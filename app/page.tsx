@@ -1,65 +1,273 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
 
 export default function Home() {
+  const [role, setRole] = useState<"staff" | "therapist">("staff");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    setTimeout(() => {
+      setLoading(false);
+      if (username === "admin" && password === "admin") {
+        alert(
+          `ログイン成功！（デモ）\nロール: ${role === "staff" ? "スタッフ" : "セラピスト"}`
+        );
+      } else {
+        setError("ユーザー名またはパスワードが正しくありません");
+      }
+    }, 1500);
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-[#0c0b0f] flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute top-[-200px] right-[-100px] w-[600px] h-[600px] rounded-full bg-[#c3a782]/[0.06] blur-3xl animate-pulse" />
+      <div className="absolute bottom-[-150px] left-[-100px] w-[500px] h-[500px] rounded-full bg-[#c3a782]/[0.04] blur-3xl animate-pulse delay-1000" />
+
+      <div className="relative z-10 w-full max-w-[420px]">
+        {/* Brand */}
+        <div className="text-center mb-12">
+          <div className="w-12 h-12 mx-auto mb-5 border border-[#c3a782]/30 rounded-xl flex items-center justify-center bg-[#c3a782]/[0.08]">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#c3a782"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="9.5" />
+              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+              <path d="M7.5 8.5C8.5 7 10 6 12 6s3.5 1 4.5 2.5" />
+            </svg>
+          </div>
+          <p className="text-[11px] tracking-[4px] uppercase text-[#f0ece4]/30 mb-2 font-light">
+            Salon Management
+          </p>
+          <h1 className="text-[32px] text-[#f0ece4] tracking-[2px] font-light">
+            チョップ
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-[12px] text-[#f0ece4]/50 mt-1.5 tracking-[3px] font-light">
+            サロン管理システム
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Login Card */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8 backdrop-blur-xl">
+          {/* Role Selector */}
+          <div className="grid grid-cols-2 gap-2.5 mb-6">
+            <button
+              type="button"
+              onClick={() => {
+                setRole("staff");
+                setError("");
+              }}
+              className={`h-11 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer ${
+                role === "staff"
+                  ? "border border-[#c3a782]/40 bg-[#c3a782]/15 text-[#c3a782]"
+                  : "border border-white/[0.06] text-[#f0ece4]/50 hover:border-white/10 hover:bg-white/[0.02]"
+              }`}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              スタッフ
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRole("therapist");
+                setError("");
+              }}
+              className={`h-11 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer ${
+                role === "therapist"
+                  ? "border border-[#c3a782]/40 bg-[#c3a782]/15 text-[#c3a782]"
+                  : "border border-white/[0.06] text-[#f0ece4]/50 hover:border-white/10 hover:bg-white/[0.02]"
+              }`}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 22c5.5-3 8.5-6.5 8.5-11a8.5 8.5 0 0 0-17 0c0 4.5 3 8 8.5 11z" />
+                <circle cx="12" cy="11" r="3" />
+              </svg>
+              セラピスト
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-px bg-white/[0.06]" />
+            <span className="text-[10px] tracking-[2px] uppercase text-[#f0ece4]/30">
+              ログイン
+            </span>
+            <div className="flex-1 h-px bg-white/[0.06]" />
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleLogin}>
+            {/* Username */}
+            <div className="mb-5">
+              <label className="block text-[11px] tracking-[1.5px] uppercase text-[#f0ece4]/50 mb-2">
+                ユーザー名
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="ユーザー名を入力"
+                  required
+                  className="w-full h-12 pl-11 pr-4 bg-white/[0.04] border border-white/[0.06] rounded-[10px] text-[#f0ece4] text-[14px] placeholder-[#f0ece4]/20 outline-none transition-all duration-300 focus:border-[#c3a782]/40 focus:bg-white/[0.05] focus:ring-2 focus:ring-[#c3a782]/15"
+                />
+                <svg
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#f0ece4]/20"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="mb-6">
+              <label className="block text-[11px] tracking-[1.5px] uppercase text-[#f0ece4]/50 mb-2">
+                パスワード
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="パスワードを入力"
+                  required
+                  className="w-full h-12 pl-11 pr-11 bg-white/[0.04] border border-white/[0.06] rounded-[10px] text-[#f0ece4] text-[14px] placeholder-[#f0ece4]/20 outline-none transition-all duration-300 focus:border-[#c3a782]/40 focus:bg-white/[0.05] focus:ring-2 focus:ring-[#c3a782]/15"
+                />
+                <svg
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#f0ece4]/20"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 cursor-pointer"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#f0ece4"
+                    strokeOpacity="0.2"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    {showPassword ? (
+                      <>
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </>
+                    ) : (
+                      <>
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </>
+                    )}
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Login Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-[50px] rounded-[10px] bg-gradient-to-br from-[#c3a782] to-[#a8895e] text-[#0c0b0f] text-[14px] font-medium tracking-[2px] cursor-pointer transition-all duration-400 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(195,167,130,0.2)] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-[#0c0b0f]/20 border-t-[#0c0b0f] rounded-full animate-spin mx-auto" />
+              ) : (
+                "ログイン"
+              )}
+            </button>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mt-4 px-4 py-3 bg-[#d4736c]/[0.08] border border-[#d4736c]/15 rounded-lg text-[13px] text-[#d4736c] flex items-center gap-2 animate-pulse">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+                {error}
+              </div>
+            )}
+          </form>
         </div>
-      </main>
+
+        {/* Footer */}
+        <div className="text-center mt-8">
+          <p className="text-[11px] text-[#f0ece4]/20 font-light tracking-[0.5px]">
+            &copy; 2026 チョップ. All rights reserved.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
