@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
+
+type Customer = {
+  id: number;
+  created_at: string;
+  name: string;
+  phone: string;
+  email: string;
+  notes: string;
+  user_id: string;
+};
 
 const menuItems = [
   { label: "HOME", icon: "home", sub: [] },
@@ -32,24 +42,70 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
 
 export default function Dashboard() {
   const router = useRouter();
+  const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [openMenus, setOpenMenus] = useState<string[]>(["HOME"]);
   const [activePage, setActivePage] = useState("HOME");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [custName, setCustName] = useState("");
+  const [custPhone, setCustPhone] = useState("");
+  const [custEmail, setCustEmail] = useState("");
+  const [custNotes, setCustNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const fetchCustomers = useCallback(async () => {
+    const { data } = await supabase
+      .from("customers")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setCustomers(data);
+  }, []);
+
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/"); } else { setUserEmail(user.email || ""); }
+      if (!user) { router.push("/"); } else { setUserEmail(user.email || ""); setUserId(user.id); }
     };
     checkUser();
-  }, [router]);
+    fetchCustomers();
+  }, [router, fetchCustomers]);
+
+  const handleRegister = async () => {
+    if (!custName.trim()) { setSaveMsg("名前を入力してください"); return; }
+    setSaving(true);
+    setSaveMsg("");
+    const { error } = await supabase.from("customers").insert({
+      name: custName.trim(),
+      phone: custPhone.trim(),
+      email: custEmail.trim(),
+      notes: custNotes.trim(),
+      user_id: userId,
+    });
+    setSaving(false);
+    if (error) {
+      setSaveMsg("登録に失敗しました: " + error.message);
+    } else {
+      setSaveMsg("登録しました！");
+      setCustName(""); setCustPhone(""); setCustEmail(""); setCustNotes("");
+      fetchCustomers();
+      setTimeout(() => { setSaveMsg(""); setActivePage("顧客一覧"); }, 1000);
+    }
+  };
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/"); };
 
   const toggleMenu = (label: string) => {
     setOpenMenus((prev) => prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label]);
   };
+
+  const filteredCustomers = customers.filter((c) => {
+    const q = searchQuery.toLowerCase();
+    return c.name?.toLowerCase().includes(q) || c.phone?.includes(q) || c.email?.toLowerCase().includes(q);
+  });
 
   const today = new Date();
   const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
@@ -62,7 +118,6 @@ export default function Dashboard() {
     <div className="flex h-screen bg-[#f8f6f3]">
       {/* Sidebar */}
       <aside className={`${sidebarOpen ? "w-[260px]" : "w-0 overflow-hidden"} bg-[#1a1a2e] flex flex-col transition-all duration-500 ease-in-out flex-shrink-0`}>
-        {/* Logo */}
         <div className="h-[72px] flex items-center px-6 border-b border-white/[0.04]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-[#c3a782] to-[#a8895e] flex items-center justify-center shadow-[0_2px_8px_rgba(195,167,130,0.3)]">
@@ -75,7 +130,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-5 px-3">
           <p className="text-[9px] text-white/20 tracking-[2px] uppercase px-3 mb-3">メニュー</p>
           {menuItems.map((item) => (
@@ -84,16 +138,12 @@ export default function Dashboard() {
                 onClick={() => { item.sub.length === 0 ? setActivePage(item.label) : toggleMenu(item.label); }}
                 className={`w-full flex items-center gap-3 px-3 py-[10px] text-[13px] rounded-lg transition-all duration-200 cursor-pointer group ${
                   activePage === item.label || (item.sub.length > 0 && item.sub.includes(activePage))
-                    ? "text-[#c3a782] bg-[#c3a782]/[0.08]"
-                    : "text-white/40 hover:text-white/70 hover:bg-white/[0.03]"
-                }`}
-              >
+                    ? "text-[#c3a782] bg-[#c3a782]/[0.08]" : "text-white/40 hover:text-white/70 hover:bg-white/[0.03]"
+                }`}>
                 <span className={`transition-colors duration-200 ${
                   activePage === item.label || (item.sub.length > 0 && item.sub.includes(activePage))
                     ? "text-[#c3a782]" : "text-white/25 group-hover:text-white/50"
-                }`}>
-                  <Icon name={item.icon} size={17} />
-                </span>
+                }`}><Icon name={item.icon} size={17} /></span>
                 <span className="flex-1 text-left">{item.label}</span>
                 {item.sub.length > 0 && (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -108,9 +158,7 @@ export default function Dashboard() {
                     <button key={sub} onClick={() => setActivePage(sub)}
                       className={`w-full text-left px-3 py-[7px] text-[12px] rounded-md transition-all duration-200 cursor-pointer ${
                         activePage === sub ? "text-[#c3a782] bg-[#c3a782]/[0.06]" : "text-white/25 hover:text-white/50 hover:bg-white/[0.02]"
-                      }`}>
-                      {sub}
-                    </button>
+                      }`}>{sub}</button>
                   ))}
                 </div>
               )}
@@ -118,7 +166,6 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        {/* User Panel */}
         <div className="border-t border-white/[0.04] p-4 mx-3 mb-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#c3a782]/30 to-[#c3a782]/10 flex items-center justify-center text-[#c3a782] text-[12px] font-medium ring-1 ring-[#c3a782]/10">
@@ -137,9 +184,8 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main Area */}
+      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar */}
         <header className="h-[72px] bg-white/80 backdrop-blur-xl border-b border-[#e8e4df] flex items-center justify-between px-8 flex-shrink-0">
           <div className="flex items-center gap-5">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg hover:bg-[#f8f6f3] transition-colors cursor-pointer">
@@ -154,31 +200,26 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-4">
             <div className="w-px h-5 bg-[#e8e4df]" />
-            <button onClick={handleLogout} className="text-[11px] text-[#b4b2a9] hover:text-[#888780] transition-colors cursor-pointer tracking-wide">
-              ログアウト
-            </button>
+            <button onClick={handleLogout} className="text-[11px] text-[#b4b2a9] hover:text-[#888780] transition-colors cursor-pointer tracking-wide">ログアウト</button>
           </div>
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-8">
+          {/* HOME */}
           {activePage === "HOME" && (
             <div className="animate-[fadeIn_0.4s_ease-out]">
-              {/* Greeting */}
               <div className="mb-8">
                 <h2 className="text-[22px] font-medium text-[#2c2c2a] tracking-tight">{greeting}</h2>
                 <p className="text-[13px] text-[#b4b2a9] mt-1">{dateStr}（{dayStr}）の業務状況</p>
               </div>
-
-              {/* Stat Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
                 {[
                   { label: "本日の予約", value: "0", unit: "件", accent: "#c3a782" },
                   { label: "本日の売上", value: "¥0", unit: "", accent: "#7ab88f" },
                   { label: "出勤セラピスト", value: "0", unit: "名", accent: "#85a8c4" },
-                  { label: "総顧客数", value: "0", unit: "名", accent: "#c49885" },
+                  { label: "総顧客数", value: String(customers.length), unit: "名", accent: "#c49885" },
                 ].map((stat) => (
-                  <div key={stat.label} className="bg-white rounded-2xl p-6 border border-[#f0ece4] hover:border-[#e0dbd2] transition-all duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] group cursor-default">
+                  <div key={stat.label} className="bg-white rounded-2xl p-6 border border-[#f0ece4] hover:border-[#e0dbd2] transition-all duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] cursor-default">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[11px] text-[#b4b2a9] tracking-wide">{stat.label}</span>
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stat.accent, opacity: 0.5 }} />
@@ -190,45 +231,45 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-
-              {/* Dashboard Panels */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white rounded-2xl border border-[#f0ece4] overflow-hidden">
-                  <div className="px-6 py-5 border-b border-[#f8f6f3]">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-[13px] font-medium text-[#2c2c2a]">本日の予約一覧</h3>
-                      <button onClick={() => setActivePage("タイムチャート")} className="text-[11px] text-[#c3a782] hover:text-[#b09672] transition-colors cursor-pointer">
-                        すべて見る →
-                      </button>
-                    </div>
+                  <div className="px-6 py-5 border-b border-[#f8f6f3] flex items-center justify-between">
+                    <h3 className="text-[13px] font-medium text-[#2c2c2a]">本日の予約一覧</h3>
+                    <button onClick={() => setActivePage("タイムチャート")} className="text-[11px] text-[#c3a782] hover:text-[#b09672] transition-colors cursor-pointer">すべて見る →</button>
                   </div>
                   <div className="flex flex-col items-center justify-center h-[180px]">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                    </svg>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     <p className="text-[12px] text-[#d3d1c7] mt-3">予約データがありません</p>
                   </div>
                 </div>
-
                 <div className="bg-white rounded-2xl border border-[#f0ece4] overflow-hidden">
-                  <div className="px-6 py-5 border-b border-[#f8f6f3]">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-[13px] font-medium text-[#2c2c2a]">最近の顧客登録</h3>
-                      <button onClick={() => setActivePage("顧客一覧")} className="text-[11px] text-[#c3a782] hover:text-[#b09672] transition-colors cursor-pointer">
-                        すべて見る →
-                      </button>
+                  <div className="px-6 py-5 border-b border-[#f8f6f3] flex items-center justify-between">
+                    <h3 className="text-[13px] font-medium text-[#2c2c2a]">最近の顧客登録</h3>
+                    <button onClick={() => setActivePage("顧客一覧")} className="text-[11px] text-[#c3a782] hover:text-[#b09672] transition-colors cursor-pointer">すべて見る →</button>
+                  </div>
+                  {customers.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-[180px]">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                      <p className="text-[12px] text-[#d3d1c7] mt-3">顧客データがありません</p>
                     </div>
-                  </div>
-                  <div className="flex flex-col items-center justify-center h-[180px]">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                    </svg>
-                    <p className="text-[12px] text-[#d3d1c7] mt-3">顧客データがありません</p>
-                  </div>
+                  ) : (
+                    <div className="p-4">
+                      {customers.slice(0, 5).map((c) => (
+                        <div key={c.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-[#f8f6f3] transition-colors">
+                          <div className="w-8 h-8 rounded-full bg-[#f0ece4] flex items-center justify-center text-[11px] text-[#888780] font-medium">
+                            {c.name?.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] text-[#2c2c2a] truncate">{c.name}</p>
+                            <p className="text-[10px] text-[#d3d1c7]">{c.phone || "電話番号なし"}</p>
+                          </div>
+                          <p className="text-[10px] text-[#d3d1c7]">{new Date(c.created_at).toLocaleDateString("ja-JP")}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Quick Actions */}
               <div className="mt-8">
                 <p className="text-[11px] text-[#b4b2a9] tracking-wide mb-4">クイックアクション</p>
                 <div className="flex flex-wrap gap-3">
@@ -243,23 +284,23 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* 顧客一覧 */}
           {activePage === "顧客一覧" && (
             <div className="animate-[fadeIn_0.4s_ease-out]">
               <div className="bg-white rounded-2xl border border-[#f0ece4] overflow-hidden">
                 <div className="px-6 py-5 border-b border-[#f8f6f3] flex items-center justify-between">
                   <div>
                     <h2 className="text-[15px] font-medium text-[#2c2c2a]">顧客一覧</h2>
-                    <p className="text-[11px] text-[#d3d1c7] mt-0.5">登録されている顧客情報</p>
+                    <p className="text-[11px] text-[#d3d1c7] mt-0.5">{customers.length}件の顧客情報</p>
                   </div>
                   <button onClick={() => setActivePage("顧客登録")}
                     className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide">
                     + 新規登録
                   </button>
                 </div>
-                {/* Search Bar */}
                 <div className="px-6 py-4 border-b border-[#f8f6f3]">
                   <div className="relative max-w-sm">
-                    <input type="text" placeholder="名前・電話番号で検索"
+                    <input type="text" placeholder="名前・電話番号で検索" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 bg-[#f8f6f3] border border-transparent rounded-xl text-[12px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
                     <svg className="absolute left-3.5 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d3d1c7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -270,13 +311,34 @@ export default function Dashboard() {
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="border-b border-[#f8f6f3]">
-                        {["名前", "電話番号", "メール", "最終来店", "来店回数"].map((h) => (
+                        {["名前", "電話番号", "メール", "備考", "登録日"].map((h) => (
                           <th key={h} className="text-left py-3.5 px-6 text-[#b4b2a9] font-normal tracking-wide text-[11px]">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      <tr><td colSpan={5} className="text-center py-16 text-[#d3d1c7] text-[12px]">顧客データがありません。「新規登録」から追加してください。</td></tr>
+                      {filteredCustomers.length === 0 ? (
+                        <tr><td colSpan={5} className="text-center py-16 text-[#d3d1c7] text-[12px]">
+                          {customers.length === 0 ? "顧客データがありません。「新規登録」から追加してください。" : "検索結果がありません"}
+                        </td></tr>
+                      ) : (
+                        filteredCustomers.map((c) => (
+                          <tr key={c.id} className="border-b border-[#f8f6f3] hover:bg-[#faf9f7] transition-colors">
+                            <td className="py-3.5 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-[#f0ece4] flex items-center justify-center text-[11px] text-[#888780] font-medium flex-shrink-0">
+                                  {c.name?.charAt(0)}
+                                </div>
+                                <span className="text-[#2c2c2a] font-medium">{c.name}</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-6 text-[#888780]">{c.phone || "—"}</td>
+                            <td className="py-3.5 px-6 text-[#888780]">{c.email || "—"}</td>
+                            <td className="py-3.5 px-6 text-[#b4b2a9] max-w-[200px] truncate">{c.notes || "—"}</td>
+                            <td className="py-3.5 px-6 text-[#b4b2a9]">{new Date(c.created_at).toLocaleDateString("ja-JP")}</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -284,6 +346,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* 顧客登録 */}
           {activePage === "顧客登録" && (
             <div className="animate-[fadeIn_0.4s_ease-out] max-w-xl">
               <div className="bg-white rounded-2xl border border-[#f0ece4] p-8">
@@ -292,38 +355,41 @@ export default function Dashboard() {
                   <p className="text-[11px] text-[#d3d1c7] mt-1">新しい顧客情報を登録します</p>
                 </div>
                 <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">姓</label>
-                      <input type="text" placeholder="山田"
-                        className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">名</label>
-                      <input type="text" placeholder="太郎"
-                        className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
-                    </div>
+                  <div>
+                    <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">名前 <span className="text-[#c49885]">*</span></label>
+                    <input type="text" placeholder="山田 太郎" value={custName} onChange={(e) => setCustName(e.target.value)}
+                      className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
                   </div>
                   <div>
                     <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">電話番号</label>
-                    <input type="tel" placeholder="090-1234-5678"
+                    <input type="tel" placeholder="090-1234-5678" value={custPhone} onChange={(e) => setCustPhone(e.target.value)}
                       className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
                   </div>
                   <div>
                     <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">メールアドレス</label>
-                    <input type="email" placeholder="example@email.com"
+                    <input type="email" placeholder="example@email.com" value={custEmail} onChange={(e) => setCustEmail(e.target.value)}
                       className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
                   </div>
                   <div>
                     <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">備考</label>
-                    <textarea placeholder="メモ・備考を入力" rows={3}
+                    <textarea placeholder="メモ・備考を入力" rows={3} value={custNotes} onChange={(e) => setCustNotes(e.target.value)}
                       className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all resize-none placeholder-[#d3d1c7]" />
                   </div>
+
+                  {saveMsg && (
+                    <div className={`px-4 py-3 rounded-xl text-[12px] ${
+                      saveMsg.includes("失敗") || saveMsg.includes("入力")
+                        ? "bg-[#c49885]/10 text-[#c49885] border border-[#c49885]/15"
+                        : "bg-[#7ab88f]/10 text-[#5a9e6f] border border-[#7ab88f]/15"
+                    }`}>{saveMsg}</div>
+                  )}
+
                   <div className="flex gap-3 pt-3">
-                    <button className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide">
-                      登録する
+                    <button onClick={handleRegister} disabled={saving}
+                      className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide disabled:opacity-60">
+                      {saving ? "登録中..." : "登録する"}
                     </button>
-                    <button onClick={() => setActivePage("顧客一覧")}
+                    <button onClick={() => { setActivePage("顧客一覧"); setSaveMsg(""); }}
                       className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl hover:bg-[#f8f6f3] transition-all cursor-pointer">
                       キャンセル
                     </button>
@@ -333,6 +399,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Other pages */}
           {activePage !== "HOME" && activePage !== "顧客一覧" && activePage !== "顧客登録" && (
             <div className="animate-[fadeIn_0.4s_ease-out]">
               <div className="bg-white rounded-2xl border border-[#f0ece4] p-8">
