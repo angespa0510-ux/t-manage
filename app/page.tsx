@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter();
   const [role, setRole] = useState<"staff" | "therapist">("staff");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,50 +28,13 @@ export default function Home() {
     if (authError) {
       setError("メールアドレスまたはパスワードが正しくありません");
     } else if (data.user) {
-      setSuccess(true);
+      if (role === "staff") {
+        router.push("/dashboard");
+      } else {
+        router.push("/mypage");
+      }
     }
   };
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-[#0c0b0f] flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[#c3a782]/20 flex items-center justify-center">
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#c3a782"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-          </div>
-          <h1 className="text-[24px] text-[#f0ece4] mb-2">ログイン成功！</h1>
-          <p className="text-[14px] text-[#f0ece4]/50 mb-1">
-            ロール: {role === "staff" ? "スタッフ" : "セラピスト"}
-          </p>
-          <p className="text-[13px] text-[#f0ece4]/30 mb-8">
-            ダッシュボード画面は次のステップで作成します
-          </p>
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut();
-              setSuccess(false);
-              setEmail("");
-              setPassword("");
-            }}
-            className="px-6 py-3 rounded-xl border border-white/10 text-[#f0ece4]/60 text-[13px] hover:bg-white/5 transition-all cursor-pointer"
-          >
-            ログアウト
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#0c0b0f] flex items-center justify-center px-4 relative overflow-hidden">

@@ -1,0 +1,362 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { supabase } from "../../lib/supabase";
+import { useRouter } from "next/navigation";
+
+const menuItems = [
+  { label: "HOME", icon: "home", sub: [] },
+  { label: "顧客管理", icon: "users", sub: ["顧客一覧", "顧客登録"] },
+  { label: "予約管理", icon: "calendar", sub: ["タイムチャート", "オーダー一覧", "SMS送信履歴一覧"] },
+  { label: "勤怠管理", icon: "clock", sub: ["セラピスト勤怠", "スタッフ勤怠"] },
+  { label: "売上分析", icon: "chart", sub: ["年別分析", "月別分析", "日別分析"] },
+  { label: "面接管理", icon: "clipboard", sub: ["面接管理"] },
+  { label: "メッセージ", icon: "mail", sub: [] },
+  { label: "設定", icon: "settings", sub: ["セラピスト登録", "スタッフ登録", "コース登録", "指名登録", "延長登録", "オプション登録", "割引登録", "営業時間設定"] },
+];
+
+function Icon({ name, size = 18 }: { name: string; size?: number }) {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  switch (name) {
+    case "home": return <svg {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+    case "users": return <svg {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    case "calendar": return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+    case "clock": return <svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+    case "chart": return <svg {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+    case "clipboard": return <svg {...p}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>;
+    case "mail": return <svg {...p}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>;
+    case "settings": return <svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+    default: return null;
+  }
+}
+
+export default function Dashboard() {
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState("");
+  const [openMenus, setOpenMenus] = useState<string[]>(["HOME"]);
+  const [activePage, setActivePage] = useState("HOME");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/"); } else { setUserEmail(user.email || ""); }
+    };
+    checkUser();
+  }, [router]);
+
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push("/"); };
+
+  const toggleMenu = (label: string) => {
+    setOpenMenus((prev) => prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label]);
+  };
+
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+  const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+  const dayStr = dayNames[today.getDay()];
+  const hours = today.getHours();
+  const greeting = hours < 12 ? "おはようございます" : hours < 18 ? "こんにちは" : "お疲れ様です";
+
+  return (
+    <div className="flex h-screen bg-[#f8f6f3]">
+      {/* Sidebar */}
+      <aside className={`${sidebarOpen ? "w-[260px]" : "w-0 overflow-hidden"} bg-[#1a1a2e] flex flex-col transition-all duration-500 ease-in-out flex-shrink-0`}>
+        {/* Logo */}
+        <div className="h-[72px] flex items-center px-6 border-b border-white/[0.04]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-[#c3a782] to-[#a8895e] flex items-center justify-center shadow-[0_2px_8px_rgba(195,167,130,0.3)]">
+              <span className="text-white text-[13px] font-semibold tracking-wider">C</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-medium text-white/90 tracking-wide">チョップ</p>
+              <p className="text-[9px] text-white/25 tracking-[2px] uppercase">salon management</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-5 px-3">
+          <p className="text-[9px] text-white/20 tracking-[2px] uppercase px-3 mb-3">メニュー</p>
+          {menuItems.map((item) => (
+            <div key={item.label} className="mb-0.5">
+              <button
+                onClick={() => { item.sub.length === 0 ? setActivePage(item.label) : toggleMenu(item.label); }}
+                className={`w-full flex items-center gap-3 px-3 py-[10px] text-[13px] rounded-lg transition-all duration-200 cursor-pointer group ${
+                  activePage === item.label || (item.sub.length > 0 && item.sub.includes(activePage))
+                    ? "text-[#c3a782] bg-[#c3a782]/[0.08]"
+                    : "text-white/40 hover:text-white/70 hover:bg-white/[0.03]"
+                }`}
+              >
+                <span className={`transition-colors duration-200 ${
+                  activePage === item.label || (item.sub.length > 0 && item.sub.includes(activePage))
+                    ? "text-[#c3a782]" : "text-white/25 group-hover:text-white/50"
+                }`}>
+                  <Icon name={item.icon} size={17} />
+                </span>
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.sub.length > 0 && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    className={`transition-transform duration-300 opacity-40 ${openMenus.includes(item.label) ? "rotate-180" : ""}`}>
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                )}
+              </button>
+              {item.sub.length > 0 && openMenus.includes(item.label) && (
+                <div className="ml-[18px] pl-4 border-l border-white/[0.04] my-1">
+                  {item.sub.map((sub) => (
+                    <button key={sub} onClick={() => setActivePage(sub)}
+                      className={`w-full text-left px-3 py-[7px] text-[12px] rounded-md transition-all duration-200 cursor-pointer ${
+                        activePage === sub ? "text-[#c3a782] bg-[#c3a782]/[0.06]" : "text-white/25 hover:text-white/50 hover:bg-white/[0.02]"
+                      }`}>
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </nav>
+
+        {/* User Panel */}
+        <div className="border-t border-white/[0.04] p-4 mx-3 mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#c3a782]/30 to-[#c3a782]/10 flex items-center justify-center text-[#c3a782] text-[12px] font-medium ring-1 ring-[#c3a782]/10">
+              {userEmail.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-white/60 truncate">{userEmail}</p>
+              <p className="text-[9px] text-white/20 tracking-[1px]">スタッフ</p>
+            </div>
+            <button onClick={handleLogout} className="text-white/15 hover:text-white/40 transition-colors cursor-pointer p-1" title="ログアウト">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Bar */}
+        <header className="h-[72px] bg-white/80 backdrop-blur-xl border-b border-[#e8e4df] flex items-center justify-between px-8 flex-shrink-0">
+          <div className="flex items-center gap-5">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg hover:bg-[#f8f6f3] transition-colors cursor-pointer">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9c9a92" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/>
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-[16px] font-medium text-[#2c2c2a] tracking-tight">{activePage}</h1>
+              <p className="text-[11px] text-[#b4b2a9]">{dateStr}（{dayStr}）</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-px h-5 bg-[#e8e4df]" />
+            <button onClick={handleLogout} className="text-[11px] text-[#b4b2a9] hover:text-[#888780] transition-colors cursor-pointer tracking-wide">
+              ログアウト
+            </button>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <main className="flex-1 overflow-y-auto p-8">
+          {activePage === "HOME" && (
+            <div className="animate-[fadeIn_0.4s_ease-out]">
+              {/* Greeting */}
+              <div className="mb-8">
+                <h2 className="text-[22px] font-medium text-[#2c2c2a] tracking-tight">{greeting}</h2>
+                <p className="text-[13px] text-[#b4b2a9] mt-1">{dateStr}（{dayStr}）の業務状況</p>
+              </div>
+
+              {/* Stat Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
+                {[
+                  { label: "本日の予約", value: "0", unit: "件", accent: "#c3a782" },
+                  { label: "本日の売上", value: "¥0", unit: "", accent: "#7ab88f" },
+                  { label: "出勤セラピスト", value: "0", unit: "名", accent: "#85a8c4" },
+                  { label: "総顧客数", value: "0", unit: "名", accent: "#c49885" },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-white rounded-2xl p-6 border border-[#f0ece4] hover:border-[#e0dbd2] transition-all duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] group cursor-default">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[11px] text-[#b4b2a9] tracking-wide">{stat.label}</span>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stat.accent, opacity: 0.5 }} />
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[32px] font-light text-[#2c2c2a] tracking-tight leading-none">{stat.value}</span>
+                      <span className="text-[12px] text-[#d3d1c7]">{stat.unit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Dashboard Panels */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-2xl border border-[#f0ece4] overflow-hidden">
+                  <div className="px-6 py-5 border-b border-[#f8f6f3]">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[13px] font-medium text-[#2c2c2a]">本日の予約一覧</h3>
+                      <button onClick={() => setActivePage("タイムチャート")} className="text-[11px] text-[#c3a782] hover:text-[#b09672] transition-colors cursor-pointer">
+                        すべて見る →
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center h-[180px]">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    <p className="text-[12px] text-[#d3d1c7] mt-3">予約データがありません</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-[#f0ece4] overflow-hidden">
+                  <div className="px-6 py-5 border-b border-[#f8f6f3]">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[13px] font-medium text-[#2c2c2a]">最近の顧客登録</h3>
+                      <button onClick={() => setActivePage("顧客一覧")} className="text-[11px] text-[#c3a782] hover:text-[#b09672] transition-colors cursor-pointer">
+                        すべて見る →
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center h-[180px]">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                    </svg>
+                    <p className="text-[12px] text-[#d3d1c7] mt-3">顧客データがありません</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="mt-8">
+                <p className="text-[11px] text-[#b4b2a9] tracking-wide mb-4">クイックアクション</p>
+                <div className="flex flex-wrap gap-3">
+                  {["顧客登録", "タイムチャート", "日別分析", "セラピスト登録"].map((action) => (
+                    <button key={action} onClick={() => setActivePage(action)}
+                      className="px-5 py-2.5 bg-white border border-[#f0ece4] rounded-xl text-[12px] text-[#888780] hover:border-[#c3a782]/30 hover:text-[#c3a782] hover:shadow-[0_2px_12px_rgba(195,167,130,0.08)] transition-all duration-300 cursor-pointer">
+                      {action}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activePage === "顧客一覧" && (
+            <div className="animate-[fadeIn_0.4s_ease-out]">
+              <div className="bg-white rounded-2xl border border-[#f0ece4] overflow-hidden">
+                <div className="px-6 py-5 border-b border-[#f8f6f3] flex items-center justify-between">
+                  <div>
+                    <h2 className="text-[15px] font-medium text-[#2c2c2a]">顧客一覧</h2>
+                    <p className="text-[11px] text-[#d3d1c7] mt-0.5">登録されている顧客情報</p>
+                  </div>
+                  <button onClick={() => setActivePage("顧客登録")}
+                    className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide">
+                    + 新規登録
+                  </button>
+                </div>
+                {/* Search Bar */}
+                <div className="px-6 py-4 border-b border-[#f8f6f3]">
+                  <div className="relative max-w-sm">
+                    <input type="text" placeholder="名前・電話番号で検索"
+                      className="w-full pl-10 pr-4 py-2.5 bg-[#f8f6f3] border border-transparent rounded-xl text-[12px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
+                    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d3d1c7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="border-b border-[#f8f6f3]">
+                        {["名前", "電話番号", "メール", "最終来店", "来店回数"].map((h) => (
+                          <th key={h} className="text-left py-3.5 px-6 text-[#b4b2a9] font-normal tracking-wide text-[11px]">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td colSpan={5} className="text-center py-16 text-[#d3d1c7] text-[12px]">顧客データがありません。「新規登録」から追加してください。</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activePage === "顧客登録" && (
+            <div className="animate-[fadeIn_0.4s_ease-out] max-w-xl">
+              <div className="bg-white rounded-2xl border border-[#f0ece4] p-8">
+                <div className="mb-8">
+                  <h2 className="text-[16px] font-medium text-[#2c2c2a]">顧客登録</h2>
+                  <p className="text-[11px] text-[#d3d1c7] mt-1">新しい顧客情報を登録します</p>
+                </div>
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">姓</label>
+                      <input type="text" placeholder="山田"
+                        className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">名</label>
+                      <input type="text" placeholder="太郎"
+                        className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">電話番号</label>
+                    <input type="tel" placeholder="090-1234-5678"
+                      className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">メールアドレス</label>
+                    <input type="email" placeholder="example@email.com"
+                      className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#888780] mb-1.5 tracking-wide">備考</label>
+                    <textarea placeholder="メモ・備考を入力" rows={3}
+                      className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all resize-none placeholder-[#d3d1c7]" />
+                  </div>
+                  <div className="flex gap-3 pt-3">
+                    <button className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide">
+                      登録する
+                    </button>
+                    <button onClick={() => setActivePage("顧客一覧")}
+                      className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl hover:bg-[#f8f6f3] transition-all cursor-pointer">
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activePage !== "HOME" && activePage !== "顧客一覧" && activePage !== "顧客登録" && (
+            <div className="animate-[fadeIn_0.4s_ease-out]">
+              <div className="bg-white rounded-2xl border border-[#f0ece4] p-8">
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="w-[72px] h-[72px] rounded-2xl bg-[#f8f6f3] flex items-center justify-center mb-5">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d3d1c7" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-[15px] text-[#888780] mb-1.5">{activePage}</h3>
+                  <p className="text-[12px] text-[#d3d1c7]">この機能は次のステップで実装します</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
