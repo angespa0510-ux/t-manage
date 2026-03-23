@@ -1,31 +1,76 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "../lib/supabase";
 
 export default function Home() {
   const [role, setRole] = useState<"staff" | "therapist">("staff");
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false);
-      if (username === "admin" && password === "admin") {
-        alert(
-          `ログイン成功！（デモ）\nロール: ${role === "staff" ? "スタッフ" : "セラピスト"}`
-        );
-      } else {
-        setError("ユーザー名またはパスワードが正しくありません");
-      }
-    }, 1500);
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setLoading(false);
+
+    if (authError) {
+      setError("メールアドレスまたはパスワードが正しくありません");
+    } else if (data.user) {
+      setSuccess(true);
+    }
   };
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-[#0c0b0f] flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[#c3a782]/20 flex items-center justify-center">
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#c3a782"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <h1 className="text-[24px] text-[#f0ece4] mb-2">ログイン成功！</h1>
+          <p className="text-[14px] text-[#f0ece4]/50 mb-1">
+            ロール: {role === "staff" ? "スタッフ" : "セラピスト"}
+          </p>
+          <p className="text-[13px] text-[#f0ece4]/30 mb-8">
+            ダッシュボード画面は次のステップで作成します
+          </p>
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              setSuccess(false);
+              setEmail("");
+              setPassword("");
+            }}
+            className="px-6 py-3 rounded-xl border border-white/10 text-[#f0ece4]/60 text-[13px] hover:bg-white/5 transition-all cursor-pointer"
+          >
+            ログアウト
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0c0b0f] flex items-center justify-center px-4 relative overflow-hidden">
@@ -53,7 +98,7 @@ export default function Home() {
             </svg>
           </div>
           <p className="text-[11px] tracking-[4px] uppercase text-[#f0ece4]/30 mb-2 font-light">
-            Salon Management
+            Chop
           </p>
           <h1 className="text-[32px] text-[#f0ece4] tracking-[2px] font-light">
             チョップ
@@ -134,17 +179,17 @@ export default function Home() {
 
           {/* Form */}
           <form onSubmit={handleLogin}>
-            {/* Username */}
+            {/* Email */}
             <div className="mb-5">
               <label className="block text-[11px] tracking-[1.5px] uppercase text-[#f0ece4]/50 mb-2">
-                ユーザー名
+                メールアドレス
               </label>
               <div className="relative">
                 <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="ユーザー名を入力"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="メールアドレスを入力"
                   required
                   className="w-full h-12 pl-11 pr-4 bg-white/[0.04] border border-white/[0.06] rounded-[10px] text-[#f0ece4] text-[14px] placeholder-[#f0ece4]/20 outline-none transition-all duration-300 focus:border-[#c3a782]/40 focus:bg-white/[0.05] focus:ring-2 focus:ring-[#c3a782]/15"
                 />
@@ -159,8 +204,8 @@ export default function Home() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M22 7l-10 6L2 7" />
                 </svg>
               </div>
             </div>
