@@ -57,6 +57,19 @@ export default function Dashboard() {
   const [saveMsg, setSaveMsg] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Edit state
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMsg, setEditMsg] = useState("");
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const fetchCustomers = useCallback(async () => {
     const { data } = await supabase
       .from("customers")
@@ -74,21 +87,17 @@ export default function Dashboard() {
     fetchCustomers();
   }, [router, fetchCustomers]);
 
+  // Register
   const handleRegister = async () => {
     if (!custName.trim()) { setSaveMsg("名前を入力してください"); return; }
     setSaving(true);
     setSaveMsg("");
     const { error } = await supabase.from("customers").insert({
-      name: custName.trim(),
-      phone: custPhone.trim(),
-      email: custEmail.trim(),
-      notes: custNotes.trim(),
-      user_id: userId,
+      name: custName.trim(), phone: custPhone.trim(), email: custEmail.trim(), notes: custNotes.trim(), user_id: userId,
     });
     setSaving(false);
-    if (error) {
-      setSaveMsg("登録に失敗しました: " + error.message);
-    } else {
+    if (error) { setSaveMsg("登録に失敗しました: " + error.message); }
+    else {
       setSaveMsg("登録しました！");
       setCustName(""); setCustPhone(""); setCustEmail(""); setCustNotes("");
       fetchCustomers();
@@ -96,12 +105,45 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push("/"); };
+  // Edit
+  const startEdit = (c: Customer) => {
+    setEditingCustomer(c);
+    setEditName(c.name || "");
+    setEditPhone(c.phone || "");
+    setEditEmail(c.email || "");
+    setEditNotes(c.notes || "");
+    setEditMsg("");
+  };
+  const handleUpdate = async () => {
+    if (!editingCustomer || !editName.trim()) { setEditMsg("名前を入力してください"); return; }
+    setEditSaving(true);
+    setEditMsg("");
+    const { error } = await supabase.from("customers").update({
+      name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), notes: editNotes.trim(),
+    }).eq("id", editingCustomer.id);
+    setEditSaving(false);
+    if (error) { setEditMsg("更新に失敗しました: " + error.message); }
+    else {
+      setEditMsg("更新しました！");
+      fetchCustomers();
+      setTimeout(() => { setEditingCustomer(null); setEditMsg(""); }, 800);
+    }
+  };
 
+  // Delete
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    await supabase.from("customers").delete().eq("id", deleteTarget.id);
+    setDeleting(false);
+    setDeleteTarget(null);
+    fetchCustomers();
+  };
+
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push("/"); };
   const toggleMenu = (label: string) => {
     setOpenMenus((prev) => prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label]);
   };
-
   const filteredCustomers = customers.filter((c) => {
     const q = searchQuery.toLowerCase();
     return c.name?.toLowerCase().includes(q) || c.phone?.includes(q) || c.email?.toLowerCase().includes(q);
@@ -129,56 +171,40 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-
         <nav className="flex-1 overflow-y-auto py-5 px-3">
           <p className="text-[9px] text-white/20 tracking-[2px] uppercase px-3 mb-3">メニュー</p>
           {menuItems.map((item) => (
             <div key={item.label} className="mb-0.5">
-              <button
-                onClick={() => { item.sub.length === 0 ? setActivePage(item.label) : toggleMenu(item.label); }}
+              <button onClick={() => { item.sub.length === 0 ? setActivePage(item.label) : toggleMenu(item.label); }}
                 className={`w-full flex items-center gap-3 px-3 py-[10px] text-[13px] rounded-lg transition-all duration-200 cursor-pointer group ${
                   activePage === item.label || (item.sub.length > 0 && item.sub.includes(activePage))
                     ? "text-[#c3a782] bg-[#c3a782]/[0.08]" : "text-white/40 hover:text-white/70 hover:bg-white/[0.03]"
                 }`}>
-                <span className={`transition-colors duration-200 ${
-                  activePage === item.label || (item.sub.length > 0 && item.sub.includes(activePage))
-                    ? "text-[#c3a782]" : "text-white/25 group-hover:text-white/50"
-                }`}><Icon name={item.icon} size={17} /></span>
+                <span className={`transition-colors duration-200 ${activePage === item.label || (item.sub.length > 0 && item.sub.includes(activePage)) ? "text-[#c3a782]" : "text-white/25 group-hover:text-white/50"}`}><Icon name={item.icon} size={17} /></span>
                 <span className="flex-1 text-left">{item.label}</span>
                 {item.sub.length > 0 && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                    className={`transition-transform duration-300 opacity-40 ${openMenus.includes(item.label) ? "rotate-180" : ""}`}>
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform duration-300 opacity-40 ${openMenus.includes(item.label) ? "rotate-180" : ""}`}><polyline points="6 9 12 15 18 9"/></svg>
                 )}
               </button>
               {item.sub.length > 0 && openMenus.includes(item.label) && (
                 <div className="ml-[18px] pl-4 border-l border-white/[0.04] my-1">
                   {item.sub.map((sub) => (
-                    <button key={sub} onClick={() => setActivePage(sub)}
-                      className={`w-full text-left px-3 py-[7px] text-[12px] rounded-md transition-all duration-200 cursor-pointer ${
-                        activePage === sub ? "text-[#c3a782] bg-[#c3a782]/[0.06]" : "text-white/25 hover:text-white/50 hover:bg-white/[0.02]"
-                      }`}>{sub}</button>
+                    <button key={sub} onClick={() => setActivePage(sub)} className={`w-full text-left px-3 py-[7px] text-[12px] rounded-md transition-all duration-200 cursor-pointer ${activePage === sub ? "text-[#c3a782] bg-[#c3a782]/[0.06]" : "text-white/25 hover:text-white/50 hover:bg-white/[0.02]"}`}>{sub}</button>
                   ))}
                 </div>
               )}
             </div>
           ))}
         </nav>
-
         <div className="border-t border-white/[0.04] p-4 mx-3 mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#c3a782]/30 to-[#c3a782]/10 flex items-center justify-center text-[#c3a782] text-[12px] font-medium ring-1 ring-[#c3a782]/10">
-              {userEmail.charAt(0).toUpperCase()}
-            </div>
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#c3a782]/30 to-[#c3a782]/10 flex items-center justify-center text-[#c3a782] text-[12px] font-medium ring-1 ring-[#c3a782]/10">{userEmail.charAt(0).toUpperCase()}</div>
             <div className="flex-1 min-w-0">
               <p className="text-[11px] text-white/60 truncate">{userEmail}</p>
               <p className="text-[9px] text-white/20 tracking-[1px]">スタッフ</p>
             </div>
             <button onClick={handleLogout} className="text-white/15 hover:text-white/40 transition-colors cursor-pointer p-1" title="ログアウト">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           </div>
         </div>
@@ -189,9 +215,7 @@ export default function Dashboard() {
         <header className="h-[72px] bg-white/80 backdrop-blur-xl border-b border-[#e8e4df] flex items-center justify-between px-8 flex-shrink-0">
           <div className="flex items-center gap-5">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg hover:bg-[#f8f6f3] transition-colors cursor-pointer">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9c9a92" strokeWidth="1.5" strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/>
-              </svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9c9a92" strokeWidth="1.5" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
             </button>
             <div>
               <h1 className="text-[16px] font-medium text-[#2c2c2a] tracking-tight">{activePage}</h1>
@@ -256,9 +280,7 @@ export default function Dashboard() {
                     <div className="p-4">
                       {customers.slice(0, 5).map((c) => (
                         <div key={c.id} className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-[#f8f6f3] transition-colors">
-                          <div className="w-8 h-8 rounded-full bg-[#f0ece4] flex items-center justify-center text-[11px] text-[#888780] font-medium">
-                            {c.name?.charAt(0)}
-                          </div>
+                          <div className="w-8 h-8 rounded-full bg-[#f0ece4] flex items-center justify-center text-[11px] text-[#888780] font-medium">{c.name?.charAt(0)}</div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[12px] text-[#2c2c2a] truncate">{c.name}</p>
                             <p className="text-[10px] text-[#d3d1c7]">{c.phone || "電話番号なし"}</p>
@@ -274,10 +296,7 @@ export default function Dashboard() {
                 <p className="text-[11px] text-[#b4b2a9] tracking-wide mb-4">クイックアクション</p>
                 <div className="flex flex-wrap gap-3">
                   {["顧客登録", "タイムチャート", "日別分析", "セラピスト登録"].map((action) => (
-                    <button key={action} onClick={() => setActivePage(action)}
-                      className="px-5 py-2.5 bg-white border border-[#f0ece4] rounded-xl text-[12px] text-[#888780] hover:border-[#c3a782]/30 hover:text-[#c3a782] hover:shadow-[0_2px_12px_rgba(195,167,130,0.08)] transition-all duration-300 cursor-pointer">
-                      {action}
-                    </button>
+                    <button key={action} onClick={() => setActivePage(action)} className="px-5 py-2.5 bg-white border border-[#f0ece4] rounded-xl text-[12px] text-[#888780] hover:border-[#c3a782]/30 hover:text-[#c3a782] hover:shadow-[0_2px_12px_rgba(195,167,130,0.08)] transition-all duration-300 cursor-pointer">{action}</button>
                   ))}
                 </div>
               </div>
@@ -293,32 +312,27 @@ export default function Dashboard() {
                     <h2 className="text-[15px] font-medium text-[#2c2c2a]">顧客一覧</h2>
                     <p className="text-[11px] text-[#d3d1c7] mt-0.5">{customers.length}件の顧客情報</p>
                   </div>
-                  <button onClick={() => setActivePage("顧客登録")}
-                    className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide">
-                    + 新規登録
-                  </button>
+                  <button onClick={() => setActivePage("顧客登録")} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide">+ 新規登録</button>
                 </div>
                 <div className="px-6 py-4 border-b border-[#f8f6f3]">
                   <div className="relative max-w-sm">
                     <input type="text" placeholder="名前・電話番号で検索" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 bg-[#f8f6f3] border border-transparent rounded-xl text-[12px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]" />
-                    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d3d1c7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
+                    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d3d1c7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="border-b border-[#f8f6f3]">
-                        {["名前", "電話番号", "メール", "備考", "登録日"].map((h) => (
+                        {["名前", "電話番号", "メール", "備考", "登録日", "操作"].map((h) => (
                           <th key={h} className="text-left py-3.5 px-6 text-[#b4b2a9] font-normal tracking-wide text-[11px]">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredCustomers.length === 0 ? (
-                        <tr><td colSpan={5} className="text-center py-16 text-[#d3d1c7] text-[12px]">
+                        <tr><td colSpan={6} className="text-center py-16 text-[#d3d1c7] text-[12px]">
                           {customers.length === 0 ? "顧客データがありません。「新規登録」から追加してください。" : "検索結果がありません"}
                         </td></tr>
                       ) : (
@@ -326,9 +340,7 @@ export default function Dashboard() {
                           <tr key={c.id} className="border-b border-[#f8f6f3] hover:bg-[#faf9f7] transition-colors">
                             <td className="py-3.5 px-6">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-[#f0ece4] flex items-center justify-center text-[11px] text-[#888780] font-medium flex-shrink-0">
-                                  {c.name?.charAt(0)}
-                                </div>
+                                <div className="w-8 h-8 rounded-full bg-[#f0ece4] flex items-center justify-center text-[11px] text-[#888780] font-medium flex-shrink-0">{c.name?.charAt(0)}</div>
                                 <span className="text-[#2c2c2a] font-medium">{c.name}</span>
                               </div>
                             </td>
@@ -336,6 +348,12 @@ export default function Dashboard() {
                             <td className="py-3.5 px-6 text-[#888780]">{c.email || "—"}</td>
                             <td className="py-3.5 px-6 text-[#b4b2a9] max-w-[200px] truncate">{c.notes || "—"}</td>
                             <td className="py-3.5 px-6 text-[#b4b2a9]">{new Date(c.created_at).toLocaleDateString("ja-JP")}</td>
+                            <td className="py-3.5 px-6">
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => startEdit(c)} className="px-3 py-1.5 text-[11px] text-[#3d6b9f] bg-[#e4eef7] rounded-lg hover:bg-[#d4e4f4] transition-colors cursor-pointer">編集</button>
+                                <button onClick={() => setDeleteTarget(c)} className="px-3 py-1.5 text-[11px] text-[#c45555] bg-[#fce8e8] rounded-lg hover:bg-[#f8d4d4] transition-colors cursor-pointer">削除</button>
+                              </div>
+                            </td>
                           </tr>
                         ))
                       )}
@@ -375,24 +393,12 @@ export default function Dashboard() {
                     <textarea placeholder="メモ・備考を入力" rows={3} value={custNotes} onChange={(e) => setCustNotes(e.target.value)}
                       className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all resize-none placeholder-[#d3d1c7]" />
                   </div>
-
                   {saveMsg && (
-                    <div className={`px-4 py-3 rounded-xl text-[12px] ${
-                      saveMsg.includes("失敗") || saveMsg.includes("入力")
-                        ? "bg-[#c49885]/10 text-[#c49885] border border-[#c49885]/15"
-                        : "bg-[#7ab88f]/10 text-[#5a9e6f] border border-[#7ab88f]/15"
-                    }`}>{saveMsg}</div>
+                    <div className={`px-4 py-3 rounded-xl text-[12px] ${saveMsg.includes("失敗") || saveMsg.includes("入力") ? "bg-[#c49885]/10 text-[#c49885] border border-[#c49885]/15" : "bg-[#7ab88f]/10 text-[#5a9e6f] border border-[#7ab88f]/15"}`}>{saveMsg}</div>
                   )}
-
                   <div className="flex gap-3 pt-3">
-                    <button onClick={handleRegister} disabled={saving}
-                      className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide disabled:opacity-60">
-                      {saving ? "登録中..." : "登録する"}
-                    </button>
-                    <button onClick={() => { setActivePage("顧客一覧"); setSaveMsg(""); }}
-                      className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl hover:bg-[#f8f6f3] transition-all cursor-pointer">
-                      キャンセル
-                    </button>
+                    <button onClick={handleRegister} disabled={saving} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all duration-300 cursor-pointer tracking-wide disabled:opacity-60">{saving ? "登録中..." : "登録する"}</button>
+                    <button onClick={() => { setActivePage("顧客一覧"); setSaveMsg(""); }} className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl hover:bg-[#f8f6f3] transition-all cursor-pointer">キャンセル</button>
                   </div>
                 </div>
               </div>
@@ -405,9 +411,7 @@ export default function Dashboard() {
               <div className="bg-white rounded-2xl border border-[#f0ece4] p-8">
                 <div className="flex flex-col items-center justify-center py-20">
                   <div className="w-[72px] h-[72px] rounded-2xl bg-[#f8f6f3] flex items-center justify-center mb-5">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d3d1c7" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                    </svg>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d3d1c7" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                   </div>
                   <h3 className="text-[15px] text-[#888780] mb-1.5">{activePage}</h3>
                   <p className="text-[12px] text-[#d3d1c7]">この機能は次のステップで実装します</p>
@@ -417,6 +421,64 @@ export default function Dashboard() {
           )}
         </main>
       </div>
+
+      {/* Edit Modal */}
+      {editingCustomer && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditingCustomer(null)}>
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-8 w-full max-w-lg animate-[fadeIn_0.25s_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-6">
+              <h2 className="text-[16px] font-medium text-[#2c2c2a]">顧客情報を編集</h2>
+              <p className="text-[11px] text-[#d3d1c7] mt-1">変更したい項目を修正してください</p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[11px] text-[#888780] mb-1.5">名前 <span className="text-[#c49885]">*</span></label>
+                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#888780] mb-1.5">電話番号</label>
+                <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#888780] mb-1.5">メールアドレス</label>
+                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#888780] mb-1.5">備考</label>
+                <textarea rows={3} value={editNotes} onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all resize-none" />
+              </div>
+              {editMsg && (
+                <div className={`px-4 py-3 rounded-xl text-[12px] ${editMsg.includes("失敗") || editMsg.includes("入力") ? "bg-[#c49885]/10 text-[#c49885]" : "bg-[#7ab88f]/10 text-[#5a9e6f]"}`}>{editMsg}</div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button onClick={handleUpdate} disabled={editSaving} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
+                <button onClick={() => setEditingCustomer(null)} className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl hover:bg-[#f8f6f3] transition-all cursor-pointer">キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteTarget(null)}>
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-8 w-full max-w-sm text-center animate-[fadeIn_0.25s_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full bg-[#fce8e8] flex items-center justify-center mx-auto mb-5">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c45555" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </div>
+            <h3 className="text-[15px] font-medium text-[#2c2c2a] mb-2">顧客を削除しますか？</h3>
+            <p className="text-[12px] text-[#b4b2a9] mb-6">「{deleteTarget.name}」を削除すると元に戻せません</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={handleDelete} disabled={deleting} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl hover:bg-[#b04444] transition-colors cursor-pointer disabled:opacity-60">{deleting ? "削除中..." : "削除する"}</button>
+              <button onClick={() => setDeleteTarget(null)} className="px-6 py-2.5 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl hover:bg-[#f8f6f3] transition-all cursor-pointer">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`
         @keyframes fadeIn {
