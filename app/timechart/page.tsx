@@ -220,7 +220,8 @@ export default function TimeChart() {
 
   const deleteReservation = async (id: number) => {
     
-    await supabase.from("reservations").delete().eq("id", id);
+  const { error } = await supabase.from("reservations").delete().eq("id", id);
+    if (error) { alert("削除失敗: " + error.message); return; }
     setEditRes(null);
     fetchData();
   };
@@ -282,7 +283,7 @@ export default function TimeChart() {
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-auto" ref={timelineRef}>
+      <div className="flex-1 overflow-auto select-none" ref={timelineRef}>
         {therapists.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
