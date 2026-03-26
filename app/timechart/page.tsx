@@ -79,8 +79,24 @@ export default function TimeChart() {
 
   const [dragInfo, setDragInfo] = useState<{ resId: number; edge: "start" | "end" | "move"; initX: number; initMin: number; initEndMin: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+const [currentTime, setCurrentTime] = useState(new Date());
 
-// Pan scroll state
+  // Pan scroll state
+// Current time update
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const currentTimePos = (() => {
+    const now = currentTime;
+    const h = now.getHours();
+    const m = now.getMinutes();
+    const adjustedH = h < 9 ? h + 24 : h;
+    if (adjustedH < 9 || adjustedH >= 27) return -1;
+    return ((adjustedH - 9) * 60 + m) * (HOUR_WIDTH / 60);
+  })();
+
   const [isPanning, setIsPanning] = useState(false);
   const panStartX = useRef(0);
   const panMoved = useRef(false);
@@ -380,7 +396,13 @@ export default function TimeChart() {
                   </div>
                 ))}
               </div>
-
+              {/* Current Time Line */}
+              {selectedDate === new Date().toISOString().split("T")[0] && currentTimePos >= 0 && (
+                <div className="absolute top-0 bottom-0 z-30 pointer-events-none" style={{ left: currentTimePos }}>
+                  <div className="w-3 h-3 rounded-full bg-[#e24b4a] -ml-1.5 -mt-1 relative z-10" />
+                  <div className="w-[2px] h-full bg-[#e24b4a]/60 -mt-1 ml-[5px]" />
+                </div>
+              )}
               {/* Therapist Rows */}
               {therapists.map((t, ti) => {
                 const tRes = getResForTherapist(t.id);
