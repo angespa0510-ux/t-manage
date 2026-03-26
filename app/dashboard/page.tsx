@@ -189,7 +189,7 @@ export default function Dashboard() {
               {item.sub.length > 0 && openMenus.includes(item.label) && (
                 <div className="ml-[18px] pl-4 border-l border-white/[0.04] my-1">
                   {item.sub.map((sub) => (
-                    <button key={sub} onClick={() => sub === "タイムチャート" ? router.push("/timechart") : setActivePage(sub)} className={`w-full text-left px-3 py-[7px] text-[12px] rounded-md transition-all duration-200 cursor-pointer ${activePage === sub ? "text-[#c3a782] bg-[#c3a782]/[0.06]" : "text-white/25 hover:text-white/50 hover:bg-white/[0.02]"}`}>{sub}</button>
+                    <button key={sub} onClick={() => sub === "タイムチャート" ? router.push("/timechart") : sub === "利用場所登録" ? router.push("/rooms") : setActivePage(sub)} className={`w-full text-left px-3 py-[7px] text-[12px] rounded-md transition-all duration-200 cursor-pointer ${activePage === sub ? "text-[#c3a782] bg-[#c3a782]/[0.06]" : "text-white/25 hover:text-white/50 hover:bg-white/[0.02]"}`}>{sub}</button>
                   ))}
                 </div>
               )}
