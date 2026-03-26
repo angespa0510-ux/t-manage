@@ -325,7 +325,7 @@ export default function ShiftManagement() {
                   {Object.entries(statusColors).map(([key, val]) => (
                     <button key={key} onClick={() => setAddStatus(key)}
                       className={`px-4 py-2 rounded-xl text-[12px] transition-all cursor-pointer ${addStatus === key ? "ring-2 ring-offset-1" : "opacity-60 hover:opacity-80"}`}
-                      style={{ backgroundColor: val.bg, color: val.text, ringColor: val.text }}>
+                      style={{ backgroundColor: val.bg, color: val.text }}>
                       {val.label}
                     </button>
                   ))}
@@ -378,7 +378,7 @@ export default function ShiftManagement() {
                   {Object.entries(statusColors).map(([key, val]) => (
                     <button key={key} onClick={() => setEditStatus(key)}
                       className={`px-4 py-2 rounded-xl text-[12px] transition-all cursor-pointer ${editStatus === key ? "ring-2 ring-offset-1" : "opacity-60 hover:opacity-80"}`}
-                      style={{ backgroundColor: val.bg, color: val.text, ringColor: val.text }}>
+                      style={{ backgroundColor: val.bg, color: val.text }}>
                       {val.label}
                     </button>
                   ))}
