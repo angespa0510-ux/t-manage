@@ -5,42 +5,36 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 
 type Store = { id: number; name: string };
-type Room = { id: number; store_id: number; name: string };
-type Therapist = { id: number; name: string };
-type Reservation = {
-  id: number; customer_name: string; therapist_id: number;
-  date: string; start_time: string; end_time: string; course: string; room_id: number;
-};
-
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 9);
+type Building = { id: number; store_id: number; name: string };
+type Room = { id: number; store_id: number; building_id: number; name: string };
 
 export default function RoomManagement() {
   const router = useRouter();
   const [stores, setStores] = useState<Store[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [therapists, setTherapists] = useState<Therapist[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [selectedStore, setSelectedStore] = useState<number>(0);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [tab, setTab] = useState<"assign" | "settings">("assign");
 
   const [newStoreName, setNewStoreName] = useState("");
+  const [newBuildingName, setNewBuildingName] = useState("");
+  const [newBuildingStoreId, setNewBuildingStoreId] = useState<number>(0);
   const [newRoomName, setNewRoomName] = useState("");
-  const [newRoomStoreId, setNewRoomStoreId] = useState<number>(0);
+  const [newRoomBuildingId, setNewRoomBuildingId] = useState<number>(0);
+
+  const [editStore, setEditStore] = useState<Store | null>(null);
+  const [editStoreName, setEditStoreName] = useState("");
+  const [editBuilding, setEditBuilding] = useState<Building | null>(null);
+  const [editBuildingName, setEditBuildingName] = useState("");
+  const [editRoom, setEditRoom] = useState<Room | null>(null);
+  const [editRoomName, setEditRoomName] = useState("");
 
   const fetchData = useCallback(async () => {
     const { data: s } = await supabase.from("stores").select("*").order("id");
-    if (s) { setStores(s); if (s.length > 0 && !selectedStore) setSelectedStore(s[0].id); }
+    if (s) setStores(s);
+    const { data: b } = await supabase.from("buildings").select("*").order("id");
+    if (b) setBuildings(b);
     const { data: r } = await supabase.from("rooms").select("*").order("id");
     if (r) setRooms(r);
-    const { data: t } = await supabase.from("therapists").select("*").order("id");
-    if (t) setTherapists(t);
-  }, [selectedStore]);
-
-  const fetchReservations = useCallback(async () => {
-    const { data: res } = await supabase.from("reservations").select("*").eq("date", selectedDate).order("start_time");
-    if (res) setReservations(res);
-  }, [selectedDate]);
+  }, []);
 
   useEffect(() => {
     const check = async () => {
@@ -51,64 +45,74 @@ export default function RoomManagement() {
     fetchData();
   }, [router, fetchData]);
 
-  useEffect(() => { fetchReservations(); }, [fetchReservations]);
-
+  // Store CRUD
   const addStore = async () => {
     if (!newStoreName.trim()) return;
     await supabase.from("stores").insert({ name: newStoreName.trim() });
     setNewStoreName("");
     fetchData();
   };
-
+  const updateStore = async () => {
+    if (!editStore || !editStoreName.trim()) return;
+    await supabase.from("stores").update({ name: editStoreName.trim() }).eq("id", editStore.id);
+    setEditStore(null);
+    fetchData();
+  };
   const deleteStore = async (id: number) => {
-    if (!confirm("この店舗を削除しますか？関連する部屋も削除されます。")) return;
-    await supabase.from("rooms").delete().eq("store_id", id);
+    if (!confirm("このルームを削除しますか？関連する建物・部屋も削除されます。")) return;
+    const bIds = buildings.filter((b) => b.store_id === id).map((b) => b.id);
+    if (bIds.length > 0) {
+      await supabase.from("rooms").delete().in("building_id", bIds);
+      await supabase.from("buildings").delete().eq("store_id", id);
+    }
     await supabase.from("stores").delete().eq("id", id);
     fetchData();
   };
 
-  const addRoom = async () => {
-    if (!newRoomName.trim() || !newRoomStoreId) return;
-    await supabase.from("rooms").insert({ name: newRoomName.trim(), store_id: newRoomStoreId });
-    setNewRoomName("");
+  // Building CRUD
+  const addBuilding = async () => {
+    if (!newBuildingName.trim() || !newBuildingStoreId) return;
+    await supabase.from("buildings").insert({ name: newBuildingName.trim(), store_id: newBuildingStoreId });
+    setNewBuildingName("");
+    fetchData();
+  };
+  const updateBuilding = async () => {
+    if (!editBuilding || !editBuildingName.trim()) return;
+    await supabase.from("buildings").update({ name: editBuildingName.trim() }).eq("id", editBuilding.id);
+    setEditBuilding(null);
+    fetchData();
+  };
+  const deleteBuilding = async (id: number) => {
+    if (!confirm("この建物を削除しますか？関連する部屋も削除されます。")) return;
+    await supabase.from("rooms").delete().eq("building_id", id);
+    await supabase.from("buildings").delete().eq("id", id);
     fetchData();
   };
 
+  // Room CRUD
+  const addRoom = async () => {
+    if (!newRoomName.trim() || !newRoomBuildingId) return;
+    const building = buildings.find((b) => b.id === newRoomBuildingId);
+    await supabase.from("rooms").insert({ name: newRoomName.trim(), building_id: newRoomBuildingId, store_id: building?.store_id || 0 });
+    setNewRoomName("");
+    fetchData();
+  };
+  const updateRoom = async () => {
+    if (!editRoom || !editRoomName.trim()) return;
+    await supabase.from("rooms").update({ name: editRoomName.trim() }).eq("id", editRoom.id);
+    setEditRoom(null);
+    fetchData();
+  };
   const deleteRoom = async (id: number) => {
     if (!confirm("この部屋を削除しますか？")) return;
     await supabase.from("rooms").delete().eq("id", id);
     fetchData();
   };
 
-  const assignRoom = async (reservationId: number, roomId: number) => {
-    await supabase.from("reservations").update({ room_id: roomId || null }).eq("id", reservationId);
-    fetchReservations();
-  };
+  const getStoreName = (id: number) => stores.find((s) => s.id === id)?.name || "";
+  const getBuildingName = (id: number) => buildings.find((b) => b.id === id)?.name || "";
 
-  const storeRooms = rooms.filter((r) => r.store_id === selectedStore);
-  const dateDisplay = (() => {
-    const d = new Date(selectedDate + "T00:00:00");
-    const days = ["日", "月", "火", "水", "木", "金", "土"];
-    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${days[d.getDay()]}）`;
-  })();
-
-  const prevDay = () => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().split("T")[0]); };
-  const nextDay = () => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split("T")[0]); };
-
-  const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4", "#85c4b8", "#c4a685", "#8599c4"];
-
-  const getResForRoomCell = (roomId: number, hour: number) => {
-    return reservations.filter((r) => {
-      const startH = parseInt(r.start_time.split(":")[0]);
-      const endH = parseInt(r.end_time.split(":")[0]);
-      return r.room_id === roomId && hour >= startH && hour < endH;
-    });
-  };
-
-  const isStartHourForRoom = (r: Reservation, hour: number) => parseInt(r.start_time.split(":")[0]) === hour;
-  const getResSpan = (r: Reservation) => parseInt(r.end_time.split(":")[0]) - parseInt(r.start_time.split(":")[0]);
-
-  const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "不明";
+  const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4"];
 
   return (
     <div className="h-screen flex flex-col bg-[#f8f6f3]">
@@ -118,182 +122,245 @@ export default function RoomManagement() {
           <button onClick={() => router.push("/dashboard")} className="p-2 rounded-lg hover:bg-[#f8f6f3] transition-colors cursor-pointer">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9c9a92" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <h1 className="text-[15px] font-medium text-[#2c2c2a]">部屋割り管理</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setTab("assign")} className={`px-4 py-2 text-[11px] rounded-xl transition-all cursor-pointer ${tab === "assign" ? "bg-[#c3a782] text-white" : "border border-[#e8e4df] text-[#888780] hover:bg-[#f8f6f3]"}`}>部屋割り表</button>
-          <button onClick={() => setTab("settings")} className={`px-4 py-2 text-[11px] rounded-xl transition-all cursor-pointer ${tab === "settings" ? "bg-[#c3a782] text-white" : "border border-[#e8e4df] text-[#888780] hover:bg-[#f8f6f3]"}`}>店舗・部屋設定</button>
+          <div>
+            <h1 className="text-[15px] font-medium text-[#2c2c2a]">利用場所登録</h1>
+            <p className="text-[11px] text-[#b4b2a9]">ルーム → 建物 → 部屋 の3階層で管理</p>
+          </div>
         </div>
       </div>
 
-      {tab === "settings" && (
-        <div className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-2xl mx-auto space-y-8 animate-[fadeIn_0.4s_ease-out]">
-            {/* Stores */}
-            <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
-              <h2 className="text-[15px] font-medium text-[#2c2c2a] mb-1">店舗管理</h2>
-              <p className="text-[11px] text-[#d3d1c7] mb-6">店舗の追加・削除</p>
-              <div className="flex gap-3 mb-6">
-                <input type="text" value={newStoreName} onChange={(e) => setNewStoreName(e.target.value)} placeholder="店舗名（例：三河安城ルーム）"
-                  className="flex-1 px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]"
-                  onKeyDown={(e) => e.key === "Enter" && addStore()} />
-                <button onClick={addStore} className="px-5 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all">追加</button>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-6 animate-[fadeIn_0.4s_ease-out]">
+
+          {/* Store (ルーム) Section */}
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-[#c3a782]/10 flex items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c3a782" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
               </div>
-              {stores.length === 0 ? (
-                <p className="text-[12px] text-[#d3d1c7] text-center py-8">店舗が登録されていません</p>
-              ) : (
-                <div className="space-y-2">
-                  {stores.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-[#f8f6f3] rounded-xl">
-                      <span className="text-[13px] text-[#2c2c2a]">{s.name}</span>
-                      <button onClick={() => deleteStore(s.id)} className="text-[11px] text-[#c45555] hover:text-[#a33] cursor-pointer">削除</button>
+              <div>
+                <h2 className="text-[15px] font-medium text-[#2c2c2a]">ルーム</h2>
+                <p className="text-[11px] text-[#d3d1c7]">三河安城ルーム、豊橋ルームなど</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4 mb-4">
+              <input type="text" value={newStoreName} onChange={(e) => setNewStoreName(e.target.value)} placeholder="ルーム名（例：三河安城ルーム）"
+                className="flex-1 px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]"
+                onKeyDown={(e) => e.key === "Enter" && addStore()} />
+              <button onClick={addStore} className="px-5 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all">追加</button>
+            </div>
+            {stores.length === 0 ? (
+              <p className="text-[12px] text-[#d3d1c7] text-center py-4">ルームが登録されていません</p>
+            ) : (
+              <div className="space-y-2">
+                {stores.map((s, si) => (
+                  <div key={s.id} className="flex items-center justify-between px-4 py-3 rounded-xl" style={{ backgroundColor: colors[si % colors.length] + "10" }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} />
+                      <span className="text-[13px] font-medium text-[#2c2c2a]">{s.name}</span>
+                      <span className="text-[10px] text-[#b4b2a9]">（建物 {buildings.filter((b) => b.store_id === s.id).length}件）</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { setEditStore(s); setEditStoreName(s.name); }} className="px-3 py-1 text-[10px] text-[#3d6b9f] bg-[#e4eef7] rounded-lg hover:bg-[#d4e4f4] transition-colors cursor-pointer">編集</button>
+                      <button onClick={() => deleteStore(s.id)} className="px-3 py-1 text-[10px] text-[#c45555] bg-[#fce8e8] rounded-lg hover:bg-[#f8d4d4] transition-colors cursor-pointer">削除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Building (建物) Section */}
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-[#7ab88f]/10 flex items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7ab88f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="6" x2="9" y2="6.01"/><line x1="15" y1="6" x2="15" y2="6.01"/><line x1="9" y1="10" x2="9" y2="10.01"/><line x1="15" y1="10" x2="15" y2="10.01"/><line x1="9" y1="14" x2="9" y2="14.01"/><line x1="15" y1="14" x2="15" y2="14.01"/><path d="M9 18h6"/></svg>
+              </div>
+              <div>
+                <h2 className="text-[15px] font-medium text-[#2c2c2a]">建物</h2>
+                <p className="text-[11px] text-[#d3d1c7]">オアシス、マイコート、リングセレクトなど</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4 mb-4">
+              <select value={newBuildingStoreId} onChange={(e) => setNewBuildingStoreId(Number(e.target.value))}
+                className="px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all cursor-pointer min-w-[160px]">
+                <option value={0}>ルームを選択</option>
+                {stores.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+              </select>
+              <input type="text" value={newBuildingName} onChange={(e) => setNewBuildingName(e.target.value)} placeholder="建物名（例：オアシス）"
+                className="flex-1 px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]"
+                onKeyDown={(e) => e.key === "Enter" && addBuilding()} />
+              <button onClick={addBuilding} className="px-5 py-3 bg-gradient-to-r from-[#7ab88f] to-[#5a9e6f] text-white text-[12px] rounded-xl cursor-pointer hover:shadow-[0_4px_16px_rgba(122,184,143,0.25)] transition-all">追加</button>
+            </div>
+            {stores.map((s, si) => {
+              const storeBuildings = buildings.filter((b) => b.store_id === s.id);
+              if (storeBuildings.length === 0) return null;
+              return (
+                <div key={s.id} className="mb-4">
+                  <p className="text-[11px] text-[#b4b2a9] mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} />
+                    {s.name}
+                  </p>
+                  <div className="space-y-2 ml-4">
+                    {storeBuildings.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between px-4 py-2.5 bg-[#f8f6f3] rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] text-[#2c2c2a] font-medium">{b.name}</span>
+                          <span className="text-[10px] text-[#b4b2a9]">（{rooms.filter((r) => r.building_id === b.id).length}部屋）</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setEditBuilding(b); setEditBuildingName(b.name); }} className="px-3 py-1 text-[10px] text-[#3d6b9f] bg-[#e4eef7] rounded-lg hover:bg-[#d4e4f4] transition-colors cursor-pointer">編集</button>
+                          <button onClick={() => deleteBuilding(b.id)} className="px-3 py-1 text-[10px] text-[#c45555] bg-[#fce8e8] rounded-lg hover:bg-[#f8d4d4] transition-colors cursor-pointer">削除</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {buildings.length === 0 && <p className="text-[12px] text-[#d3d1c7] text-center py-4">建物が登録されていません。まずルームを追加してください。</p>}
+          </div>
+
+          {/* Room (部屋) Section */}
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-[#85a8c4]/10 flex items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#85a8c4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div>
+                <h2 className="text-[15px] font-medium text-[#2c2c2a]">部屋</h2>
+                <p className="text-[11px] text-[#d3d1c7]">201号室、703号室など</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4 mb-4">
+              <select value={newRoomBuildingId} onChange={(e) => setNewRoomBuildingId(Number(e.target.value))}
+                className="px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all cursor-pointer min-w-[200px]">
+                <option value={0}>建物を選択</option>
+                {stores.map((s) => {
+                  const storeBuildings = buildings.filter((b) => b.store_id === s.id);
+                  if (storeBuildings.length === 0) return null;
+                  return storeBuildings.map((b) => (
+                    <option key={b.id} value={b.id}>{s.name} / {b.name}</option>
+                  ));
+                })}
+              </select>
+              <input type="text" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} placeholder="部屋名（例：201号室）"
+                className="flex-1 px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]"
+                onKeyDown={(e) => e.key === "Enter" && addRoom()} />
+              <button onClick={addRoom} className="px-5 py-3 bg-gradient-to-r from-[#85a8c4] to-[#6890b0] text-white text-[12px] rounded-xl cursor-pointer hover:shadow-[0_4px_16px_rgba(133,168,196,0.25)] transition-all">追加</button>
+            </div>
+            {stores.map((s, si) => {
+              const storeBuildings = buildings.filter((b) => b.store_id === s.id);
+              const hasRooms = storeBuildings.some((b) => rooms.filter((r) => r.building_id === b.id).length > 0);
+              if (!hasRooms) return null;
+              return (
+                <div key={s.id} className="mb-5">
+                  <p className="text-[12px] font-medium text-[#2c2c2a] mb-2 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} />
+                    {s.name}
+                  </p>
+                  {storeBuildings.map((b) => {
+                    const bRooms = rooms.filter((r) => r.building_id === b.id);
+                    if (bRooms.length === 0) return null;
+                    return (
+                      <div key={b.id} className="ml-4 mb-3">
+                        <p className="text-[11px] text-[#888780] mb-1.5 font-medium">{b.name}</p>
+                        <div className="flex flex-wrap gap-2 ml-2">
+                          {bRooms.map((r) => (
+                            <div key={r.id} className="flex items-center gap-1.5 px-3 py-2 bg-[#f8f6f3] rounded-xl group hover:bg-[#f0ece4] transition-colors">
+                              <span className="text-[12px] text-[#2c2c2a]">{r.name}</span>
+                              <button onClick={() => { setEditRoom(r); setEditRoomName(r.name); }} className="w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-[#e4eef7]">
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#3d6b9f" strokeWidth="2.5" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              </button>
+                              <button onClick={() => deleteRoom(r.id)} className="w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-[#fce8e8]">
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#c45555" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {rooms.length === 0 && <p className="text-[12px] text-[#d3d1c7] text-center py-4">部屋が登録されていません。まず建物を追加してください。</p>}
+          </div>
+
+          {/* Summary Tree */}
+          {stores.length > 0 && buildings.length > 0 && rooms.length > 0 && (
+            <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
+              <h2 className="text-[15px] font-medium text-[#2c2c2a] mb-4">全体構成</h2>
+              {stores.map((s, si) => (
+                <div key={s.id} className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-4 h-4 rounded" style={{ backgroundColor: colors[si % colors.length] + "30" }} />
+                    <span className="text-[13px] font-medium text-[#2c2c2a]">{s.name}</span>
+                  </div>
+                  {buildings.filter((b) => b.store_id === s.id).map((b) => (
+                    <div key={b.id} className="ml-6 mb-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-1 h-4 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} />
+                        <span className="text-[12px] text-[#888780] font-medium">{b.name}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 ml-3">
+                        {rooms.filter((r) => r.building_id === b.id).map((r) => (
+                          <span key={r.id} className="px-2.5 py-1 bg-[#f8f6f3] rounded-lg text-[11px] text-[#888780]">{r.name}</span>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
-              )}
+              ))}
             </div>
+          )}
 
-            {/* Rooms */}
-            <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
-              <h2 className="text-[15px] font-medium text-[#2c2c2a] mb-1">部屋管理</h2>
-              <p className="text-[11px] text-[#d3d1c7] mb-6">各店舗の部屋を追加・削除</p>
-              <div className="flex gap-3 mb-6">
-                <select value={newRoomStoreId} onChange={(e) => setNewRoomStoreId(Number(e.target.value))}
-                  className="px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all cursor-pointer">
-                  <option value={0}>店舗を選択</option>
-                  {stores.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-                </select>
-                <input type="text" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} placeholder="部屋名（例：Room A）"
-                  className="flex-1 px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]"
-                  onKeyDown={(e) => e.key === "Enter" && addRoom()} />
-                <button onClick={addRoom} className="px-5 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer hover:shadow-[0_4px_16px_rgba(195,167,130,0.25)] transition-all">追加</button>
-              </div>
-              {stores.map((s) => {
-                const sRooms = rooms.filter((r) => r.store_id === s.id);
-                if (sRooms.length === 0) return null;
-                return (
-                  <div key={s.id} className="mb-4">
-                    <p className="text-[11px] text-[#b4b2a9] mb-2 tracking-wide">{s.name}</p>
-                    <div className="space-y-2">
-                      {sRooms.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between px-4 py-2.5 bg-[#f8f6f3] rounded-xl">
-                          <span className="text-[13px] text-[#2c2c2a]">{r.name}</span>
-                          <button onClick={() => deleteRoom(r.id)} className="text-[11px] text-[#c45555] hover:text-[#a33] cursor-pointer">削除</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              {rooms.length === 0 && <p className="text-[12px] text-[#d3d1c7] text-center py-8">部屋が登録されていません。まず店舗を追加してください。</p>}
+        </div>
+      </div>
+
+      {/* Edit Store Modal */}
+      {editStore && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditStore(null)}>
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-8 w-full max-w-sm animate-[fadeIn_0.25s_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[16px] font-medium text-[#2c2c2a] mb-4">ルーム名を変更</h2>
+            <input type="text" value={editStoreName} onChange={(e) => setEditStoreName(e.target.value)}
+              className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all mb-4" />
+            <div className="flex gap-3">
+              <button onClick={updateStore} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">更新</button>
+              <button onClick={() => setEditStore(null)} className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl cursor-pointer">キャンセル</button>
             </div>
           </div>
         </div>
       )}
 
-      {tab === "assign" && (
-        <>
-          {/* Date & Store Nav */}
-          <div className="h-[52px] bg-white border-b border-[#e8e4df] flex items-center justify-center gap-4 flex-shrink-0 px-6">
-            <button onClick={prevDay} className="p-1.5 rounded-lg hover:bg-[#f8f6f3] transition-colors cursor-pointer">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888780" strokeWidth="1.5"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <button onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])} className="px-3 py-1 text-[11px] text-[#888780] border border-[#e8e4df] rounded-lg hover:bg-[#f8f6f3] cursor-pointer">今日</button>
-            <span className="text-[14px] font-medium text-[#2c2c2a] min-w-[180px] text-center">{dateDisplay}</span>
-            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
-              className="text-[12px] text-[#888780] border border-[#e8e4df] rounded-lg px-2 py-1 outline-none cursor-pointer" />
-            <button onClick={nextDay} className="p-1.5 rounded-lg hover:bg-[#f8f6f3] transition-colors cursor-pointer">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888780" strokeWidth="1.5"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-            <div className="w-px h-5 bg-[#e8e4df] mx-2" />
-            <select value={selectedStore} onChange={(e) => setSelectedStore(Number(e.target.value))}
-              className="px-3 py-1.5 text-[12px] text-[#2c2c2a] border border-[#e8e4df] rounded-lg outline-none cursor-pointer font-medium">
-              {stores.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-            </select>
-          </div>
-
-          {/* Room Chart */}
-          <div className="flex-1 overflow-auto">
-            {stores.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full">
-                <p className="text-[14px] text-[#b4b2a9] mb-4">店舗が登録されていません</p>
-                <button onClick={() => setTab("settings")} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">店舗・部屋を設定する</button>
-              </div>
-            ) : storeRooms.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full">
-                <p className="text-[14px] text-[#b4b2a9] mb-4">この店舗に部屋がありません</p>
-                <button onClick={() => setTab("settings")} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">部屋を追加する</button>
-              </div>
-            ) : (
-              <div className="min-w-[800px]">
-                <table className="w-full border-collapse">
-                  <thead className="sticky top-0 z-10">
-                    <tr>
-                      <th className="w-[120px] bg-[#f0ece4] border-b border-r border-[#e8e4df] p-3 text-[11px] text-[#888780] font-normal text-left sticky left-0 z-20">部屋</th>
-                      {HOURS.map((h) => (
-                        <th key={h} className="bg-[#f0ece4] border-b border-r border-[#e8e4df] p-2 text-[11px] text-[#888780] font-normal min-w-[80px]">{h}:00</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {storeRooms.map((room, ri) => (
-                      <tr key={room.id} className="hover:bg-[#faf9f7]">
-                        <td className="bg-white border-b border-r border-[#e8e4df] p-3 sticky left-0 z-10">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: colors[ri % colors.length], opacity: 0.6 }} />
-                            <span className="text-[12px] text-[#2c2c2a] font-medium">{room.name}</span>
-                          </div>
-                        </td>
-                        {HOURS.map((h) => {
-                          const cellRes = getResForRoomCell(room.id, h);
-                          const startRes = cellRes.find((r) => isStartHourForRoom(r, h));
-                          if (cellRes.length > 0 && !startRes) return null;
-                          return (
-                            <td key={h} colSpan={startRes ? getResSpan(startRes) : 1}
-                              className="border-b border-r border-[#e8e4df] p-1 bg-white">
-                              {startRes && (
-                                <div className="rounded-lg p-2 h-full min-h-[48px]" style={{ backgroundColor: colors[ri % colors.length] + "18", borderLeft: `3px solid ${colors[ri % colors.length]}` }}>
-                                  <p className="text-[11px] font-medium text-[#2c2c2a] truncate">{startRes.customer_name}</p>
-                                  <p className="text-[10px] text-[#888780] truncate">{getTherapistName(startRes.therapist_id)} / {startRes.start_time}〜{startRes.end_time}</p>
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Unassigned Reservations */}
-          {tab === "assign" && stores.length > 0 && (
-            <div className="border-t border-[#e8e4df] bg-white p-4 flex-shrink-0">
-              <p className="text-[11px] text-[#b4b2a9] mb-3 tracking-wide">未割当の予約（部屋を選択してください）</p>
-              <div className="flex flex-wrap gap-3">
-                {reservations.filter((r) => !r.room_id).length === 0 ? (
-                  <p className="text-[12px] text-[#d3d1c7]">すべての予約が割り当て済みです</p>
-                ) : (
-                  reservations.filter((r) => !r.room_id).map((r) => (
-                    <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 bg-[#f8f6f3] rounded-xl">
-                      <div>
-                        <p className="text-[12px] text-[#2c2c2a] font-medium">{r.customer_name}</p>
-                        <p className="text-[10px] text-[#888780]">{getTherapistName(r.therapist_id)} / {r.start_time}〜{r.end_time}</p>
-                      </div>
-                      <select value={r.room_id || ""} onChange={(e) => assignRoom(r.id, Number(e.target.value))}
-                        className="px-3 py-1.5 text-[11px] border border-[#e8e4df] rounded-lg outline-none cursor-pointer bg-white">
-                        <option value="">部屋を選択</option>
-                        {storeRooms.map((room) => (<option key={room.id} value={room.id}>{room.name}</option>))}
-                      </select>
-                    </div>
-                  ))
-                )}
-              </div>
+      {/* Edit Building Modal */}
+      {editBuilding && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditBuilding(null)}>
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-8 w-full max-w-sm animate-[fadeIn_0.25s_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[16px] font-medium text-[#2c2c2a] mb-4">建物名を変更</h2>
+            <input type="text" value={editBuildingName} onChange={(e) => setEditBuildingName(e.target.value)}
+              className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all mb-4" />
+            <div className="flex gap-3">
+              <button onClick={updateBuilding} className="px-7 py-3 bg-gradient-to-r from-[#7ab88f] to-[#5a9e6f] text-white text-[12px] rounded-xl cursor-pointer">更新</button>
+              <button onClick={() => setEditBuilding(null)} className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl cursor-pointer">キャンセル</button>
             </div>
-          )}
-        </>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Room Modal */}
+      {editRoom && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRoom(null)}>
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-8 w-full max-w-sm animate-[fadeIn_0.25s_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[16px] font-medium text-[#2c2c2a] mb-4">部屋名を変更</h2>
+            <input type="text" value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)}
+              className="w-full px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all mb-4" />
+            <div className="flex gap-3">
+              <button onClick={updateRoom} className="px-7 py-3 bg-gradient-to-r from-[#85a8c4] to-[#6890b0] text-white text-[12px] rounded-xl cursor-pointer">更新</button>
+              <button onClick={() => setEditRoom(null)} className="px-7 py-3 border border-[#f0ece4] text-[#888780] text-[12px] rounded-xl cursor-pointer">キャンセル</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <style jsx global>{`
