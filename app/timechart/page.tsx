@@ -80,6 +80,16 @@ export default function TimeChart() {
   const [dragInfo, setDragInfo] = useState<{ resId: number; edge: "start" | "end" | "move"; initX: number; initMin: number; initEndMin: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
+// Pan scroll state
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartX = useRef(0);
+  const panMoved = useRef(false);
+  const panScrollLeft = useRef(0);
+  const velocity = useRef(0);
+  const lastX = useRef(0);
+  const lastTime = useRef(0);
+  const animFrame = useRef<number>(0);
+
   const selectedCourse = courses.find((c) => c.id === newCourseId);
   const editSelectedCourse = courses.find((c) => c.id === editCourseId);
 
@@ -100,6 +110,51 @@ export default function TimeChart() {
     check();
     fetchData();
   }, [router, fetchData]);
+
+  // Pan scroll handlers
+  const handlePanStart = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest(".res-block")) return;
+    const container = timelineRef.current;
+    if (!container) return;
+    setIsPanning(true);panMoved.current = false;
+    panStartX.current = e.clientX;
+    panScrollLeft.current = container.scrollLeft;
+    lastX.current = e.clientX;
+    lastTime.current = Date.now();
+    velocity.current = 0;
+    cancelAnimationFrame(animFrame.current);
+  };
+
+  const handlePanMove = (e: React.MouseEvent) => {
+    if (!isPanning) return;
+    const container = timelineRef.current;
+    if (!container) return;
+    e.preventDefault();
+    const dx = e.clientX - panStartX.current;
+    container.scrollLeft = panScrollLeft.current - dx;if (Math.abs(dx) > 5) panMoved.current = true;
+    const now = Date.now();
+    const dt = now - lastTime.current;
+    if (dt > 0) {
+      velocity.current = (e.clientX - lastX.current) / dt;
+    }
+    lastX.current = e.clientX;
+    lastTime.current = now;
+  };
+
+  const handlePanEnd = () => {
+    if (!isPanning) return;
+    setIsPanning(false);
+    const container = timelineRef.current;
+    if (!container) return;
+    let v = velocity.current * 15;
+    const decelerate = () => {
+      if (Math.abs(v) < 0.5) return;
+      container.scrollLeft -= v;
+      v *= 0.92;
+      animFrame.current = requestAnimationFrame(decelerate);
+    };
+    decelerate();
+  };
 
   // Drag handlers
   useEffect(() => {
@@ -283,7 +338,7 @@ export default function TimeChart() {
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-auto select-none" ref={timelineRef}>
+      <div className="flex-1 overflow-auto select-none [&::-webkit-scrollbar]:h-[4px] [&::-webkit-scrollbar-thumb]:bg-[#d3d1c7]/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-[#b4b2a9]/50" ref={timelineRef} style={{ cursor: isPanning ? "grabbing" : "grab" }} onMouseDown={handlePanStart} onMouseMove={handlePanMove} onMouseUp={handlePanEnd} onMouseLeave={handlePanEnd}>
         {therapists.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#e0dbd2" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -337,6 +392,7 @@ export default function TimeChart() {
                       const x = e.clientX - rect.left;
                       const min = Math.round(x / MIN_10_WIDTH) * 10;
                       const startTime = minutesToTime(min);
+                      if (panMoved.current) return;
                       setNewTherapistId(t.id);
                       setNewStart(startTime);
                       setNewEnd(minutesToTime(min + 60));
