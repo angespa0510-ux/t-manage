@@ -7,18 +7,24 @@ import { useRouter } from "next/navigation";
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
 type Room = { id: number; store_id: number; building_id: number; name: string };
+type ParkingSpot = { id: number; store_id: number; building_id: number; number: string; type: string };
 
 export default function RoomManagement() {
   const router = useRouter();
   const [stores, setStores] = useState<Store[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
 
   const [newStoreName, setNewStoreName] = useState("");
   const [newBuildingName, setNewBuildingName] = useState("");
   const [newBuildingStoreId, setNewBuildingStoreId] = useState<number>(0);
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomBuildingId, setNewRoomBuildingId] = useState<number>(0);
+
+  const [newParkingNumber, setNewParkingNumber] = useState("");
+  const [newParkingBuildingId, setNewParkingBuildingId] = useState<number>(0);
+  const [newParkingType, setNewParkingType] = useState<string>("therapist");
 
   const [editStore, setEditStore] = useState<Store | null>(null);
   const [editStoreName, setEditStoreName] = useState("");
@@ -34,6 +40,8 @@ export default function RoomManagement() {
     if (b) setBuildings(b);
     const { data: r } = await supabase.from("rooms").select("*").order("id");
     if (r) setRooms(r);
+    const { data: p } = await supabase.from("parking_spots").select("*").order("id");
+    if (p) setParkingSpots(p);
   }, []);
 
   useEffect(() => {
@@ -59,10 +67,11 @@ export default function RoomManagement() {
     fetchData();
   };
   const deleteStore = async (id: number) => {
-    if (!confirm("このルームを削除しますか？関連する建物・部屋も削除されます。")) return;
+    if (!confirm("このルームを削除しますか？関連する建物・部屋・駐車場も削除されます。")) return;
     const bIds = buildings.filter((b) => b.store_id === id).map((b) => b.id);
     if (bIds.length > 0) {
       await supabase.from("rooms").delete().in("building_id", bIds);
+      await supabase.from("parking_spots").delete().in("building_id", bIds);
       await supabase.from("buildings").delete().eq("store_id", id);
     }
     await supabase.from("stores").delete().eq("id", id);
@@ -83,8 +92,9 @@ export default function RoomManagement() {
     fetchData();
   };
   const deleteBuilding = async (id: number) => {
-    if (!confirm("この建物を削除しますか？関連する部屋も削除されます。")) return;
+    if (!confirm("この建物を削除しますか？関連する部屋・駐車場も削除されます。")) return;
     await supabase.from("rooms").delete().eq("building_id", id);
+    await supabase.from("parking_spots").delete().eq("building_id", id);
     await supabase.from("buildings").delete().eq("id", id);
     fetchData();
   };
@@ -109,8 +119,19 @@ export default function RoomManagement() {
     fetchData();
   };
 
-  const getStoreName = (id: number) => stores.find((s) => s.id === id)?.name || "";
-  const getBuildingName = (id: number) => buildings.find((b) => b.id === id)?.name || "";
+  // Parking CRUD
+  const addParking = async () => {
+    if (!newParkingNumber.trim() || !newParkingBuildingId) return;
+    const bld = buildings.find((b) => b.id === newParkingBuildingId);
+    await supabase.from("parking_spots").insert({ number: newParkingNumber.trim(), store_id: bld?.store_id || 0, building_id: newParkingBuildingId, type: newParkingType });
+    setNewParkingNumber("");
+    fetchData();
+  };
+  const deleteParking = async (id: number) => {
+    if (!confirm("この駐車場を削除しますか？")) return;
+    await supabase.from("parking_spots").delete().eq("id", id);
+    fetchData();
+  };
 
   const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4"];
 
@@ -124,7 +145,7 @@ export default function RoomManagement() {
           </button>
           <div>
             <h1 className="text-[15px] font-medium text-[#2c2c2a]">利用場所登録</h1>
-            <p className="text-[11px] text-[#b4b2a9]">ルーム → 建物 → 部屋 の3階層で管理</p>
+            <p className="text-[11px] text-[#b4b2a9]">ルーム・建物・部屋・駐車場の管理</p>
           </div>
         </div>
       </div>
@@ -132,7 +153,7 @@ export default function RoomManagement() {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-3xl mx-auto space-y-6 animate-[fadeIn_0.4s_ease-out]">
 
-          {/* Store (ルーム) Section */}
+          {/* Store (ルーム) */}
           <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-8 h-8 rounded-lg bg-[#c3a782]/10 flex items-center justify-center">
@@ -170,11 +191,11 @@ export default function RoomManagement() {
             )}
           </div>
 
-          {/* Building (建物) Section */}
+          {/* Building (建物) */}
           <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-8 h-8 rounded-lg bg-[#7ab88f]/10 flex items-center justify-center">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7ab88f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="6" x2="9" y2="6.01"/><line x1="15" y1="6" x2="15" y2="6.01"/><line x1="9" y1="10" x2="9" y2="10.01"/><line x1="15" y1="10" x2="15" y2="10.01"/><line x1="9" y1="14" x2="9" y2="14.01"/><line x1="15" y1="14" x2="15" y2="14.01"/><path d="M9 18h6"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7ab88f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="6" x2="9" y2="6.01"/><line x1="15" y1="6" x2="15" y2="6.01"/><line x1="9" y1="10" x2="9" y2="10.01"/><line x1="15" y1="10" x2="15" y2="10.01"/><path d="M9 18h6"/></svg>
               </div>
               <div>
                 <h2 className="text-[15px] font-medium text-[#2c2c2a]">建物</h2>
@@ -221,7 +242,7 @@ export default function RoomManagement() {
             {buildings.length === 0 && <p className="text-[12px] text-[#d3d1c7] text-center py-4">建物が登録されていません。まずルームを追加してください。</p>}
           </div>
 
-          {/* Room (部屋) Section */}
+          {/* Room (部屋) */}
           <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-8 h-8 rounded-lg bg-[#85a8c4]/10 flex items-center justify-center">
@@ -236,13 +257,9 @@ export default function RoomManagement() {
               <select value={newRoomBuildingId} onChange={(e) => setNewRoomBuildingId(Number(e.target.value))}
                 className="px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all cursor-pointer min-w-[200px]">
                 <option value={0}>建物を選択</option>
-                {stores.map((s) => {
-                  const storeBuildings = buildings.filter((b) => b.store_id === s.id);
-                  if (storeBuildings.length === 0) return null;
-                  return storeBuildings.map((b) => (
-                    <option key={b.id} value={b.id}>{s.name} / {b.name}</option>
-                  ));
-                })}
+                {stores.map((s) => buildings.filter((b) => b.store_id === s.id).map((b) => (
+                  <option key={b.id} value={b.id}>{s.name} / {b.name}</option>
+                )))}
               </select>
               <input type="text" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} placeholder="部屋名（例：201号室）"
                 className="flex-1 px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]"
@@ -287,8 +304,93 @@ export default function RoomManagement() {
             {rooms.length === 0 && <p className="text-[12px] text-[#d3d1c7] text-center py-4">部屋が登録されていません。まず建物を追加してください。</p>}
           </div>
 
+          {/* Parking (駐車場) */}
+          <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-[#c49885]/10 flex items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c49885" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="16" textAnchor="middle" fill="#c49885" fontSize="12" fontWeight="bold" stroke="none">P</text></svg>
+              </div>
+              <div>
+                <h2 className="text-[15px] font-medium text-[#2c2c2a]">駐車場</h2>
+                <p className="text-[11px] text-[#d3d1c7]">建物ごとにセラピスト用・お客様用を登録</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4 mb-4">
+              <select value={newParkingBuildingId} onChange={(e) => setNewParkingBuildingId(Number(e.target.value))}
+                className="px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all cursor-pointer min-w-[200px]">
+                <option value={0}>建物を選択</option>
+                {stores.map((s) => buildings.filter((b) => b.store_id === s.id).map((b) => (
+                  <option key={b.id} value={b.id}>{s.name} / {b.name}</option>
+                )))}
+              </select>
+              <select value={newParkingType} onChange={(e) => setNewParkingType(e.target.value)}
+                className="px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all cursor-pointer min-w-[140px]">
+                <option value="therapist">セラピスト用</option>
+                <option value="customer">お客様用</option>
+              </select>
+              <input type="text" value={newParkingNumber} onChange={(e) => setNewParkingNumber(e.target.value)} placeholder="番号（例：P1）"
+                className="flex-1 px-4 py-3 bg-[#f8f6f3] border border-transparent rounded-xl text-[13px] outline-none focus:border-[#c3a782]/30 focus:bg-white transition-all placeholder-[#d3d1c7]"
+                onKeyDown={(e) => e.key === "Enter" && addParking()} />
+              <button onClick={addParking} className="px-5 py-3 bg-gradient-to-r from-[#c49885] to-[#b08472] text-white text-[12px] rounded-xl cursor-pointer hover:shadow-[0_4px_16px_rgba(196,152,133,0.25)] transition-all">追加</button>
+            </div>
+            {stores.map((s, si) => {
+              const storeBuildings = buildings.filter((b) => b.store_id === s.id);
+              const hasParking = storeBuildings.some((b) => parkingSpots.filter((p) => p.building_id === b.id).length > 0);
+              if (!hasParking) return null;
+              return (
+                <div key={s.id} className="mb-5">
+                  <p className="text-[12px] font-medium text-[#2c2c2a] mb-2 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} />
+                    {s.name}
+                  </p>
+                  {storeBuildings.map((b) => {
+                    const bTherapistP = parkingSpots.filter((p) => p.building_id === b.id && p.type === "therapist");
+                    const bCustomerP = parkingSpots.filter((p) => p.building_id === b.id && p.type === "customer");
+                    if (bTherapistP.length === 0 && bCustomerP.length === 0) return null;
+                    return (
+                      <div key={b.id} className="ml-4 mb-3">
+                        <p className="text-[11px] text-[#888780] mb-1.5 font-medium">{b.name}</p>
+                        {bTherapistP.length > 0 && (
+                          <div className="ml-2 mb-2">
+                            <p className="text-[10px] text-[#7ab88f] mb-1">セラピスト用</p>
+                            <div className="flex flex-wrap gap-2">
+                              {bTherapistP.map((p) => (
+                                <div key={p.id} className="flex items-center gap-1.5 px-3 py-2 bg-[#e8f0ea] rounded-xl group hover:bg-[#d8e8db] transition-colors">
+                                  <span className="text-[12px] text-[#4a7c59] font-medium">{p.number}</span>
+                                  <button onClick={() => deleteParking(p.id)} className="w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-[#fce8e8]">
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#c45555" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {bCustomerP.length > 0 && (
+                          <div className="ml-2 mb-2">
+                            <p className="text-[10px] text-[#3d6b9f] mb-1">お客様用</p>
+                            <div className="flex flex-wrap gap-2">
+                              {bCustomerP.map((p) => (
+                                <div key={p.id} className="flex items-center gap-1.5 px-3 py-2 bg-[#e4eef7] rounded-xl group hover:bg-[#d4e4f4] transition-colors">
+                                  <span className="text-[12px] text-[#3d6b9f] font-medium">{p.number}</span>
+                                  <button onClick={() => deleteParking(p.id)} className="w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-[#fce8e8]">
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#c45555" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {parkingSpots.length === 0 && <p className="text-[12px] text-[#d3d1c7] text-center py-4">駐車場が登録されていません。建物を選択して番号を追加してください。</p>}
+          </div>
+
           {/* Summary Tree */}
-          {stores.length > 0 && buildings.length > 0 && rooms.length > 0 && (
+          {stores.length > 0 && (buildings.length > 0 || parkingSpots.length > 0) && (
             <div className="bg-white rounded-2xl border border-[#f0ece4] p-6">
               <h2 className="text-[15px] font-medium text-[#2c2c2a] mb-4">全体構成</h2>
               {stores.map((s, si) => (
@@ -303,11 +405,21 @@ export default function RoomManagement() {
                         <div className="w-1 h-4 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} />
                         <span className="text-[12px] text-[#888780] font-medium">{b.name}</span>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 ml-3">
+                      <div className="flex flex-wrap gap-1.5 ml-3 mb-1">
                         {rooms.filter((r) => r.building_id === b.id).map((r) => (
                           <span key={r.id} className="px-2.5 py-1 bg-[#f8f6f3] rounded-lg text-[11px] text-[#888780]">{r.name}</span>
                         ))}
                       </div>
+                      {parkingSpots.filter((p) => p.building_id === b.id).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 ml-3">
+                          {parkingSpots.filter((p) => p.building_id === b.id && p.type === "therapist").map((p) => (
+                            <span key={p.id} className="px-2.5 py-1 bg-[#e8f0ea] rounded-lg text-[10px] text-[#4a7c59]">{p.number}(セラピスト)</span>
+                          ))}
+                          {parkingSpots.filter((p) => p.building_id === b.id && p.type === "customer").map((p) => (
+                            <span key={p.id} className="px-2.5 py-1 bg-[#e4eef7] rounded-lg text-[10px] text-[#3d6b9f]">{p.number}(お客様)</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
