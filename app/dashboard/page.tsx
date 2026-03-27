@@ -59,7 +59,8 @@ export default function Dashboard() {
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [openMenus, setOpenMenus] = useState<string[]>(["HOME"]);
-  const [activePage, setActivePage] = useState(() => { if (typeof window !== "undefined") { const p = new URLSearchParams(window.location.search).get("page"); if (p) return p; } return "HOME"; });
+  const [activePage, setActivePage] = useState("HOME");
+  useEffect(() => { const p = new URLSearchParams(window.location.search).get("page"); if (p) setActivePage(p); }, []);
   useEffect(() => { const h = (e: Event) => setActivePage((e as CustomEvent).detail); window.addEventListener("dashboardPage", h); return () => window.removeEventListener("dashboardPage", h); }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
