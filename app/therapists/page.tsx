@@ -155,7 +155,7 @@ export default function TherapistManagement() {
                 <div className="flex gap-2">
                   {Object.entries(statusMap).map(([key, val]) => (
                     <button key={key} onClick={() => setAddStatus(key)} className={`px-4 py-2 rounded-xl text-[12px] transition-all cursor-pointer ${addStatus === key ? "ring-2 ring-offset-1" : "opacity-60"}`}
-                      style={{ backgroundColor: val.bg, color: val.text, ringColor: val.text }}>{val.label}</button>
+                      style={{ backgroundColor: val.bg, color: val.text }}>{val.label}</button>
                   ))}
                 </div>
               </div>
