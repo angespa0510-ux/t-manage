@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
+import { NavMenu } from "../../lib/nav-menu";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -196,6 +197,7 @@ export default function Analytics() {
       {/* Header */}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">
+          <NavMenu T={T} dark={dark} />
           <button onClick={() => router.push("/dashboard")} className="p-2 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6"/></svg></button>
           <h1 className="text-[14px] font-medium">売上分析</h1>
         </div>

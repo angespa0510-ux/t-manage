@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
+import { NavMenu } from "../../lib/nav-menu";
 
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
@@ -82,6 +83,7 @@ export default function ShiftManagement() {
       {/* Header */}
       <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6 flex-shrink-0" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
         <div className="flex items-center gap-4">
+          <NavMenu T={T} dark={dark} />
           <button onClick={() => router.push("/dashboard")} className="p-2 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
           <h1 className="text-[15px] font-medium">セラピスト勤怠（シフト管理）</h1>
         </div>

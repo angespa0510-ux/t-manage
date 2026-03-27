@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
+import { NavMenu } from "../../lib/nav-menu";
 
 type Customer = {
   id: number; created_at: string; name: string; phone: string; phone2: string; phone3: string;
@@ -58,8 +59,9 @@ export default function Dashboard() {
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [openMenus, setOpenMenus] = useState<string[]>(["HOME"]);
-  const [activePage, setActivePage] = useState("HOME");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activePage, setActivePage] = useState(() => { if (typeof window !== "undefined") { const p = new URLSearchParams(window.location.search).get("page"); if (p) return p; } return "HOME"; });
+  useEffect(() => { const h = (e: Event) => setActivePage((e as CustomEvent).detail); window.addEventListener("dashboardPage", h); return () => window.removeEventListener("dashboardPage", h); }, []);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
@@ -218,7 +220,7 @@ export default function Dashboard() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-[72px] backdrop-blur-xl flex items-center justify-between px-8 flex-shrink-0 border-b" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
           <div className="flex items-center gap-5">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
+            <NavMenu T={T} dark={dark} />
             <div><h1 className="text-[16px] font-medium">{activePage}</h1><p className="text-[11px]" style={{ color: T.textMuted }}>{dateStr}（{dayStr}）</p></div>
           </div>
           <div className="flex items-center gap-4">
@@ -229,6 +231,8 @@ export default function Dashboard() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-8">
+          {/* Loading */}
+          {activePage === "" && null}
           {/* HOME */}
           {activePage === "HOME" && (
             <div className="animate-[fadeIn_0.4s]">
