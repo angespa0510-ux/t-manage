@@ -196,7 +196,7 @@ export default function Dashboard() {
               {item.sub.length > 0 && openMenus.includes(item.label) && (
                 <div className="ml-[18px] pl-4 my-1" style={{ borderLeft: `1px solid ${SB.border}` }}>
                   {item.sub.map((sub) => (
-                    <button key={sub} onClick={() => sub === "タイムチャート" ? router.push("/timechart") : sub === "利用場所登録" ? router.push("/rooms") : sub === "セラピスト勤怠" ? router.push("/shifts") : sub === "セラピスト登録" ? router.push("/therapists") : sub === "コース登録" ? router.push("/courses") : sub === "部屋割り管理" ? router.push("/room-assignments") : setActivePage(sub)}
+                    <button key={sub} onClick={() => sub === "タイムチャート" ? router.push("/timechart") : sub === "利用場所登録" ? router.push("/rooms") : sub === "セラピスト勤怠" ? router.push("/shifts") : sub === "セラピスト登録" ? router.push("/therapists") : sub === "コース登録" ? router.push("/courses") : sub === "部屋割り管理" ? router.push("/room-assignments") : sub === "年別分析" || sub === "月別分析" || sub === "日別分析" ? router.push("/analytics") : sub === "指名登録" || sub === "延長登録" || sub === "オプション登録" || sub === "割引登録" ? router.push("/service-settings") : setActivePage(sub)}
                       className="w-full text-left px-3 py-[7px] text-[12px] rounded-md transition-all cursor-pointer"
                       style={{ color: activePage === sub ? SB.textActive : SB.textFaint, backgroundColor: activePage === sub ? "rgba(195,167,130,0.06)" : "transparent" }}>{sub}</button>
                   ))}
