@@ -56,6 +56,14 @@ export default function TimeChart() {
   const [editCourseId, setEditCourseId] = useState<number>(0);
   const [editNotes, setEditNotes] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [editNomination, setEditNomination] = useState("");
+  const [editNomFee, setEditNomFee] = useState(0);
+  const [editOptions, setEditOptions] = useState<{ name: string; price: number }[]>([]);
+  const [editDiscount, setEditDiscount] = useState("");
+  const [editDiscAmt, setEditDiscAmt] = useState(0);
+  const [editExtension, setEditExtension] = useState("");
+  const [editExtPrice, setEditExtPrice] = useState(0);
+  const [editExtDur, setEditExtDur] = useState(0);
   const [editMsg, setEditMsg] = useState("");
 
   const [showNewTherapist, setShowNewTherapist] = useState(false);
@@ -171,8 +179,8 @@ export default function TimeChart() {
     else { setMsg("予約を登録しました！"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscount(""); setNewDiscAmt(0); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
   };
 
-  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); };
-  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim() }).eq("id", editRes.id); setEditSaving(false); if (error) { setEditMsg("更新失敗: " + error.message); } else { setEditMsg("更新しました！"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
+  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); setEditDiscount((r as any).discount_name || ""); setEditDiscAmt((r as any).discount_amount || 0); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); };
+  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - editDiscAmt; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: editDiscount, discount_amount: editDiscAmt, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal }).eq("id", editRes.id); setEditSaving(false); if (error) { setEditMsg("更新失敗: " + error.message); } else { setEditMsg("更新しました！"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
   const deleteReservation = async (id: number) => { await supabase.from("reservations").delete().eq("id", id); setEditRes(null); fetchData(); };
   const addTherapist = async () => { if (!tName.trim()) return; await supabase.from("therapists").insert({ name: tName.trim(), phone: tPhone.trim(), status: "active" }); setTName(""); setTPhone(""); setShowNewTherapist(false); fetchData(); };
 
@@ -409,31 +417,52 @@ export default function TimeChart() {
       })()}
 
       {/* Edit Modal */}
-      {editRes && (
+      {editRes && (() => {
+        const eCp = editSelectedCourse?.price || 0; const eOptT = editOptions.reduce((s,o)=>s+o.price,0); const eTotalCalc = eCp + editNomFee + eOptT + editExtPrice - editDiscAmt;
+        return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRes(null)}>
-          <div className="rounded-2xl border p-8 w-full max-w-md animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-1">予約編集</h2>
-            <p className="text-[11px] mb-6" style={{ color: T.textFaint }}>予約情報を変更します</p>
+          <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[16px] font-medium mb-1">オーダー編集</h2>
+            <p className="text-[11px] mb-5" style={{ color: T.textFaint }}>{editCustName} 様の予約を編集</p>
             <div className="space-y-4">
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={editCustName} onChange={(e) => setEditCustName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト</label><select value={editTherapistId} onChange={(e) => setEditTherapistId(Number(e.target.value))} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none cursor-pointer" style={inputStyle}>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース</label><select value={editCourseId} onChange={(e) => handleCourseChange(Number(e.target.value), true)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択なし</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
-              {editSelectedCourse && (<div className="rounded-xl p-3 flex items-center gap-4 text-[12px]" style={{ backgroundColor: T.cardAlt }}><span style={{ color: T.textSub }}>料金: <span className="font-medium" style={{ color: T.text }}>{fmt(editSelectedCourse.price)}</span></span><span style={{ color: T.textSub }}>バック: <span className="font-medium" style={{ color: "#7ab88f" }}>{fmt(editSelectedCourse.therapist_back)}</span></span></div>)}
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>開始時間</label><select value={editStart} onChange={(e) => handleStartChange(e.target.value, true)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>終了時間</label><select value={editEnd} onChange={(e) => setEditEnd(e.target.value)} disabled={!!editSelectedCourse} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none cursor-pointer" style={{ ...inputStyle, color: editSelectedCourse ? "#c3a782" : T.text }}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={editCustName} onChange={(e) => setEditCustName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト</label><select value={editTherapistId} onChange={(e) => setEditTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
               </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><input type="text" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={editCourseId} onChange={(e) => handleCourseChange(Number(e.target.value), true)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>— コースを選択 —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
+              {editSelectedCourse && (<div className="rounded-xl p-3 flex items-center gap-4 text-[11px]" style={{ backgroundColor: T.cardAlt }}><span style={{ color: T.textSub }}>料金: <strong style={{ color: T.text }}>{fmt(editSelectedCourse.price)}</strong></span><span style={{ color: T.textSub }}>バック: <strong style={{ color: "#7ab88f" }}>{fmt(editSelectedCourse.therapist_back)}</strong></span></div>)}
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>指名</label><select value={editNomination} onChange={(e) => { const n = nominations.find(x=>x.name===e.target.value); setEditNomination(e.target.value); setEditNomFee(n?.price||0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">指名なし</option>{nominations.map((n) => (<option key={n.id} value={n.name}>{n.name}（{fmt(n.price)}）</option>))}</select>{editNomination && <p className="text-[10px] mt-1" style={{ color: "#c3a782" }}>指名料: {fmt(editNomFee)}</p>}</div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>オプション（複数選択可）</label><div className="flex flex-wrap gap-2">{options.map((o) => { const sel = editOptions.some(x=>x.name===o.name); return <button key={o.id} onClick={() => { if (sel) setEditOptions(editOptions.filter(x=>x.name!==o.name)); else setEditOptions([...editOptions, { name: o.name, price: o.price }]); }} className="px-3 py-1.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: sel ? "#85a8c418" : T.cardAlt, color: sel ? "#85a8c4" : T.textMuted, border: `1px solid ${sel ? "#85a8c4" : T.border}`, fontWeight: sel ? 600 : 400 }}>{o.name}（{fmt(o.price)}）</button>; })}</div>{editOptions.length > 0 && <p className="text-[10px] mt-1" style={{ color: "#85a8c4" }}>オプション合計: {fmt(eOptT)}</p>}</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>延長</label><select value={editExtension} onChange={(e) => { const ex = extensions.find(x=>x.name===e.target.value); setEditExtension(e.target.value); setEditExtPrice(ex?.price||0); setEditExtDur(ex?.duration||0); if (ex && editSelectedCourse && editStart) { setEditEnd(minutesToTime(timeToMinutes(editStart) + editSelectedCourse.duration + ex.duration)); } }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">延長なし</option>{extensions.map((ex) => (<option key={ex.id} value={ex.name}>{ex.name}（{ex.duration}分 / {fmt(ex.price)}）</option>))}</select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>割引</label><select value={editDiscount} onChange={(e) => { const d = discounts.find(x=>x.name===e.target.value); setEditDiscount(e.target.value); setEditDiscAmt(d ? (d.type==="percent" ? Math.round(eCp * d.amount / 100) : d.amount) : 0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">割引なし</option>{discounts.map((d) => (<option key={d.id} value={d.name}>{d.name}（{d.type==="percent" ? d.amount+"%" : fmt(d.amount)}）</option>))}</select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>開始時間</label><select value={editStart} onChange={(e) => handleStartChange(e.target.value, true)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>終了時間{editSelectedCourse ? "（自動）" : ""}</label><select value={editEnd} onChange={(e) => setEditEnd(e.target.value)} disabled={!!editSelectedCourse} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, color: editSelectedCourse ? "#c3a782" : T.text }}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+              </div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><input type="text" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="メモ" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>料金サマリー</p>
+                <div className="space-y-1 text-[11px]">
+                  {editSelectedCourse && <div className="flex justify-between"><span>コース: {editSelectedCourse.name}</span><span>{fmt(eCp)}</span></div>}
+                  {editNomination && <div className="flex justify-between"><span>指名: {editNomination}</span><span>+{fmt(editNomFee)}</span></div>}
+                  {editOptions.map((o,i) => <div key={i} className="flex justify-between"><span>OP: {o.name}</span><span>+{fmt(o.price)}</span></div>)}
+                  {editExtension && <div className="flex justify-between"><span>延長: {editExtension}</span><span>+{fmt(editExtPrice)}</span></div>}
+                  {editDiscount && <div className="flex justify-between" style={{ color: "#c45555" }}><span>割引: {editDiscount}</span><span>-{fmt(editDiscAmt)}</span></div>}
+                  <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${T.border}`, color: "#c3a782" }}><span>合計</span><span>{fmt(eTotalCalc)}</span></div>
+                </div>
+              </div>
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
               <div className="flex gap-3 pt-2">
-                <button onClick={updateReservation} disabled={editSaving} className="px-6 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
-                <button onClick={() => deleteReservation(editRes.id)} className="px-6 py-3 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer">削除</button>
-                <button onClick={() => setEditRes(null)} className="px-6 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+                <button onClick={updateReservation} disabled={editSaving} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
+                <button onClick={() => deleteReservation(editRes.id)} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer">削除</button>
+                <button onClick={() => setEditRes(null)} className="px-6 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </div>);
+      })()}
 
       {/* New Therapist Modal */}
       {showNewTherapist && (
