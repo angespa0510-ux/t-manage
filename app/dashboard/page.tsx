@@ -118,6 +118,11 @@ export default function Dashboard() {
   const handleRegister = async () => {
     if (!custName.trim()) { setSaveMsg("名前を入力してください"); return; }
     setSaving(true); setSaveMsg("");
+    const phoneToCheck = custPhone.trim();
+    if (phoneToCheck) {
+      const { data: dup } = await supabase.from("customers").select("id, name").or(`phone.eq.${phoneToCheck},phone2.eq.${phoneToCheck},phone3.eq.${phoneToCheck}`);
+      if (dup && dup.length > 0) { setSaving(false); setSaveMsg(`この電話番号は「${dup[0].name}」で既に登録されています`); return; }
+    }
     const { error } = await supabase.from("customers").insert({ name: custName.trim(), phone: custPhone.trim(), phone2: custPhone2.trim(), phone3: custPhone3.trim(), email: custEmail.trim(), notes: custNotes.trim(), rank: custRank, user_id: userId });
     setSaving(false);
     if (error) { setSaveMsg("登録に失敗しました: " + error.message); }

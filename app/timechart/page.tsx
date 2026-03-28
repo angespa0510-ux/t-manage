@@ -134,6 +134,12 @@ export default function TimeChart() {
     setSaving(true); setMsg("");
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id });
+    if (!error) {
+      const { data: cust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle();
+      if (cust) {
+        await supabase.from("customer_visits").insert({ customer_id: cust.id, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, therapist_id: newTherapistId, course_name: selectedCourse?.name || "", price: selectedCourse?.price || 0, therapist_back: selectedCourse?.therapist_back || 0, total: selectedCourse?.price || 0 });
+      }
+    }
     setSaving(false);
     if (error) { setMsg("登録失敗: " + error.message); }
     else { setMsg("予約を登録しました！"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
