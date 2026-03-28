@@ -567,6 +567,12 @@ export default function TimeChart() {
         const subtotal = totalBack + salaryBonus + adj;
         const invoiceDed = settleInvoice ? Math.round(subtotal * 0.1) : 0;
         const finalPay = subtotal - invoiceDed;
+        const ra = roomAssigns.find(a => a.therapist_id === settleTh.id);
+        const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
+        const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
+        const cashReserve = (bl as any)?.cash_reserve || 0;
+        const cashBalance = cashReserve + totalCash - finalPay;
+        const storeRecovery = cashBalance > cashReserve ? cashBalance - cashReserve : 0;
         return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSettleTh(null)}>
           <div className="rounded-2xl border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
@@ -611,6 +617,19 @@ export default function TimeChart() {
                   <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #c3a78233", color: "#c3a782" }}><span>支給額</span><span>{fmt(finalPay)}</span></div>
                 </div>
               </div>
+              {cashReserve > 0 && (
+              <div className="rounded-xl p-4" style={{ backgroundColor: cashBalance < 0 ? "#c4555512" : "#85a8c412", border: `1px solid ${cashBalance < 0 ? "#c4555533" : "#85a8c433"}` }}>
+                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>💴 ルーム内現金（{bl?.name || ""}）</p>
+                <div className="space-y-1 text-[11px]">
+                  <div className="flex justify-between"><span>準備金（釣銭）</span><span>{fmt(cashReserve)}</span></div>
+                  <div className="flex justify-between"><span>現金受取（お客様から）</span><span>+{fmt(totalCash)}</span></div>
+                  <div className="flex justify-between" style={{ color: "#c45555" }}><span>報酬支払（セラピストへ）</span><span>-{fmt(finalPay)}</span></div>
+                  <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${cashBalance < 0 ? "#c4555533" : "#85a8c433"}`, color: cashBalance < 0 ? "#c45555" : "#85a8c4" }}><span>現在の残高</span><span>{fmt(cashBalance)}</span></div>
+                  {cashBalance < 0 && <p className="text-[10px] font-medium mt-2 px-2 py-1.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠ 残高がマイナスです。予備金から {fmt(Math.abs(cashBalance))} を補充してください</p>}
+                  {storeRecovery > 0 && <div className="flex justify-between mt-2 pt-2" style={{ borderTop: `1px dashed ${T.border}` }}><span>営業終了時の回収額（残高 - 準備金）</span><span className="font-bold" style={{ color: "#22c55e" }}>{fmt(storeRecovery)}</span></div>}
+                </div>
+              </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <button onClick={async () => { setSettleSaving(true); await supabase.from("therapist_daily_settlements").upsert({ therapist_id: settleTh.id, date: selectedDate, total_sales: totalSales, total_back: totalBack + salaryBonus, total_nomination: totalNom, total_options: totalOpt, total_extension: totalExt, total_discount: totalDisc, total_card: totalCard, total_paypay: totalPaypay, total_cash: totalCash, order_count: tRes.length, is_settled: true, adjustment: adj, adjustment_note: settleAdjNote.trim(), invoice_deduction: invoiceDed, has_invoice: settleInvoice }, { onConflict: "therapist_id,date" }); setSettleSaving(false); setSettleTh(null); fetchData(); }} disabled={settleSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{settleSaving ? "保存中..." : "清算確定"}</button>
                 <button onClick={() => setSettleTh(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
