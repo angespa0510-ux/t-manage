@@ -70,13 +70,39 @@ export default function TimeChart() {
   const [editMsg, setEditMsg] = useState("");
 
   const [showNewTherapist, setShowNewTherapist] = useState(false);
-  const [tName, setTName] = useState("");
-  const [tPhone, setTPhone] = useState("");
+  const [addShiftTherapistId, setAddShiftTherapistId] = useState(0);
+  const [addShiftStart, setAddShiftStart] = useState("12:00");
+  const [addShiftEnd, setAddShiftEnd] = useState("03:00");
+  const [addShiftStore, setAddShiftStore] = useState(0);
+  const [addShiftBuilding, setAddShiftBuilding] = useState(0);
+  const [addShiftRoom, setAddShiftRoom] = useState(0);
+  const [addShiftSearch, setAddShiftSearch] = useState("");
+  const [editTherapist, setEditTherapist] = useState<Therapist | null>(null);
+  const [etNotes, setEtNotes] = useState("");
+  const [etSaving, setEtSaving] = useState(false);
+  const [settleTh, setSettleTh] = useState<Therapist | null>(null);
+  const [settleAdj, setSettleAdj] = useState("");
+  const [settleAdjNote, setSettleAdjNote] = useState("");
+  const [settleInvoice, setSettleInvoice] = useState(false);
+  const [settleSaving, setSettleSaving] = useState(false);
+  const [settleSettled, setSettleSettled] = useState(false);
 
   const [nominations, setNominations] = useState<{ id: number; name: string; price: number }[]>([]);
   const [options, setOptions] = useState<{ id: number; name: string; price: number }[]>([]);
   const [discounts, setDiscounts] = useState<{ id: number; name: string; amount: number; type: string }[]>([]);
   const [extensions, setExtensions] = useState<{ id: number; name: string; duration: number; price: number }[]>([]);
+  const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
+  const [buildings, setBuildings] = useState<{ id: number; store_id: number; name: string }[]>([]);
+  const [allRooms, setAllRooms] = useState<{ id: number; store_id: number; building_id: number; name: string }[]>([]);
+  const [roomAssigns, setRoomAssigns] = useState<{ id: number; date: string; room_id: number; therapist_id: number; slot: string }[]>([]);
+  const [editShiftTherapist, setEditShiftTherapist] = useState<number | null>(null);
+  const [editShiftStart, setEditShiftStart] = useState("");
+  const [editShiftEnd, setEditShiftEnd] = useState("");
+  const [editShiftId, setEditShiftId] = useState<number | null>(null);
+  const [editRoomTherapist, setEditRoomTherapist] = useState<number | null>(null);
+  const [editRoomStore, setEditRoomStore] = useState(0);
+  const [editRoomBuilding, setEditRoomBuilding] = useState(0);
+  const [editRoomId, setEditRoomId] = useState(0);
   const [newNomination, setNewNomination] = useState("");
   const [newNomFee, setNewNomFee] = useState(0);
   const [newOptions, setNewOptions] = useState<{ name: string; price: number }[]>([]);
@@ -121,6 +147,10 @@ export default function TimeChart() {
     const { data: op } = await supabase.from("options").select("*"); if (op) setOptions(op);
     const { data: dc } = await supabase.from("discounts").select("*"); if (dc) setDiscounts(dc);
     const { data: ex } = await supabase.from("extensions").select("*"); if (ex) setExtensions(ex);
+    const { data: st } = await supabase.from("stores").select("*"); if (st) setStores(st);
+    const { data: bl } = await supabase.from("buildings").select("*"); if (bl) setBuildings(bl);
+    const { data: rm } = await supabase.from("rooms").select("*"); if (rm) setAllRooms(rm);
+    const { data: ra } = await supabase.from("room_assignments").select("*").eq("date", selectedDate); if (ra) setRoomAssigns(ra);
   }, [selectedDate]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -130,8 +160,19 @@ export default function TimeChart() {
 
   // シフトに入っているセラピストだけ表示（退勤者は下に）
   const shiftTherapistIds = new Set(shifts.map((s) => s.therapist_id));
-  const activeTherapists = therapists.filter((t) => shiftTherapistIds.has(t.id) && !clockedOut.has(t.id));
-  const clockedOutTherapists = therapists.filter((t) => shiftTherapistIds.has(t.id) && clockedOut.has(t.id));
+  const sortByBuildingAndTime = (list: Therapist[]) => list.sort((a, b) => {
+    const raA = roomAssigns.find(r => r.therapist_id === a.id); const raB = roomAssigns.find(r => r.therapist_id === b.id);
+    const rmA = raA ? allRooms.find(r => r.id === raA.room_id) : null; const rmB = raB ? allRooms.find(r => r.id === raB.room_id) : null;
+    const blA = rmA ? (rmA.building_id || 0) : 9999; const blB = rmB ? (rmB.building_id || 0) : 9999;
+    if (blA !== blB) return blA - blB;
+    const rmIdA = rmA ? rmA.id : 9999; const rmIdB = rmB ? rmB.id : 9999;
+    if (rmIdA !== rmIdB) return rmIdA - rmIdB;
+    const shA = shifts.find(s => s.therapist_id === a.id); const shB = shifts.find(s => s.therapist_id === b.id);
+    const tA = shA ? timeToMinutes(shA.start_time) : 9999; const tB = shB ? timeToMinutes(shB.start_time) : 9999;
+    return tA - tB;
+  });
+  const activeTherapists = sortByBuildingAndTime(therapists.filter((t) => shiftTherapistIds.has(t.id) && !clockedOut.has(t.id)));
+  const clockedOutTherapists = sortByBuildingAndTime(therapists.filter((t) => shiftTherapistIds.has(t.id) && clockedOut.has(t.id)));
   const displayTherapists = [...activeTherapists, ...clockedOutTherapists];
 
   const toggleClockOut = (id: number) => {
@@ -187,7 +228,7 @@ export default function TimeChart() {
   const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); setEditDiscount((r as any).discount_name || ""); setEditDiscAmt((r as any).discount_amount || 0); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); };
   const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - editDiscAmt; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: editDiscount, discount_amount: editDiscAmt, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0) }).eq("id", editRes.id); setEditSaving(false); if (error) { setEditMsg("更新失敗: " + error.message); } else { setEditMsg("更新しました！"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
   const deleteReservation = async (id: number) => { await supabase.from("reservations").delete().eq("id", id); setEditRes(null); fetchData(); };
-  const addTherapist = async () => { if (!tName.trim()) return; await supabase.from("therapists").insert({ name: tName.trim(), phone: tPhone.trim(), status: "active" }); setTName(""); setTPhone(""); setShowNewTherapist(false); fetchData(); };
+  const addShiftTherapist = async () => { if (!addShiftTherapistId) return; await supabase.from("shifts").insert({ therapist_id: addShiftTherapistId, date: selectedDate, start_time: addShiftStart, end_time: addShiftEnd, status: "confirmed" }); if (addShiftRoom) { await supabase.from("room_assignments").insert({ date: selectedDate, room_id: addShiftRoom, therapist_id: addShiftTherapistId, slot: "early" }); } setShowNewTherapist(false); setAddShiftTherapistId(0); fetchData(); };
 
   const getCourseByName = (name: string) => courses.find((c) => c.name === name);
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
@@ -244,16 +285,27 @@ export default function TimeChart() {
                 const isCO = clockedOut.has(t.id);
                 const origIdx = therapists.findIndex((x) => x.id === t.id);
                 return (
-                  <div key={t.id} className="h-[72px] border-b border-r flex items-center px-3 gap-2" style={{ backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.5 : 1 }}>
+                  <div key={t.id} className="h-[72px] border-b border-r flex items-center px-2 gap-1.5" style={{ backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.5 : 1 }}>
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] text-white font-medium flex-shrink-0" style={{ backgroundColor: isCO ? "#888" : colors[origIdx % colors.length] }}>{t.name.charAt(0)}</div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-[11px] font-medium truncate block" style={{ textDecoration: isCO ? "line-through" : "none" }}>{t.name}</span>
-                      {isCO && <span className="text-[8px]" style={{ color: "#c45555" }}>退勤済</span>}
+                      <div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); setEditTherapist(t); setEtNotes((t as any).notes || ""); }} className="text-[10px] font-medium truncate cursor-pointer flex items-center gap-0.5" style={{ textDecoration: isCO ? "line-through" : "none", background: "none", border: "none", padding: 0, color: T.text, textAlign: "left" }}>{t.name}<span style={{ fontSize: 8, opacity: 0.4 }}>✏️</span></button></div>
+                      <div className="flex items-center gap-1 flex-wrap text-[7px]" style={{ color: T.textMuted }}>
+                        {(t as any).age > 0 && <span>{(t as any).age}歳</span>}
+                        {(t as any).height_cm > 0 && <span>{(t as any).height_cm}cm</span>}
+                        {(t as any).cup && <span>{(t as any).cup}</span>}
+                        {(() => { const sh = shifts.find(s => s.therapist_id === t.id); return sh ? <button onClick={(e) => { e.stopPropagation(); setEditShiftTherapist(t.id); setEditShiftId(sh.id); setEditShiftStart(sh.start_time?.slice(0,5) || "12:00"); setEditShiftEnd(sh.end_time?.slice(0,5) || "03:00"); }} className="cursor-pointer" style={{ color: "#c3a782", background: "none", border: "none", padding: 0, fontSize: 7 }}>⏰{sh.start_time?.slice(0,5)}〜{sh.end_time?.slice(0,5)}</button> : null; })()}
+                        {(() => { const ra = roomAssigns.find(a => a.therapist_id === t.id); if (ra) { const rm = allRooms.find(r => r.id === ra.room_id); const bl = rm ? buildings.find(b => b.id === rm.building_id) : null; return <button onClick={(e) => { e.stopPropagation(); setEditRoomTherapist(t.id); const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { const rm2 = allRooms.find(r => r.id === ra2.room_id); setEditRoomId(ra2.room_id); setEditRoomStore(rm2?.store_id || 0); setEditRoomBuilding(rm2?.building_id || 0); } }} className="cursor-pointer" style={{ color: "#85a8c4", background: "none", border: "none", padding: 0, fontSize: 7 }}>🏠{bl?.name || ""}{rm?.name || ""}</button>; } return null; })()}
+                      </div>
+                      {(t as any).notes && <div style={{ overflow: "hidden", maxWidth: 120 }}><span className="text-[6px] block" style={{ color: "#f59e0b", whiteSpace: "nowrap", animation: (t as any).notes.length > 12 ? `scrollLeft ${Math.max(3, (t as any).notes.length * 0.2)}s linear infinite` : "none" }}>📝{(t as any).notes}</span></div>}
+                      {isCO && <span className="text-[7px]" style={{ color: "#c45555" }}>退勤済</span>}
                     </div>
-                    <button onClick={() => toggleClockOut(t.id)} className="text-[8px] px-1.5 py-1 rounded cursor-pointer border flex-shrink-0"
-                      style={{ borderColor: isCO ? "#7ab88f66" : "#c4555566", backgroundColor: isCO ? "#7ab88f12" : "#c4555512", color: isCO ? "#7ab88f" : "#c45555" }}>
-                      {isCO ? "復活" : "退勤"}
-                    </button>
+                    <div className="flex flex-col gap-0.5 flex-shrink-0">
+                      <button onClick={() => toggleClockOut(t.id)} className="text-[7px] px-1 py-0.5 rounded cursor-pointer border"
+                        style={{ borderColor: isCO ? "#7ab88f66" : "#c4555566", backgroundColor: isCO ? "#7ab88f12" : "#c4555512", color: isCO ? "#7ab88f" : "#c45555" }}>
+                        {isCO ? "復活" : "退勤"}
+                      </button>
+                      <button onClick={async (e) => { e.stopPropagation(); setSettleTh(t); setSettleAdj(""); setSettleAdjNote(""); setSettleInvoice((t as any).has_invoice || false); const { data: existing } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", t.id).eq("date", selectedDate).maybeSingle(); setSettleSettled(!!existing?.is_settled); }} className="text-[7px] px-1 py-0.5 rounded cursor-pointer border" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>清算</button>
+                    </div>
                   </div>
                 );
               })}
@@ -290,6 +342,7 @@ export default function TimeChart() {
                       if (panMoved.current) return;
                       setNewTherapistId(t.id); setNewStart(minutesToTime(min)); setNewEnd(minutesToTime(min + 60)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
                     }}>
+                    {(() => { const sh = shifts.find(s => s.therapist_id === t.id); if (sh) { const shStart = timeToMinutes(sh.start_time); const shEnd = timeToMinutes(sh.end_time); const left = shStart * MIN_10_WIDTH / 10; const w = (shEnd - shStart) * MIN_10_WIDTH / 10; return <div className="absolute top-0 bottom-0" style={{ left, width: w, backgroundColor: dark ? "#c3a78208" : "#c3a78210", borderLeft: "2px solid #c3a78233", borderRight: "2px solid #c3a78233", zIndex: 1 }} />; } return null; })()}
                     {HOURS_RAW.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - 9) * HOUR_WIDTH, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
                     {tRes.map((r, ri) => {
                       const sM = timeToMinutes(r.start_time); const eM = timeToMinutes(r.end_time);
@@ -495,25 +548,169 @@ export default function TimeChart() {
         </div>);
       })()}
 
-      {/* New Therapist Modal */}
-      {showNewTherapist && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowNewTherapist(false)}>
-          <div className="rounded-2xl border p-8 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-1">セラピスト追加</h2>
-            <p className="text-[11px] mb-6" style={{ color: T.textFaint }}>新しいセラピストを登録します</p>
-            <div className="space-y-4">
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={tName} onChange={(e) => setTName(e.target.value)} placeholder="セラピスト名" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={tPhone} onChange={(e) => setTPhone(e.target.value)} placeholder="090-xxxx-xxxx" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+      {/* Settlement Modal */}
+      {settleTh && (() => {
+        const tRes = reservations.filter(r => r.therapist_id === settleTh.id && (r as any).status === "completed");
+        const totalSales = tRes.reduce((s,r) => s + ((r as any).total_price || 0), 0);
+        const totalBack = tRes.reduce((s,r) => { const c = getCourseByName(r.course); return s + (c?.therapist_back || 0); }, 0);
+        const salaryType = (settleTh as any).salary_type || "fixed";
+        const salaryAmount = (settleTh as any).salary_amount || 0;
+        const salaryBonus = salaryType === "percent" ? Math.round(totalBack * salaryAmount / 100) : salaryAmount * tRes.length;
+        const totalNom = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
+        const totalOpt = tRes.reduce((s,r) => s + ((r as any).options_total || 0), 0);
+        const totalExt = tRes.reduce((s,r) => s + ((r as any).extension_price || 0), 0);
+        const totalDisc = tRes.reduce((s,r) => s + ((r as any).discount_amount || 0), 0);
+        const totalCard = tRes.reduce((s,r) => s + ((r as any).card_billing || 0), 0);
+        const totalPaypay = tRes.reduce((s,r) => s + ((r as any).paypay_amount || 0), 0);
+        const totalCash = tRes.reduce((s,r) => s + ((r as any).cash_amount || 0), 0);
+        const adj = parseInt(settleAdj) || 0;
+        const subtotal = totalBack + salaryBonus + adj;
+        const invoiceDed = settleInvoice ? Math.round(subtotal * 0.1) : 0;
+        const finalPay = subtotal - invoiceDed;
+        return (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSettleTh(null)}>
+          <div className="rounded-2xl border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div><h2 className="text-[15px] font-medium">💰 本日の清算</h2><p className="text-[11px]" style={{ color: T.textFaint }}>{settleTh.name} — {selectedDate}</p></div>
+              {settleSettled && <span className="px-2 py-1 rounded text-[9px] font-medium" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✓ 清算済</span>}
+            </div>
+            <div className="space-y-3">
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>売上明細（終了 {tRes.length}件）</p>
+                <div className="space-y-1 text-[11px]">
+                  {tRes.map((r,i) => <div key={i} className="flex justify-between"><span className="truncate" style={{ maxWidth: 200 }}>{r.customer_name} / {r.course}</span><span className="font-medium">{fmt((r as any).total_price || 0)}</span></div>)}
+                  {tRes.length === 0 && <p className="text-[10px] text-center py-2" style={{ color: T.textFaint }}>終了した予約がありません</p>}
+                </div>
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>給与計算</p>
+                <div className="space-y-1 text-[11px]">
+                  <div className="flex justify-between"><span>基本バック（{tRes.length}件）</span><span>{fmt(totalBack)}</span></div>
+                  {salaryAmount > 0 && <div className="flex justify-between" style={{ color: "#c3a782" }}><span>給料ランク（{salaryType === "percent" ? `${salaryAmount}%UP` : `${salaryAmount.toLocaleString()}円UP×${tRes.length}件`}）</span><span>+{fmt(salaryBonus)}</span></div>}
+                  <div className="flex justify-between"><span>指名料合計</span><span>{fmt(totalNom)}</span></div>
+                </div>
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>支払い内訳</p>
+                <div className="space-y-1 text-[11px]">
+                  <div className="flex justify-between"><span>💳 カード合計</span><span>{fmt(totalCard)}</span></div>
+                  <div className="flex justify-between"><span>📱 PayPay合計</span><span>{fmt(totalPaypay)}</span></div>
+                  <div className="flex justify-between"><span>💴 現金合計</span><span>{fmt(totalCash)}</span></div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[9px] mb-1" style={{ color: T.textSub }}>調整金（+/-）</label><input type="text" value={settleAdj} onChange={(e) => setSettleAdj(e.target.value.replace(/[^0-9-]/g, ""))} placeholder="0" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                <div><label className="block text-[9px] mb-1" style={{ color: T.textSub }}>調整理由</label><input type="text" value={settleAdjNote} onChange={(e) => setSettleAdjNote(e.target.value)} placeholder="理由" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              </div>
+              <button onClick={() => setSettleInvoice(!settleInvoice)} className="px-3 py-2 rounded-xl text-[11px] cursor-pointer w-full text-left" style={{ backgroundColor: settleInvoice ? "#a855f718" : T.cardAlt, color: settleInvoice ? "#a855f7" : T.textMuted, border: `1px solid ${settleInvoice ? "#a855f7" : T.border}` }}>{settleInvoice ? "✅ インボイス控除あり（10%）" : "インボイス控除なし"}</button>
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
+                <div className="space-y-1 text-[12px]">
+                  <div className="flex justify-between"><span>バック小計</span><span>{fmt(totalBack + salaryBonus)}</span></div>
+                  {adj !== 0 && <div className="flex justify-between" style={{ color: adj > 0 ? "#22c55e" : "#c45555" }}><span>調整金</span><span>{adj > 0 ? "+" : ""}{fmt(adj)}</span></div>}
+                  {settleInvoice && <div className="flex justify-between" style={{ color: "#a855f7" }}><span>インボイス控除（10%）</span><span>-{fmt(invoiceDed)}</span></div>}
+                  <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #c3a78233", color: "#c3a782" }}><span>支給額</span><span>{fmt(finalPay)}</span></div>
+                </div>
+              </div>
               <div className="flex gap-3 pt-2">
-                <button onClick={addTherapist} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">登録する</button>
-                <button onClick={() => setShowNewTherapist(false)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+                <button onClick={async () => { setSettleSaving(true); await supabase.from("therapist_daily_settlements").upsert({ therapist_id: settleTh.id, date: selectedDate, total_sales: totalSales, total_back: totalBack + salaryBonus, total_nomination: totalNom, total_options: totalOpt, total_extension: totalExt, total_discount: totalDisc, total_card: totalCard, total_paypay: totalPaypay, total_cash: totalCash, order_count: tRes.length, is_settled: true, adjustment: adj, adjustment_note: settleAdjNote.trim(), invoice_deduction: invoiceDed, has_invoice: settleInvoice }, { onConflict: "therapist_id,date" }); setSettleSaving(false); setSettleTh(null); fetchData(); }} disabled={settleSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{settleSaving ? "保存中..." : "清算確定"}</button>
+                <button onClick={() => setSettleTh(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>);
+      })()}
+
+      {/* Therapist Edit Modal */}
+      {editTherapist && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditTherapist(null)}>
+          <div className="rounded-2xl border p-6 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[15px] font-medium mb-2">セラピスト編集</h2>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-[14px] text-white font-medium" style={{ backgroundColor: colors[therapists.findIndex(x => x.id === editTherapist.id) % colors.length] }}>{editTherapist.name.charAt(0)}</div>
+              <div>
+                <p className="text-[13px] font-medium">{editTherapist.name}</p>
+                <div className="flex gap-2 text-[9px]" style={{ color: T.textMuted }}>
+                  {(editTherapist as any).age > 0 && <span>{(editTherapist as any).age}歳</span>}
+                  {(editTherapist as any).height_cm > 0 && <span>{(editTherapist as any).height_cm}cm</span>}
+                  {(editTherapist as any).cup && <span>{(editTherapist as any).cup}カップ</span>}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>備考・メモ</label><textarea value={etNotes} onChange={(e) => { if (e.target.value.length <= 50) setEtNotes(e.target.value); }} placeholder="セラピストの備考を入力" rows={3} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-y" style={inputStyle} /><div className="flex items-center justify-between mt-1"><div className="h-1 flex-1 rounded-full overflow-hidden" style={{ backgroundColor: T.cardAlt }}><div className="h-full rounded-full" style={{ width: `${(etNotes.length / 50) * 100}%`, backgroundColor: etNotes.length > 40 ? "#c45555" : etNotes.length > 25 ? "#f59e0b" : "#7ab88f" }} /></div><span className="text-[8px] ml-2 flex-shrink-0" style={{ color: etNotes.length > 40 ? "#c45555" : T.textMuted }}>{etNotes.length}/50</span></div></div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={async () => { setEtSaving(true); await supabase.from("therapists").update({ notes: etNotes.trim() }).eq("id", editTherapist.id); setEtSaving(false); setEditTherapist(null); fetchData(); }} disabled={etSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{etSaving ? "保存中..." : "保存する"}</button>
+                <button onClick={() => window.open("/therapists", "_blank")} className="px-5 py-2.5 text-[11px] rounded-xl cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>詳細編集</button>
+                <button onClick={() => setEditTherapist(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
+      {/* Shift Change Modal */}
+      {editShiftTherapist && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditShiftTherapist(null)}>
+          <div className="rounded-2xl border p-6 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[15px] font-medium mb-2">⏰ 出勤時間変更</h2>
+            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{therapists.find(t => t.id === editShiftTherapist)?.name} の出勤時間</p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label><select value={editShiftStart} onChange={(e) => setEditShiftStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>終了時間</label><select value={editShiftEnd} onChange={(e) => setEditShiftEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={async () => { if (!editShiftId) return; await supabase.from("shifts").update({ start_time: editShiftStart, end_time: editShiftEnd }).eq("id", editShiftId); setEditShiftTherapist(null); fetchData(); }} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">変更する</button>
+                <button onClick={() => setEditShiftTherapist(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Room Change Modal */}
+      {editRoomTherapist && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRoomTherapist(null)}>
+          <div className="rounded-2xl border p-6 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[15px] font-medium mb-4">🏠 ルーム変更</h2>
+            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{therapists.find(t => t.id === editRoomTherapist)?.name} のルームを変更</p>
+            <div className="space-y-3">
+              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>店舗</label><select value={editRoomStore} onChange={(e) => { setEditRoomStore(Number(e.target.value)); setEditRoomBuilding(0); setEditRoomId(0); }} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+              {editRoomStore > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>建物</label><select value={editRoomBuilding} onChange={(e) => { setEditRoomBuilding(Number(e.target.value)); setEditRoomId(0); }} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{buildings.filter(b => b.store_id === editRoomStore).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>}
+              {editRoomBuilding > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>部屋</label><select value={editRoomId} onChange={(e) => setEditRoomId(Number(e.target.value))} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{allRooms.filter(r => r.building_id === editRoomBuilding).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>}
+              <div className="flex gap-3 pt-2">
+                <button onClick={async () => { if (!editRoomTherapist || !editRoomId) return; const existing = roomAssigns.find(a => a.therapist_id === editRoomTherapist); if (existing) { await supabase.from("room_assignments").update({ room_id: editRoomId }).eq("id", existing.id); } else { await supabase.from("room_assignments").insert({ date: selectedDate, room_id: editRoomId, therapist_id: editRoomTherapist, slot: "early" }); } setEditRoomTherapist(null); fetchData(); }} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">変更する</button>
+                <button onClick={() => setEditRoomTherapist(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Shift Modal */}
+      {showNewTherapist && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowNewTherapist(false)}>
+          <div className="rounded-2xl border p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[15px] font-medium mb-1">出勤追加</h2>
+            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>セラピストを本日の出勤に追加します</p>
+            <div className="space-y-3">
+              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト *</label><input type="text" placeholder="名前で検索" value={addShiftSearch} onChange={(e) => setAddShiftSearch(e.target.value)} className="w-full px-3 py-2 rounded-xl text-[11px] outline-none mb-2" style={inputStyle} /><div className="max-h-[150px] overflow-y-auto space-y-1">{therapists.filter(t => t.status === "active" && (!addShiftSearch || t.name.toLowerCase().includes(addShiftSearch.toLowerCase()))).map(t => { const onShift = shiftTherapistIds.has(t.id); return <button key={t.id} onClick={() => setAddShiftTherapistId(t.id)} className="w-full text-left px-3 py-2 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: addShiftTherapistId === t.id ? "#c3a78222" : T.cardAlt, border: `1px solid ${addShiftTherapistId === t.id ? "#c3a782" : "transparent"}` }}><span>{t.name}{(t as any).age ? ` (${(t as any).age}歳)` : ""}</span>{onShift && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>出勤中</span>}</button>; })}</div></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label><select value={addShiftStart} onChange={(e) => setAddShiftStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>終了時間</label><select value={addShiftEnd} onChange={(e) => setAddShiftEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+              </div>
+              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>店舗</label><select value={addShiftStore} onChange={(e) => { setAddShiftStore(Number(e.target.value)); setAddShiftBuilding(0); setAddShiftRoom(0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+              {addShiftStore > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>建物</label><select value={addShiftBuilding} onChange={(e) => { setAddShiftBuilding(Number(e.target.value)); setAddShiftRoom(0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{buildings.filter(b => b.store_id === addShiftStore).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>}
+              {addShiftBuilding > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>部屋</label><select value={addShiftRoom} onChange={(e) => setAddShiftRoom(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{allRooms.filter(r => r.building_id === addShiftBuilding).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>}
+              <div className="flex gap-3 pt-2">
+                <button onClick={addShiftTherapist} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">出勤追加</button>
+<button onClick={() => setShowNewTherapist(false)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
     </div>
   );
 }
