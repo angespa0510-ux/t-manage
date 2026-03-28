@@ -64,6 +64,9 @@ export default function TimeChart() {
   const [editExtension, setEditExtension] = useState("");
   const [editExtPrice, setEditExtPrice] = useState(0);
   const [editExtDur, setEditExtDur] = useState(0);
+  const [editStatus, setEditStatus] = useState("unprocessed");
+  const [editCardBase, setEditCardBase] = useState("");
+  const [editPaypay, setEditPaypay] = useState("");
   const [editMsg, setEditMsg] = useState("");
 
   const [showNewTherapist, setShowNewTherapist] = useState(false);
@@ -82,6 +85,8 @@ export default function TimeChart() {
   const [newExtension, setNewExtension] = useState("");
   const [newExtPrice, setNewExtPrice] = useState(0);
   const [newExtDur, setNewExtDur] = useState(0);
+  const [newCardBase, setNewCardBase] = useState("");
+  const [newPaypay, setNewPaypay] = useState("");
 
   const [dragInfo, setDragInfo] = useState<{ resId: number; edge: "start" | "end" | "move"; initX: number; initMin: number; initEndMin: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -166,7 +171,7 @@ export default function TimeChart() {
     if (!newCourseId) { setSaving(false); setMsg("コースを選択してください"); return; }
     const optText = newOptions.map(o => o.name).join(","); const optTotal = newOptions.reduce((s, o) => s + o.price, 0);
     const coursePrice = selectedCourse?.price || 0; const total = coursePrice + newNomFee + optTotal + newExtPrice - newDiscAmt;
-    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: newDiscount, discount_amount: newDiscAmt, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total });
+    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: newDiscount, discount_amount: newDiscAmt, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0) });
     if (!error) {
       const { data: cust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle();
       if (cust) {
@@ -176,11 +181,11 @@ export default function TimeChart() {
     }
     setSaving(false);
     if (error) { setMsg("登録失敗: " + error.message); }
-    else { setMsg("予約を登録しました！"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscount(""); setNewDiscAmt(0); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
+    else { setMsg("予約を登録しました！"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscount(""); setNewDiscAmt(0); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
   };
 
-  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); setEditDiscount((r as any).discount_name || ""); setEditDiscAmt((r as any).discount_amount || 0); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); };
-  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - editDiscAmt; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: editDiscount, discount_amount: editDiscAmt, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal }).eq("id", editRes.id); setEditSaving(false); if (error) { setEditMsg("更新失敗: " + error.message); } else { setEditMsg("更新しました！"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
+  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); setEditDiscount((r as any).discount_name || ""); setEditDiscAmt((r as any).discount_amount || 0); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); };
+  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - editDiscAmt; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: editDiscount, discount_amount: editDiscAmt, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0) }).eq("id", editRes.id); setEditSaving(false); if (error) { setEditMsg("更新失敗: " + error.message); } else { setEditMsg("更新しました！"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
   const deleteReservation = async (id: number) => { await supabase.from("reservations").delete().eq("id", id); setEditRes(null); fetchData(); };
   const addTherapist = async () => { if (!tName.trim()) return; await supabase.from("therapists").insert({ name: tName.trim(), phone: tPhone.trim(), status: "active" }); setTName(""); setTPhone(""); setShowNewTherapist(false); fetchData(); };
 
@@ -289,7 +294,7 @@ export default function TimeChart() {
                     {tRes.map((r, ri) => {
                       const sM = timeToMinutes(r.start_time); const eM = timeToMinutes(r.end_time);
                       const left = sM * (HOUR_WIDTH / 60); const width = (eM - sM) * (HOUR_WIDTH / 60);
-                      const course = getCourseByName(r.course); const color = colors[origIdx % colors.length];
+                      const course = getCourseByName(r.course); const statusColors: Record<string,string> = { unprocessed: "#888780", processed: "#85a8c4", web_reservation: "#a855f7", phone_check: "#f59e0b", serving: "#22c55e", completed: "#c3a782" }; const color = statusColors[(r as any).status] || colors[origIdx % colors.length];
                       return (
                         <div key={`res-${r.id}-${ri}`} className="res-block absolute top-[4px] bottom-[4px] rounded-lg cursor-pointer group"
                           style={{ left, width: Math.max(width, MIN_10_WIDTH), backgroundColor: color + "20", borderLeft: `3px solid ${color}`, zIndex: 5 }}
@@ -298,9 +303,11 @@ export default function TimeChart() {
                             onMouseDown={(e) => { e.stopPropagation(); setDragInfo({ resId: r.id, edge: "start", initX: e.clientX, initMin: sM, initEndMin: eM }); }} />
                           <div className="px-2 py-1 overflow-hidden h-full"
                             onMouseDown={(e) => { if ((e.target as HTMLElement).closest(".drag-handle")) return; e.stopPropagation(); setDragInfo({ resId: r.id, edge: "move", initX: e.clientX, initMin: sM, initEndMin: eM }); }}>
-                            <p className="text-[11px] font-medium truncate" style={{ color: T.text }}>{r.customer_name}</p>
+                            <p className="text-[11px] font-medium truncate" style={{ color: T.text }}>{r.customer_name}{(r as any).status && (r as any).status !== "unprocessed" && <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 4, backgroundColor: (r as any).status === "completed" ? "#c3a78222" : (r as any).status === "serving" ? "#22c55e22" : (r as any).status === "phone_check" ? "#f59e0b22" : (r as any).status === "web_reservation" ? "#a855f722" : "#85a8c422", color: (r as any).status === "completed" ? "#c3a782" : (r as any).status === "serving" ? "#22c55e" : (r as any).status === "phone_check" ? "#f59e0b" : (r as any).status === "web_reservation" ? "#a855f7" : "#85a8c4" }}>{(r as any).status === "completed" ? "終了" : (r as any).status === "serving" ? "接客中" : (r as any).status === "phone_check" ? "電話確認" : (r as any).status === "web_reservation" ? "WEB" : (r as any).status === "processed" ? "処理済" : ""}</span>}</p>
                             <p className="text-[9px] truncate" style={{ color: T.textSub }}>{r.course || `${r.start_time}〜${r.end_time}`}</p>
-                            {course && width > 80 && (<div className="flex items-center gap-1 mt-0.5"><span className="text-[8px] font-medium" style={{ color: "#c3a782" }}>{fmt(course.price)}</span><span className="text-[8px]" style={{ color: "#7ab88f" }}>B:{fmt(course.therapist_back)}</span></div>)}
+                            {((r as any).card_billing > 0 || (r as any).paypay_amount > 0) && <p className="text-[8px] truncate" style={{ color: "#85a8c4" }}>{(r as any).card_billing > 0 ? `💳${fmt((r as any).card_billing)}` : ""}{(r as any).card_billing > 0 && (r as any).paypay_amount > 0 ? " " : ""}{(r as any).paypay_amount > 0 ? `📱${fmt((r as any).paypay_amount)}` : ""}</p>}
+                            {r.notes && <div style={{ overflow: "hidden", maxHeight: 20, lineHeight: "10px", marginTop: 2, position: "relative" }}><p className="text-[8px]" style={{ color: "#f59e0b", whiteSpace: "pre-wrap", animation: r.notes.length > 20 ? `scrollNote ${Math.max(4, r.notes.length * 0.15)}s linear infinite` : "none" }}>📝 {r.notes}</p></div>}
+                            
                           </div>
                           <div className="drag-handle absolute right-0 top-0 bottom-0 w-[6px] cursor-ew-resize opacity-0 group-hover:opacity-100 hover:bg-black/10 rounded-r-lg"
                             onMouseDown={(e) => { e.stopPropagation(); setDragInfo({ resId: r.id, edge: "end", initX: e.clientX, initMin: sM, initEndMin: eM }); }} />
@@ -321,8 +328,9 @@ export default function TimeChart() {
           <span>出勤: <strong style={{ color: T.text }}>{activeTherapists.length}</strong>名</span>
           {clockedOutTherapists.length > 0 && <span>退勤: <strong style={{ color: "#c45555" }}>{clockedOutTherapists.length}</strong>名</span>}
           <span>予約: <strong style={{ color: T.text }}>{reservations.length}</strong>件</span>
-          <span>売上: <strong style={{ color: T.text }}>{fmt(reservations.reduce((s, r) => { const c = getCourseByName(r.course); return s + (c ? c.price : 0); }, 0))}</strong></span>
-          <span>バック: <strong style={{ color: "#7ab88f" }}>{fmt(reservations.reduce((s, r) => { const c = getCourseByName(r.course); return s + (c ? c.therapist_back : 0); }, 0))}</strong></span>
+          <span>売上: <strong style={{ color: T.text }}>{fmt(reservations.filter(r => (r as any).status === "completed").reduce((s, r) => { const t = (r as any).total_price; return s + (t || (getCourseByName(r.course)?.price || 0)); }, 0))}</strong></span>
+          <span>バック: <strong style={{ color: "#7ab88f" }}>{fmt(reservations.filter(r => (r as any).status === "completed").reduce((s, r) => { const c = getCourseByName(r.course); return s + (c ? c.therapist_back : 0); }, 0))}</strong></span>
+          <span style={{ color: "#c3a782" }}>終了: <strong>{reservations.filter(r => (r as any).status === "completed").length}</strong>件</span>
           <span className="ml-auto text-[10px]" style={{ color: T.textFaint }}>ドラッグで時間変更 / クリックで編集</span>
         </div>
       </div>
@@ -394,7 +402,11 @@ export default function TimeChart() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>開始時間</label><select value={newStart} onChange={(e) => handleStartChange(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>終了時間{selectedCourse ? "（自動）" : ""}</label><select value={newEnd} onChange={(e) => setNewEnd(e.target.value)} disabled={!!selectedCourse} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, color: selectedCourse ? "#c3a782" : T.text }}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
               </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><input type="text" value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="メモ" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><div style={{ position: "relative" }}><textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="メモ・備考を入力" rows={4} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-y" style={inputStyle} /><div style={{ position: "absolute", left: 12, right: 12, top: 42, borderTop: "1px dashed #f59e0b44", pointerEvents: "none" }} /><p className="text-[8px] mt-1" style={{ color: T.textFaint }}>⚠ 点線より上がタイムチャートに表示されます（2行まで）</p></div></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💳 カード充当額（税抜）</label><input type="text" inputMode="numeric" value={newCardBase} onChange={(e) => setNewCardBase(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />{parseInt(newCardBase) > 0 && <p className="text-[9px] mt-1" style={{ color: "#85a8c4" }}>カード決済額: {fmt(Math.round(parseInt(newCardBase) * 1.1))}（10%手数料込）</p>}</div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📱 PayPay支払額</label><input type="text" inputMode="numeric" value={newPaypay} onChange={(e) => setNewPaypay(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              </div>
               <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
                 <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>料金サマリー</p>
                 <div className="space-y-1 text-[11px]">
@@ -404,6 +416,13 @@ export default function TimeChart() {
                   {newExtension && <div className="flex justify-between"><span>延長: {newExtension}</span><span>+{fmt(newExtPrice)}</span></div>}
                   {newDiscount && <div className="flex justify-between" style={{ color: "#c45555" }}><span>割引: {newDiscount}</span><span>-{fmt(newDiscAmt)}</span></div>}
                   <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${T.border}`, color: "#c3a782" }}><span>合計</span><span>{fmt(totalCalc)}</span></div>
+                  {(parseInt(newCardBase) > 0 || parseInt(newPaypay) > 0) && (<>
+                    <div className="pt-2 mt-1" style={{ borderTop: `1px dashed ${T.border}` }}>
+                      {parseInt(newCardBase) > 0 && <div className="flex justify-between"><span>💳 カード端末入力額</span><span style={{ color: "#85a8c4", fontWeight: 700 }}>{fmt(Math.round(parseInt(newCardBase) * 1.1))}</span></div>}
+                      {parseInt(newPaypay) > 0 && <div className="flex justify-between"><span>📱 PayPay</span><span style={{ color: "#22c55e" }}>{fmt(parseInt(newPaypay))}</span></div>}
+                      <div className="flex justify-between"><span>💴 現金</span><span>{fmt(totalCalc - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0))}</span></div>
+                    </div>
+                  </>)}
                 </div>
               </div>
               {msg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: msg.includes("失敗") || msg.includes("選択") ? "#c4988518" : "#7ab88f18", color: msg.includes("失敗") || msg.includes("選択") ? "#c49885" : "#5a9e6f" }}>{msg}</div>}
@@ -423,7 +442,8 @@ export default function TimeChart() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRes(null)}>
           <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-[16px] font-medium mb-1">オーダー編集</h2>
-            <p className="text-[11px] mb-5" style={{ color: T.textFaint }}>{editCustName} 様の予約を編集</p>
+            <p className="text-[11px] mb-3" style={{ color: T.textFaint }}>{editCustName} 様の予約を編集</p>
+            <div className="flex flex-wrap gap-1.5 mb-4">{([["unprocessed","未処理","#888780"],["processed","処理済","#85a8c4"],["web_reservation","WEB予約","#a855f7"],["phone_check","電話確認","#f59e0b"],["serving","接客中","#22c55e"],["completed","終了","#c3a782"]] as const).map(([val,label,color]) => (<button key={val} onClick={() => setEditStatus(val)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: editStatus === val ? color + "22" : T.cardAlt, color: editStatus === val ? color : T.textMuted, border: `1px solid ${editStatus === val ? color : T.border}`, fontWeight: editStatus === val ? 700 : 400 }}>{label}</button>))}</div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={editCustName} onChange={(e) => setEditCustName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
@@ -441,7 +461,11 @@ export default function TimeChart() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>開始時間</label><select value={editStart} onChange={(e) => handleStartChange(e.target.value, true)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>終了時間{editSelectedCourse ? "（自動）" : ""}</label><select value={editEnd} onChange={(e) => setEditEnd(e.target.value)} disabled={!!editSelectedCourse} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, color: editSelectedCourse ? "#c3a782" : T.text }}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
               </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><input type="text" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="メモ" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><div style={{ position: "relative" }}><textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="メモ・備考を入力" rows={4} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-y" style={inputStyle} /><div style={{ position: "absolute", left: 12, right: 12, top: 42, borderTop: "1px dashed #f59e0b44", pointerEvents: "none" }} /><p className="text-[8px] mt-1" style={{ color: T.textFaint }}>⚠ 点線より上がタイムチャートに表示されます（2行まで）</p></div></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💳 カード充当額（税抜）</label><input type="text" inputMode="numeric" value={editCardBase} onChange={(e) => setEditCardBase(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />{parseInt(editCardBase) > 0 && <p className="text-[9px] mt-1" style={{ color: "#85a8c4" }}>カード決済額: {fmt(Math.round(parseInt(editCardBase) * 1.1))}（10%手数料込）</p>}</div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📱 PayPay支払額</label><input type="text" inputMode="numeric" value={editPaypay} onChange={(e) => setEditPaypay(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              </div>
               <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
                 <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>料金サマリー</p>
                 <div className="space-y-1 text-[11px]">
@@ -451,6 +475,13 @@ export default function TimeChart() {
                   {editExtension && <div className="flex justify-between"><span>延長: {editExtension}</span><span>+{fmt(editExtPrice)}</span></div>}
                   {editDiscount && <div className="flex justify-between" style={{ color: "#c45555" }}><span>割引: {editDiscount}</span><span>-{fmt(editDiscAmt)}</span></div>}
                   <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${T.border}`, color: "#c3a782" }}><span>合計</span><span>{fmt(eTotalCalc)}</span></div>
+                  {(parseInt(editCardBase) > 0 || parseInt(editPaypay) > 0) && (<>
+                    <div className="pt-2 mt-1" style={{ borderTop: `1px dashed ${T.border}` }}>
+                      {parseInt(editCardBase) > 0 && <div className="flex justify-between"><span>💳 カード端末入力額</span><span style={{ color: "#85a8c4", fontWeight: 700 }}>{fmt(Math.round(parseInt(editCardBase) * 1.1))}</span></div>}
+                      {parseInt(editPaypay) > 0 && <div className="flex justify-between"><span>📱 PayPay</span><span style={{ color: "#22c55e" }}>{fmt(parseInt(editPaypay))}</span></div>}
+                      <div className="flex justify-between"><span>💴 現金</span><span>{fmt(eTotalCalc - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0))}</span></div>
+                    </div>
+                  </>)}
                 </div>
               </div>
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
@@ -482,7 +513,7 @@ export default function TimeChart() {
         </div>
       )}
 
-      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
     </div>
   );
 }
