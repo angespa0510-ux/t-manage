@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useToast } from "../../lib/toast";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme"; import { NavMenu } from "../../lib/nav-menu";
@@ -19,12 +20,14 @@ const HOURS_DISPLAY = Array.from({ length: DISPLAY_HOURS }, (_, i) => { const h 
 
 function timeToMinutes(time: string): number { const [h, m] = time.split(":").map(Number); const adj = h < START_HOUR ? h + 24 : h; return (adj - START_HOUR) * 60 + m; }
 function minutesToTime(min: number): string { const t = min + START_HOUR * 60; const h = Math.floor(t / 60) % 24; const m = t % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; }
+function minutesToDisplay(min: number): string { const t = min + START_HOUR * 60; const h = Math.floor(t / 60); const dh = h >= 24 ? h - 24 : h; const m = t % 60; return `${dh}:${String(m).padStart(2, "0")}`; }
 
 const TIMES_10MIN: string[] = [];
 for (let m = 0; m <= 18 * 60; m += 10) TIMES_10MIN.push(minutesToTime(m));
 
 export default function TimeChart() {
   const router = useRouter();
+  const toast = useToast();
   const { dark, toggle, T } = useTheme();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -227,12 +230,12 @@ export default function TimeChart() {
       }
     }
     setSaving(false);
-    if (error) { setMsg("登録失敗: " + error.message); }
-    else { setMsg("予約を登録しました！"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscount(""); setNewDiscAmt(0); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
+    if (error) { toast.show("登録失敗: " + error.message, "error"); }
+    else { toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscount(""); setNewDiscAmt(0); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
   };
 
   const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); setEditDiscount((r as any).discount_name || ""); setEditDiscAmt((r as any).discount_amount || 0); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); };
-  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - editDiscAmt; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: editDiscount, discount_amount: editDiscAmt, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0) }).eq("id", editRes.id); setEditSaving(false); if (error) { setEditMsg("更新失敗: " + error.message); } else { setEditMsg("更新しました！"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
+  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - editDiscAmt; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: editDiscount, discount_amount: editDiscAmt, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0) }).eq("id", editRes.id); setEditSaving(false); if (error) { toast.show("更新失敗: " + error.message, "error"); } else { toast.show("更新しました！", "success"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
   const deleteReservation = async (id: number) => { await supabase.from("reservations").delete().eq("id", id); setEditRes(null); fetchData(); };
   const addShiftTherapist = async () => { if (!addShiftTherapistId) return; await supabase.from("shifts").insert({ therapist_id: addShiftTherapistId, date: selectedDate, start_time: addShiftStart, end_time: addShiftEnd, status: "confirmed" }); if (addShiftRoom) { await supabase.from("room_assignments").insert({ date: selectedDate, room_id: addShiftRoom, therapist_id: addShiftTherapistId, slot: "early" }); } setShowNewTherapist(false); setAddShiftTherapistId(0); fetchData(); };
 
