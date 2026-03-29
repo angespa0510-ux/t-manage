@@ -104,7 +104,7 @@ export default function TimeChart() {
   const [safeHistory, setSafeHistory] = useState<{ id: number; date: string; total_cash: number; total_back: number; room_id: number; therapist_name: string; room_label: string; replenish: number; safe_collected_date: string }[]>([]);
   const [showReplenish, setShowReplenish] = useState<number | null>(null);
   const [showDailySummary, setShowDailySummary] = useState(false);
-  const [dailySettlements, setDailySettlements] = useState<{ therapist_id: number; sales_collected: boolean; change_collected: boolean; total_cash: number; total_back: number; room_id: number }[]>([]);
+  const [dailySettlements, setDailySettlements] = useState<{ therapist_id: number; sales_collected: boolean; change_collected: boolean; total_cash: number; total_back: number; room_id: number; safe_deposited: boolean }[]>([]);
   const [pastCollected, setPastCollected] = useState<{ date: string; total_cash: number; total_back: number; room_id: number; replenish: number; therapist_name: string }[]>([]);
   const [safeCollectedToday, setSafeCollectedToday] = useState<{ date: string; total_cash: number; total_back: number; room_id: number; replenish: number; therapist_name: string }[]>([]);
   const [replenishAmount, setReplenishAmount] = useState("");
