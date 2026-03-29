@@ -12,12 +12,13 @@ type Shift = { id: number; therapist_id: number; store_id: number; date: string;
 
 const HOUR_WIDTH = 120;
 const MIN_10_WIDTH = HOUR_WIDTH / 6;
-const HOURS_DISPLAY = Array.from({ length: 19 }, (_, i) => { const h = i + 9; return h >= 24 ? h - 24 : h; });
-const HOURS_RAW = Array.from({ length: 19 }, (_, i) => i + 9);
+const START_HOUR = 11;
+const DISPLAY_HOURS = 17;
+const HOURS_RAW = Array.from({ length: DISPLAY_HOURS }, (_, i) => i + START_HOUR);
+const HOURS_DISPLAY = Array.from({ length: DISPLAY_HOURS }, (_, i) => { const h = i + START_HOUR; return h >= 24 ? h - 24 : h; });
 
-function timeToMinutes(time: string): number { const [h, m] = time.split(":").map(Number); const adj = h < 9 ? h + 24 : h; return (adj - 9) * 60 + m; }
-function minutesToTime(min: number): string { const t = min + 9 * 60; const h = Math.floor(t / 60) % 24; const m = t % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; }
-function minutesToDisplay(min: number): string { const t = min + 9 * 60; const h = Math.floor(t / 60); const dh = h >= 24 ? h - 24 : h; const m = t % 60; return `${dh}:${String(m).padStart(2, "0")}`; }
+function timeToMinutes(time: string): number { const [h, m] = time.split(":").map(Number); const adj = h < START_HOUR ? h + 24 : h; return (adj - START_HOUR) * 60 + m; }
+function minutesToTime(min: number): string { const t = min + START_HOUR * 60; const h = Math.floor(t / 60) % 24; const m = t % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; }
 
 const TIMES_10MIN: string[] = [];
 for (let m = 0; m <= 18 * 60; m += 10) TIMES_10MIN.push(minutesToTime(m));
@@ -77,6 +78,11 @@ export default function TimeChart() {
   const [addShiftBuilding, setAddShiftBuilding] = useState(0);
   const [addShiftRoom, setAddShiftRoom] = useState(0);
   const [addShiftSearch, setAddShiftSearch] = useState("");
+  const [breaks, setBreaks] = useState<{ id: number; therapist_id: number; start: string; end: string; label: string }[]>([]);
+  const [nextBreakId, setNextBreakId] = useState(1);
+  const [showBreakModal, setShowBreakModal] = useState<number | null>(null);
+  const [breakDuration, setBreakDuration] = useState(30);
+  const [breakStart, setBreakStart] = useState("12:00");
   const [editTherapist, setEditTherapist] = useState<Therapist | null>(null);
   const [etNotes, setEtNotes] = useState("");
   const [etSaving, setEtSaving] = useState(false);
@@ -135,7 +141,7 @@ export default function TimeChart() {
     const now = currentTime; const h = now.getHours(); const m = now.getMinutes();
     const adjH = h < 9 ? h + 24 : h;
     if (adjH < 9 || adjH >= 27) return -1;
-    return ((adjH - 9) * 60 + m) * (HOUR_WIDTH / 60);
+    return ((adjH - START_HOUR) * 60 + m) * (HOUR_WIDTH / 60);
   })();
 
   const fetchData = useCallback(async () => {
@@ -237,7 +243,7 @@ export default function TimeChart() {
   const dateDisplay = (() => { const d = new Date(selectedDate + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${days[d.getDay()]}）`; })();
 
   const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4", "#85c4b8", "#c4a685", "#8599c4"];
-  const totalWidth = 19 * HOUR_WIDTH;
+  const totalWidth = DISPLAY_HOURS * HOUR_WIDTH;
   const getResForTherapist = (tid: number) => reservations.filter((r) => r.therapist_id === tid);
 
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
@@ -304,6 +310,7 @@ export default function TimeChart() {
                         style={{ borderColor: isCO ? "#7ab88f66" : "#c4555566", backgroundColor: isCO ? "#7ab88f12" : "#c4555512", color: isCO ? "#7ab88f" : "#c45555" }}>
                         {isCO ? "復活" : "退勤"}
                       </button>
+                      <button onClick={(e) => { e.stopPropagation(); const bRes2 = reservations.filter(r => r.therapist_id === t.id).sort((a, b) => timeToMinutes(b.end_time) - timeToMinutes(a.end_time)); setBreakStart(bRes2.length > 0 ? bRes2[0].end_time.slice(0,5) : "12:00"); setShowBreakModal(t.id); setBreakDuration(30); }} className="text-[7px] px-1 py-0.5 rounded cursor-pointer border" style={{ borderColor: "#a855f744", color: "#a855f7" }}>休憩</button>
                       <button onClick={async (e) => { e.stopPropagation(); setSettleTh(t); setSettleAdj(""); setSettleAdjNote(""); setSettleInvoice((t as any).has_invoice || false); const { data: existing } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", t.id).eq("date", selectedDate).maybeSingle(); setSettleSettled(!!existing?.is_settled); }} className="text-[7px] px-1 py-0.5 rounded cursor-pointer border" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>清算</button>
                     </div>
                   </div>
@@ -343,7 +350,7 @@ export default function TimeChart() {
                       setNewTherapistId(t.id); setNewStart(minutesToTime(min)); setNewEnd(minutesToTime(min + 60)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
                     }}>
                     {(() => { const sh = shifts.find(s => s.therapist_id === t.id); if (sh) { const shStart = timeToMinutes(sh.start_time); const shEnd = timeToMinutes(sh.end_time); const left = shStart * MIN_10_WIDTH / 10; const w = (shEnd - shStart) * MIN_10_WIDTH / 10; return <div className="absolute top-0 bottom-0" style={{ left, width: w, backgroundColor: dark ? "#c3a78208" : "#c3a78210", borderLeft: "2px solid #c3a78233", borderRight: "2px solid #c3a78233", zIndex: 1 }} />; } return null; })()}
-                    {HOURS_RAW.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - 9) * HOUR_WIDTH, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
+                    {HOURS_RAW.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - START_HOUR) * HOUR_WIDTH, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
                     {tRes.map((r, ri) => {
                       const sM = timeToMinutes(r.start_time); const eM = timeToMinutes(r.end_time);
                       const left = sM * (HOUR_WIDTH / 60); const width = (eM - sM) * (HOUR_WIDTH / 60);
@@ -357,13 +364,35 @@ export default function TimeChart() {
                           <div className="px-2 py-1 overflow-hidden h-full"
                             onMouseDown={(e) => { if ((e.target as HTMLElement).closest(".drag-handle")) return; e.stopPropagation(); setDragInfo({ resId: r.id, edge: "move", initX: e.clientX, initMin: sM, initEndMin: eM }); }}>
                             <p className="text-[11px] font-medium truncate" style={{ color: T.text }}>{r.customer_name}{(r as any).status && (r as any).status !== "unprocessed" && <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 4, backgroundColor: (r as any).status === "completed" ? "#c3a78222" : (r as any).status === "serving" ? "#22c55e22" : (r as any).status === "phone_check" ? "#f59e0b22" : (r as any).status === "web_reservation" ? "#a855f722" : "#85a8c422", color: (r as any).status === "completed" ? "#c3a782" : (r as any).status === "serving" ? "#22c55e" : (r as any).status === "phone_check" ? "#f59e0b" : (r as any).status === "web_reservation" ? "#a855f7" : "#85a8c4" }}>{(r as any).status === "completed" ? "終了" : (r as any).status === "serving" ? "接客中" : (r as any).status === "phone_check" ? "電話確認" : (r as any).status === "web_reservation" ? "WEB" : (r as any).status === "processed" ? "処理済" : ""}</span>}</p>
-                            <p className="text-[9px] truncate" style={{ color: T.textSub }}>{r.course || `${r.start_time}〜${r.end_time}`}</p>
+                            <p className="text-[9px] truncate" style={{ color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}{r.course ? ` / ${r.course}` : ""}</p>
                             {((r as any).card_billing > 0 || (r as any).paypay_amount > 0) && <p className="text-[8px] truncate" style={{ color: "#85a8c4" }}>{(r as any).card_billing > 0 ? `💳${fmt((r as any).card_billing)}` : ""}{(r as any).card_billing > 0 && (r as any).paypay_amount > 0 ? " " : ""}{(r as any).paypay_amount > 0 ? `📱${fmt((r as any).paypay_amount)}` : ""}</p>}
                             {r.notes && <div style={{ overflow: "hidden", maxHeight: 20, lineHeight: "10px", marginTop: 2, position: "relative" }}><p className="text-[8px]" style={{ color: "#f59e0b", whiteSpace: "pre-wrap", animation: r.notes.length > 20 ? `scrollNote ${Math.max(4, r.notes.length * 0.15)}s linear infinite` : "none" }}>📝 {r.notes}</p></div>}
                             
                           </div>
                           <div className="drag-handle absolute right-0 top-0 bottom-0 w-[6px] cursor-ew-resize opacity-0 group-hover:opacity-100 hover:bg-black/10 rounded-r-lg"
                             onMouseDown={(e) => { e.stopPropagation(); setDragInfo({ resId: r.id, edge: "end", initX: e.clientX, initMin: sM, initEndMin: eM }); }} />
+                        </div>
+                      );
+                    })}
+                    {breaks.filter(b => b.therapist_id === t.id).map((b) => {
+                      const bsM = timeToMinutes(b.start); const beM = timeToMinutes(b.end);
+                      const bLeft = bsM * (HOUR_WIDTH / 60); const bWidth = (beM - bsM) * (HOUR_WIDTH / 60);
+                      return (
+                        <div key={`brk-${b.id}`} className="absolute top-[2px] bottom-[2px] rounded-lg cursor-pointer" style={{ left: bLeft, width: bWidth, backgroundColor: dark ? "#a855f715" : "#a855f710", borderLeft: `2px dashed #a855f7`, zIndex: 4 }}
+                          onClick={(e) => { e.stopPropagation(); if (confirm("この休憩を削除しますか？")) setBreaks(prev => prev.filter(x => x.id !== b.id)); }}>
+                          <div className="px-1 py-0.5"><p className="text-[8px] font-medium" style={{ color: "#a855f7" }}>☕ {b.start?.slice(0,5)}〜{b.end?.slice(0,5)}</p></div>
+                        </div>
+                      );
+                    })}
+                    {tRes.map((r, ri) => {
+                      const intervalMin = (t as any).interval_minutes || 0;
+                      if (intervalMin <= 0) return null;
+                      const eM = timeToMinutes(r.end_time);
+                      const iLeft = eM * (HOUR_WIDTH / 60);
+                      const iWidth = intervalMin * (HOUR_WIDTH / 60);
+                      return (
+                        <div key={`int-${r.id}-${ri}`} className="absolute top-[8px] bottom-[8px] rounded" style={{ left: iLeft, width: iWidth, backgroundColor: dark ? "#ffffff08" : "#00000008", borderLeft: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, borderRight: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, zIndex: 2 }}>
+                          <span className="text-[7px] absolute top-0.5 left-1" style={{ color: T.textFaint }}>{intervalMin}分</span>
                         </div>
                       );
                     })}
@@ -666,6 +695,29 @@ export default function TimeChart() {
           </div>
         </div>
       )}
+
+      {/* Break Modal */}
+      {showBreakModal && (() => {
+        const bTh = therapists.find(t => t.id === showBreakModal);
+        const bEndMin = timeToMinutes(breakStart) + breakDuration;
+        const bEnd = minutesToTime(bEndMin);
+        return (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowBreakModal(null)}>
+          <div className="rounded-2xl border p-6 w-full max-w-xs animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[15px] font-medium mb-2">☕ 休憩追加</h2>
+            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{bTh?.name}</p>
+            <div className="space-y-3">
+              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label><select value={breakStart} onChange={(e) => setBreakStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
+              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>休憩時間</label><div className="flex flex-wrap gap-2">{[10, 15, 20, 30, 45, 60].map(d => (<button key={d} onClick={() => setBreakDuration(d)} className="px-3 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: breakDuration === d ? "#a855f722" : T.cardAlt, color: breakDuration === d ? "#a855f7" : T.textMuted, border: `1px solid ${breakDuration === d ? "#a855f7" : T.border}`, fontWeight: breakDuration === d ? 700 : 400 }}>{d}分</button>))}</div></div>
+              <p className="text-[11px] text-center py-2" style={{ color: "#a855f7" }}>☕ {breakStart?.slice(0,5)} 〜 {minutesToDisplay(bEndMin)}（{breakDuration}分間）</p>
+              <div className="flex gap-3">
+                <button onClick={() => { setBreaks(prev => [...prev, { id: nextBreakId, therapist_id: showBreakModal, start: breakStart, end: bEnd, label: "休憩" }]); setNextBreakId(prev => prev + 1); setShowBreakModal(null); }} className="px-5 py-2.5 bg-gradient-to-r from-[#a855f7] to-[#9333ea] text-white text-[11px] rounded-xl cursor-pointer">追加する</button>
+                <button onClick={() => setShowBreakModal(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>);
+      })()}
 
       {/* Shift Change Modal */}
       {editShiftTherapist && (
