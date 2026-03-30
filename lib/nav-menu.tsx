@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: "売上分析", path: "/analytics" },
   { label: "経費管理", path: "/expenses" },
   { label: "税務報告", path: "/tax-dashboard" },
+  { label: "スタッフ設定", path: "/staff" },
   { label: "顧客一覧", path: "DASHBOARD_PAGE:顧客一覧" },
   { label: "顧客登録", path: "DASHBOARD_PAGE:顧客登録" },
   { label: "セラピスト登録", path: "/therapists" },
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
 const ICONS: Record<string, string> = {
   "HOME": "🏠", "タイムチャート": "📅", "部屋割り管理": "🏢", "セラピスト勤怠": "⏰",
   "売上分析": "📊", "顧客一覧": "👥", "顧客登録": "📝", "セラピスト登録": "💆",
-  "コース登録": "📋", "利用場所登録": "🔑", "サービス設定": "⚙️", "経費管理": "💰", "税務報告": "📑",
+  "コース登録": "📋", "利用場所登録": "🔑", "サービス設定": "⚙️", "経費管理": "💰", "税務報告": "📑", "スタッフ設定": "👥",
 };
 
 function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }) {
