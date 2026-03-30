@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { useStaffSession } from "../../lib/staff-session";
 
 type Customer = {
   id: number; created_at: string; name: string; phone: string; phone2: string; phone3: string;
@@ -56,6 +57,10 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
 export default function Dashboard() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { activeStaff, isManager, login, logout: staffLogout } = useStaffSession();
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [openMenus, setOpenMenus] = useState<string[]>(["HOME"]);
@@ -230,6 +235,11 @@ export default function Dashboard() {
             <div><h1 className="text-[16px] font-medium">{activePage}</h1><p className="text-[11px]" style={{ color: T.textMuted }}>{dateStr}（{dayStr}）</p></div>
           </div>
           <div className="flex items-center gap-4">
+            {activeStaff ? (
+              <button onClick={staffLogout} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer font-medium" style={{ backgroundColor: activeStaff.role === "owner" ? "#c3a78222" : activeStaff.role === "manager" ? "#85a8c422" : "#22c55e22", color: activeStaff.role === "owner" ? "#c3a782" : activeStaff.role === "manager" ? "#85a8c4" : "#22c55e", border: `1px solid ${activeStaff.role === "owner" ? "#c3a78244" : activeStaff.role === "manager" ? "#85a8c444" : "#22c55e44"}` }}>👤 {activeStaff.name} ✕</button>
+            ) : (
+              <button onClick={() => { setShowPinModal(true); setPinInput(""); setPinError(""); }} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer font-medium" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>🔑 スタッフログイン</button>
+            )}
             <button onClick={toggle} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
             <div className="w-px h-5" style={{ backgroundColor: T.border }} />
             <button onClick={handleLogout} className="text-[11px] cursor-pointer" style={{ color: T.textMuted }}>ログアウト</button>
@@ -486,6 +496,45 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* PIN Login Modal */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowPinModal(false)}>
+          <div className="rounded-2xl w-full max-w-[300px] p-6 animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[16px] font-medium text-center mb-1">🔑 スタッフログイン</h2>
+            <p className="text-[11px] text-center mb-5" style={{ color: T.textFaint }}>4桁のPINコードを入力</p>
+            <div className="flex justify-center gap-2 mb-4">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="w-12 h-14 rounded-xl flex items-center justify-center text-[22px] font-bold" style={{ backgroundColor: T.cardAlt, color: pinInput[i] ? T.text : T.textFaint, border: `2px solid ${pinInput.length === i ? "#c3a782" : T.border}` }}>
+                  {pinInput[i] ? "●" : ""}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, "del"].map((n, i) => {
+                if (n === null) return <div key={i} />;
+                return (
+                  <button key={i} onClick={() => {
+                    if (n === "del") { setPinInput(prev => prev.slice(0, -1)); setPinError(""); return; }
+                    const next = pinInput + String(n);
+                    if (next.length > 4) return;
+                    setPinInput(next); setPinError("");
+                    if (next.length === 4) {
+                      login(next).then(ok => {
+                        if (ok) { setShowPinModal(false); }
+                        else { setPinError("PINが一致しません"); setPinInput(""); }
+                      });
+                    }
+                  }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
+                    {n === "del" ? "⌫" : n}
+                  </button>
+                );
+              })}
+            </div>
+            {pinError && <p className="text-[11px] text-center" style={{ color: "#c45555" }}>{pinError}</p>}
+            <button onClick={() => setShowPinModal(false)} className="w-full mt-2 py-2 text-[11px] rounded-xl cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+          </div>
+        </div>
+      )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
