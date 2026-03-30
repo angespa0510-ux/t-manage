@@ -67,12 +67,15 @@ export default function RoomAssignments() {
   const [allStaffSchedules, setAllStaffSchedules] = useState<StaffSchedule[]>([]);
   const [allDailyTasks, setAllDailyTasks] = useState<DailyTask[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [staffOpen, setStaffOpen] = useState(true);
+  const [taskOpen, setTaskOpen] = useState(true);
+  const [viewFilter, setViewFilter] = useState<"all" | "rooms" | "staff" | "tasks">("all");
   const [prevMonthAssignments, setPrevMonthAssignments] = useState<RoomAssignment[]>([]);
   const [pointAssignments, setPointAssignments] = useState<RoomAssignment[]>([]);
   const [pointAbsents, setPointAbsents] = useState<AbsentRecord[]>([]);
 
   const [currentMonth, setCurrentMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
-  const [expandedDay, setExpandedDay] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set([new Date().toISOString().split("T")[0]]));
   const [showPoints, setShowPoints] = useState(false);
   const [showVacancy, setShowVacancy] = useState(false);
   const [vacancyText, setVacancyText] = useState("");
@@ -87,7 +90,7 @@ export default function RoomAssignments() {
   const jumpToToday = () => {
     const tm = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
     if (currentMonth !== tm) setCurrentMonth(tm);
-    setExpandedDay(todayStr);
+    setExpandedDays(new Set([todayStr]));
     setTimeout(() => { dayRefs.current[todayStr]?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 100);
   };
 
@@ -315,14 +318,21 @@ export default function RoomAssignments() {
         <button onClick={nextMonth2} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="9 18 15 12 9 6"/></svg></button>
       </div>
 
+      {/* View Filter */}
+      <div className="flex items-center justify-center gap-2 py-2 border-b flex-shrink-0" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        {([["all", "🏠 すべて"], ["rooms", "🏠 部屋割り"], ["staff", "👤 スタッフ"], ["tasks", "📋 タスク"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => { setViewFilter(key as typeof viewFilter); if (key === "staff") setStaffOpen(true); if (key === "tasks") setTaskOpen(true); }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: viewFilter === key ? "#c3a78222" : "transparent", color: viewFilter === key ? "#c3a782" : T.textMuted, border: `1px solid ${viewFilter === key ? "#c3a782" : T.border}`, fontWeight: viewFilter === key ? 700 : 400 }}>{label}</button>
+        ))}
+      </div>
+
       {/* Calendar */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[1100px] mx-auto py-4 px-4">
           {allDates.map((date) => {
-            const f = formatDay(date); const dayShifts = getShiftsForDate(date); const dayA = getAssignmentsForDate(date); const dayPU = getParkingUsageForDate(date); const dayAb = getAbsentsForDate(date); const isExp = expandedDay === date;
+            const f = formatDay(date); const dayShifts = getShiftsForDate(date); const dayA = getAssignmentsForDate(date); const dayPU = getParkingUsageForDate(date); const dayAb = getAbsentsForDate(date); const isExp = expandedDays.has(date);
             return (
               <div key={date} ref={(el) => { dayRefs.current[date] = el; }} className="mb-1 rounded-xl overflow-hidden border transition-all" style={{ borderColor: isExp ? T.accent + "44" : "transparent", boxShadow: isExp ? "0 4px 20px rgba(0,0,0,0.06)" : "none" }}>
-                <button onClick={() => setExpandedDay(isExp ? "" : date)} className="w-full flex items-center justify-between px-5 py-3 cursor-pointer" style={{ backgroundColor: isExp ? T.card : f.isToday ? T.accentBg : "transparent" }}>
+                <button onClick={() => setExpandedDays(prev => { const next = new Set(prev); if (next.has(date)) next.delete(date); else next.add(date); return next; })} className="w-full flex items-center justify-between px-5 py-3 cursor-pointer" style={{ backgroundColor: isExp ? T.card : f.isToday ? T.accentBg : "transparent" }}>
                   <div className="flex items-center gap-3">
                     <span className="text-[15px] font-medium w-[28px]" style={{ color: f.isToday ? T.accent : f.isSun ? "#c45555" : f.isSat ? "#3d6b9f" : T.text }}>{f.day}</span>
                     <span className="text-[12px]" style={{ color: f.isSun ? "#c45555" : f.isSat ? "#3d6b9f" : T.textMuted }}>({f.dow})</span>
@@ -340,7 +350,7 @@ export default function RoomAssignments() {
                 {isExp && (
                   <div className="px-5 pb-5 animate-[fadeIn_0.3s]" style={{ backgroundColor: T.card }}>
                     
-
+                    {(viewFilter === "all" || viewFilter === "rooms") && (<>
                     <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                       <p className="text-[10px] mb-2" style={{ color: T.textMuted }}>出勤セラピスト</p>
                       {dayShifts.length === 0 ? <p className="text-[11px]" style={{ color: T.textFaint }}>シフトが登録されていません</p> : (
@@ -424,13 +434,21 @@ export default function RoomAssignments() {
                       if (un.length === 0) return null;
                       return (<div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b30" }}><p className="text-[10px] mb-2 font-medium" style={{ color: "#854f0b" }}>未割当セラピスト</p><div className="flex flex-wrap gap-1.5">{un.map((s) => (<span key={s.id} className="px-2 py-1 rounded-md text-[10px]" style={{ backgroundColor: T.card, color: "#854f0b" }}>{getTherapistName(s.therapist_id)} {s.start_time}〜{s.end_time}</span>))}</div></div>);
                     })()}
+                    </>)}
 
-                    {/* ★追加: 内勤スタッフ稼働 */}
-                    <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-[10px] font-medium" style={{ color: "#85a8c4" }}>👤 内勤スタッフ</p>
-                        <select onChange={(e) => { if (Number(e.target.value)) { addStaffSchedule(date, Number(e.target.value)); (e.target as HTMLSelectElement).value = "0"; } }} className="px-2 py-1 rounded-lg text-[10px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: "#85a8c444", color: "#85a8c4" }}><option value={0}>+ スタッフ追加</option>{staffList.filter(s => !getStaffSchedulesForDate(date).some(ss => ss.staff_id === s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-                      </div>
+                    {(viewFilter === "all" || viewFilter === "staff") && (
+                    <div className="mt-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <button onClick={() => setStaffOpen(!staffOpen)} className="w-full flex items-center justify-between px-3 py-2 cursor-pointer" style={{ background: "none", border: "none", color: T.text }}>
+                        <div className="flex items-center gap-2">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#85a8c4" strokeWidth="2" style={{ transform: staffOpen ? "rotate(180deg)" : "", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
+                          <span className="text-[10px] font-medium" style={{ color: "#85a8c4" }}>👤 内勤スタッフ</span>
+                          <span className="text-[9px]" style={{ color: T.textMuted }}>({getStaffSchedulesForDate(date).length}名)</span>
+                          {hasUncheckedStaff(date) && getStaffSchedulesForDate(date).length > 0 && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⚠未確認</span>}
+                        </div>
+                        {(staffOpen || viewFilter === "staff") && <select onClick={(e) => e.stopPropagation()} onChange={(e) => { if (Number(e.target.value)) { addStaffSchedule(date, Number(e.target.value)); (e.target as HTMLSelectElement).value = "0"; } }} className="px-2 py-1 rounded-lg text-[10px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: "#85a8c444", color: "#85a8c4" }}><option value={0}>+ 追加</option>{staffList.filter(s => !getStaffSchedulesForDate(date).some(ss => ss.staff_id === s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
+                      </button>
+                      {(staffOpen || viewFilter === "staff") && (
+                        <div className="px-3 pb-3">
                       {getStaffSchedulesForDate(date).length === 0 ? <p className="text-[10px]" style={{ color: T.textFaint }}>スタッフの稼働予定なし</p> : (
                         <div className="space-y-2">{getStaffSchedulesForDate(date).map(sch => { const staff = staffList.find(s => s.id === sch.staff_id); const locked = sch.is_checked; return (
                           <div key={sch.id} className="rounded-lg p-2" style={{ backgroundColor: T.card, border: locked ? "1px solid #22c55e44" : `1px solid ${T.border}` }}>
@@ -440,45 +458,49 @@ export default function RoomAssignments() {
                               <span className="text-[9px]" style={{ color: T.textFaint }}>〜</span>
                               <select value={sch.end_time} onChange={(e) => updateStaffScheduleTime(sch.id, "end_time", e.target.value, sch)} disabled={locked} className="px-1.5 py-0.5 rounded text-[9px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub, opacity: locked ? 0.6 : 1 }}>{STAFF_TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select>
                               <span className="text-[9px]" style={{ color: T.textMuted }}>{sch.units}u</span>
-                              {/* 出勤ボタン */}
                               {!sch.clock_in_time ? (
                                 <button onClick={() => clockIn(sch.id)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>▶ 出勤</button>
                               ) : (
                                 <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#3b82f612", color: "#3b82f6" }}>出勤 {sch.clock_in_time}</span>
                               )}
-                              {/* 退勤ボタン */}
                               {sch.clock_in_time && !sch.clock_out_time ? (
                                 <button onClick={() => clockOut(sch.id)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b44" }}>⏹ 退勤</button>
                               ) : sch.clock_out_time ? (
                                 <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b12", color: "#f59e0b" }}>退勤 {sch.clock_out_time}</span>
                               ) : null}
-                              {/* 管理者チェック */}
                               {!locked ? (
                                 isManager ? <button onClick={() => managerCheck(sch.id)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "1px solid #22c55e44" }}>🔓 確認</button> : <span className="text-[8px]" style={{ color: "#f59e0b" }}>⏳未確認</span>
                               ) : (
                                 <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 確認済{isManager && <button onClick={() => undoManagerCheck(sch.id)} className="ml-1 cursor-pointer" style={{ background: "none", border: "none", color: "#c45555", fontSize: 8, padding: 0 }}>取消</button>}</span>
                               )}
-                              {/* 削除（ロック時は非表示） */}
                               {!locked && <button onClick={() => removeStaffSchedule(sch.id)} className="text-[9px] px-1 py-0.5 rounded cursor-pointer" style={{ color: "#c45555" }}>×</button>}
                             </div>
                             {locked && <p className="text-[7px] mt-1" style={{ color: "#22c55e" }}>🔒 管理者確認済 — 変更ロック中</p>}
                           </div>); })}</div>
                       )}
+                        </div>
+                      )}
                     </div>
+                    )}
 
-                    {/* ★追加: 日次タスク */}
-                    <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-[10px] font-medium" style={{ color: "#c3a782" }}>📋 日次タスク</p>
-                      </div>
-                      {/* 管理者チェック未完了の警告 */}
+                    {(viewFilter === "all" || viewFilter === "tasks") && (
+                    <div className="mt-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <button onClick={() => setTaskOpen(!taskOpen)} className="w-full flex items-center justify-between px-3 py-2 cursor-pointer" style={{ background: "none", border: "none", color: T.text }}>
+                        <div className="flex items-center gap-2">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c3a782" strokeWidth="2" style={{ transform: taskOpen ? "rotate(180deg)" : "", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
+                          <span className="text-[10px] font-medium" style={{ color: "#c3a782" }}>📋 日次タスク</span>
+                          {(() => { const pending = getDailyTasksForDate(date).filter(t => !t.is_completed).length; const total = getDailyTasksForDate(date).length; return total > 0 ? <span className="text-[9px]" style={{ color: pending > 0 ? "#f59e0b" : "#22c55e" }}>{pending > 0 ? `${pending}件未完了` : "✅全完了"}</span> : <span className="text-[9px]" style={{ color: T.textMuted }}>0件</span>; })()}
+                          {hasUncheckedStaff(date) && getStaffSchedulesForDate(date).length > 0 && !staffOpen && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⚠スタッフ未確認</span>}
+                        </div>
+                      </button>
+                      {(taskOpen || viewFilter === "tasks") && (
+                        <div className="px-3 pb-3">
                       {hasUncheckedStaff(date) && getStaffSchedulesForDate(date).length > 0 && (
                         <div className="px-3 py-2 rounded-lg mb-2" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
                           <p className="text-[10px] font-medium" style={{ color: "#f59e0b" }}>⚠ 内勤スタッフの管理者チェックが未完了です</p>
-                          <p className="text-[9px]" style={{ color: "#f59e0b88" }}>管理者権限で上の「🔓 確認」ボタンを押してください</p>
+                          <p className="text-[9px]" style={{ color: "#f59e0b88" }}>管理者権限で「🔓 確認」ボタンを押してください</p>
                         </div>
                       )}
-                      {/* タスクリスト */}
                       <div className="space-y-1">
                         {getDailyTasksForDate(date).map(task => (
                           <div key={task.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ backgroundColor: T.card }}>
@@ -489,12 +511,14 @@ export default function RoomAssignments() {
                           </div>
                         ))}
                       </div>
-                      {/* タスク追加フォーム */}
                       <div className="flex gap-1.5 mt-2">
-                        <input type="text" placeholder="タスクを追加..." value={expandedDay === date ? newTaskTitle : ""} onChange={(e) => setNewTaskTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && newTaskTitle.trim()) { addDailyTask(date, newTaskTitle); setNewTaskTitle(""); } }} className="flex-1 px-2.5 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
+                        <input type="text" placeholder="タスクを追加..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && newTaskTitle.trim()) { addDailyTask(date, newTaskTitle); setNewTaskTitle(""); } }} className="flex-1 px-2.5 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
                         <button onClick={() => { if (newTaskTitle.trim()) { addDailyTask(date, newTaskTitle); setNewTaskTitle(""); } }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>追加</button>
                       </div>
+                        </div>
+                      )}
                     </div>
+                    )}
                   </div>
                 )}
               </div>
