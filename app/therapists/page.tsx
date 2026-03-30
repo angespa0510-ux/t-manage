@@ -8,7 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 
 type Therapist = {
   id: number; created_at: string; name: string; phone: string; status: string;
-  salary_type: string; salary_amount: number; age: number; interval_minutes: number;
+  salary_type: string; salary_amount: number; age: number; interval_minutes: number; transport_fee: number;
   height_cm: number; bust: number; waist: number; hip: number; cup: string;
   photo_url: string; photo_width: number; photo_height: number;
 };
@@ -24,7 +24,7 @@ export default function TherapistManagement() {
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState(""); const [addPhone, setAddPhone] = useState(""); const [addStatus, setAddStatus] = useState("active");
   const [addSalaryType, setAddSalaryType] = useState("fixed"); const [addSalaryAmount, setAddSalaryAmount] = useState("");
-  const [addAge, setAddAge] = useState(""); const [addInterval, setAddInterval] = useState("10");
+  const [addAge, setAddAge] = useState(""); const [addInterval, setAddInterval] = useState("10"); const [addTransport, setAddTransport] = useState("0");
   const [addHeight, setAddHeight] = useState(""); const [addBust, setAddBust] = useState(""); const [addWaist, setAddWaist] = useState(""); const [addHip, setAddHip] = useState(""); const [addCup, setAddCup] = useState("");
   const [addPhotoW, setAddPhotoW] = useState("400"); const [addPhotoH, setAddPhotoH] = useState("600");
   const [addPhotoFile, setAddPhotoFile] = useState<File | null>(null); const [addPhotoPreview, setAddPhotoPreview] = useState("");
@@ -35,7 +35,7 @@ export default function TherapistManagement() {
   const [editTarget, setEditTarget] = useState<Therapist | null>(null);
   const [editName, setEditName] = useState(""); const [editPhone, setEditPhone] = useState(""); const [editStatus, setEditStatus] = useState("");
   const [editSalaryType, setEditSalaryType] = useState("fixed"); const [editSalaryAmount, setEditSalaryAmount] = useState("");
-  const [editAge, setEditAge] = useState(""); const [editInterval, setEditInterval] = useState("10");
+  const [editAge, setEditAge] = useState(""); const [editInterval, setEditInterval] = useState("10"); const [editTransport, setEditTransport] = useState("0");
   const [editHeight, setEditHeight] = useState(""); const [editBust, setEditBust] = useState(""); const [editWaist, setEditWaist] = useState(""); const [editHip, setEditHip] = useState(""); const [editCup, setEditCup] = useState("");
   const [editPhotoW, setEditPhotoW] = useState("400"); const [editPhotoH, setEditPhotoH] = useState("600");
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
@@ -69,7 +69,7 @@ export default function TherapistManagement() {
     const { data, error } = await supabase.from("therapists").insert({
       name: addName.trim(), phone: addPhone.trim(), status: addStatus,
       salary_type: addSalaryType, salary_amount: parseInt(addSalaryAmount) || 0,
-      age: parseInt(addAge) || 0, interval_minutes: parseInt(addInterval) || 10,
+      age: parseInt(addAge) || 0, interval_minutes: parseInt(addInterval) || 10, transport_fee: parseInt(addTransport) || 0,
       height_cm: parseInt(addHeight) || 0, bust: parseInt(addBust) || 0, waist: parseInt(addWaist) || 0, hip: parseInt(addHip) || 0, cup: addCup,
       photo_width: parseInt(addPhotoW) || 400, photo_height: parseInt(addPhotoH) || 600,
     }).select().single();
@@ -79,14 +79,14 @@ export default function TherapistManagement() {
       if (url) await supabase.from("therapists").update({ photo_url: url }).eq("id", data.id);
     }
     setSaving(false); setMsg("登録しました！");
-    setAddName(""); setAddPhone(""); setAddStatus("active"); setAddSalaryType("fixed"); setAddSalaryAmount(""); setAddAge(""); setAddInterval("10");
+    setAddName(""); setAddPhone(""); setAddStatus("active"); setAddSalaryType("fixed"); setAddSalaryAmount(""); setAddAge(""); setAddInterval("10"); setAddTransport("0");
     setAddHeight(""); setAddBust(""); setAddWaist(""); setAddHip(""); setAddCup(""); setAddPhotoFile(null); setAddPhotoPreview(""); setAddPhotoW("400"); setAddPhotoH("600");
     fetchTherapists(); setTimeout(() => { setShowAdd(false); setMsg(""); }, 800);
   };
 
   const startEdit = (t: Therapist) => {
     setEditTarget(t); setEditName(t.name || ""); setEditPhone(t.phone || ""); setEditStatus(t.status || "active");
-    setEditSalaryType(t.salary_type || "fixed"); setEditSalaryAmount(String(t.salary_amount || 0));
+    setEditSalaryType(t.salary_type || "fixed"); setEditSalaryAmount(String(t.salary_amount || 0)); setEditTransport(String(t.transport_fee || 0));
     setEditAge(String(t.age || "")); setEditInterval(String(t.interval_minutes || 10));
     setEditHeight(String(t.height_cm || "")); setEditBust(String(t.bust || "")); setEditWaist(String(t.waist || "")); setEditHip(String(t.hip || "")); setEditCup(t.cup || "");
     setEditPhotoW(String(t.photo_width || 400)); setEditPhotoH(String(t.photo_height || 600));
@@ -101,7 +101,7 @@ export default function TherapistManagement() {
     const { error } = await supabase.from("therapists").update({
       name: editName.trim(), phone: editPhone.trim(), status: editStatus,
       salary_type: editSalaryType, salary_amount: parseInt(editSalaryAmount) || 0,
-      age: parseInt(editAge) || 0, interval_minutes: parseInt(editInterval) || 10,
+      age: parseInt(editAge) || 0, interval_minutes: parseInt(editInterval) || 10, transport_fee: parseInt(editTransport) || 0,
       height_cm: parseInt(editHeight) || 0, bust: parseInt(editBust) || 0, waist: parseInt(editWaist) || 0, hip: parseInt(editHip) || 0, cup: editCup,
       photo_url: photoUrl, photo_width: parseInt(editPhotoW) || 400, photo_height: parseInt(editPhotoH) || 600,
     }).eq("id", editTarget.id);
@@ -272,6 +272,7 @@ export default function TherapistManagement() {
                 {getSalaryLabel(detailTarget) && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>給料ランク</span><span className="font-medium" style={{ color: "#c3a782" }}>{getSalaryLabel(detailTarget)}</span></div>}
                 {detailTarget.age > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>年齢</span><span>{detailTarget.age}歳</span></div>}
                 {detailTarget.interval_minutes > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>インターバル</span><span>{detailTarget.interval_minutes}分</span></div>}
+                {detailTarget.transport_fee > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>交通費</span><span>¥{detailTarget.transport_fee.toLocaleString()}</span></div>}
                 {detailTarget.height_cm > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>身長</span><span>{detailTarget.height_cm}cm</span></div>}
                 {(detailTarget.bust > 0 || detailTarget.waist > 0 || detailTarget.hip > 0) && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>スリーサイズ</span><span>B{detailTarget.bust} W{detailTarget.waist} H{detailTarget.hip}</span></div>}
                 {detailTarget.cup && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>カップ</span><span>{detailTarget.cup}カップ</span></div>}
@@ -304,6 +305,7 @@ export default function TherapistManagement() {
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>年齢</label><input type="text" inputMode="numeric" value={addAge} onChange={(e) => setAddAge(e.target.value.replace(/[^0-9]/g, ""))} placeholder="25" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>インターバル</label><select value={addInterval} onChange={(e) => setAddInterval(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{INTERVALS.map((m) => <option key={m} value={m}>{m}分</option>)}</select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費</label><select value={addTransport} onChange={(e) => setAddTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>身長</label><input type="text" inputMode="numeric" value={addHeight} onChange={(e) => setAddHeight(e.target.value.replace(/[^0-9]/g, ""))} placeholder="160" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div className="grid grid-cols-4 gap-3">
@@ -342,6 +344,7 @@ export default function TherapistManagement() {
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>年齢</label><input type="text" inputMode="numeric" value={editAge} onChange={(e) => setEditAge(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>インターバル</label><select value={editInterval} onChange={(e) => setEditInterval(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{INTERVALS.map((m) => <option key={m} value={m}>{m}分</option>)}</select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>身長</label><input type="text" inputMode="numeric" value={editHeight} onChange={(e) => setEditHeight(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div className="grid grid-cols-4 gap-3">

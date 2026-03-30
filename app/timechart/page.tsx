@@ -111,11 +111,11 @@ export default function TimeChart() {
   const [replenishStaff, setReplenishStaff] = useState("");
   const [replenishTherapistId, setReplenishTherapistId] = useState(0);
 
-  const [nominations, setNominations] = useState<{ id: number; name: string; price: number }[]>([]);
+  const [nominations, setNominations] = useState<{ id: number; name: string; price: number; back_amount?: number }[]>([]);
   const [options, setOptions] = useState<{ id: number; name: string; price: number }[]>([]);
   const [discounts, setDiscounts] = useState<{ id: number; name: string; amount: number; type: string }[]>([]);
   const [extensions, setExtensions] = useState<{ id: number; name: string; duration: number; price: number }[]>([]);
-  const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
+  const [stores, setStores] = useState<{ id: number; name: string; invoice_number?: string; company_name?: string; company_address?: string; company_phone?: string }[]>([]);
   const [buildings, setBuildings] = useState<{ id: number; store_id: number; name: string }[]>([]);
   const [allRooms, setAllRooms] = useState<{ id: number; store_id: number; building_id: number; name: string }[]>([]);
   const [roomAssigns, setRoomAssigns] = useState<{ id: number; date: string; room_id: number; therapist_id: number; slot: string }[]>([]);
@@ -610,6 +610,9 @@ export default function TimeChart() {
         const salaryAmount = (settleTh as any).salary_amount || 0;
         const salaryBonus = salaryType === "percent" ? Math.round(totalBack * salaryAmount / 100) : salaryAmount * tRes.length;
         const totalNom = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
+        const totalNomBack = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.back_amount || 0); }, 0);
+        const welfareFee = 500;
+        const transportFee = (settleTh as any).transport_fee || 0;
         const totalOpt = tRes.reduce((s,r) => s + ((r as any).options_total || 0), 0);
         const totalExt = tRes.reduce((s,r) => s + ((r as any).extension_price || 0), 0);
         const totalDisc = tRes.reduce((s,r) => s + ((r as any).discount_amount || 0), 0);
@@ -617,9 +620,13 @@ export default function TimeChart() {
         const totalPaypay = tRes.reduce((s,r) => s + ((r as any).paypay_amount || 0), 0);
         const totalCash = tRes.reduce((s,r) => s + ((r as any).cash_amount || 0), 0);
         const adj = parseInt(settleAdj) || 0;
-        const subtotal = totalBack + salaryBonus + adj;
-        const invoiceDed = settleInvoice ? Math.round(subtotal * 0.1) : 0;
-        const finalPay = subtotal - invoiceDed;
+        const backTotal = totalBack + salaryBonus + totalNomBack + adj;
+        const invoiceDed = settleInvoice ? 0 : Math.round(backTotal * 0.1);
+        const adjustedPay = backTotal - invoiceDed;
+        const withholdingBase = Math.max(adjustedPay - 5000, 0);
+        const withholding = Math.floor(withholdingBase * 0.1021);
+        const finalPayRaw = adjustedPay - withholding - welfareFee + transportFee;
+        const finalPay = Math.ceil(finalPayRaw / 100) * 100;
         const ra = roomAssigns.find(a => a.therapist_id === settleTh.id);
         const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
         const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
@@ -650,7 +657,15 @@ export default function TimeChart() {
                 <div className="space-y-1 text-[11px]">
                   <div className="flex justify-between"><span>基本バック（{tRes.length}件）</span><span>{fmt(totalBack)}</span></div>
                   {salaryAmount > 0 && <div className="flex justify-between" style={{ color: "#c3a782" }}><span>給料ランク（{salaryType === "percent" ? `${salaryAmount}%UP` : `${salaryAmount.toLocaleString()}円UP×${tRes.length}件`}）</span><span>+{fmt(salaryBonus)}</span></div>}
-                  <div className="flex justify-between"><span>指名料合計</span><span>{fmt(totalNom)}</span></div>
+                  {totalNomBack > 0 && <div className="flex justify-between"><span>指名バック</span><span>+{fmt(totalNomBack)}</span></div>}
+                  {adj !== 0 && <div className="flex justify-between" style={{ color: adj > 0 ? "#22c55e" : "#c45555" }}><span>調整金{settleAdjNote ? `（${settleAdjNote}）` : ""}</span><span>{adj > 0 ? "+" : ""}{fmt(adj)}</span></div>}
+                  <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}` }}><span>バック額</span><span>{fmt(backTotal)}</span></div>
+                  {invoiceDed > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>① インボイス控除（10%）</span><span>-{fmt(invoiceDed)}</span></div>}
+                  {invoiceDed > 0 && <div className="flex justify-between"><span>調整後の報酬額</span><span>{fmt(adjustedPay)}</span></div>}
+                  <div className="flex justify-between" style={{ color: "#c45555" }}><span>② 源泉徴収（10.21%）</span><span>-{fmt(withholding)}</span></div>
+                  <div className="text-[8px] pl-2" style={{ color: T.textFaint }}>({fmt(adjustedPay)} - ¥5,000) × 10.21%</div>
+                  <div className="flex justify-between" style={{ color: "#c45555" }}><span>③ 厚生費</span><span>-{fmt(welfareFee)}</span></div>
+                  {transportFee > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>④ 交通費（非課税）</span><span>+{fmt(transportFee)}</span></div>}
                 </div>
               </div>
               <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
@@ -665,13 +680,11 @@ export default function TimeChart() {
                 <div><label className="block text-[9px] mb-1" style={{ color: T.textSub }}>調整金（+/-）</label><input type="text" value={settleAdj} onChange={(e) => setSettleAdj(e.target.value.replace(/[^0-9-]/g, ""))} placeholder="0" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[9px] mb-1" style={{ color: T.textSub }}>調整理由</label><input type="text" value={settleAdjNote} onChange={(e) => setSettleAdjNote(e.target.value)} placeholder="理由" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
-              <button onClick={() => setSettleInvoice(!settleInvoice)} className="px-3 py-2 rounded-xl text-[11px] cursor-pointer w-full text-left" style={{ backgroundColor: settleInvoice ? "#a855f718" : T.cardAlt, color: settleInvoice ? "#a855f7" : T.textMuted, border: `1px solid ${settleInvoice ? "#a855f7" : T.border}` }}>{settleInvoice ? "✅ インボイス控除あり（10%）" : "インボイス控除なし"}</button>
+              <button onClick={() => setSettleInvoice(!settleInvoice)} className="px-3 py-2 rounded-xl text-[11px] cursor-pointer w-full text-left" style={{ backgroundColor: settleInvoice ? "#22c55e18" : "#c4555518", color: settleInvoice ? "#22c55e" : "#c45555", border: `1px solid ${settleInvoice ? "#22c55e44" : "#c4555544"}` }}>{settleInvoice ? "✅ 適格事業者登録あり（10%控除なし）" : "⬜ 適格事業者登録なし（10%控除あり）"}</button>
               <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
                 <div className="space-y-1 text-[12px]">
-                  <div className="flex justify-between"><span>バック小計</span><span>{fmt(totalBack + salaryBonus)}</span></div>
-                  {adj !== 0 && <div className="flex justify-between" style={{ color: adj > 0 ? "#22c55e" : "#c45555" }}><span>調整金</span><span>{adj > 0 ? "+" : ""}{fmt(adj)}</span></div>}
-                  {settleInvoice && <div className="flex justify-between" style={{ color: "#a855f7" }}><span>インボイス控除（10%）</span><span>-{fmt(invoiceDed)}</span></div>}
-                  <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #c3a78233", color: "#c3a782" }}><span>支給額</span><span>{fmt(finalPay)}</span></div>
+                  {finalPayRaw !== finalPay && <div className="flex justify-between text-[10px]" style={{ color: T.textFaint }}><span>計算額</span><span>{fmt(finalPayRaw)}</span></div>}
+                  <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #c3a78233", color: "#c3a782" }}><span>支給額（100円繰上）</span><span>{fmt(finalPay)}</span></div>
                 </div>
               </div>
               {pastUncollected.length > 0 && (
@@ -705,6 +718,7 @@ export default function TimeChart() {
               <div className="flex gap-3 pt-2">
                 <button onClick={async () => { setSettleSaving(true); await supabase.from("therapist_daily_settlements").upsert({ therapist_id: settleTh.id, date: selectedDate, total_sales: totalSales, total_back: totalBack + salaryBonus, total_nomination: totalNom, total_options: totalOpt, total_extension: totalExt, total_discount: totalDisc, total_card: totalCard, total_paypay: totalPaypay, total_cash: totalCash, order_count: tRes.length, is_settled: true, adjustment: adj, adjustment_note: settleAdjNote.trim(), invoice_deduction: invoiceDed, has_invoice: settleInvoice, room_id: ra?.room_id || 0, sales_collected: settleSalesCollected, change_collected: settleChangeCollected, safe_deposited: settleSafeDeposited }, { onConflict: "therapist_id,date" }); if (ra && settleSalesCollected) { for (const p of pastUncollected) { if (!p.sales_collected) { await supabase.from("therapist_daily_settlements").update({ sales_collected: true }).eq("room_id", ra.room_id).eq("date", p.date).eq("sales_collected", false); } } } if (ra && settleChangeCollected) { for (const p of pastUncollected) { if (!p.change_collected) { await supabase.from("therapist_daily_settlements").update({ change_collected: true }).eq("room_id", ra.room_id).eq("date", p.date).eq("change_collected", false); } } } toast.show("清算を確定しました", "success"); setSettleSaving(false); setSettleTh(null); fetchData(); }} disabled={settleSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{settleSaving ? "保存中..." : "清算確定"}</button>
                 <button onClick={() => setSettleTh(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+                <button onClick={() => { const store = stores[0]; const w = window.open("", "_blank"); if (!w) return; w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払い通知書</title><style>body{font-family:'Hiragino Sans','Yu Gothic',sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#333}h1{text-align:center;font-size:22px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:8px 12px;font-size:13px}th{background:#f5f0e8;text-align:left;width:35%}.right{text-align:right}.total{font-size:16px;font-weight:bold;color:#c3a782}.header-info{display:flex;justify-content:space-between;margin-bottom:20px;font-size:12px}.company{text-align:right;font-size:11px;line-height:1.8}.stamp{margin-top:40px;text-align:center;font-size:11px;color:#888}@media print{body{margin:0;padding:20px}}</style></head><body><h1>支払い通知書</h1><div class="header-info"><div><p><strong>支払先：</strong>${settleTh.name} 様</p><p><strong>支払日：</strong>${selectedDate}</p></div><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p><p>適格事業者番号: ${store?.invoice_number || ""}</p></div></div><table><tr><th>項目</th><th class="right">金額</th><th>解説</th></tr><tr><td>基本バック（${tRes.length}件）</td><td class="right">&yen;${totalBack.toLocaleString()}</td><td style="font-size:11px;color:#888">コースバック合計</td></tr>${salaryBonus > 0 ? `<tr><td>給料ランク</td><td class="right">+&yen;${salaryBonus.toLocaleString()}</td><td style="font-size:11px;color:#888">${salaryType === "percent" ? salaryAmount + "%UP" : "¥" + salaryAmount.toLocaleString() + "×" + tRes.length + "件"}</td></tr>` : ""}${totalNomBack > 0 ? `<tr><td>指名バック</td><td class="right">+&yen;${totalNomBack.toLocaleString()}</td><td style="font-size:11px;color:#888">指名料のセラピスト取り分</td></tr>` : ""}${adj !== 0 ? `<tr><td>調整金${settleAdjNote ? "（" + settleAdjNote + "）" : ""}</td><td class="right" style="color:${adj > 0 ? "#22c55e" : "#c45555"}">${adj > 0 ? "+" : ""}&yen;${adj.toLocaleString()}</td><td></td></tr>` : ""}<tr style="background:#f9f6f0"><td><strong>バック額</strong></td><td class="right"><strong>&yen;${backTotal.toLocaleString()}</strong></td><td></td></tr>${invoiceDed > 0 ? `<tr><td>① インボイス控除（10%）</td><td class="right" style="color:#c45555">-&yen;${invoiceDed.toLocaleString()}</td><td style="font-size:11px;color:#888">適格事業者未登録による調整</td></tr><tr><td>調整後の報酬額</td><td class="right">&yen;${adjustedPay.toLocaleString()}</td><td style="font-size:11px;color:#888">税金計算の基準額</td></tr>` : ""}<tr><td>② 源泉徴収（10.21%）</td><td class="right" style="color:#c45555">-&yen;${withholding.toLocaleString()}</td><td style="font-size:11px;color:#888">(&yen;${adjustedPay.toLocaleString()} - &yen;5,000) × 10.21%</td></tr><tr><td>③ 厚生費</td><td class="right" style="color:#c45555">-&yen;${welfareFee.toLocaleString()}</td><td style="font-size:11px;color:#888">備品・リネン代等</td></tr>${transportFee > 0 ? `<tr><td>④ 交通費（非課税）</td><td class="right" style="color:#22c55e">+&yen;${transportFee.toLocaleString()}</td><td style="font-size:11px;color:#888">税金は引きません</td></tr>` : ""}<tr style="background:#f9f6f0"><td><strong>合計支給額（100円繰上）</strong></td><td class="right total">&yen;${finalPay.toLocaleString()}</td><td style="font-size:11px;color:#888">最終的にお渡しする金額</td></tr></table><h3 style="margin-top:30px;font-size:14px">売上明細</h3><table><tr><th>顧客</th><th>コース</th><th class="right">売上</th></tr>${tRes.map(r => `<tr><td>${r.customer_name}</td><td>${r.course}</td><td class="right">&yen;${((r as any).total_price || 0).toLocaleString()}</td></tr>`).join("")}</table><h3 style="margin-top:20px;font-size:14px">支払い方法別</h3><table><tr><td>💳 カード</td><td class="right">&yen;${totalCard.toLocaleString()}</td></tr><tr><td>📱 PayPay</td><td class="right">&yen;${totalPaypay.toLocaleString()}</td></tr><tr><td>💴 現金</td><td class="right">&yen;${totalCash.toLocaleString()}</td></tr></table></body></html>`); w.document.close(); }} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📄 通知書</button>
               </div>
             </div>
           </div>
