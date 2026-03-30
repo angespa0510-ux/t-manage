@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../lib/theme";
 import { ToastProvider } from "../lib/toast";
+import { StaffSessionProvider } from "../lib/staff-session";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,7 +32,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" style={{ margin: 0 }}>
-        <ThemeProvider><ToastProvider>{children}</ToastProvider></ThemeProvider>
+        <ThemeProvider><ToastProvider><StaffSessionProvider>{children}</StaffSessionProvider></ToastProvider></ThemeProvider>
       </body>
     </html>
   );

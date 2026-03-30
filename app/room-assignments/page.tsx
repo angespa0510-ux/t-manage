@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { useStaffSession } from "../../lib/staff-session";
 
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
@@ -16,6 +17,9 @@ type ParkingSpot = { id: number; store_id: number; building_id: number; number: 
 type ParkingUsage = { id: number; date: string; parking_spot_id: number; user_type: string; therapist_id: number | null; customer_name: string | null; notes: string | null };
 type RoomDailySetting = { id: number; date: string; room_id: number; send_off: boolean; memo: string };
 type AbsentRecord = { id: number; date: string; therapist_id: number; room_id: number; slot: string; original_start: string; original_end: string; created_at: string };
+type StaffMember = { id: number; name: string; role: string; unit_price: number; transport_fee: number; status: string };
+type StaffSchedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_checked: boolean; checked_by: string; clock_in_time: string; clock_out_time: string };
+type DailyTask = { id: number; date: string; title: string; is_completed: boolean; completed_by: string; completed_at: string; sort_order: number };
 
 const CLEAN_OPTS: { value: string; label: string; color: string }[] = [
   { value: "", label: "—", color: "#b4b2a9" },
@@ -45,6 +49,10 @@ function formatDateShort(d: string) { const dt = new Date(d + "T00:00:00"); cons
 export default function RoomAssignments() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { activeStaff, isManager, login, logout } = useStaffSession();
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
   const [stores, setStores] = useState<Store[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -55,6 +63,10 @@ export default function RoomAssignments() {
   const [allParkingUsage, setAllParkingUsage] = useState<ParkingUsage[]>([]);
   const [dailySettings, setDailySettings] = useState<RoomDailySetting[]>([]);
   const [absentRecords, setAbsentRecords] = useState<AbsentRecord[]>([]);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [allStaffSchedules, setAllStaffSchedules] = useState<StaffSchedule[]>([]);
+  const [allDailyTasks, setAllDailyTasks] = useState<DailyTask[]>([]);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
   const [prevMonthAssignments, setPrevMonthAssignments] = useState<RoomAssignment[]>([]);
   const [pointAssignments, setPointAssignments] = useState<RoomAssignment[]>([]);
   const [pointAbsents, setPointAbsents] = useState<AbsentRecord[]>([]);
@@ -91,6 +103,9 @@ export default function RoomAssignments() {
     const { data: pu } = await supabase.from("parking_usage").select("*").gte("date", startDate).lte("date", endDate).order("parking_spot_id"); if (pu) setAllParkingUsage(pu);
     const { data: ds } = await supabase.from("room_daily_settings").select("*").gte("date", startDate).lte("date", endDate); if (ds) setDailySettings(ds);
     const { data: ab } = await supabase.from("absent_records").select("*").gte("date", startDate).lte("date", endDate).order("created_at"); if (ab) setAbsentRecords(ab);
+    const { data: stfList } = await supabase.from("staff").select("*").eq("status", "active").order("id"); if (stfList) setStaffList(stfList);
+    const { data: stfSch } = await supabase.from("staff_schedules").select("*").gte("date", startDate).lte("date", endDate).order("start_time"); if (stfSch) setAllStaffSchedules(stfSch);
+    const { data: dtasks } = await supabase.from("daily_tasks").select("*").gte("date", startDate).lte("date", endDate).order("sort_order"); if (dtasks) setAllDailyTasks(dtasks);
     const prevLastDay = getPrevDate(startDate);
     const { data: prevA } = await supabase.from("room_assignments").select("*").eq("date", prevLastDay).eq("slot", "late"); if (prevA) setPrevMonthAssignments(prevA);
     const tma = new Date(year, month - 4, 1); const pointStart = `${tma.getFullYear()}-${String(tma.getMonth() + 1).padStart(2, "0")}-01`;
@@ -189,6 +204,27 @@ export default function RoomAssignments() {
     text += "━━━━━━━━━━━━━━\nよろしくお願いします🌸"; setVacancyText(text); setShowVacancy(true);
   };
 
+  // ★追加: 内勤スタッフ稼働ヘルパー
+  const getStaffSchedulesForDate = (date: string) => allStaffSchedules.filter(s => s.date === date);
+  const calcStaffUnits = (start: string, end: string) => { const [sh, sm] = start.split(":").map(Number); const [eh, em] = end.split(":").map(Number); const diff = (eh * 60 + em) - (sh * 60 + sm); return Math.max(0, Math.round(diff / 6) / 10); };
+  const addStaffSchedule = async (date: string, staffId: number) => { const staff = staffList.find(s => s.id === staffId); if (!staff) return; const up = staff.unit_price || 1200; const units = calcStaffUnits("10:00", "19:00"); const comm = Math.round(up * units); const tr = staff.transport_fee || 0; await supabase.from("staff_schedules").insert({ staff_id: staffId, date, start_time: "10:00", end_time: "19:00", unit_price: up, units, commission_fee: comm, transport_fee: tr, total_payment: comm + tr, status: "scheduled", notes: "" }); fetchData(); };
+  const updateStaffScheduleTime = async (id: number, field: "start_time" | "end_time", value: string, sch: StaffSchedule) => { const newStart = field === "start_time" ? value : sch.start_time; const newEnd = field === "end_time" ? value : sch.end_time; const staff = staffList.find(s => s.id === sch.staff_id); const up = staff?.unit_price || sch.unit_price; const units = calcStaffUnits(newStart, newEnd); const comm = Math.round(up * units); const tr = staff?.transport_fee || sch.transport_fee; await supabase.from("staff_schedules").update({ [field]: value, units, commission_fee: comm, total_payment: comm + tr }).eq("id", id); fetchData(); };
+  const removeStaffSchedule = async (id: number) => { await supabase.from("staff_schedules").delete().eq("id", id); fetchData(); };
+  const toggleStaffComplete = async (id: number, current: string) => { const next = current === "completed" ? "scheduled" : "completed"; await supabase.from("staff_schedules").update({ status: next }).eq("id", id); fetchData(); };
+  // ★追加: 管理者チェック
+  const managerCheck = async (id: number) => { if (!isManager) return; await supabase.from("staff_schedules").update({ is_checked: true, checked_by: activeStaff?.name || "manager" }).eq("id", id); fetchData(); };
+  const undoManagerCheck = async (id: number) => { if (!isManager) return; await supabase.from("staff_schedules").update({ is_checked: false, checked_by: "" }).eq("id", id); fetchData(); };
+  // ★追加: 出退勤
+  const clockIn = async (id: number) => { const now = new Date(); const t = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`; await supabase.from("staff_schedules").update({ clock_in_time: t }).eq("id", id); fetchData(); };
+  const clockOut = async (id: number) => { const now = new Date(); const t = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`; await supabase.from("staff_schedules").update({ clock_out_time: t, status: "completed" }).eq("id", id); fetchData(); };
+  // ★追加: 日次タスク
+  const getDailyTasksForDate = (date: string) => allDailyTasks.filter(t => t.date === date);
+  const addDailyTask = async (date: string, title: string) => { if (!title.trim()) return; const maxSort = getDailyTasksForDate(date).reduce((m, t) => Math.max(m, t.sort_order), 0); await supabase.from("daily_tasks").insert({ date, title: title.trim(), sort_order: maxSort + 1 }); fetchData(); };
+  const toggleDailyTask = async (id: number, current: boolean) => { await supabase.from("daily_tasks").update({ is_completed: !current, completed_by: !current ? (activeStaff?.name || "") : "", completed_at: !current ? new Date().toISOString() : null }).eq("id", id); fetchData(); };
+  const deleteDailyTask = async (id: number) => { await supabase.from("daily_tasks").delete().eq("id", id); fetchData(); };
+  const hasUncheckedStaff = (date: string) => getStaffSchedulesForDate(date).some(s => !s.is_checked);
+  const STAFF_TIMES = ["06:00","06:30","07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","21:30","22:00","22:30","23:00"];
+
   const prevMonth2 = () => { const d = new Date(year, month - 2, 1); setCurrentMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   const nextMonth2 = () => { const d = new Date(year, month, 1); setCurrentMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   const formatDay = (date: string) => { const d = new Date(date + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return { day: d.getDate(), dow: days[d.getDay()], isSun: d.getDay() === 0, isSat: d.getDay() === 6, isToday: date === todayStr }; };
@@ -220,6 +256,11 @@ export default function RoomAssignments() {
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={toggle} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
+          {activeStaff ? (
+            <button onClick={logout} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer font-medium" style={{ backgroundColor: activeStaff.role === "owner" ? "#c3a78222" : activeStaff.role === "manager" ? "#85a8c422" : "#22c55e22", color: activeStaff.role === "owner" ? "#c3a782" : activeStaff.role === "manager" ? "#85a8c4" : "#22c55e", border: `1px solid ${activeStaff.role === "owner" ? "#c3a78244" : activeStaff.role === "manager" ? "#85a8c444" : "#22c55e44"}` }}>👤 {activeStaff.name} ✕</button>
+          ) : (
+            <button onClick={() => { setShowPinModal(true); setPinInput(""); setPinError(""); }} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer font-medium" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>🔑 ログイン</button>
+          )}
           <button onClick={extractVacancy} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#3b82f6" }}>🔍 空き状況</button>
           <button onClick={() => setShowPoints(!showPoints)} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>📊 ポイント</button>
           <button onClick={() => router.push("/rooms")} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>利用場所</button>
@@ -290,6 +331,8 @@ export default function RoomAssignments() {
                     {dayA.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#7ab88f" }}>割当:{dayA.length}</span>}
                     {dayAb.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#c45555" }}>当欠:{dayAb.length}</span>}
                     {dayPU.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#85a8c4" }}>🅿{dayPU.length}</span>}
+                    {getStaffSchedulesForDate(date).length > 0 && <span className="text-[11px] ml-1" style={{ color: "#85a8c4" }}>👤{getStaffSchedulesForDate(date).length}</span>}
+                    {getDailyTasksForDate(date).filter(t => !t.is_completed).length > 0 && <span className="text-[11px] ml-1" style={{ color: "#f59e0b" }}>📋{getDailyTasksForDate(date).filter(t => !t.is_completed).length}</span>}
                   </div>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textFaint} strokeWidth="2" style={{ transform: isExp ? "rotate(180deg)" : "", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
@@ -381,6 +424,77 @@ export default function RoomAssignments() {
                       if (un.length === 0) return null;
                       return (<div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b30" }}><p className="text-[10px] mb-2 font-medium" style={{ color: "#854f0b" }}>未割当セラピスト</p><div className="flex flex-wrap gap-1.5">{un.map((s) => (<span key={s.id} className="px-2 py-1 rounded-md text-[10px]" style={{ backgroundColor: T.card, color: "#854f0b" }}>{getTherapistName(s.therapist_id)} {s.start_time}〜{s.end_time}</span>))}</div></div>);
                     })()}
+
+                    {/* ★追加: 内勤スタッフ稼働 */}
+                    <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] font-medium" style={{ color: "#85a8c4" }}>👤 内勤スタッフ</p>
+                        <select onChange={(e) => { if (Number(e.target.value)) { addStaffSchedule(date, Number(e.target.value)); (e.target as HTMLSelectElement).value = "0"; } }} className="px-2 py-1 rounded-lg text-[10px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: "#85a8c444", color: "#85a8c4" }}><option value={0}>+ スタッフ追加</option>{staffList.filter(s => !getStaffSchedulesForDate(date).some(ss => ss.staff_id === s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                      </div>
+                      {getStaffSchedulesForDate(date).length === 0 ? <p className="text-[10px]" style={{ color: T.textFaint }}>スタッフの稼働予定なし</p> : (
+                        <div className="space-y-2">{getStaffSchedulesForDate(date).map(sch => { const staff = staffList.find(s => s.id === sch.staff_id); const locked = sch.is_checked; return (
+                          <div key={sch.id} className="rounded-lg p-2" style={{ backgroundColor: T.card, border: locked ? "1px solid #22c55e44" : `1px solid ${T.border}` }}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] font-medium min-w-[50px]">{staff?.name || "?"}</span>
+                              <select value={sch.start_time} onChange={(e) => updateStaffScheduleTime(sch.id, "start_time", e.target.value, sch)} disabled={locked} className="px-1.5 py-0.5 rounded text-[9px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub, opacity: locked ? 0.6 : 1 }}>{STAFF_TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                              <span className="text-[9px]" style={{ color: T.textFaint }}>〜</span>
+                              <select value={sch.end_time} onChange={(e) => updateStaffScheduleTime(sch.id, "end_time", e.target.value, sch)} disabled={locked} className="px-1.5 py-0.5 rounded text-[9px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub, opacity: locked ? 0.6 : 1 }}>{STAFF_TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                              <span className="text-[9px]" style={{ color: T.textMuted }}>{sch.units}u</span>
+                              {/* 出勤ボタン */}
+                              {!sch.clock_in_time ? (
+                                <button onClick={() => clockIn(sch.id)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>▶ 出勤</button>
+                              ) : (
+                                <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#3b82f612", color: "#3b82f6" }}>出勤 {sch.clock_in_time}</span>
+                              )}
+                              {/* 退勤ボタン */}
+                              {sch.clock_in_time && !sch.clock_out_time ? (
+                                <button onClick={() => clockOut(sch.id)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b44" }}>⏹ 退勤</button>
+                              ) : sch.clock_out_time ? (
+                                <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b12", color: "#f59e0b" }}>退勤 {sch.clock_out_time}</span>
+                              ) : null}
+                              {/* 管理者チェック */}
+                              {!locked ? (
+                                isManager ? <button onClick={() => managerCheck(sch.id)} className="text-[8px] px-2 py-0.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "1px solid #22c55e44" }}>🔓 確認</button> : <span className="text-[8px]" style={{ color: "#f59e0b" }}>⏳未確認</span>
+                              ) : (
+                                <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 確認済{isManager && <button onClick={() => undoManagerCheck(sch.id)} className="ml-1 cursor-pointer" style={{ background: "none", border: "none", color: "#c45555", fontSize: 8, padding: 0 }}>取消</button>}</span>
+                              )}
+                              {/* 削除（ロック時は非表示） */}
+                              {!locked && <button onClick={() => removeStaffSchedule(sch.id)} className="text-[9px] px-1 py-0.5 rounded cursor-pointer" style={{ color: "#c45555" }}>×</button>}
+                            </div>
+                            {locked && <p className="text-[7px] mt-1" style={{ color: "#22c55e" }}>🔒 管理者確認済 — 変更ロック中</p>}
+                          </div>); })}</div>
+                      )}
+                    </div>
+
+                    {/* ★追加: 日次タスク */}
+                    <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] font-medium" style={{ color: "#c3a782" }}>📋 日次タスク</p>
+                      </div>
+                      {/* 管理者チェック未完了の警告 */}
+                      {hasUncheckedStaff(date) && getStaffSchedulesForDate(date).length > 0 && (
+                        <div className="px-3 py-2 rounded-lg mb-2" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
+                          <p className="text-[10px] font-medium" style={{ color: "#f59e0b" }}>⚠ 内勤スタッフの管理者チェックが未完了です</p>
+                          <p className="text-[9px]" style={{ color: "#f59e0b88" }}>管理者権限で上の「🔓 確認」ボタンを押してください</p>
+                        </div>
+                      )}
+                      {/* タスクリスト */}
+                      <div className="space-y-1">
+                        {getDailyTasksForDate(date).map(task => (
+                          <div key={task.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ backgroundColor: T.card }}>
+                            <button onClick={() => toggleDailyTask(task.id, task.is_completed)} className="text-[12px] cursor-pointer flex-shrink-0" style={{ background: "none", border: "none", padding: 0 }}>{task.is_completed ? "✅" : "⬜"}</button>
+                            <span className="text-[10px] flex-1" style={{ color: task.is_completed ? T.textMuted : T.text, textDecoration: task.is_completed ? "line-through" : "none" }}>{task.title}</span>
+                            {task.is_completed && task.completed_by && <span className="text-[8px]" style={{ color: T.textFaint }}>{task.completed_by.split("@")[0]}</span>}
+                            <button onClick={() => deleteDailyTask(task.id)} className="text-[9px] px-1 cursor-pointer" style={{ color: "#c45555", background: "none", border: "none" }}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                      {/* タスク追加フォーム */}
+                      <div className="flex gap-1.5 mt-2">
+                        <input type="text" placeholder="タスクを追加..." value={expandedDay === date ? newTaskTitle : ""} onChange={(e) => setNewTaskTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && newTaskTitle.trim()) { addDailyTask(date, newTaskTitle); setNewTaskTitle(""); } }} className="flex-1 px-2.5 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
+                        <button onClick={() => { if (newTaskTitle.trim()) { addDailyTask(date, newTaskTitle); setNewTaskTitle(""); } }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>追加</button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -388,6 +502,46 @@ export default function RoomAssignments() {
           })}
         </div>
       </div>
+      {/* PIN Login Modal */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowPinModal(false)}>
+          <div className="rounded-2xl w-full max-w-[300px] p-6 animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[16px] font-medium text-center mb-1">🔑 スタッフログイン</h2>
+            <p className="text-[11px] text-center mb-5" style={{ color: T.textFaint }}>4桁のPINコードを入力</p>
+            <div className="flex justify-center gap-2 mb-4">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="w-12 h-14 rounded-xl flex items-center justify-center text-[22px] font-bold" style={{ backgroundColor: T.cardAlt, color: pinInput[i] ? T.text : T.textFaint, border: `2px solid ${pinInput.length === i ? "#c3a782" : T.border}` }}>
+                  {pinInput[i] ? "●" : ""}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, "del"].map((n, i) => {
+                if (n === null) return <div key={i} />;
+                return (
+                  <button key={i} onClick={() => {
+                    if (n === "del") { setPinInput(prev => prev.slice(0, -1)); setPinError(""); return; }
+                    const next = pinInput + String(n);
+                    if (next.length > 4) return;
+                    setPinInput(next);
+                    setPinError("");
+                    if (next.length === 4) {
+                      login(next).then(ok => {
+                        if (ok) { setShowPinModal(false); }
+                        else { setPinError("PINが一致しません"); setPinInput(""); }
+                      });
+                    }
+                  }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
+                    {n === "del" ? "⌫" : n}
+                  </button>
+                );
+              })}
+            </div>
+            {pinError && <p className="text-[11px] text-center" style={{ color: "#c45555" }}>{pinError}</p>}
+            <button onClick={() => setShowPinModal(false)} className="w-full mt-2 py-2 text-[11px] rounded-xl cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+          </div>
+        </div>
+      )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
