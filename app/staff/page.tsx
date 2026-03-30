@@ -44,6 +44,7 @@ export default function StaffPage() {
   // Schedule states
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schPositionFilter, setSchPositionFilter] = useState("all");
   const [showAddSchedule, setShowAddSchedule] = useState(false);
   const [schStaffId, setSchStaffId] = useState(0); const [schStart, setSchStart] = useState("10:00"); const [schEnd, setSchEnd] = useState("19:00"); const [schNotes, setSchNotes] = useState("");
   const [editSchedule, setEditSchedule] = useState<Schedule | null>(null);
@@ -331,8 +332,13 @@ export default function StaffPage() {
                 <button onClick={() => { setShowAddSchedule(true); setSchStaffId(0); setSchStart("10:00"); setSchEnd("19:00"); setSchNotes(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 稼働追加</button>
               </div>
             </div>
-            {schedules.length === 0 ? <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[13px]" style={{ color: T.textFaint }}>この日の稼働予定はありません</p></div> : (
-              <div className="space-y-3">{schedules.map(sch => { const staff = staffList.find(s => s.id === sch.staff_id); return (
+            <div className="flex gap-1.5 flex-wrap">
+              {[["all", "全て"], ["業務委託", "業務委託"], ["社長", "社長"], ["経営責任者", "経営責任者"], ["社員", "社員"], ["契約社員", "契約社員"]].map(([key, label]) => { const count = key === "all" ? schedules.length : schedules.filter(x => { const st = staffList.find(s => s.id === x.staff_id); return (st?.company_position || "業務委託") === key; }).length; return (
+                <button key={key} onClick={() => setSchPositionFilter(key)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ borderColor: schPositionFilter === key ? "#c3a782" : T.border, backgroundColor: schPositionFilter === key ? "#c3a78218" : "transparent", color: schPositionFilter === key ? "#c3a782" : T.textMuted, fontWeight: schPositionFilter === key ? 600 : 400 }}>{label} {count > 0 ? count : ""}</button>
+              ); })}
+            </div>
+            {(() => { const filtered = schPositionFilter === "all" ? schedules : schedules.filter(x => { const st = staffList.find(s => s.id === x.staff_id); return (st?.company_position || "業務委託") === schPositionFilter; }); return filtered.length === 0 ? <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[13px]" style={{ color: T.textFaint }}>この日の稼働予定はありません</p></div> : (
+              <div className="space-y-3">{filtered.map(sch => { const staff = staffList.find(s => s.id === sch.staff_id); const biz = isBizCommission(staff?.company_position || "業務委託"); return (
                 <div key={sch.id} className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
@@ -342,11 +348,12 @@ export default function StaffPage() {
                           <span className="text-[13px] font-medium">{staff?.name||"不明"}</span>
                           <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: statusColors[sch.status]+"22", color: statusColors[sch.status] }}>{statusLabels[sch.status]}</span>
                           {staff?.has_license && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>🚗</span>}
+                          {!biz && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#88878018", color: "#888780" }}>{staff?.company_position}</span>}
                         </div>
                         <p className="text-[10px]" style={{ color: T.textMuted }}>⏰ {sch.start_time}〜{sch.end_time}（{sch.units}u）</p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    {biz && <div className="text-right">
                       <p className="text-[15px] font-bold" style={{ color: "#c3a782" }}>{fmt(sch.total_payment)}</p>
                       <div className="text-[8px]" style={{ color: T.textMuted }}>
                         <span>委託{fmt(sch.commission_fee)}</span>
@@ -354,26 +361,25 @@ export default function StaffPage() {
                         {(sch.license_premium||0)>0 && <span> 🚗{fmt(sch.license_premium)}</span>}
                         {sch.transport_fee>0 && <span> 交{fmt(sch.transport_fee)}</span>}
                       </div>
-                    </div>
+                    </div>}
                   </div>
                   <div className="flex gap-2">
                     {sch.status === "scheduled" && <button onClick={() => markCompleted(sch)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "1px solid #22c55e44" }}>✅ 業務完了</button>}
-                    <button onClick={() => openPaymentStatement(sch)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 支払明細書</button>
+                    {biz && <button onClick={() => openPaymentStatement(sch)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 支払明細書</button>}
                     <button onClick={() => { setEditSchedule(sch); setEschStart(sch.start_time); setEschEnd(sch.end_time); setEschNotes(sch.notes||""); setEschStatus(sch.status); }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                     <button onClick={() => deleteScheduleFn(sch.id)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
                   </div>
                 </div>); })}</div>
-            )}
-            {schedules.length > 0 && (
+            ); })()}
+            {schedules.length > 0 && (() => { const bizSchedules = schedules.filter(x => { const st = staffList.find(s => s.id === x.staff_id); return isBizCommission(st?.company_position || "業務委託"); }); return (
               <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
                 <div className="flex justify-between flex-wrap gap-2 text-[12px]">
-                  <span style={{ color: T.textSub }}>稼働: <strong>{schedules.length}名</strong></span>
-                  <span style={{ color: T.textSub }}>委託費: <strong>{fmt(schedules.reduce((s,x)=>s+x.commission_fee,0))}</strong></span>
-                  <span style={{ color: T.textSub }}>🌙深夜: <strong>{fmt(schedules.reduce((s,x)=>s+(x.night_premium||0),0))}</strong></span>
-                  <span style={{ color: "#c3a782" }}>合計: <strong>{fmt(schedules.reduce((s,x)=>s+x.total_payment,0))}</strong></span>
+                  <span style={{ color: T.textSub }}>稼働: <strong>{schedules.length}名</strong>（委託: {bizSchedules.length}名）</span>
+                  {bizSchedules.length > 0 && <span style={{ color: T.textSub }}>委託費: <strong>{fmt(bizSchedules.reduce((s,x)=>s+x.commission_fee,0))}</strong></span>}
+                  {bizSchedules.reduce((s,x)=>s+(x.night_premium||0),0) > 0 && <span style={{ color: T.textSub }}>🌙深夜: <strong>{fmt(bizSchedules.reduce((s,x)=>s+(x.night_premium||0),0))}</strong></span>}
+                  {bizSchedules.length > 0 && <span style={{ color: "#c3a782" }}>合計: <strong>{fmt(bizSchedules.reduce((s,x)=>s+x.total_payment,0))}</strong></span>}
                 </div>
-              </div>
-            )}
+              </div>); })()}
           </div>
         )}
 
@@ -388,10 +394,10 @@ export default function StaffPage() {
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>売上条件（以上）</label><input type="text" inputMode="numeric" value={oiriSales} onChange={(e) => setOiriSales(e.target.value.replace(/[^0-9]/g, ""))} placeholder="150000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>{parseInt(oiriSales) > 0 ? `${fmt(parseInt(oiriSales))} 以上` : "未設定"}</p></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>本数条件（以上）</label><input type="text" inputMode="numeric" value={oiriCount} onChange={(e) => setOiriCount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="10" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>{parseInt(oiriCount) > 0 ? `${oiriCount}本 以上` : "未設定"}</p></div>
                 </div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎁 大入り金額（Amazonギフトカード）</label><input type="text" inputMode="numeric" value={oiriBonus} onChange={(e) => setOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[11px]" style={{ color: T.textSub }}>現在の設定:</p>
-                  <p className="text-[13px] font-medium mt-1" style={{ color: "#c3a782" }}>売上 {fmt(parseInt(oiriSales)||0)} 以上 かつ {oiriCount||0}本以上 → 🎁 {fmt(parseInt(oiriBonus)||1000)}</p>
+                  <p className="text-[13px] font-medium mt-1" style={{ color: "#c3a782" }}>売上 {fmt(parseInt(oiriSales)||0)} 以上 かつ {oiriCount||0}本以上</p>
+                  <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 金額はスタッフごとに個別設定（スタッフ編集画面の「🎉 大入り金額」）</p>
                 </div>
                 <button onClick={saveOiri} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
               </div>
@@ -638,20 +644,23 @@ export default function StaffPage() {
             </div>
             {monthlyData.length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>データがありません</p> : (
               <div className="space-y-3">
-                {monthlyData.map(d => (
+                {monthlyData.map(d => { const staff = staffList.find(s => s.id === d.staff_id); const biz = isBizCommission(staff?.company_position || "業務委託"); return (
                   <div key={d.staff_id} className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                    <div className="flex items-center justify-between mb-2"><span className="text-[13px] font-medium">{d.name}</span><span className="text-[15px] font-bold" style={{ color: "#c3a782" }}>{fmt(d.total_payment)}</span></div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]" style={{ color: T.textMuted }}>
-                      <span>稼働: {d.days}日</span><span>ユニット: {d.total_units}</span><span>委託費: {fmt(d.total_commission)}</span>
-                      {d.total_night > 0 && <span style={{ color: "#a855f7" }}>🌙深夜: {fmt(d.total_night)}</span>}
-                      {d.total_license > 0 && <span style={{ color: "#3b82f6" }}>🚗免許: {fmt(d.total_license)}</span>}
-                      <span>交通費: {fmt(d.total_transport)}</span>
-                      {d.total_oiri > 0 && <span style={{ color: "#f59e0b" }}>🎉大入: {fmt(d.total_oiri)}</span>}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2"><span className="text-[13px] font-medium">{d.name}</span>{!biz && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#88878018", color: "#888780" }}>{staff?.company_position}</span>}</div>
+                      {biz && <span className="text-[15px] font-bold" style={{ color: "#c3a782" }}>{fmt(d.total_payment)}</span>}
                     </div>
-                  </div>
-                ))}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]" style={{ color: T.textMuted }}>
+                      <span>稼働: {d.days}日</span><span>ユニット: {d.total_units}</span>
+                      {biz && <span>委託費: {fmt(d.total_commission)}</span>}
+                      {biz && d.total_night > 0 && <span style={{ color: "#a855f7" }}>🌙深夜: {fmt(d.total_night)}</span>}
+                      {biz && d.total_license > 0 && <span style={{ color: "#3b82f6" }}>🚗免許: {fmt(d.total_license)}</span>}
+                      {biz && <span>交通費: {fmt(d.total_transport)}</span>}
+                      {biz && d.total_oiri > 0 && <span style={{ color: "#f59e0b" }}>🎉大入: {fmt(d.total_oiri)}</span>}
+                    </div>
+                  </div>); })}
                 <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
-                  <div className="flex justify-between text-[13px] font-bold" style={{ color: "#c3a782" }}><span>月間合計</span><span>{fmt(monthlyData.reduce((s,d)=>s+d.total_payment,0))}</span></div>
+                  <div className="flex justify-between text-[13px] font-bold" style={{ color: "#c3a782" }}><span>月間合計（業務委託のみ）</span><span>{fmt(monthlyData.filter(d => { const st = staffList.find(s => s.id === d.staff_id); return isBizCommission(st?.company_position || "業務委託"); }).reduce((s,d)=>s+d.total_payment,0))}</span></div>
                 </div>
               </div>
             )}
