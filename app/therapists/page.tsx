@@ -10,7 +10,8 @@ type Therapist = {
   id: number; created_at: string; name: string; phone: string; status: string;
   salary_type: string; salary_amount: number; age: number; interval_minutes: number; transport_fee: number;
   height_cm: number; bust: number; waist: number; hip: number; cup: string;
-  photo_url: string; photo_width: number; photo_height: number;
+  photo_url: string; photo_width: number; photo_height: number; notes: string;
+  email: string; email_verified: boolean; email_token: string;
 };
 
 export default function TherapistManagement() {
@@ -28,6 +29,8 @@ export default function TherapistManagement() {
   const [addHeight, setAddHeight] = useState(""); const [addBust, setAddBust] = useState(""); const [addWaist, setAddWaist] = useState(""); const [addHip, setAddHip] = useState(""); const [addCup, setAddCup] = useState("");
   const [addPhotoW, setAddPhotoW] = useState("400"); const [addPhotoH, setAddPhotoH] = useState("600");
   const [addPhotoFile, setAddPhotoFile] = useState<File | null>(null); const [addPhotoPreview, setAddPhotoPreview] = useState("");
+  const [addNotes, setAddNotes] = useState("");
+  const [addEmail, setAddEmail] = useState("");
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState("");
   const addFileRef = useRef<HTMLInputElement>(null);
 
@@ -39,6 +42,8 @@ export default function TherapistManagement() {
   const [editHeight, setEditHeight] = useState(""); const [editBust, setEditBust] = useState(""); const [editWaist, setEditWaist] = useState(""); const [editHip, setEditHip] = useState(""); const [editCup, setEditCup] = useState("");
   const [editPhotoW, setEditPhotoW] = useState("400"); const [editPhotoH, setEditPhotoH] = useState("600");
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editEmail, setEditEmail] = useState("");
   const [editSaving, setEditSaving] = useState(false); const [editMsg, setEditMsg] = useState("");
   const editFileRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +77,8 @@ export default function TherapistManagement() {
       age: parseInt(addAge) || 0, interval_minutes: parseInt(addInterval) || 10, transport_fee: parseInt(addTransport) || 0,
       height_cm: parseInt(addHeight) || 0, bust: parseInt(addBust) || 0, waist: parseInt(addWaist) || 0, hip: parseInt(addHip) || 0, cup: addCup,
       photo_width: parseInt(addPhotoW) || 400, photo_height: parseInt(addPhotoH) || 600,
+      notes: addNotes.trim(),
+      email: addEmail.trim(), email_verified: false, email_token: crypto.randomUUID(),
     }).select().single();
     if (error) { setSaving(false); setMsg("登録失敗: " + error.message); return; }
     if (addPhotoFile && data) {
@@ -80,7 +87,7 @@ export default function TherapistManagement() {
     }
     setSaving(false); setMsg("登録しました！");
     setAddName(""); setAddPhone(""); setAddStatus("active"); setAddSalaryType("fixed"); setAddSalaryAmount(""); setAddAge(""); setAddInterval("10"); setAddTransport("0");
-    setAddHeight(""); setAddBust(""); setAddWaist(""); setAddHip(""); setAddCup(""); setAddPhotoFile(null); setAddPhotoPreview(""); setAddPhotoW("400"); setAddPhotoH("600");
+    setAddHeight(""); setAddBust(""); setAddWaist(""); setAddHip(""); setAddCup(""); setAddPhotoFile(null); setAddPhotoPreview(""); setAddPhotoW("400"); setAddPhotoH("600"); setAddNotes(""); setAddEmail("");
     fetchTherapists(); setTimeout(() => { setShowAdd(false); setMsg(""); }, 800);
   };
 
@@ -90,7 +97,7 @@ export default function TherapistManagement() {
     setEditAge(String(t.age || "")); setEditInterval(String(t.interval_minutes || 10));
     setEditHeight(String(t.height_cm || "")); setEditBust(String(t.bust || "")); setEditWaist(String(t.waist || "")); setEditHip(String(t.hip || "")); setEditCup(t.cup || "");
     setEditPhotoW(String(t.photo_width || 400)); setEditPhotoH(String(t.photo_height || 600));
-    setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditMsg("");
+    setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditMsg("");
   };
 
   const handleUpdate = async () => {
@@ -104,6 +111,9 @@ export default function TherapistManagement() {
       age: parseInt(editAge) || 0, interval_minutes: parseInt(editInterval) || 10, transport_fee: parseInt(editTransport) || 0,
       height_cm: parseInt(editHeight) || 0, bust: parseInt(editBust) || 0, waist: parseInt(editWaist) || 0, hip: parseInt(editHip) || 0, cup: editCup,
       photo_url: photoUrl, photo_width: parseInt(editPhotoW) || 400, photo_height: parseInt(editPhotoH) || 600,
+      notes: editNotes.trim(),
+      email: editEmail.trim(),
+      ...(editEmail.trim() !== (editTarget.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}),
     }).eq("id", editTarget.id);
     setEditSaving(false);
     if (error) { setEditMsg("更新失敗: " + error.message); }
@@ -111,6 +121,15 @@ export default function TherapistManagement() {
   };
 
   const handleDelete = async () => { if (!deleteTarget) return; setDeleting(true); await supabase.from("therapists").delete().eq("id", deleteTarget.id); setDeleting(false); setDeleteTarget(null); fetchTherapists(); };
+
+  const sendConfirmEmail = async (t: Therapist) => {
+    let token = t.email_token;
+    if (!token) { token = crypto.randomUUID(); await supabase.from("therapists").update({ email_token: token }).eq("id", t.id); }
+    const confirmUrl = `${window.location.origin}/confirm-email?token=${token}`;
+    const subject = encodeURIComponent("【チョップ】メールアドレス確認のお願い");
+    const body = encodeURIComponent(`${t.name} 様\n\nチョップからのメールアドレス確認です。\n以下のリンクをクリックして確認を完了してください。\n\n${confirmUrl}\n\n※このリンクはお一人様専用です。\n\nよろしくお願いいたします。\nチョップ`);
+    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(t.email)}&su=${subject}&body=${body}`, "_blank");
+  };
 
   const handleFileChange = (file: File | null, isEdit: boolean) => {
     if (!file) return;
@@ -217,6 +236,7 @@ export default function TherapistManagement() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2"><p className="text-[14px] font-medium truncate">{t.name}</p><span className="px-2 py-0.5 rounded-md text-[9px] font-medium flex-shrink-0" style={{ backgroundColor: st.bg, color: st.text }}>{st.label}</span></div>
                       <p className="text-[11px]" style={{ color: T.textMuted }}>{t.phone || "電話番号なし"}</p>
+                      {t.email && <p className="text-[10px] flex items-center gap-1" style={{ color: T.textMuted }}>✉️ {t.email} {t.email_verified ? <span style={{ color: "#22c55e", fontSize: 8 }}>✅</span> : <span style={{ color: "#f59e0b", fontSize: 8 }}>⏳</span>}</p>}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] mb-3" style={{ color: T.textSub }}>
@@ -227,9 +247,11 @@ export default function TherapistManagement() {
                     {(t.bust > 0 || t.waist > 0 || t.hip > 0) && <span>B{t.bust} W{t.waist} H{t.hip}</span>}
                     {t.cup && <span>{t.cup}カップ</span>}
                   </div>
+                  {t.notes && <p className="text-[10px] mb-2 truncate" style={{ color: T.textMuted }}>📝 {t.notes}</p>}
                   <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px solid ${T.cardAlt}` }}>
                     <p className="text-[10px]" style={{ color: T.textFaint }}>登録: {new Date(t.created_at).toLocaleDateString("ja-JP")}</p>
                     <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      {t.email && !t.email_verified && <button onClick={() => sendConfirmEmail(t)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>📧 確認</button>}
                       <button onClick={() => startEdit(t)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
                       <button onClick={() => setDeleteTarget(t)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                     </div>
@@ -266,6 +288,7 @@ export default function TherapistManagement() {
                 <div>
                   <div className="flex items-center gap-2"><h2 className="text-[20px] font-medium">{detailTarget.name}</h2><span className="px-2 py-0.5 rounded-md text-[10px] font-medium" style={{ backgroundColor: (statusMap[detailTarget.status] || statusMap.active).bg, color: (statusMap[detailTarget.status] || statusMap.active).text }}>{(statusMap[detailTarget.status] || statusMap.active).label}</span></div>
                   <p className="text-[12px]" style={{ color: T.textSub }}>{detailTarget.phone || "電話番号なし"}</p>
+                  {detailTarget.email && <div className="flex items-center gap-2 mt-0.5"><p className="text-[11px]" style={{ color: T.textSub }}>✉️ {detailTarget.email}</p>{detailTarget.email_verified ? <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅確認済み</span> : <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未確認</span>}</div>}
                 </div>
               </div>
               <div className="space-y-3">
@@ -276,9 +299,11 @@ export default function TherapistManagement() {
                 {detailTarget.height_cm > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>身長</span><span>{detailTarget.height_cm}cm</span></div>}
                 {(detailTarget.bust > 0 || detailTarget.waist > 0 || detailTarget.hip > 0) && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>スリーサイズ</span><span>B{detailTarget.bust} W{detailTarget.waist} H{detailTarget.hip}</span></div>}
                 {detailTarget.cup && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>カップ</span><span>{detailTarget.cup}カップ</span></div>}
+                {detailTarget.notes && <div className="pt-2" style={{ borderTop: `1px solid ${T.cardAlt}` }}><p className="text-[11px] mb-1" style={{ color: T.textMuted }}>📝 備考・メモ</p><p className="text-[12px] whitespace-pre-wrap" style={{ color: T.textSub }}>{detailTarget.notes}</p></div>}
               </div>
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-3 mt-6 flex-wrap">
                 <button onClick={() => { setDetailTarget(null); startEdit(detailTarget); }} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">編集する</button>
+                {detailTarget.email && !detailTarget.email_verified && <button onClick={() => sendConfirmEmail(detailTarget)} className="px-4 py-2.5 text-[12px] rounded-xl cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📧 確認メール送信</button>}
                 <button onClick={() => setDetailTarget(null)} className="px-5 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
               </div>
             </div>
@@ -297,6 +322,7 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="セラピスト名" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="090-xxxx-xxxx" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>✉️ メールアドレス</label><input type="email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="example@gmail.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ステータス</label><div className="flex gap-2">{Object.entries(statusMap).map(([key, val]) => (<button key={key} onClick={() => setAddStatus(key)} className={`px-3 py-1.5 rounded-xl text-[11px] cursor-pointer ${addStatus === key ? "ring-2 ring-offset-1" : "opacity-50"}`} style={{ backgroundColor: val.bg, color: val.text }}>{val.label}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>給料タイプ</label><select value={addSalaryType} onChange={(e) => setAddSalaryType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">〇〇円UP</option><option value="percent">〇〇%UP</option></select></div>
@@ -314,6 +340,7 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ヒップ</label><input type="text" inputMode="numeric" value={addHip} onChange={(e) => setAddHip(e.target.value.replace(/[^0-9]/g, ""))} placeholder="86" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>カップ</label><select value={addCup} onChange={(e) => setAddCup(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{CUPS.map((c) => <option key={c} value={c}>{c || "—"}</option>)}</select></div>
               </div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📝 備考・メモ</label><textarea value={addNotes} onChange={(e) => setAddNotes(e.target.value)} placeholder="セラピストの備考を入力" rows={2} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} /></div>
               <PhotoField preview={addPhotoPreview} fileRef={addFileRef} onFileChange={(f) => handleFileChange(f, false)} width={addPhotoW} height={addPhotoH} onWidthChange={setAddPhotoW} onHeightChange={setAddPhotoH} />
               {msg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: msg.includes("失敗") || msg.includes("入力") ? "#c4988518" : "#7ab88f18", color: msg.includes("失敗") || msg.includes("入力") ? "#c49885" : "#5a9e6f" }}>{msg}</div>}
               <div className="flex gap-3 pt-2">
@@ -336,6 +363,7 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>✉️ メールアドレス {editTarget?.email_verified ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅確認済み</span> : editTarget?.email ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未確認</span> : null}</label><input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="example@gmail.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ステータス</label><div className="flex gap-2">{Object.entries(statusMap).map(([key, val]) => (<button key={key} onClick={() => setEditStatus(key)} className={`px-3 py-1.5 rounded-xl text-[11px] cursor-pointer ${editStatus === key ? "ring-2 ring-offset-1" : "opacity-50"}`} style={{ backgroundColor: val.bg, color: val.text }}>{val.label}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>給料タイプ</label><select value={editSalaryType} onChange={(e) => setEditSalaryType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">〇〇円UP</option><option value="percent">〇〇%UP</option></select></div>
@@ -353,6 +381,7 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ヒップ</label><input type="text" inputMode="numeric" value={editHip} onChange={(e) => setEditHip(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>カップ</label><select value={editCup} onChange={(e) => setEditCup(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{CUPS.map((c) => <option key={c} value={c}>{c || "—"}</option>)}</select></div>
               </div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📝 備考・メモ</label><textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="セラピストの備考を入力" rows={2} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} /></div>
               <PhotoField preview={editPhotoPreview} fileRef={editFileRef} onFileChange={(f) => handleFileChange(f, true)} width={editPhotoW} height={editPhotoH} onWidthChange={setEditPhotoW} onHeightChange={setEditPhotoH} />
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") || editMsg.includes("入力") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") || editMsg.includes("入力") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
               <div className="flex gap-3 pt-2">
