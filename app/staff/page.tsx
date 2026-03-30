@@ -7,7 +7,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 
-type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean; company_position: string };
+type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string };
 type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number };
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
@@ -30,11 +30,13 @@ export default function StaffPage() {
   const [addName, setAddName] = useState(""); const [addPhone, setAddPhone] = useState(""); const [addEmail, setAddEmail] = useState("");
   const [addRole, setAddRole] = useState("staff"); const [addPosition, setAddPosition] = useState("業務委託"); const [addAddress, setAddAddress] = useState(""); const [addTransport, setAddTransport] = useState("0");
   const [addUnitPrice, setAddUnitPrice] = useState("1200"); const [addPin, setAddPin] = useState(""); const [addLicense, setAddLicense] = useState(false);
+  const [addLicenseNum, setAddLicenseNum] = useState(""); const [addOiriBonus, setAddOiriBonus] = useState("0");
 
   const [editStaff, setEditStaff] = useState<Staff | null>(null);
   const [editName, setEditName] = useState(""); const [editPhone, setEditPhone] = useState(""); const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState("staff"); const [editPosition, setEditPosition] = useState("業務委託"); const [editAddress, setEditAddress] = useState(""); const [editTransport, setEditTransport] = useState("0");
   const [editUnitPrice, setEditUnitPrice] = useState("1200"); const [editPin, setEditPin] = useState(""); const [editLicense, setEditLicense] = useState(false);
+  const [editLicenseNum, setEditLicenseNum] = useState(""); const [editOiriBonus, setEditOiriBonus] = useState("0");
 
   // Company states
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -53,6 +55,17 @@ export default function StaffPage() {
   // Oiri states
   const [oiriSettings, setOiriSettings] = useState<OiriSetting | null>(null);
   const [oiriSales, setOiriSales] = useState(""); const [oiriCount, setOiriCount] = useState(""); const [oiriBonus, setOiriBonus] = useState("");
+
+  const isBizCommission = (pos: string) => pos === "業務委託";
+
+  const sendStaffConfirmEmail = async (s: Staff) => {
+    let token = s.email_token;
+    if (!token) { token = crypto.randomUUID(); await supabase.from("staff").update({ email_token: token }).eq("id", s.id); }
+    const confirmUrl = `${window.location.origin}/confirm-staff-email?token=${token}`;
+    const subject = encodeURIComponent("【チョップ】メールアドレス確認のお願い");
+    const body = encodeURIComponent(`${s.name} 様\n\nチョップからのメールアドレス確認です。\n以下のリンクをクリックして確認を完了してください。\n\n${confirmUrl}\n\n※このリンクはお一人様専用です。\n\nよろしくお願いいたします。\nチョップ`);
+    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(s.email)}&su=${subject}&body=${body}`, "_blank");
+  };
 
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
@@ -90,10 +103,11 @@ export default function StaffPage() {
   const calcFullPayment = (start: string, end: string, staff: Staff | undefined) => {
     const units = calcUnits(start, end);
     const nightUnits = calcNightUnits(start, end);
+    const biz = isBizCommission(staff?.company_position || "業務委託");
     const up = staff?.unit_price || 1200;
-    const commission = Math.round(up * units);
-    const nightPremium = Math.round(100 * nightUnits);
-    const licensePremium = staff?.has_license ? Math.round(50 * units) : 0;
+    const commission = biz ? Math.round(up * units) : 0;
+    const nightPremium = biz ? Math.round(100 * nightUnits) : 0;
+    const licensePremium = biz && staff?.has_license ? Math.round(50 * units) : 0;
     const transport = staff?.transport_fee || 0;
     const total = commission + nightPremium + licensePremium + transport;
     return { units, nightUnits, commission, nightPremium, licensePremium, transport, total };
@@ -117,14 +131,14 @@ export default function StaffPage() {
   // Staff CRUD
   const addStaffFn = async () => {
     if (!addName.trim()) return;
-    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicense, status: "active" });
+    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, email_verified: false, email_token: crypto.randomUUID(), status: "active" });
     toast.show("スタッフを登録しました", "success");
-    setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddPosition("業務委託"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false);
+    setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddPosition("業務委託"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false); setAddLicenseNum(""); setAddOiriBonus("0");
     fetchData();
   };
   const updateStaffFn = async () => {
     if (!editStaff) return;
-    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicense }).eq("id", editStaff.id);
+    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
     toast.show("スタッフ情報を更新しました", "success"); setEditStaff(null); fetchData();
   };
   const deleteStaffFn = async (id: number, name: string) => { if (!confirm(`${name}を削除しますか？`)) return; await supabase.from("staff").delete().eq("id", id); toast.show("スタッフを削除しました", "info"); fetchData(); };
@@ -284,14 +298,16 @@ export default function StaffPage() {
                     </div>
                     <div className="flex items-center gap-3 text-[10px]" style={{ color: T.textMuted }}>
                       {s.phone && <span>📞 {s.phone}</span>}
-                      {s.transport_fee > 0 && <span>🚗 {fmt(s.transport_fee)}</span>}
-                      <span>💰 {fmt(s.unit_price || 1200)}/u</span>
+                      {s.email && <span className="flex items-center gap-1">✉️ {s.email} {s.email_verified ? <span style={{ color: "#22c55e", fontSize: 8 }}>✅</span> : <span style={{ color: "#f59e0b", fontSize: 8 }}>⏳</span>}</span>}
+                      {isBizCommission(s.company_position) && <span>💰 {fmt(s.unit_price || 1200)}/u</span>}
+                      {s.oiri_bonus > 0 && <span style={{ color: "#f59e0b" }}>🎉 {fmt(s.oiri_bonus)}</span>}
                       {s.pin ? <span style={{ color: "#22c55e" }}>🔑 設定済</span> : <span style={{ color: "#c45555" }}>🔑 未設定</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                  {s.email && !s.email_verified && <button onClick={() => sendStaffConfirmEmail(s)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>📧 確認</button>}
+                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                   <button onClick={() => deleteStaffFn(s.id, s.name)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
                 </div>
               </div>
@@ -414,12 +430,23 @@ export default function StaffPage() {
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={addRole} onChange={(e) => setAddRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">店長</option><option value="leader">責任者</option><option value="staff">スタッフ</option></select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>会社役職</label><select value={addPosition} onChange={(e) => setAddPosition(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>交通費</label><select value={addTransport} onChange={(e) => setAddTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option></select></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={addUnitPrice} onChange={(e) => setAddUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                {isBizCommission(addPosition) && <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={addUnitPrice} onChange={(e) => setAddUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🔑 PINコード（4桁）</label><input type="text" inputMode="numeric" maxLength={4} value={addPin} onChange={(e) => setAddPin(e.target.value.replace(/[^0-9]/g, "").slice(0,4))} placeholder="4桁" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.5em] text-center font-bold" style={inputStyle} /></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><button onClick={() => setAddLicense(!addLicense)} className="w-full px-3 py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: addLicense ? "#3b82f618" : T.cardAlt, color: addLicense ? "#3b82f6" : T.textMuted, border: `1px solid ${addLicense ? "#3b82f6" : T.border}`, fontWeight: addLicense ? 700 : 400 }}>{addLicense ? "✅ 免許あり（+¥50/u）" : "免許なし"}</button></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><div className="w-full px-3 py-2.5 rounded-xl text-[12px]" style={{ backgroundColor: addLicenseNum.trim().length === 12 ? "#3b82f618" : T.cardAlt, color: addLicenseNum.trim().length === 12 ? "#3b82f6" : T.textMuted, border: `1px solid ${addLicenseNum.trim().length === 12 ? "#3b82f6" : T.border}`, fontWeight: addLicenseNum.trim().length === 12 ? 700 : 400 }}>{addLicenseNum.trim().length === 12 ? "✅ 免許あり（+¥50/u）" : "免許なし（番号入力で自動切替）"}</div></div>
               </div>
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🪪 免許証番号（12桁）</label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>第</span>
+                  <input type="text" inputMode="numeric" maxLength={12} value={addLicenseNum} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 12); setAddLicenseNum(v); if (v.length === 12) setAddLicense(true); }} placeholder="123456789012" className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.15em] text-center font-bold" style={inputStyle} />
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>号</span>
+                </div>
+                {addLicenseNum.length > 0 && addLicenseNum.length !== 12 && <p className="text-[9px] mt-1" style={{ color: "#c45555" }}>⚠ 免許証番号は12桁です（現在{addLicenseNum.length}桁）</p>}
+                {addLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
+              </div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={addOiriBonus} onChange={(e) => setAddOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
               <div className="flex gap-3 pt-2">
                 <button onClick={addStaffFn} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">登録する</button>
                 <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
@@ -445,11 +472,80 @@ export default function StaffPage() {
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">店長</option><option value="leader">責任者</option><option value="staff">スタッフ</option></select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>会社役職</label><select value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>交通費</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option></select></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={editUnitPrice} onChange={(e) => setEditUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                {isBizCommission(editPosition) && <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={editUnitPrice} onChange={(e) => setEditUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🔑 PINコード（4桁）</label><input type="text" inputMode="numeric" maxLength={4} value={editPin} onChange={(e) => setEditPin(e.target.value.replace(/[^0-9]/g, "").slice(0,4))} placeholder="4桁" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.5em] text-center font-bold" style={inputStyle} /></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><button onClick={() => setEditLicense(!editLicense)} className="w-full px-3 py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: editLicense ? "#3b82f618" : T.cardAlt, color: editLicense ? "#3b82f6" : T.textMuted, border: `1px solid ${editLicense ? "#3b82f6" : T.border}`, fontWeight: editLicense ? 700 : 400 }}>{editLicense ? "✅ 免許あり（+¥50/u）" : "免許なし"}</button></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><div className="w-full px-3 py-2.5 rounded-xl text-[12px]" style={{ backgroundColor: editLicenseNum.trim().length === 12 ? "#3b82f618" : T.cardAlt, color: editLicenseNum.trim().length === 12 ? "#3b82f6" : T.textMuted, border: `1px solid ${editLicenseNum.trim().length === 12 ? "#3b82f6" : T.border}`, fontWeight: editLicenseNum.trim().length === 12 ? 700 : 400 }}>{editLicenseNum.trim().length === 12 ? "✅ 免許あり（+¥50/u）" : "免許なし（番号入力で自動切替）"}</div></div>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🪪 免許証番号（12桁）</label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>第</span>
+                  <input type="text" inputMode="numeric" maxLength={12} value={editLicenseNum} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 12); setEditLicenseNum(v); if (v.length === 12) setEditLicense(true); }} placeholder="123456789012" className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.15em] text-center font-bold" style={inputStyle} />
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>号</span>
+                </div>
+                {editLicenseNum.length > 0 && editLicenseNum.length !== 12 && <p className="text-[9px] mt-1" style={{ color: "#c45555" }}>⚠ 免許証番号は12桁です（現在{editLicenseNum.length}桁）</p>}
+                {editLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
+              </div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={editOiriBonus} onChange={(e) => setEditOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
+              {/* 身分証アップロード（表・裏） */}
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 身分証アップロード</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 表面 */}
+                  <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📄 表面</p>
+                    {editStaff?.id_doc_url ? (
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[9px] flex-1 truncate" style={{ color: "#22c55e" }}>✅ アップロード済</span>
+                        <a href={editStaff.id_doc_url} target="_blank" rel="noopener noreferrer" className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>表示</a>
+                      </div>
+                    ) : <p className="text-[9px] mb-1.5" style={{ color: T.textFaint }}>未アップロード</p>}
+                    <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>
+                      📎 表面を選択
+                      <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0]; if (!file || !editStaff) return;
+                        toast.show("表面アップロード中...", "info");
+                        const now = new Date(); const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
+                        const docName = `${dateStr}_${editName.trim()}_第${editLicenseNum.trim() || "未登録"}号_表`;
+                        const ext = file.name.split(".").pop(); const fileName = `id-docs/${editStaff.id}_front_${dateStr}_${Date.now()}.${ext}`;
+                        const { error } = await supabase.storage.from("therapist-photos").upload(fileName, file, { upsert: true });
+                        if (error) { toast.show("アップロード失敗: " + error.message, "error"); return; }
+                        const { data: urlData } = supabase.storage.from("therapist-photos").getPublicUrl(fileName);
+                        await supabase.from("staff").update({ id_doc_url: urlData.publicUrl, id_doc_name: docName }).eq("id", editStaff.id);
+                        toast.show("表面をアップロードしました", "success"); fetchData();
+                        setEditStaff({ ...editStaff, id_doc_url: urlData.publicUrl, id_doc_name: docName });
+                      }} />
+                    </label>
+                  </div>
+                  {/* 裏面 */}
+                  <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📄 裏面</p>
+                    {editStaff?.id_doc_url_back ? (
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[9px] flex-1 truncate" style={{ color: "#22c55e" }}>✅ アップロード済</span>
+                        <a href={editStaff.id_doc_url_back} target="_blank" rel="noopener noreferrer" className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>表示</a>
+                      </div>
+                    ) : <p className="text-[9px] mb-1.5" style={{ color: T.textFaint }}>未アップロード</p>}
+                    <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>
+                      📎 裏面を選択
+                      <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0]; if (!file || !editStaff) return;
+                        toast.show("裏面アップロード中...", "info");
+                        const now = new Date(); const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
+                        const docName = `${dateStr}_${editName.trim()}_第${editLicenseNum.trim() || "未登録"}号_裏`;
+                        const ext = file.name.split(".").pop(); const fileName = `id-docs/${editStaff.id}_back_${dateStr}_${Date.now()}.${ext}`;
+                        const { error } = await supabase.storage.from("therapist-photos").upload(fileName, file, { upsert: true });
+                        if (error) { toast.show("アップロード失敗: " + error.message, "error"); return; }
+                        const { data: urlData } = supabase.storage.from("therapist-photos").getPublicUrl(fileName);
+                        await supabase.from("staff").update({ id_doc_url_back: urlData.publicUrl, id_doc_name_back: docName }).eq("id", editStaff.id);
+                        toast.show("裏面をアップロードしました", "success"); fetchData();
+                        setEditStaff({ ...editStaff, id_doc_url_back: urlData.publicUrl, id_doc_name_back: docName });
+                      }} />
+                    </label>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button onClick={updateStaffFn} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">更新する</button>
