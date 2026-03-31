@@ -13,6 +13,7 @@ type Therapist = {
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
+  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string;
 };
 
 export default function TherapistManagement() {
@@ -48,6 +49,16 @@ export default function TherapistManagement() {
   const [editHeight, setEditHeight] = useState(""); const [editBust, setEditBust] = useState(""); const [editWaist, setEditWaist] = useState(""); const [editHip, setEditHip] = useState(""); const [editCup, setEditCup] = useState("");
   const [editPhotoW, setEditPhotoW] = useState("400"); const [editPhotoH, setEditPhotoH] = useState("600");
   const [editWithholding, setEditWithholding] = useState(false);
+  const [editTab, setEditTab] = useState<"basic" | "personal">("basic");
+  const [editPinInput, setEditPinInput] = useState("");
+  const [editPinAuthed, setEditPinAuthed] = useState(false);
+  const [editPinError, setEditPinError] = useState("");
+  const [editRealName, setEditRealName] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editHasInvoice, setEditHasInvoice] = useState(false);
+  const [editInvoiceNum, setEditInvoiceNum] = useState("");
+  const [editInvoicePhoto, setEditInvoicePhoto] = useState<File | null>(null);
+  const [editLicensePhoto, setEditLicensePhoto] = useState<File | null>(null);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -140,6 +151,10 @@ export default function TherapistManagement() {
     setEditHeight(String(t.height_cm || "")); setEditBust(String(t.bust || "")); setEditWaist(String(t.waist || "")); setEditHip(String(t.hip || "")); setEditCup(t.cup || "");
     setEditPhotoW(String(t.photo_width || 400)); setEditPhotoH(String(t.photo_height || 600));
     setEditWithholding(t.has_withholding || false);
+    setEditTab("basic"); setEditPinAuthed(false); setEditPinInput(""); setEditPinError("");
+    setEditRealName(t.real_name || ""); setEditAddress(t.address || "");
+    setEditHasInvoice(t.has_invoice || false); setEditInvoiceNum(t.therapist_invoice_number || "");
+    setEditInvoicePhoto(null); setEditLicensePhoto(null);
     setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditMsg("");
   };
 
@@ -156,6 +171,8 @@ export default function TherapistManagement() {
       photo_url: photoUrl, photo_width: parseInt(editPhotoW) || 400, photo_height: parseInt(editPhotoH) || 600,
       notes: editNotes.trim(),
       has_withholding: editWithholding,
+      real_name: editRealName.trim(), address: editAddress.trim(),
+      has_invoice: editHasInvoice, therapist_invoice_number: editInvoiceNum.trim(),
       email: editEmail.trim(),
       ...(editEmail.trim() !== (editTarget.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}),
     }).eq("id", editTarget.id);
@@ -437,23 +454,29 @@ export default function TherapistManagement() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditTarget(null)}>
           <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-[16px] font-medium mb-1">セラピスト編集</h2>
-            <p className="text-[11px] mb-5" style={{ color: T.textFaint }}>情報を修正してください</p>
+            <div className="flex gap-2 mb-5">
+              <button onClick={() => setEditTab("basic")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editTab === "basic" ? "#c3a78222" : T.cardAlt, color: editTab === "basic" ? "#c3a782" : T.textMuted, border: `1px solid ${editTab === "basic" ? "#c3a78244" : T.border}`, fontWeight: editTab === "basic" ? 700 : 400 }}>① 基本情報</button>
+              <button onClick={() => setEditTab("personal")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editTab === "personal" ? "#85a8c422" : T.cardAlt, color: editTab === "personal" ? "#85a8c4" : T.textMuted, border: `1px solid ${editTab === "personal" ? "#85a8c444" : T.border}`, fontWeight: editTab === "personal" ? 700 : 400 }}>② 個人情報 🔒</button>
+            </div>
+
+            {editTab === "basic" && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>✉️ メールアドレス {editTarget?.email_verified ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅確認済み</span> : editTarget?.email ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未確認</span> : null}</label><input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="example@gmail.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📧 メールアドレス {editTarget?.email_verified ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 確認済み</span> : editTarget?.email ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未確認</span> : null}</label><input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="example@gmail.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ステータス</label><div className="flex gap-2">{Object.entries(statusMap).map(([key, val]) => (<button key={key} onClick={() => setEditStatus(key)} className={`px-3 py-1.5 rounded-xl text-[11px] cursor-pointer ${editStatus === key ? "ring-2 ring-offset-1" : "opacity-50"}`} style={{ backgroundColor: val.bg, color: val.text }}>{val.label}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>給料タイプ</label><select value={editSalaryType} onChange={(e) => setEditSalaryType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">〇〇円UP</option><option value="percent">〇〇%UP</option></select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>給料タイプ</label><select value={editSalaryType} onChange={(e) => setEditSalaryType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">〇〇円UP</option><option value="percent">〇%UP</option></select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>金額/率</label><input type="text" inputMode="numeric" value={editSalaryAmount} onChange={(e) => setEditSalaryAmount(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>年齢</label><input type="text" inputMode="numeric" value={editAge} onChange={(e) => setEditAge(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>インターバル</label><select value={editInterval} onChange={(e) => setEditInterval(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{INTERVALS.map((m) => <option key={m} value={m}>{m}分</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>身長</label><input type="text" inputMode="numeric" value={editHeight} onChange={(e) => setEditHeight(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div className="grid grid-cols-4 gap-3">
@@ -464,16 +487,58 @@ export default function TherapistManagement() {
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📝 備考・メモ</label><textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="セラピストの備考を入力" rows={2} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} /></div>
               <PhotoField preview={editPhotoPreview} fileRef={editFileRef} onFileChange={(f) => handleFileChange(f, true)} width={editPhotoW} height={editPhotoH} onWidthChange={setEditPhotoW} onHeightChange={setEditPhotoH} />
-              {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") || editMsg.includes("入力") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") || editMsg.includes("入力") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
-              <div className="flex gap-3 pt-2">
-                <button onClick={handleUpdate} disabled={editSaving} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
-                <button onClick={() => setEditTarget(null)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+            </div>
+            )}
+
+            {editTab === "personal" && !editPinAuthed && (
+              <div className="py-8">
+                <p className="text-[12px] text-center mb-1" style={{ color: T.textSub }}>🔒 個人情報を編集するにはPINコードが必要です</p>
+                <p className="text-[10px] text-center mb-5" style={{ color: T.textFaint }}>管理者PINコード（4桁）を入力</p>
+                <div className="flex justify-center gap-2 mb-4">
+                  {[0,1,2,3].map(i => (<div key={i} className="w-12 h-14 rounded-xl flex items-center justify-center text-[22px] font-bold" style={{ backgroundColor: T.cardAlt, color: editPinInput[i] ? T.text : T.textFaint, border: `2px solid ${editPinInput.length === i ? "#c3a782" : T.border}` }}>{editPinInput[i] ? "●" : ""}</div>))}
+                </div>
+                <div className="grid grid-cols-3 gap-2 max-w-[240px] mx-auto mb-3">
+                  {[1,2,3,4,5,6,7,8,9,null,0,"del"].map((n, i) => {
+                    if (n === null) return <div key={i} />;
+                    return (<button key={i} onClick={async () => {
+                      if (n === "del") { setEditPinInput(prev => prev.slice(0,-1)); setEditPinError(""); return; }
+                      const next = editPinInput + String(n);
+                      if (next.length > 4) return;
+                      setEditPinInput(next); setEditPinError("");
+                      if (next.length === 4) {
+                        const { data } = await supabase.from("staff").select("role").eq("pin", next).eq("status", "active").maybeSingle();
+                        if (data && (data.role === "owner" || data.role === "manager")) { setEditPinAuthed(true); }
+                        else { setEditPinError("管理者PINが一致しません"); setEditPinInput(""); }
+                      }
+                    }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>{n === "del" ? "⌫" : n}</button>);
+                  })}
+                </div>
+                {editPinError && <p className="text-[11px] text-center" style={{ color: "#c45555" }}>{editPinError}</p>}
               </div>
+            )}
+
+            {editTab === "personal" && editPinAuthed && (
+              <div className="space-y-4">
+                <div className="rounded-xl p-3 mb-2" style={{ backgroundColor: "#22c55e12", border: "1px solid #22c55e33" }}><p className="text-[10px] text-center" style={{ color: "#22c55e" }}>🔓 管理者認証済み — 個人情報を編集できます</p></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>本名（実名）</label><input type="text" value={editRealName} onChange={(e) => setEditRealName(e.target.value)} placeholder="山田 太郎" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                  <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
+                </div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="愛知県安城市..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📋 適格事業者登録</label><button type="button" onClick={() => setEditHasInvoice(!editHasInvoice)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer mb-2" style={{ backgroundColor: editHasInvoice ? "#22c55e22" : "#88878022", color: editHasInvoice ? "#22c55e" : "#888780", border: `1px solid ${editHasInvoice ? "#22c55e44" : "#88878044"}` }}>{editHasInvoice ? "✅ 適格事業者登録あり" : "⬜ 適格事業者登録なし"}</button>{editHasInvoice && <div className="space-y-2"><input type="text" value={editInvoiceNum} onChange={(e) => setEditInvoiceNum(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2 rounded-xl text-[11px] outline-none" style={inputStyle} /><label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 証明書をアップロード<input type="file" accept="image/*" onChange={(e) => setEditInvoicePhoto(e.target.files?.[0] || null)} className="hidden" /></label>{editInvoicePhoto && <span className="text-[10px] ml-2" style={{ color: "#22c55e" }}>✅ {editInvoicePhoto.name}</span>}{editTarget?.invoice_photo_url && <a href={editTarget.invoice_photo_url} target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: "#85a8c4" }}>📄 現在の証明書を表示</a>}</div>}</div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 免許証アップロード</label><label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 免許証をアップロード<input type="file" accept="image/*" onChange={(e) => setEditLicensePhoto(e.target.files?.[0] || null)} className="hidden" /></label>{editLicensePhoto && <span className="text-[10px] ml-2" style={{ color: "#22c55e" }}>✅ {editLicensePhoto.name}</span>}{editTarget?.license_photo_url && <a href={editTarget.license_photo_url} target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: "#85a8c4" }}>📄 現在の免許証を表示</a>}</div>
+              </div>
+            )}
+
+            {editMsg && <div className="px-4 py-3 rounded-xl text-[12px] mt-4" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
+            <div className="flex gap-3 pt-4">
+              <button onClick={handleUpdate} disabled={editSaving} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
+              <button onClick={() => setEditTarget(null)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
             </div>
           </div>
         </div>
       )}
-
+      
       {/* Delete Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteTarget(null)}>
