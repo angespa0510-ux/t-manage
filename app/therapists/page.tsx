@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
+import { useToast } from "../../lib/toast";
 
 type Therapist = {
   id: number; created_at: string; name: string; phone: string; status: string;
@@ -14,12 +15,13 @@ type Therapist = {
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
-  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string;
+  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string;
 };
 
 export default function TherapistManagement() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const toast = useToast();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -61,6 +63,7 @@ export default function TherapistManagement() {
   const [editInvoicePhoto, setEditInvoicePhoto] = useState<File | null>(null);
   const [editLicensePhoto, setEditLicensePhoto] = useState<File | null>(null);
   const [editLicensePhotoBack, setEditLicensePhotoBack] = useState<File | null>(null);
+  const [editBirthDate, setEditBirthDate] = useState("");
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -157,6 +160,7 @@ export default function TherapistManagement() {
     setEditRealName(t.real_name || ""); setEditAddress(t.address || "");
     setEditHasInvoice(t.has_invoice || false); setEditInvoiceNum(t.therapist_invoice_number || "");
     setEditInvoicePhoto(null); setEditLicensePhoto(null); setEditLicensePhotoBack(null);
+    setEditBirthDate(t.birth_date || "");
     setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditMsg("");
   };
 
@@ -173,7 +177,7 @@ export default function TherapistManagement() {
       photo_url: photoUrl, photo_width: parseInt(editPhotoW) || 400, photo_height: parseInt(editPhotoH) || 600,
       notes: editNotes.trim(),
       has_withholding: editWithholding,
-      real_name: editRealName.trim(), address: editAddress.trim(),
+      real_name: editRealName.trim(), address: editAddress.trim(), birth_date: editBirthDate,
       has_invoice: editHasInvoice, therapist_invoice_number: editInvoiceNum.trim(),
       email: editEmail.trim(),
       ...(editEmail.trim() !== (editTarget.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}),
@@ -181,7 +185,49 @@ export default function TherapistManagement() {
     setEditSaving(false);
     if (error) { setEditMsg("更新失敗: " + error.message); }
     else { setEditMsg("更新しました！"); fetchTherapists(); setTimeout(() => { setEditTarget(null); setEditMsg(""); }, 800); }
-  };
+  const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
+      const uploadDocPDF = async (file: File, label: string, idNum: number): Promise<string> => {
+        const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+        const canvas = document.createElement("canvas");
+        canvas.width = bmp.width; canvas.height = bmp.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(bmp, 0, 0);
+        bmp.close();
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        const img = { width: canvas.width, height: canvas.height };
+        const headerH = 40;
+        const isLicense = label.includes("license");
+        const pageW = isLicense ? Math.max(img.width, img.height, 800) : Math.max(img.width, 500);
+        const pageH = (isLicense ? Math.min(img.width, img.height) : img.height) + headerH;
+        const pdf = new jsPDF({ orientation: isLicense ? "landscape" : (img.width > img.height ? "landscape" : "portrait"), unit: "px", format: isLicense ? [pageH, pageW] : (img.width > img.height ? [pageH, pageW] : [pageW, pageH]) });
+        pdf.setFontSize(14); pdf.setTextColor(80,80,80); pdf.text(label, 15, 25);
+        pdf.setFontSize(10); pdf.setTextColor(130,130,130); pdf.text(`${editName.trim()} - ${dateStr}`, 15, 45);
+        const drawW = isLicense ? Math.max(img.width, img.height) : img.width;
+        const drawH = isLicense ? Math.min(img.width, img.height) : img.height;
+        pdf.addImage(dataUrl, "JPEG", 0, headerH, drawW, drawH);
+        const pdfBlob = pdf.output("blob");
+        const fileName = `therapist_${label}_${idNum}_${dateStr}.pdf`;
+        await supabase.storage.from("therapist-photos").upload(fileName, pdfBlob, { contentType: "application/pdf", upsert: true });
+        const { data: urlData } = supabase.storage.from("therapist-photos").getPublicUrl(fileName);
+        return urlData.publicUrl;
+      };
+      try {
+        if (editInvoicePhoto && editTarget) {
+          const url = await uploadDocPDF(editInvoicePhoto, "invoice", editTarget.id);
+          await supabase.from("therapists").update({ invoice_photo_url: url }).eq("id", editTarget.id);
+        }
+        if (editLicensePhoto && editTarget) {
+          const url = await uploadDocPDF(editLicensePhoto, "license_front", editTarget.id);
+          await supabase.from("therapists").update({ license_photo_url: url }).eq("id", editTarget.id);
+        }
+        if (editLicensePhotoBack && editTarget) {
+          const url = await uploadDocPDF(editLicensePhotoBack, "license_back", editTarget.id);
+          await supabase.from("therapists").update({ license_photo_url_back: url }).eq("id", editTarget.id);
+        }
+      } catch (e) { console.error("upload error:", e); }
+      fetchTherapists();
+    }
 
   const handleDelete = async () => { if (!deleteTarget) return; setDeleting(true); await supabase.from("therapists").delete().eq("id", deleteTarget.id); setDeleting(false); setDeleteTarget(null); fetchTherapists(); };
 
@@ -519,26 +565,44 @@ export default function TherapistManagement() {
               </div>
             )}
 
-            {editTab === "personal" && editPinAuthed && (
+                        {editTab === "personal" && editPinAuthed && (
               <div className="space-y-4">
                 <div className="rounded-xl p-3 mb-2" style={{ backgroundColor: "#22c55e12", border: "1px solid #22c55e33" }}><p className="text-[10px] text-center" style={{ color: "#22c55e" }}>🔓 管理者認証済み — 個人情報を編集できます</p></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>本名（実名）</label><input type="text" value={editRealName} onChange={(e) => setEditRealName(e.target.value)} placeholder="山田 太郎" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
                 </div>
-                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 免許証アップロード</label>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎂 生年月日</label><input type="date" value={editBirthDate} onChange={(e) => { setEditBirthDate(e.target.value); if (e.target.value) { const b = new Date(e.target.value); const today = new Date(); let age = today.getFullYear() - b.getFullYear(); if (today.getMonth() < b.getMonth() || (today.getMonth() === b.getMonth() && today.getDate() < b.getDate())) age--; setEditAge(String(age)); } }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />{editBirthDate && <p className="text-[10px] mt-1" style={{ color: "#c3a782" }}>現在 {(() => { const b = new Date(editBirthDate); const today = new Date(); let age = today.getFullYear() - b.getFullYear(); if (today.getMonth() < b.getMonth() || (today.getMonth() === b.getMonth() && today.getDate() < b.getDate())) age--; return age; })()}歳</p>}</div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="愛知県安城市..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📋 適格事業者登録</label>
+                  <button type="button" onClick={() => setEditHasInvoice(!editHasInvoice)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer mb-2" style={{ backgroundColor: editHasInvoice ? "#22c55e22" : "#88878022", color: editHasInvoice ? "#22c55e" : "#888780", border: `1px solid ${editHasInvoice ? "#22c55e44" : "#88878044"}` }}>{editHasInvoice ? "✅ 適格事業者登録あり" : "⬜ 適格事業者登録なし"}</button>
+                  {editHasInvoice && <div className="space-y-2">
+                    <input type="text" value={editInvoiceNum} onChange={(e) => setEditInvoiceNum(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2 rounded-xl text-[11px] outline-none" style={inputStyle} />
+                    <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📎 適格事業者証明</p>
+                      {editTarget?.invoice_photo_url && <a href={editTarget.invoice_photo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mb-1.5 px-2 py-1 rounded-lg" style={{ backgroundColor: "#85a8c412", border: "1px solid #85a8c433" }}><img src={editTarget.invoice_photo_url} alt="適格事業者" className="rounded" style={{ width: 48, height: 48, objectFit: "cover" }} /><span className="text-[9px]" style={{ color: "#85a8c4" }}>📄 証明書を表示</span></a>}
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 写真を選択<input type="file" accept="image/*" onChange={(e) => setEditInvoicePhoto(e.target.files?.[0] || null)} className="hidden" /></label>
+                        {editInvoicePhoto && <><span className="text-[9px]" style={{ color: "#22c55e" }}>✅ {editInvoicePhoto.name}</span><button onClick={async () => { if (!editTarget || !editInvoicePhoto) return; const ext = editInvoicePhoto.name.split(".").pop(); const now = new Date(); const ds = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`; const fn = `therapist_invoice_${editTarget.id}_${ds}.${ext}`; await supabase.storage.from("therapist-photos").upload(fn, editInvoicePhoto, { upsert: true }); const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn); await supabase.from("therapists").update({ invoice_photo_url: u.publicUrl }).eq("id", editTarget.id); setEditInvoicePhoto(null); fetchTherapists(); toast.show("適格事業者証明を保存しました", "success"); }} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 保存</button></>}
+                      </div>
+                    </div>
+                  </div>}
+                </div>
+
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 免許証アップロード</label>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
                       <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📋 表面</p>
-                      {editTarget?.license_photo_url && <a href={editTarget.license_photo_url} target="_blank" rel="noreferrer" className="text-[9px] underline block mb-1.5" style={{ color: "#85a8c4" }}>📄 現在の表面を表示</a>}
+                      {editTarget?.license_photo_url && <a href={editTarget.license_photo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mb-1.5 px-2 py-1 rounded-lg" style={{ backgroundColor: "#85a8c412", border: "1px solid #85a8c433" }}><img src={editTarget.license_photo_url} alt="免許証表面" className="rounded" style={{ width: 60, height: 38, objectFit: "cover" }} /><span className="text-[9px]" style={{ color: "#85a8c4" }}>📄 表面を表示</span></a>}
                       <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 表面を選択<input type="file" accept="image/*" onChange={(e) => setEditLicensePhoto(e.target.files?.[0] || null)} className="hidden" /></label>
-                      {editLicensePhoto && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ {editLicensePhoto.name}</p>}
+                      {editLicensePhoto && <div className="flex items-center gap-2 mt-1"><span className="text-[9px]" style={{ color: "#22c55e" }}>✅ {editLicensePhoto.name}</span><button onClick={async () => { if (!editTarget || !editLicensePhoto) return; const ext = editLicensePhoto.name.split(".").pop(); const now = new Date(); const ds = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`; const fn = `therapist_license_front_${editTarget.id}_${ds}.${ext}`; await supabase.storage.from("therapist-photos").upload(fn, editLicensePhoto, { upsert: true }); const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn); await supabase.from("therapists").update({ license_photo_url: u.publicUrl }).eq("id", editTarget.id); setEditLicensePhoto(null); fetchTherapists(); toast.show("免許証（表面）を保存しました", "success"); }} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 保存</button></div>}
                     </div>
                     <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
                       <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📋 裏面</p>
-                      {editTarget?.license_photo_url_back && <a href={editTarget.license_photo_url_back} target="_blank" rel="noreferrer" className="text-[9px] underline block mb-1.5" style={{ color: "#85a8c4" }}>📄 現在の裏面を表示</a>}
+                      {editTarget?.license_photo_url_back && <a href={editTarget.license_photo_url_back} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mb-1.5 px-2 py-1 rounded-lg" style={{ backgroundColor: "#85a8c412", border: "1px solid #85a8c433" }}><img src={editTarget.license_photo_url_back} alt="免許証裏面" className="rounded" style={{ width: 60, height: 38, objectFit: "cover" }} /><span className="text-[9px]" style={{ color: "#85a8c4" }}>📄 裏面を表示</span></a>}
                       <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 裏面を選択<input type="file" accept="image/*" onChange={(e) => setEditLicensePhotoBack(e.target.files?.[0] || null)} className="hidden" /></label>
-                      {editLicensePhotoBack && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ {editLicensePhotoBack.name}</p>}
+                      {editLicensePhotoBack && <div className="flex items-center gap-2 mt-1"><span className="text-[9px]" style={{ color: "#22c55e" }}>✅ {editLicensePhotoBack.name}</span><button onClick={async () => { if (!editTarget || !editLicensePhotoBack) return; const ext = editLicensePhotoBack.name.split(".").pop(); const now = new Date(); const ds = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`; const fn = `therapist_license_back_${editTarget.id}_${ds}.${ext}`; await supabase.storage.from("therapist-photos").upload(fn, editLicensePhotoBack, { upsert: true }); const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn); await supabase.from("therapists").update({ license_photo_url_back: u.publicUrl }).eq("id", editTarget.id); setEditLicensePhotoBack(null); fetchTherapists(); toast.show("免許証（裏面）を保存しました", "success"); }} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 保存</button></div>}
                     </div>
                   </div>
                 </div>
