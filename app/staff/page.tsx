@@ -320,18 +320,21 @@ const openPaymentStatement = (sch: Schedule) => {
     const adjusted = subtotal - invDed;
     const hasWT = staff?.has_withholding || false;
     const wtTax = hasWT ? Math.floor(adjusted * 0.1021) : 0;
-    const finalTotal = adjusted - wtTax + (sch.transport_fee||0);
+    const finalTotalRaw = adjusted - wtTax + (sch.transport_fee||0);
+    const finalTotal = Math.ceil(finalTotalRaw / 100) * 100;
+    const roundUp = finalTotal - finalTotalRaw;
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払明細書</title><style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#333}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:8px 12px;font-size:13px}th{background:#f5f0e8;text-align:left;width:35%}.right{text-align:right}.total{font-size:16px;font-weight:bold;color:#c3a782}.header-info{display:flex;justify-content:space-between;margin-bottom:20px;font-size:12px}.company{text-align:right;font-size:11px;line-height:1.8}.sign{margin-top:50px;display:flex;justify-content:space-between}.sign-box{border-top:1px solid #333;width:200px;text-align:center;padding-top:5px;font-size:11px}@media print{body{margin:0;padding:20px}}</style></head><body>
     <h1>支払明細書（業務委託費）</h1>
     <div class="header-info"><div><p><strong>支払先：</strong>${staff?.name||""} 様</p><p><strong>業務実施日：</strong>${sch.date}</p><p><strong>業務内容：</strong>店舗管理・受付業務一式</p></div><div class="company"><p><strong>${store?.company_name||""}</strong></p><p>${store?.company_address||""}</p><p>TEL: ${store?.company_phone||""}</p>${store?.invoice_number?`<p>適格事業者番号: ${store.invoice_number}</p>`:""}</div></div>
     <table><tr><th>項目</th><th class="right">金額</th><th>備考</th></tr>
-    <tr><td>業務委託費（基本）</td><td class="right">&yen;${sch.commission_fee.toLocaleString()}</td><td style="font-size:11px;color:#888">業務単価 &yen;${sch.unit_price.toLocaleString()} × ${sch.units}ユニット</td></tr>
+    <tr><td>業務委託費（基本）</td><td class="right">&yen;${sch.commission_fee.toLocaleString()}</td><td style="font-size:11px;color:#888">業務単価 &yen;${sch.unit_price.toLocaleString()}（税込） × ${sch.units}ユニット</td></tr>
     ${(sch.night_premium||0)>0?`<tr><td>深夜時間帯業務加算</td><td class="right">&yen;${sch.night_premium.toLocaleString()}</td><td style="font-size:11px;color:#888">${staff?.night_start_time||"00:00"}〜${staff?.night_end_time||"05:00"} +&yen;${staff?.night_unit_price||100}/ユニット</td></tr>`:""}
-    ${(sch.license_premium||0)>0?`<tr><td>免許資格業務加算</td><td class="right">&yen;${sch.license_premium.toLocaleString()}</td><td style="font-size:11px;color:#888">+&yen;${storeInfo?.license_unit_price||50}/ユニット</td></tr>`:""}
-    <tr style="background:#f9f6f0"><td><strong>小計（額面）</strong></td><td class="right"><strong>&yen;${subtotal.toLocaleString()}</strong></td><td></td></tr>
+    ${(sch.license_premium||0)>0?`<tr><td>免許資格業務加算</td><td class="right">&yen;${sch.license_premium.toLocaleString()}</td><td style="font-size:11px;color:#888">+&yen;${storeInfo?.license_unit_price||50}（税込）/ユニット</td></tr>`:""}
+    <tr style="background:#f9f6f0"><td><strong>小計（額面・税込）</strong></td><td class="right"><strong>&yen;${subtotal.toLocaleString()}</strong></td><td></td></tr>
     ${invDed>0?`<tr><td style="color:#c45555">インボイス未登録調整</td><td class="right" style="color:#c45555">-&yen;${invDed.toLocaleString()}</td><td style="font-size:11px;color:#888">小計の10%</td></tr>`:`<tr><td style="color:#22c55e">適格事業者登録あり</td><td class="right" style="color:#22c55e">控除なし</td><td style="font-size:11px;color:#888">${staff?.invoice_number||""}</td></tr>`}
     ${hasWT?`<tr><td style="color:#c45555">源泉徴収税（10.21%）</td><td class="right" style="color:#c45555">-&yen;${wtTax.toLocaleString()}</td><td style="font-size:11px;color:#888">(&yen;${subtotal.toLocaleString()} - &yen;${invDed.toLocaleString()}) = &yen;${adjusted.toLocaleString()} × 10.21%</td></tr>`:`<tr><td>源泉徴収</td><td class="right">なし</td><td style="font-size:11px;color:#888">源泉徴収対象外</td></tr>`}
     ${sch.transport_fee>0?`<tr><td>交通費（実費精算分）</td><td class="right">&yen;${sch.transport_fee.toLocaleString()}</td><td style="font-size:11px;color:#888">※源泉対象外</td></tr>`:""}
+    ${roundUp>0?`<tr><td>端数調整（切り上げ）</td><td class="right">&yen;${roundUp.toLocaleString()}</td><td style="font-size:11px;color:#888">100円単位調整分</td></tr>`:""}
     <tr style="background:#f9f6f0"><td><strong>合計支払額</strong></td><td class="right total">&yen;${finalTotal.toLocaleString()}</td><td></td></tr></table>
     <div class="sign"><div class="sign-box">支払者（${store?.company_name||""}）</div><div class="sign-box">受領者（${staff?.name||""} 様）</div></div></body></html>`);
     w.document.close();
