@@ -17,7 +17,7 @@ export default function StaffPage() {
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "company">("staff");
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "company" | "payroll">("staff");
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 
@@ -49,6 +49,105 @@ export default function StaffPage() {
   const [schStaffId, setSchStaffId] = useState(0); const [schStart, setSchStart] = useState("10:00"); const [schEnd, setSchEnd] = useState("19:00"); const [schNotes, setSchNotes] = useState(""); const [schBreak, setSchBreak] = useState("0");
   const [editSchedule, setEditSchedule] = useState<Schedule | null>(null);
   const [eschStart, setEschStart] = useState(""); const [eschEnd, setEschEnd] = useState(""); const [eschNotes, setEschNotes] = useState(""); const [eschStatus, setEschStatus] = useState("scheduled"); const [eschBreak, setEschBreak] = useState("0");
+  const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
+  const [payrollData, setPayrollData] = useState<{ type: string; id: number; name: string; address: string; total: number; tax: number }[]>([]);
+  const [payrollLoading, setPayrollLoading] = useState(false);
+
+  const fetchPayroll = async () => {
+    setPayrollLoading(true);
+    const year = payrollYear;
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+
+    // セラピスト支払調書
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, withholding_tax").gte("date", startDate).lte("date", endDate);
+    const { data: therapists } = await supabase.from("therapists").select("id, name, address");
+    const thMap: Record<number, { name: string; address: string; total: number; tax: number }> = {};
+    (settlements || []).forEach(s => {
+      if (!thMap[s.therapist_id]) {
+        const th = (therapists || []).find(t => t.id === s.therapist_id);
+        thMap[s.therapist_id] = { name: th?.name || "不明", address: th?.address || "", total: 0, tax: 0 };
+      }
+      thMap[s.therapist_id].total += s.total_back || 0;
+      thMap[s.therapist_id].tax += s.withholding_tax || 0;
+    });
+
+    // 内勤スタッフ支払調書
+    const { data: staffScheds } = await supabase.from("staff_schedules").select("staff_id, total_payment").gte("date", startDate).lte("date", endDate).eq("status", "completed");
+    const stMap: Record<number, { name: string; address: string; total: number }> = {};
+    (staffScheds || []).forEach(s => {
+      if (!stMap[s.staff_id]) {
+        const st = staffList.find(x => x.id === s.staff_id);
+        stMap[s.staff_id] = { name: st?.name || "不明", address: st?.address || "", total: 0 };
+      }
+      stMap[s.staff_id].total += s.total_payment || 0;
+    });
+
+    const result: typeof payrollData = [];
+    Object.entries(thMap).forEach(([id, d]) => result.push({ type: "セラピスト", id: Number(id), name: d.name, address: d.address, total: d.total, tax: d.tax }));
+    Object.entries(stMap).forEach(([id, d]) => result.push({ type: "内勤スタッフ", id: Number(id), name: d.name, address: d.address, total: d.total, tax: 0 }));
+    result.sort((a, b) => b.total - a.total);
+    setPayrollData(result);
+    setPayrollLoading(false);
+  };
+
+  const downloadPayrollPDF = (row: typeof payrollData[0]) => {
+    const store = storeInfo;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    pdf.setFontSize(20);
+    pdf.text("支払調書", 105, 25, { align: "center" });
+    pdf.setFontSize(10);
+    pdf.text(`${payrollYear}年1月1日 〜 ${payrollYear}年12月31日`, 105, 33, { align: "center" });
+
+    pdf.setFontSize(11);
+    pdf.text("支払先", 20, 50);
+    pdf.setFontSize(12);
+    pdf.text(row.name, 50, 50);
+    pdf.setFontSize(9);
+    if (row.address) pdf.text(row.address, 50, 57);
+    pdf.text(`区分: ${row.type}`, 50, row.address ? 64 : 57);
+
+    const startY = 80;
+    pdf.setFontSize(10);
+    pdf.setDrawColor(200);
+    pdf.setFillColor(245, 240, 232);
+    pdf.rect(20, startY, 170, 10, "FD");
+    pdf.text("項目", 25, startY + 7);
+    pdf.text("金額", 160, startY + 7, { align: "right" });
+
+    let y = startY + 15;
+    pdf.text("支払金額", 25, y);
+    pdf.text(`${row.total.toLocaleString()} 円`, 160, y, { align: "right" });
+    y += 10;
+    if (row.tax > 0) {
+      pdf.text("源泉徴収税額", 25, y);
+      pdf.text(`${row.tax.toLocaleString()} 円`, 160, y, { align: "right" });
+      y += 10;
+    }
+    pdf.setDrawColor(200);
+    pdf.line(20, y, 190, y);
+    y += 8;
+    pdf.setFontSize(12);
+    pdf.text("差引支払額", 25, y);
+    pdf.text(`${(row.total - row.tax).toLocaleString()} 円`, 160, y, { align: "right" });
+
+    y += 25;
+    pdf.setFontSize(9);
+    pdf.text("支払者", 20, y);
+    pdf.setFontSize(11);
+    pdf.text(store?.company_name || "", 50, y);
+    pdf.setFontSize(9);
+    pdf.text(store?.company_address || "", 50, y + 7);
+    pdf.text(`TEL: ${store?.company_phone || ""}`, 50, y + 14);
+    if (store?.invoice_number) pdf.text(`適格事業者番号: ${store.invoice_number}`, 50, y + 21);
+
+    pdf.save(`支払調書_${payrollYear}_${row.name}.pdf`);
+  };
+
+  const downloadAllPayrollPDF = () => {
+    payrollData.forEach(row => downloadPayrollPDF(row));
+  };
+
   const [showMonthly, setShowMonthly] = useState(false);
   const [monthlyData, setMonthlyData] = useState<{ staff_id: number; name: string; days: number; total_units: number; total_commission: number; total_transport: number; total_night: number; total_license: number; total_oiri: number; total_payment: number }[]>([]);
   const [monthlyMonth, setMonthlyMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
@@ -272,9 +371,9 @@ export default function StaffPage() {
 
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["staff", "schedule", "oiri", "company"] as const).map(t => (
+          {(["staff", "schedule", "oiri", "company", "payroll"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: tab === t ? "#c3a78222" : T.cardAlt, color: tab === t ? "#c3a782" : T.textMuted, border: `1px solid ${tab === t ? "#c3a782" : T.border}`, fontWeight: tab === t ? 700 : 400 }}>
-              {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🏢 会社情報"}
+              {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : t === "company" ? "🏢 会社情報" : "📑 支払調書"}
             </button>
           ))}
         </div>
@@ -406,6 +505,47 @@ export default function StaffPage() {
         )}
 
         {/* ========== Tab 4: Company Info ========== */}
+        {tab === "payroll" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <select value={payrollYear} onChange={(e) => setPayrollYear(e.target.value)} className="px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }}>
+                {[...Array(5)].map((_, i) => { const y = new Date().getFullYear() - i; return <option key={y} value={String(y)}>{y}年</option>; })}
+              </select>
+              <button onClick={fetchPayroll} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">{payrollLoading ? "読込中..." : "📑 支払調書を生成"}</button>
+              {payrollData.length > 0 && <button onClick={downloadAllPayrollPDF} className="px-4 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📥 全員分ダウンロード</button>}
+            </div>
+            {payrollData.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px]" style={{ color: T.textMuted }}>{payrollYear}年 — {payrollData.length}名</p>
+                {payrollData.map((row, i) => (
+                  <div key={i} className="rounded-xl p-4 flex items-center justify-between" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: row.type === "セラピスト" ? "#c3a78222" : "#85a8c422", color: row.type === "セラピスト" ? "#c3a782" : "#85a8c4" }}>{row.type}</span>
+                        <span className="text-[13px] font-medium">{row.name}</span>
+                      </div>
+                      <div className="flex gap-4 mt-1">
+                        <span className="text-[11px]" style={{ color: T.textMuted }}>支払金額: <span style={{ color: T.text }}>{fmt(row.total)}</span></span>
+                        {row.tax > 0 && <span className="text-[11px]" style={{ color: "#c45555" }}>源泉徴収: {fmt(row.tax)}</span>}
+                        <span className="text-[11px] font-medium" style={{ color: "#22c55e" }}>差引: {fmt(row.total - row.tax)}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => downloadPayrollPDF(row)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 PDF</button>
+                  </div>
+                ))}
+                <div className="rounded-xl p-4 mt-2" style={{ backgroundColor: T.cardAlt }}>
+                  <div className="flex justify-between text-[12px] font-medium">
+                    <span>合計支払額</span><span>{fmt(payrollData.reduce((s, r) => s + r.total, 0))}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] mt-1" style={{ color: "#c45555" }}>
+                    <span>合計源泉徴収</span><span>{fmt(payrollData.reduce((s, r) => s + r.tax, 0))}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === "company" && (
           <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
             <h2 className="text-[15px] font-medium">🏢 会社情報</h2>
