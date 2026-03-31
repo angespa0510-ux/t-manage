@@ -7,9 +7,9 @@ import { NavMenu } from "../../lib/nav-menu";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 
-type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean };
+type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string };
-type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number };
+type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number; break_minutes: number };
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
 
 export default function StaffPage() {
@@ -28,13 +28,15 @@ export default function StaffPage() {
   // Staff CRUD states
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState(""); const [addPhone, setAddPhone] = useState(""); const [addEmail, setAddEmail] = useState("");
-  const [addRole, setAddRole] = useState("staff"); const [addAddress, setAddAddress] = useState(""); const [addTransport, setAddTransport] = useState("0");
+  const [addRole, setAddRole] = useState("staff"); const [addPosition, setAddPosition] = useState("業務委託"); const [addAddress, setAddAddress] = useState(""); const [addTransport, setAddTransport] = useState("0");
   const [addUnitPrice, setAddUnitPrice] = useState("1200"); const [addPin, setAddPin] = useState(""); const [addLicense, setAddLicense] = useState(false);
+  const [addLicenseNum, setAddLicenseNum] = useState(""); const [addOiriBonus, setAddOiriBonus] = useState("0");
 
   const [editStaff, setEditStaff] = useState<Staff | null>(null);
   const [editName, setEditName] = useState(""); const [editPhone, setEditPhone] = useState(""); const [editEmail, setEditEmail] = useState("");
-  const [editRole, setEditRole] = useState("staff"); const [editAddress, setEditAddress] = useState(""); const [editTransport, setEditTransport] = useState("0");
+  const [editRole, setEditRole] = useState("staff"); const [editPosition, setEditPosition] = useState("業務委託"); const [editAddress, setEditAddress] = useState(""); const [editTransport, setEditTransport] = useState("0");
   const [editUnitPrice, setEditUnitPrice] = useState("1200"); const [editPin, setEditPin] = useState(""); const [editLicense, setEditLicense] = useState(false);
+  const [editLicenseNum, setEditLicenseNum] = useState(""); const [editOiriBonus, setEditOiriBonus] = useState("0");
 
   // Company states
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -42,10 +44,11 @@ export default function StaffPage() {
   // Schedule states
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schPositionFilter, setSchPositionFilter] = useState("all");
   const [showAddSchedule, setShowAddSchedule] = useState(false);
-  const [schStaffId, setSchStaffId] = useState(0); const [schStart, setSchStart] = useState("10:00"); const [schEnd, setSchEnd] = useState("19:00"); const [schNotes, setSchNotes] = useState("");
+  const [schStaffId, setSchStaffId] = useState(0); const [schStart, setSchStart] = useState("10:00"); const [schEnd, setSchEnd] = useState("19:00"); const [schNotes, setSchNotes] = useState(""); const [schBreak, setSchBreak] = useState("0");
   const [editSchedule, setEditSchedule] = useState<Schedule | null>(null);
-  const [eschStart, setEschStart] = useState(""); const [eschEnd, setEschEnd] = useState(""); const [eschNotes, setEschNotes] = useState(""); const [eschStatus, setEschStatus] = useState("scheduled");
+  const [eschStart, setEschStart] = useState(""); const [eschEnd, setEschEnd] = useState(""); const [eschNotes, setEschNotes] = useState(""); const [eschStatus, setEschStatus] = useState("scheduled"); const [eschBreak, setEschBreak] = useState("0");
   const [showMonthly, setShowMonthly] = useState(false);
   const [monthlyData, setMonthlyData] = useState<{ staff_id: number; name: string; days: number; total_units: number; total_commission: number; total_transport: number; total_night: number; total_license: number; total_oiri: number; total_payment: number }[]>([]);
   const [monthlyMonth, setMonthlyMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
@@ -54,12 +57,23 @@ export default function StaffPage() {
   const [oiriSettings, setOiriSettings] = useState<OiriSetting | null>(null);
   const [oiriSales, setOiriSales] = useState(""); const [oiriCount, setOiriCount] = useState(""); const [oiriBonus, setOiriBonus] = useState("");
 
+  const isBizCommission = (pos: string) => pos === "業務委託";
+
+  const sendStaffConfirmEmail = async (s: Staff) => {
+    let token = s.email_token;
+    if (!token) { token = crypto.randomUUID(); await supabase.from("staff").update({ email_token: token }).eq("id", s.id); }
+    const confirmUrl = `${window.location.origin}/confirm-staff-email?token=${token}`;
+    const subject = encodeURIComponent("【チョップ】メールアドレス確認のお願い");
+    const body = encodeURIComponent(`${s.name} 様\n\nチョップからのメールアドレス確認です。\n以下のリンクをクリックして確認を完了してください。\n\n${confirmUrl}\n\n※このリンクはお一人様専用です。\n\nよろしくお願いいたします。\nチョップ`);
+    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(s.email)}&su=${subject}&body=${body}`, "_blank");
+  };
+
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
-  const TIMES_30MIN: string[] = [];
-  for (let h = 6; h <= 23; h++) { TIMES_30MIN.push(`${String(h).padStart(2, "0")}:00`); TIMES_30MIN.push(`${String(h).padStart(2, "0")}:30`); }
-  for (let h = 0; h <= 5; h++) { TIMES_30MIN.push(`${String(h).padStart(2, "0")}:00`); TIMES_30MIN.push(`${String(h).padStart(2, "0")}:30`); }
+  const TIMES_15MIN: string[] = [];
+  for (let h = 6; h <= 23; h++) { TIMES_15MIN.push(`${String(h).padStart(2, "0")}:00`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:15`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:30`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:45`); }
+  for (let h = 0; h <= 5; h++) { TIMES_15MIN.push(`${String(h).padStart(2, "0")}:00`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:15`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:30`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:45`); }
 
   // 深夜帯(0:00-5:00)のユニット数を計算
   const calcNightUnits = (start: string, end: string) => {
@@ -75,25 +89,26 @@ export default function StaffPage() {
     const overlapEnd = Math.min(eMin, nightEnd);
     if (overlapStart >= overlapEnd) return 0;
     const diff = overlapEnd - overlapStart;
-    return Math.max(0, Math.round(diff / 6) / 10);
+    return Math.max(0, Math.floor(diff / 15) * 0.25);
   };
 
-  const calcUnits = (start: string, end: string) => {
+  const calcUnits = (start: string, end: string, breakMin: number = 0) => {
     const [sh, sm] = start.split(":").map(Number);
     const [eh, em] = end.split(":").map(Number);
     const sMin = (sh < 6 ? sh + 24 : sh) * 60 + sm;
     const eMin = (eh < 6 ? eh + 24 : eh) * 60 + em;
-    const diff = eMin - sMin;
-    return Math.max(0, Math.round(diff / 6) / 10);
+    const diff = eMin - sMin - breakMin;
+    return Math.max(0, Math.floor(diff / 15) * 0.25);
   };
 
-  const calcFullPayment = (start: string, end: string, staff: Staff | undefined) => {
-    const units = calcUnits(start, end);
+  const calcFullPayment = (start: string, end: string, staff: Staff | undefined, breakMin: number = 0) => {
+    const units = calcUnits(start, end, breakMin);
     const nightUnits = calcNightUnits(start, end);
+    const biz = isBizCommission(staff?.company_position || "業務委託");
     const up = staff?.unit_price || 1200;
-    const commission = Math.round(up * units);
-    const nightPremium = Math.round(100 * nightUnits);
-    const licensePremium = staff?.has_license ? Math.round(50 * units) : 0;
+    const commission = biz ? Math.round(up * units) : 0;
+    const nightPremium = biz ? Math.round(100 * nightUnits) : 0;
+    const licensePremium = biz && staff?.has_license ? Math.round(50 * units) : 0;
     const transport = staff?.transport_fee || 0;
     const total = commission + nightPremium + licensePremium + transport;
     return { units, nightUnits, commission, nightPremium, licensePremium, transport, total };
@@ -117,14 +132,14 @@ export default function StaffPage() {
   // Staff CRUD
   const addStaffFn = async () => {
     if (!addName.trim()) return;
-    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicense, status: "active" });
+    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, email_verified: false, email_token: crypto.randomUUID(), status: "active" });
     toast.show("スタッフを登録しました", "success");
-    setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false);
+    setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddPosition("業務委託"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false); setAddLicenseNum(""); setAddOiriBonus("0");
     fetchData();
   };
   const updateStaffFn = async () => {
     if (!editStaff) return;
-    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicense }).eq("id", editStaff.id);
+    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
     toast.show("スタッフ情報を更新しました", "success"); setEditStaff(null); fetchData();
   };
   const deleteStaffFn = async (id: number, name: string) => { if (!confirm(`${name}を削除しますか？`)) return; await supabase.from("staff").delete().eq("id", id); toast.show("スタッフを削除しました", "info"); fetchData(); };
@@ -140,15 +155,15 @@ export default function StaffPage() {
   const addScheduleFn = async () => {
     if (!schStaffId) return;
     const staff = staffList.find(s => s.id === schStaffId);
-    const calc = calcFullPayment(schStart, schEnd, staff);
-    await supabase.from("staff_schedules").insert({ staff_id: schStaffId, date: scheduleDate, start_time: schStart, end_time: schEnd, unit_price: staff?.unit_price || 1200, units: calc.units, commission_fee: calc.commission, transport_fee: calc.transport, night_premium: calc.nightPremium, license_premium: calc.licensePremium, total_payment: calc.total, status: "scheduled", notes: schNotes.trim() });
-    toast.show("稼働予定を登録しました", "success"); setShowAddSchedule(false); setSchStaffId(0); setSchStart("10:00"); setSchEnd("19:00"); setSchNotes(""); fetchSchedules();
+    const calc = calcFullPayment(schStart, schEnd, staff, parseInt(schBreak) || 0);
+    await supabase.from("staff_schedules").insert({ staff_id: schStaffId, date: scheduleDate, start_time: schStart, end_time: schEnd, unit_price: staff?.unit_price || 1200, units: calc.units, commission_fee: calc.commission, transport_fee: calc.transport, night_premium: calc.nightPremium, license_premium: calc.licensePremium, total_payment: calc.total, status: "scheduled", notes: schNotes.trim(), break_minutes: parseInt(schBreak) || 0 });
+    toast.show("稼働予定を登録しました", "success"); setShowAddSchedule(false); setSchStaffId(0); setSchStart("10:00"); setSchEnd("19:00"); setSchNotes(""); setSchBreak("0"); fetchSchedules();
   };
   const updateScheduleFn = async () => {
     if (!editSchedule) return;
     const staff = staffList.find(s => s.id === editSchedule.staff_id);
-    const calc = calcFullPayment(eschStart, eschEnd, staff);
-    await supabase.from("staff_schedules").update({ start_time: eschStart, end_time: eschEnd, units: calc.units, commission_fee: calc.commission, transport_fee: calc.transport, night_premium: calc.nightPremium, license_premium: calc.licensePremium, total_payment: calc.total, status: eschStatus, notes: eschNotes.trim() }).eq("id", editSchedule.id);
+    const calc = calcFullPayment(eschStart, eschEnd, staff, parseInt(eschBreak) || 0);
+    await supabase.from("staff_schedules").update({ start_time: eschStart, end_time: eschEnd, units: calc.units, commission_fee: calc.commission, transport_fee: calc.transport, night_premium: calc.nightPremium, license_premium: calc.licensePremium, total_payment: calc.total, status: eschStatus, notes: eschNotes.trim(), break_minutes: parseInt(eschBreak) || 0 }).eq("id", editSchedule.id);
     toast.show("稼働予定を更新しました", "success"); setEditSchedule(null); fetchSchedules();
   };
   const markCompleted = async (sch: Schedule) => { await supabase.from("staff_schedules").update({ status: "completed" }).eq("id", sch.id); toast.show("業務完了を記録しました", "success"); fetchSchedules(); };
@@ -187,8 +202,9 @@ export default function StaffPage() {
     w.document.close();
   };
 
-  const roleColors: Record<string, string> = { owner: "#c3a782", manager: "#85a8c4", staff: "#22c55e" };
-  const roleLabels: Record<string, string> = { owner: "オーナー", manager: "マネージャー", staff: "スタッフ" };
+  const roleColors: Record<string, string> = { owner: "#c3a782", manager: "#85a8c4", leader: "#a855f7", staff: "#22c55e" };
+  const roleLabels: Record<string, string> = { owner: "オーナー", manager: "店長", leader: "責任者", staff: "スタッフ" };
+  const POSITIONS = ["社長", "経営責任者", "社員", "契約社員", "業務委託"];
   const statusColors: Record<string, string> = { scheduled: "#85a8c4", completed: "#22c55e", cancelled: "#c45555" };
   const statusLabels: Record<string, string> = { scheduled: "予定", completed: "完了", cancelled: "キャンセル" };
 
@@ -225,7 +241,7 @@ export default function StaffPage() {
                   if (next.length === 4) {
                     const { data } = await supabase.from("staff").select("id,name,role").eq("pin", next).eq("status", "active").maybeSingle();
                     if (!data) { setPinError("PINが一致しません"); setPinInput(""); }
-                    else if (data.role !== "owner" && data.role !== "manager") { setPinError("管理者権限が必要です"); setPinInput(""); }
+                    else if (data.role !== "owner" && data.role !== "manager" && data.role !== "leader") { setPinError("責任者以上の権限が必要です"); setPinInput(""); }
                     else { setPageAuthed(true); setPageAuthName(data.name); login(next); }
                   }
                 }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
@@ -278,18 +294,21 @@ export default function StaffPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-[13px] font-medium">{s.name}</span>
                       <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: (roleColors[s.role] || "#888") + "22", color: roleColors[s.role] || "#888" }}>{roleLabels[s.role] || s.role}</span>
+                      {s.company_position && <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: "#88878018", color: "#888780" }}>{s.company_position}</span>}
                       {s.has_license && <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: "#3b82f622", color: "#3b82f6" }}>🚗 免許</span>}
                     </div>
                     <div className="flex items-center gap-3 text-[10px]" style={{ color: T.textMuted }}>
                       {s.phone && <span>📞 {s.phone}</span>}
-                      {s.transport_fee > 0 && <span>🚗 {fmt(s.transport_fee)}</span>}
-                      <span>💰 {fmt(s.unit_price || 1200)}/u</span>
+                      {s.email && <span className="flex items-center gap-1">✉️ {s.email} {s.email_verified ? <span style={{ color: "#22c55e", fontSize: 8 }}>✅</span> : <span style={{ color: "#f59e0b", fontSize: 8 }}>⏳</span>}</span>}
+                      {isBizCommission(s.company_position) && <span>💰 {fmt(s.unit_price || 1200)}/u</span>}
+                      {s.oiri_bonus > 0 && <span style={{ color: "#f59e0b" }}>🎉 {fmt(s.oiri_bonus)}</span>}
                       {s.pin ? <span style={{ color: "#22c55e" }}>🔑 設定済</span> : <span style={{ color: "#c45555" }}>🔑 未設定</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                  {s.email && !s.email_verified && <button onClick={() => sendStaffConfirmEmail(s)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>📧 確認</button>}
+                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                   <button onClick={() => deleteStaffFn(s.id, s.name)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
                 </div>
               </div>
@@ -310,11 +329,16 @@ export default function StaffPage() {
               </div>
               <div className="flex gap-2">
                 <button onClick={fetchMonthly} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 月次集計</button>
-                <button onClick={() => { setShowAddSchedule(true); setSchStaffId(0); setSchStart("10:00"); setSchEnd("19:00"); setSchNotes(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 稼働追加</button>
+                <button onClick={() => { setShowAddSchedule(true); setSchStaffId(0); setSchStart("10:00"); setSchEnd("19:00"); setSchNotes(""); setSchBreak("0"); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 稼働追加</button>
               </div>
             </div>
-            {schedules.length === 0 ? <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[13px]" style={{ color: T.textFaint }}>この日の稼働予定はありません</p></div> : (
-              <div className="space-y-3">{schedules.map(sch => { const staff = staffList.find(s => s.id === sch.staff_id); return (
+            <div className="flex gap-1.5 flex-wrap">
+              {[["all", "全て"], ["業務委託", "業務委託"], ["社長", "社長"], ["経営責任者", "経営責任者"], ["社員", "社員"], ["契約社員", "契約社員"]].map(([key, label]) => { const count = key === "all" ? schedules.length : schedules.filter(x => { const st = staffList.find(s => s.id === x.staff_id); return (st?.company_position || "業務委託") === key; }).length; return (
+                <button key={key} onClick={() => setSchPositionFilter(key)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ borderColor: schPositionFilter === key ? "#c3a782" : T.border, backgroundColor: schPositionFilter === key ? "#c3a78218" : "transparent", color: schPositionFilter === key ? "#c3a782" : T.textMuted, fontWeight: schPositionFilter === key ? 600 : 400 }}>{label} {count > 0 ? count : ""}</button>
+              ); })}
+            </div>
+            {(() => { const filtered = schPositionFilter === "all" ? schedules : schedules.filter(x => { const st = staffList.find(s => s.id === x.staff_id); return (st?.company_position || "業務委託") === schPositionFilter; }); return filtered.length === 0 ? <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[13px]" style={{ color: T.textFaint }}>この日の稼働予定はありません</p></div> : (
+              <div className="space-y-3">{filtered.map(sch => { const staff = staffList.find(s => s.id === sch.staff_id); const biz = isBizCommission(staff?.company_position || "業務委託"); return (
                 <div key={sch.id} className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
@@ -324,11 +348,12 @@ export default function StaffPage() {
                           <span className="text-[13px] font-medium">{staff?.name||"不明"}</span>
                           <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: statusColors[sch.status]+"22", color: statusColors[sch.status] }}>{statusLabels[sch.status]}</span>
                           {staff?.has_license && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>🚗</span>}
+                          {!biz && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#88878018", color: "#888780" }}>{staff?.company_position}</span>}
                         </div>
-                        <p className="text-[10px]" style={{ color: T.textMuted }}>⏰ {sch.start_time}〜{sch.end_time}（{sch.units}u）</p>
+                        <p className="text-[10px]" style={{ color: T.textMuted }}>⏰ {sch.start_time}〜{sch.end_time}（{sch.units}u）{(sch.break_minutes||0) > 0 && <span style={{ color: "#f59e0b" }}> 休憩{sch.break_minutes}分</span>}</p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    {biz && <div className="text-right">
                       <p className="text-[15px] font-bold" style={{ color: "#c3a782" }}>{fmt(sch.total_payment)}</p>
                       <div className="text-[8px]" style={{ color: T.textMuted }}>
                         <span>委託{fmt(sch.commission_fee)}</span>
@@ -336,26 +361,25 @@ export default function StaffPage() {
                         {(sch.license_premium||0)>0 && <span> 🚗{fmt(sch.license_premium)}</span>}
                         {sch.transport_fee>0 && <span> 交{fmt(sch.transport_fee)}</span>}
                       </div>
-                    </div>
+                    </div>}
                   </div>
                   <div className="flex gap-2">
                     {sch.status === "scheduled" && <button onClick={() => markCompleted(sch)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "1px solid #22c55e44" }}>✅ 業務完了</button>}
-                    <button onClick={() => openPaymentStatement(sch)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 支払明細書</button>
-                    <button onClick={() => { setEditSchedule(sch); setEschStart(sch.start_time); setEschEnd(sch.end_time); setEschNotes(sch.notes||""); setEschStatus(sch.status); }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                    {biz && <button onClick={() => openPaymentStatement(sch)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 支払明細書</button>}
+                    <button onClick={() => { setEditSchedule(sch); setEschStart(sch.start_time); setEschEnd(sch.end_time); setEschNotes(sch.notes||""); setEschStatus(sch.status); setEschBreak(String(sch.break_minutes||0)); }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                     <button onClick={() => deleteScheduleFn(sch.id)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
                   </div>
                 </div>); })}</div>
-            )}
-            {schedules.length > 0 && (
+            ); })()}
+            {schedules.length > 0 && (() => { const bizSchedules = schedules.filter(x => { const st = staffList.find(s => s.id === x.staff_id); return isBizCommission(st?.company_position || "業務委託"); }); return (
               <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
                 <div className="flex justify-between flex-wrap gap-2 text-[12px]">
-                  <span style={{ color: T.textSub }}>稼働: <strong>{schedules.length}名</strong></span>
-                  <span style={{ color: T.textSub }}>委託費: <strong>{fmt(schedules.reduce((s,x)=>s+x.commission_fee,0))}</strong></span>
-                  <span style={{ color: T.textSub }}>🌙深夜: <strong>{fmt(schedules.reduce((s,x)=>s+(x.night_premium||0),0))}</strong></span>
-                  <span style={{ color: "#c3a782" }}>合計: <strong>{fmt(schedules.reduce((s,x)=>s+x.total_payment,0))}</strong></span>
+                  <span style={{ color: T.textSub }}>稼働: <strong>{schedules.length}名</strong>（委託: {bizSchedules.length}名）</span>
+                  {bizSchedules.length > 0 && <span style={{ color: T.textSub }}>委託費: <strong>{fmt(bizSchedules.reduce((s,x)=>s+x.commission_fee,0))}</strong></span>}
+                  {bizSchedules.reduce((s,x)=>s+(x.night_premium||0),0) > 0 && <span style={{ color: T.textSub }}>🌙深夜: <strong>{fmt(bizSchedules.reduce((s,x)=>s+(x.night_premium||0),0))}</strong></span>}
+                  {bizSchedules.length > 0 && <span style={{ color: "#c3a782" }}>合計: <strong>{fmt(bizSchedules.reduce((s,x)=>s+x.total_payment,0))}</strong></span>}
                 </div>
-              </div>
-            )}
+              </div>); })()}
           </div>
         )}
 
@@ -370,10 +394,10 @@ export default function StaffPage() {
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>売上条件（以上）</label><input type="text" inputMode="numeric" value={oiriSales} onChange={(e) => setOiriSales(e.target.value.replace(/[^0-9]/g, ""))} placeholder="150000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>{parseInt(oiriSales) > 0 ? `${fmt(parseInt(oiriSales))} 以上` : "未設定"}</p></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>本数条件（以上）</label><input type="text" inputMode="numeric" value={oiriCount} onChange={(e) => setOiriCount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="10" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>{parseInt(oiriCount) > 0 ? `${oiriCount}本 以上` : "未設定"}</p></div>
                 </div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎁 大入り金額（Amazonギフトカード）</label><input type="text" inputMode="numeric" value={oiriBonus} onChange={(e) => setOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[11px]" style={{ color: T.textSub }}>現在の設定:</p>
-                  <p className="text-[13px] font-medium mt-1" style={{ color: "#c3a782" }}>売上 {fmt(parseInt(oiriSales)||0)} 以上 かつ {oiriCount||0}本以上 → 🎁 {fmt(parseInt(oiriBonus)||1000)}</p>
+                  <p className="text-[13px] font-medium mt-1" style={{ color: "#c3a782" }}>売上 {fmt(parseInt(oiriSales)||0)} 以上 かつ {oiriCount||0}本以上</p>
+                  <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 金額はスタッフごとに個別設定（スタッフ編集画面の「🎉 大入り金額」）</p>
                 </div>
                 <button onClick={saveOiri} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
               </div>
@@ -409,14 +433,26 @@ export default function StaffPage() {
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>住所</label><input type="text" value={addAddress} onChange={(e) => setAddAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>役割</label><select value={addRole} onChange={(e) => setAddRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">マネージャー</option><option value="staff">スタッフ</option></select></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={addRole} onChange={(e) => setAddRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">店長</option><option value="leader">責任者</option><option value="staff">スタッフ</option></select></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>会社役職</label><select value={addPosition} onChange={(e) => setAddPosition(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>交通費</label><select value={addTransport} onChange={(e) => setAddTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option></select></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={addUnitPrice} onChange={(e) => setAddUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                {isBizCommission(addPosition) && <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={addUnitPrice} onChange={(e) => setAddUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🔑 PINコード（4桁）</label><input type="text" inputMode="numeric" maxLength={4} value={addPin} onChange={(e) => setAddPin(e.target.value.replace(/[^0-9]/g, "").slice(0,4))} placeholder="4桁" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.5em] text-center font-bold" style={inputStyle} /></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><button onClick={() => setAddLicense(!addLicense)} className="w-full px-3 py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: addLicense ? "#3b82f618" : T.cardAlt, color: addLicense ? "#3b82f6" : T.textMuted, border: `1px solid ${addLicense ? "#3b82f6" : T.border}`, fontWeight: addLicense ? 700 : 400 }}>{addLicense ? "✅ 免許あり（+¥50/u）" : "免許なし"}</button></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><div className="w-full px-3 py-2.5 rounded-xl text-[12px]" style={{ backgroundColor: addLicenseNum.trim().length === 12 ? "#3b82f618" : T.cardAlt, color: addLicenseNum.trim().length === 12 ? "#3b82f6" : T.textMuted, border: `1px solid ${addLicenseNum.trim().length === 12 ? "#3b82f6" : T.border}`, fontWeight: addLicenseNum.trim().length === 12 ? 700 : 400 }}>{addLicenseNum.trim().length === 12 ? "✅ 免許あり（+¥50/u）" : "免許なし（番号入力で自動切替）"}</div></div>
               </div>
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🪪 免許証番号（12桁）</label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>第</span>
+                  <input type="text" inputMode="numeric" maxLength={12} value={addLicenseNum} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 12); setAddLicenseNum(v); if (v.length === 12) setAddLicense(true); }} placeholder="123456789012" className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.15em] text-center font-bold" style={inputStyle} />
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>号</span>
+                </div>
+                {addLicenseNum.length > 0 && addLicenseNum.length !== 12 && <p className="text-[9px] mt-1" style={{ color: "#c45555" }}>⚠ 免許証番号は12桁です（現在{addLicenseNum.length}桁）</p>}
+                {addLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
+              </div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={addOiriBonus} onChange={(e) => setAddOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
               <div className="flex gap-3 pt-2">
                 <button onClick={addStaffFn} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">登録する</button>
                 <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
@@ -439,13 +475,83 @@ export default function StaffPage() {
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>住所</label><input type="text" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>役割</label><select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">マネージャー</option><option value="staff">スタッフ</option></select></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">店長</option><option value="leader">責任者</option><option value="staff">スタッフ</option></select></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>会社役職</label><select value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>交通費</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option></select></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={editUnitPrice} onChange={(e) => setEditUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                {isBizCommission(editPosition) && <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={editUnitPrice} onChange={(e) => setEditUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🔑 PINコード（4桁）</label><input type="text" inputMode="numeric" maxLength={4} value={editPin} onChange={(e) => setEditPin(e.target.value.replace(/[^0-9]/g, "").slice(0,4))} placeholder="4桁" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.5em] text-center font-bold" style={inputStyle} /></div>
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><button onClick={() => setEditLicense(!editLicense)} className="w-full px-3 py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: editLicense ? "#3b82f618" : T.cardAlt, color: editLicense ? "#3b82f6" : T.textMuted, border: `1px solid ${editLicense ? "#3b82f6" : T.border}`, fontWeight: editLicense ? 700 : 400 }}>{editLicense ? "✅ 免許あり（+¥50/u）" : "免許なし"}</button></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🚗 免許</label><div className="w-full px-3 py-2.5 rounded-xl text-[12px]" style={{ backgroundColor: editLicenseNum.trim().length === 12 ? "#3b82f618" : T.cardAlt, color: editLicenseNum.trim().length === 12 ? "#3b82f6" : T.textMuted, border: `1px solid ${editLicenseNum.trim().length === 12 ? "#3b82f6" : T.border}`, fontWeight: editLicenseNum.trim().length === 12 ? 700 : 400 }}>{editLicenseNum.trim().length === 12 ? "✅ 免許あり（+¥50/u）" : "免許なし（番号入力で自動切替）"}</div></div>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🪪 免許証番号（12桁）</label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>第</span>
+                  <input type="text" inputMode="numeric" maxLength={12} value={editLicenseNum} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 12); setEditLicenseNum(v); if (v.length === 12) setEditLicense(true); }} placeholder="123456789012" className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none tracking-[0.15em] text-center font-bold" style={inputStyle} />
+                  <span className="text-[13px] font-medium" style={{ color: T.textSub }}>号</span>
+                </div>
+                {editLicenseNum.length > 0 && editLicenseNum.length !== 12 && <p className="text-[9px] mt-1" style={{ color: "#c45555" }}>⚠ 免許証番号は12桁です（現在{editLicenseNum.length}桁）</p>}
+                {editLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
+              </div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={editOiriBonus} onChange={(e) => setEditOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
+              {/* 身分証アップロード（表・裏） */}
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 身分証アップロード</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 表面 */}
+                  <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📄 表面</p>
+                    {editStaff?.id_doc_url ? (
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[9px] flex-1 truncate" style={{ color: "#22c55e" }}>✅ アップロード済</span>
+                        <a href={editStaff.id_doc_url} target="_blank" rel="noopener noreferrer" className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>表示</a>
+                      </div>
+                    ) : <p className="text-[9px] mb-1.5" style={{ color: T.textFaint }}>未アップロード</p>}
+                    <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>
+                      📎 表面を選択
+                      <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0]; if (!file || !editStaff) return;
+                        toast.show("表面アップロード中...", "info");
+                        const now = new Date(); const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
+                        const docName = `${dateStr}_${editName.trim()}_第${editLicenseNum.trim() || "未登録"}号_表`;
+                        const ext = file.name.split(".").pop(); const fileName = `id-docs/${editStaff.id}_front_${dateStr}_${Date.now()}.${ext}`;
+                        const { error } = await supabase.storage.from("therapist-photos").upload(fileName, file, { upsert: true });
+                        if (error) { toast.show("アップロード失敗: " + error.message, "error"); return; }
+                        const { data: urlData } = supabase.storage.from("therapist-photos").getPublicUrl(fileName);
+                        await supabase.from("staff").update({ id_doc_url: urlData.publicUrl, id_doc_name: docName }).eq("id", editStaff.id);
+                        toast.show("表面をアップロードしました", "success"); fetchData();
+                        setEditStaff({ ...editStaff, id_doc_url: urlData.publicUrl, id_doc_name: docName });
+                      }} />
+                    </label>
+                  </div>
+                  {/* 裏面 */}
+                  <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📄 裏面</p>
+                    {editStaff?.id_doc_url_back ? (
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[9px] flex-1 truncate" style={{ color: "#22c55e" }}>✅ アップロード済</span>
+                        <a href={editStaff.id_doc_url_back} target="_blank" rel="noopener noreferrer" className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>表示</a>
+                      </div>
+                    ) : <p className="text-[9px] mb-1.5" style={{ color: T.textFaint }}>未アップロード</p>}
+                    <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>
+                      📎 裏面を選択
+                      <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0]; if (!file || !editStaff) return;
+                        toast.show("裏面アップロード中...", "info");
+                        const now = new Date(); const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
+                        const docName = `${dateStr}_${editName.trim()}_第${editLicenseNum.trim() || "未登録"}号_裏`;
+                        const ext = file.name.split(".").pop(); const fileName = `id-docs/${editStaff.id}_back_${dateStr}_${Date.now()}.${ext}`;
+                        const { error } = await supabase.storage.from("therapist-photos").upload(fileName, file, { upsert: true });
+                        if (error) { toast.show("アップロード失敗: " + error.message, "error"); return; }
+                        const { data: urlData } = supabase.storage.from("therapist-photos").getPublicUrl(fileName);
+                        await supabase.from("staff").update({ id_doc_url_back: urlData.publicUrl, id_doc_name_back: docName }).eq("id", editStaff.id);
+                        toast.show("裏面をアップロードしました", "success"); fetchData();
+                        setEditStaff({ ...editStaff, id_doc_url_back: urlData.publicUrl, id_doc_name_back: docName });
+                      }} />
+                    </label>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button onClick={updateStaffFn} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">更新する</button>
@@ -464,13 +570,14 @@ export default function StaffPage() {
             <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{dateDisplay}</p>
             <div className="space-y-3">
               <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>スタッフ *</label><select value={schStaffId} onChange={(e) => setSchStaffId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{staffList.filter(s => s.status === "active").map(s => <option key={s.id} value={s.id}>{s.name}（{fmt(s.unit_price||1200)}/u）{s.has_license ? " 🚗" : ""}</option>)}</select></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務開始</label><select value={schStart} onChange={(e) => setSchStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_30MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務終了</label><select value={schEnd} onChange={(e) => setSchEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_30MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務開始</label><select value={schStart} onChange={(e) => setSchStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務終了</label><select value={schEnd} onChange={(e) => setSchEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>☕ 休憩</label><select value={schBreak} onChange={(e) => setSchBreak(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="15">15分</option><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="75">75分</option><option value="90">90分</option><option value="105">105分</option><option value="120">120分</option></select></div>
               </div>
               {schStaffId > 0 && (() => {
                 const st = staffList.find(s => s.id === schStaffId);
-                const calc = calcFullPayment(schStart, schEnd, st);
+                const calc = calcFullPayment(schStart, schEnd, st, parseInt(schBreak) || 0);
                 return (
                 <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt }}>
                   <div className="space-y-1 text-[11px]">
@@ -501,11 +608,12 @@ export default function StaffPage() {
             <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{staffList.find(s => s.id === editSchedule.staff_id)?.name} — {editSchedule.date}</p>
             <div className="space-y-3">
               <div className="flex flex-wrap gap-1.5">{(["scheduled","completed","cancelled"] as const).map(st => (<button key={st} onClick={() => setEschStatus(st)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: eschStatus===st ? statusColors[st]+"22" : T.cardAlt, color: eschStatus===st ? statusColors[st] : T.textMuted, border: `1px solid ${eschStatus===st ? statusColors[st] : T.border}`, fontWeight: eschStatus===st ? 700 : 400 }}>{statusLabels[st]}</button>))}</div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務開始</label><select value={eschStart} onChange={(e) => setEschStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_30MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務終了</label><select value={eschEnd} onChange={(e) => setEschEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_30MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務開始</label><select value={eschStart} onChange={(e) => setEschStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>業務終了</label><select value={eschEnd} onChange={(e) => setEschEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>☕ 休憩</label><select value={eschBreak} onChange={(e) => setEschBreak(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="15">15分</option><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="75">75分</option><option value="90">90分</option><option value="105">105分</option><option value="120">120分</option></select></div>
               </div>
-              {(() => { const st = staffList.find(s => s.id === editSchedule.staff_id); const calc = calcFullPayment(eschStart, eschEnd, st); return (
+              {(() => { const st = staffList.find(s => s.id === editSchedule.staff_id); const calc = calcFullPayment(eschStart, eschEnd, st, parseInt(eschBreak) || 0); return (
                 <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt }}>
                   <div className="space-y-1 text-[11px]">
                     <div className="flex justify-between"><span>委託費</span><span>{fmt(calc.commission)}</span></div>
@@ -538,20 +646,23 @@ export default function StaffPage() {
             </div>
             {monthlyData.length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>データがありません</p> : (
               <div className="space-y-3">
-                {monthlyData.map(d => (
+                {monthlyData.map(d => { const staff = staffList.find(s => s.id === d.staff_id); const biz = isBizCommission(staff?.company_position || "業務委託"); return (
                   <div key={d.staff_id} className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                    <div className="flex items-center justify-between mb-2"><span className="text-[13px] font-medium">{d.name}</span><span className="text-[15px] font-bold" style={{ color: "#c3a782" }}>{fmt(d.total_payment)}</span></div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]" style={{ color: T.textMuted }}>
-                      <span>稼働: {d.days}日</span><span>ユニット: {d.total_units}</span><span>委託費: {fmt(d.total_commission)}</span>
-                      {d.total_night > 0 && <span style={{ color: "#a855f7" }}>🌙深夜: {fmt(d.total_night)}</span>}
-                      {d.total_license > 0 && <span style={{ color: "#3b82f6" }}>🚗免許: {fmt(d.total_license)}</span>}
-                      <span>交通費: {fmt(d.total_transport)}</span>
-                      {d.total_oiri > 0 && <span style={{ color: "#f59e0b" }}>🎉大入: {fmt(d.total_oiri)}</span>}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2"><span className="text-[13px] font-medium">{d.name}</span>{!biz && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#88878018", color: "#888780" }}>{staff?.company_position}</span>}</div>
+                      {biz && <span className="text-[15px] font-bold" style={{ color: "#c3a782" }}>{fmt(d.total_payment)}</span>}
                     </div>
-                  </div>
-                ))}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]" style={{ color: T.textMuted }}>
+                      <span>稼働: {d.days}日</span><span>ユニット: {d.total_units}</span>
+                      {biz && <span>委託費: {fmt(d.total_commission)}</span>}
+                      {biz && d.total_night > 0 && <span style={{ color: "#a855f7" }}>🌙深夜: {fmt(d.total_night)}</span>}
+                      {biz && d.total_license > 0 && <span style={{ color: "#3b82f6" }}>🚗免許: {fmt(d.total_license)}</span>}
+                      {biz && <span>交通費: {fmt(d.total_transport)}</span>}
+                      {biz && d.total_oiri > 0 && <span style={{ color: "#f59e0b" }}>🎉大入: {fmt(d.total_oiri)}</span>}
+                    </div>
+                  </div>); })}
                 <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
-                  <div className="flex justify-between text-[13px] font-bold" style={{ color: "#c3a782" }}><span>月間合計</span><span>{fmt(monthlyData.reduce((s,d)=>s+d.total_payment,0))}</span></div>
+                  <div className="flex justify-between text-[13px] font-bold" style={{ color: "#c3a782" }}><span>月間合計（業務委託のみ）</span><span>{fmt(monthlyData.filter(d => { const st = staffList.find(s => s.id === d.staff_id); return isBizCommission(st?.company_position || "業務委託"); }).reduce((s,d)=>s+d.total_payment,0))}</span></div>
                 </div>
               </div>
             )}

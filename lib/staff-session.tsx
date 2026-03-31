@@ -37,7 +37,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("t-manage-staff");
   };
 
-  const isManager = activeStaff?.role === "owner" || activeStaff?.role === "manager";
+  const isManager = activeStaff?.role === "owner" || activeStaff?.role === "manager" || activeStaff?.role === "leader";
 
   return (
     <StaffSessionCtx.Provider value={{ activeStaff, isManager, login, logout }}>
