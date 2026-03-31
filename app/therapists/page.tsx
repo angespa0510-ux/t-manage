@@ -12,6 +12,7 @@ type Therapist = {
   height_cm: number; bust: number; waist: number; hip: number; cup: string;
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
+  has_withholding: boolean;
 };
 
 export default function TherapistManagement() {
@@ -46,6 +47,7 @@ export default function TherapistManagement() {
   const [editAge, setEditAge] = useState(""); const [editInterval, setEditInterval] = useState("10"); const [editTransport, setEditTransport] = useState("0");
   const [editHeight, setEditHeight] = useState(""); const [editBust, setEditBust] = useState(""); const [editWaist, setEditWaist] = useState(""); const [editHip, setEditHip] = useState(""); const [editCup, setEditCup] = useState("");
   const [editPhotoW, setEditPhotoW] = useState("400"); const [editPhotoH, setEditPhotoH] = useState("600");
+  const [editWithholding, setEditWithholding] = useState(false);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -130,6 +132,7 @@ export default function TherapistManagement() {
     setEditAge(String(t.age || "")); setEditInterval(String(t.interval_minutes || 10));
     setEditHeight(String(t.height_cm || "")); setEditBust(String(t.bust || "")); setEditWaist(String(t.waist || "")); setEditHip(String(t.hip || "")); setEditCup(t.cup || "");
     setEditPhotoW(String(t.photo_width || 400)); setEditPhotoH(String(t.photo_height || 600));
+    setEditWithholding(t.has_withholding || false);
     setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditMsg("");
   };
 
@@ -145,6 +148,7 @@ export default function TherapistManagement() {
       height_cm: parseInt(editHeight) || 0, bust: parseInt(editBust) || 0, waist: parseInt(editWaist) || 0, hip: parseInt(editHip) || 0, cup: editCup,
       photo_url: photoUrl, photo_width: parseInt(editPhotoW) || 400, photo_height: parseInt(editPhotoH) || 600,
       notes: editNotes.trim(),
+      has_withholding: editWithholding,
       email: editEmail.trim(),
       ...(editEmail.trim() !== (editTarget.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}),
     }).eq("id", editTarget.id);
@@ -442,6 +446,7 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>年齢</label><input type="text" inputMode="numeric" value={editAge} onChange={(e) => setEditAge(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>インターバル</label><select value={editInterval} onChange={(e) => setEditInterval(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{INTERVALS.map((m) => <option key={m} value={m}>{m}分</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>身長</label><input type="text" inputMode="numeric" value={editHeight} onChange={(e) => setEditHeight(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div className="grid grid-cols-4 gap-3">

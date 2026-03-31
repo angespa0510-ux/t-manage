@@ -50,6 +50,8 @@ export default function StaffPage() {
   const [schStaffId, setSchStaffId] = useState(0); const [schStart, setSchStart] = useState("10:00"); const [schEnd, setSchEnd] = useState("19:00"); const [schNotes, setSchNotes] = useState(""); const [schBreak, setSchBreak] = useState("0");
   const [editSchedule, setEditSchedule] = useState<Schedule | null>(null);
   const [eschStart, setEschStart] = useState(""); const [eschEnd, setEschEnd] = useState(""); const [eschNotes, setEschNotes] = useState(""); const [eschStatus, setEschStatus] = useState("scheduled"); const [eschBreak, setEschBreak] = useState("0");
+  const [addWithholding, setAddWithholding] = useState(false);
+  const [editWithholding, setEditWithholding] = useState(false);
   const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
   const [payrollData, setPayrollData] = useState<{ type: string; id: number; name: string; address: string; total: number; tax: number }[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
@@ -204,14 +206,14 @@ export default function StaffPage() {
   // Staff CRUD
   const addStaffFn = async () => {
     if (!addName.trim()) return;
-    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, email_verified: false, email_token: crypto.randomUUID(), status: "active" });
+    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, has_withholding: addWithholding, email_verified: false, email_token: crypto.randomUUID(), status: "active" });
     toast.show("スタッフを登録しました", "success");
     setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddPosition("業務委託"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false); setAddLicenseNum(""); setAddOiriBonus("0");
     fetchData();
   };
   const updateStaffFn = async () => {
     if (!editStaff) return;
-    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
+    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, has_withholding: editWithholding, ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
     toast.show("スタッフ情報を更新しました", "success"); setEditStaff(null); fetchData();
   };
   const deleteStaffFn = async (id: number, name: string) => { if (!confirm(`${name}を削除しますか？`)) return; await supabase.from("staff").delete().eq("id", id); toast.show("スタッフを削除しました", "info"); fetchData(); };
@@ -380,7 +382,7 @@ export default function StaffPage() {
                 </div>
                 <div className="flex gap-2">
                   {s.email && !s.email_verified && <button onClick={() => sendStaffConfirmEmail(s)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>📧 確認</button>}
-                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                   <button onClick={() => deleteStaffFn(s.id, s.name)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
                 </div>
               </div>
@@ -571,6 +573,7 @@ export default function StaffPage() {
                 {addLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={addOiriBonus} onChange={(e) => setAddOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setAddWithholding(!addWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: addWithholding ? "#c4555522" : "#22c55e22", color: addWithholding ? "#c45555" : "#22c55e", border: `1px solid ${addWithholding ? "#c4555544" : "#22c55e44"}` }}>{addWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
               <div className="flex gap-3 pt-2">
                 <button onClick={addStaffFn} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">登録する</button>
                 <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
@@ -613,6 +616,7 @@ export default function StaffPage() {
                 {editLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={editOiriBonus} onChange={(e) => setEditOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
               {/* 身分証アップロード（表・裏） */}
               <div>
                 <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 身分証アップロード</label>
