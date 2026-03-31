@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { jsPDF } from "jspdf";
 
 type Therapist = {
   id: number; created_at: string; name: string; phone: string; status: string;
@@ -13,7 +14,7 @@ type Therapist = {
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
-  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string;
+  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string;
 };
 
 export default function TherapistManagement() {
@@ -59,6 +60,7 @@ export default function TherapistManagement() {
   const [editInvoiceNum, setEditInvoiceNum] = useState("");
   const [editInvoicePhoto, setEditInvoicePhoto] = useState<File | null>(null);
   const [editLicensePhoto, setEditLicensePhoto] = useState<File | null>(null);
+  const [editLicensePhotoBack, setEditLicensePhotoBack] = useState<File | null>(null);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -154,7 +156,7 @@ export default function TherapistManagement() {
     setEditTab("basic"); setEditPinAuthed(false); setEditPinInput(""); setEditPinError("");
     setEditRealName(t.real_name || ""); setEditAddress(t.address || "");
     setEditHasInvoice(t.has_invoice || false); setEditInvoiceNum(t.therapist_invoice_number || "");
-    setEditInvoicePhoto(null); setEditLicensePhoto(null);
+    setEditInvoicePhoto(null); setEditLicensePhoto(null); setEditLicensePhotoBack(null);
     setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditMsg("");
   };
 
@@ -524,12 +526,24 @@ export default function TherapistManagement() {
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>本名（実名）</label><input type="text" value={editRealName} onChange={(e) => setEditRealName(e.target.value)} placeholder="山田 太郎" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
                 </div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="愛知県安城市..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📋 適格事業者登録</label><button type="button" onClick={() => setEditHasInvoice(!editHasInvoice)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer mb-2" style={{ backgroundColor: editHasInvoice ? "#22c55e22" : "#88878022", color: editHasInvoice ? "#22c55e" : "#888780", border: `1px solid ${editHasInvoice ? "#22c55e44" : "#88878044"}` }}>{editHasInvoice ? "✅ 適格事業者登録あり" : "⬜ 適格事業者登録なし"}</button>{editHasInvoice && <div className="space-y-2"><input type="text" value={editInvoiceNum} onChange={(e) => setEditInvoiceNum(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2 rounded-xl text-[11px] outline-none" style={inputStyle} /><label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 証明書をアップロード<input type="file" accept="image/*" onChange={(e) => setEditInvoicePhoto(e.target.files?.[0] || null)} className="hidden" /></label>{editInvoicePhoto && <span className="text-[10px] ml-2" style={{ color: "#22c55e" }}>✅ {editInvoicePhoto.name}</span>}{editTarget?.invoice_photo_url && <a href={editTarget.invoice_photo_url} target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: "#85a8c4" }}>📄 現在の証明書を表示</a>}</div>}</div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 免許証アップロード</label><label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 免許証をアップロード<input type="file" accept="image/*" onChange={(e) => setEditLicensePhoto(e.target.files?.[0] || null)} className="hidden" /></label>{editLicensePhoto && <span className="text-[10px] ml-2" style={{ color: "#22c55e" }}>✅ {editLicensePhoto.name}</span>}{editTarget?.license_photo_url && <a href={editTarget.license_photo_url} target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: "#85a8c4" }}>📄 現在の免許証を表示</a>}</div>
+                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 免許証アップロード</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📋 表面</p>
+                      {editTarget?.license_photo_url && <a href={editTarget.license_photo_url} target="_blank" rel="noreferrer" className="text-[9px] underline block mb-1.5" style={{ color: "#85a8c4" }}>📄 現在の表面を表示</a>}
+                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 表面を選択<input type="file" accept="image/*" onChange={(e) => setEditLicensePhoto(e.target.files?.[0] || null)} className="hidden" /></label>
+                      {editLicensePhoto && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ {editLicensePhoto.name}</p>}
+                    </div>
+                    <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📋 裏面</p>
+                      {editTarget?.license_photo_url_back && <a href={editTarget.license_photo_url_back} target="_blank" rel="noreferrer" className="text-[9px] underline block mb-1.5" style={{ color: "#85a8c4" }}>📄 現在の裏面を表示</a>}
+                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 裏面を選択<input type="file" accept="image/*" onChange={(e) => setEditLicensePhotoBack(e.target.files?.[0] || null)} className="hidden" /></label>
+                      {editLicensePhotoBack && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ {editLicensePhotoBack.name}</p>}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
-
             {editMsg && <div className="px-4 py-3 rounded-xl text-[12px] mt-4" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
             <div className="flex gap-3 pt-4">
               <button onClick={handleUpdate} disabled={editSaving} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
@@ -538,7 +552,7 @@ export default function TherapistManagement() {
           </div>
         </div>
       )}
-      
+
       {/* Delete Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteTarget(null)}>
