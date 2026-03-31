@@ -28,7 +28,7 @@ export default function TherapistManagement() {
   const [storeInfo, setStoreInfo] = useState<{ company_name: string; company_address: string; company_phone: string; invoice_number: string } | null>(null);
   const [showPayroll, setShowPayroll] = useState(false);
   const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
-  const [payrollData, setPayrollData] = useState<{ id: number; name: string; address: string; total: number; tax: number }[]>([]);
+  const [payrollData, setPayrollData] = useState<{ id: number; name: string; address: string; total: number; tax: number; transport: number; days: number }[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
 
   // Add
@@ -83,28 +83,32 @@ export default function TherapistManagement() {
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); const fetchStore = async () => { const { data } = await supabase.from("stores").select("company_name, company_address, company_phone, invoice_number"); if (data?.[0]) setStoreInfo(data[0]); }; fetchStore(); }, [router, fetchTherapists]);
 
-  const fetchPayroll = async () => {
+    const fetchPayroll = async () => {
     setPayrollLoading(true);
     const startDate = `${payrollYear}-01-01`;
     const endDate = `${payrollYear}-12-31`;
-    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax, adjustment").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
-    const thMap: Record<number, { name: string; address: string; total: number; deduction: number }> = {};
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax, adjustment, total_sales, total_cash, total_card, total_paypay").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
+    const thMap: Record<number, { name: string; address: string; gross: number; tax: number; transport: number; days: number }> = {};
     (settlements || []).forEach(s => {
       if (!thMap[s.therapist_id]) {
         const th = therapists.find(t => t.id === s.therapist_id);
-        thMap[s.therapist_id] = { name: th?.name || "不明", address: "", total: 0, deduction: 0 };
+        thMap[s.therapist_id] = { name: th?.name || "不明", address: th?.address || "", gross: 0, tax: 0, transport: 0, days: 0 };
       }
-      thMap[s.therapist_id].total += s.total_back || 0;
       const th = therapists.find(t => t.id === s.therapist_id);
-      if (th && (th as any).has_withholding) {
-        const backAmt = s.total_back || 0;
-        const invDed = s.invoice_deduction || 0;
-        const adjusted = backAmt - invDed + (s.adjustment || 0);
-        const wBase = Math.max(adjusted - 5000, 0);
-        thMap[s.therapist_id].deduction += Math.floor(wBase * 0.1021);
+      const transportFee = th?.transport_fee || 0;
+      const backAmt = (s.total_back || 0) + (s.adjustment || 0);
+      const invDed = s.invoice_deduction || 0;
+      const adjusted = backAmt - invDed + (s.adjustment || 0);
+      let dayWT = s.withholding_tax || 0;
+      if (dayWT === 0 && th && (th as any).has_withholding) {
+        dayWT = Math.floor(Math.max(adjusted - 5000, 0) * 0.1021);
       }
+      thMap[s.therapist_id].gross += backAmt;
+      thMap[s.therapist_id].tax += dayWT;
+      thMap[s.therapist_id].transport += transportFee;
+      thMap[s.therapist_id].days += 1;
     });
-    const result = Object.entries(thMap).map(([id, d]) => ({ id: Number(id), name: d.name, address: d.address, total: d.total, tax: d.deduction }));
+    const result = Object.entries(thMap).map(([id, d]) => ({ id: Number(id), name: d.name, address: d.address, total: d.gross, tax: d.tax, transport: d.transport, days: d.days }));
     result.sort((a, b) => b.total - a.total);
     setPayrollData(result);
     setPayrollLoading(false);
@@ -112,9 +116,34 @@ export default function TherapistManagement() {
 
   const openPayrollPDF = (row: typeof payrollData[0]) => {
     const store = storeInfo;
+    const th = therapists.find(t => t.id === row.id);
+    const realName = th?.real_name || row.name;
+    const hasInvoice = th?.has_invoice || false;
+    const invoiceNum = (th as any)?.therapist_invoice_number || "";
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${payrollYear}_${row.name}</title><style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:22px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #ccc;padding:10px 14px;font-size:13px}th{background:#f5f0e8;text-align:left;width:40%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:15px}.section{margin-top:30px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}@media print{body{margin:0;padding:20px}}</style></head><body><h1>支払調書</h1><h2>${payrollYear}年1月1日 〜 ${payrollYear}年12月31日</h2><table><tr><th>支払先（氏名）</th><td>${row.name}</td></tr><tr><th>区分</th><td>セラピスト（業務委託）</td></tr></table><table><tr><th>項目</th><th class="right">金額</th></tr><tr><td>支払金額</td><td class="right">¥${row.total.toLocaleString()}</td></tr>${row.tax > 0 ? `<tr><td>源泉徴収税額</td><td class="right" style="color:#c45555">¥${row.tax.toLocaleString()}</td></tr>` : ""}<tr class="total-row"><td>差引支払額</td><td class="right">¥${(row.total - row.tax).toLocaleString()}</td></tr></table><div class="section"><p style="font-size:12px;color:#888">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格事業者番号: ${store.invoice_number}</p>` : ""}</div></div></body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${payrollYear}_${realName}</title><style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:22px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #ccc;padding:10px 14px;font-size:13px}th{background:#f5f0e8;text-align:left;width:40%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:15px}.section{margin-top:30px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:10px;color:#888;margin-top:5px}@media print{body{margin:0;padding:20px}}</style></head><body>
+    <h1>支払調書</h1>
+    <h2>${payrollYear}年1月1日 〜 ${payrollYear}年12月31日</h2>
+    <table>
+    <tr><th>支払先（氏名）</th><td>${realName}</td></tr>
+    <tr><th>源氏名</th><td>${row.name}</td></tr>
+    ${th?.address ? `<tr><th>住所</th><td>${th.address}</td></tr>` : ""}
+    <tr><th>区分</th><td>セラピスト（業務委託）</td></tr>
+    <tr><th>適格事業者</th><td>${hasInvoice ? `登録あり（${invoiceNum}）` : "未登録"}</td></tr>
+    </table>
+    <table>
+    <tr><th>項目</th><th class="right">金額</th><th>備考</th></tr>
+    <tr><td>稼働日数</td><td class="right">${row.days}日</td><td style="font-size:11px;color:#888">年間清算回数</td></tr>
+    <tr><td>支払金額（税込）</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:11px;color:#888">年間バック合計（税込・源泉前）</td></tr>
+    ${row.transport > 0 ? `<tr><td>うち交通費（非課税）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:11px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日</td></tr>` : ""}
+    ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額（清算時控除済）</td><td class="right" style="color:#c45555">&yen;${row.tax.toLocaleString()}</td><td style="font-size:11px;color:#888">日次清算で差し引き済み</td></tr>` : `<tr><td>源泉徴収</td><td class="right">なし</td><td style="font-size:11px;color:#888">源泉徴収対象外</td></tr>`}
+    <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${(row.total - row.tax).toLocaleString()}</td><td></td></tr>
+    </table>
+    <p class="note">※ 支払金額は全て税込（内税方式）で記載しています。</p>
+    <p class="note">※ 本書は所得税法第225条に基づく「報酬、料金、契約金及び賞金の支払調書」に準じて発行しています。</p>
+    <div class="section"><p style="font-size:12px;color:#888">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格事業者番号: ${store.invoice_number}</p>` : ""}</div></div>
+    </body></html>`);
     w.document.close();
   };
 
@@ -325,7 +354,9 @@ export default function TherapistManagement() {
                   <div>
                     <span className="text-[13px] font-medium">{row.name}</span>
                     <div className="flex gap-4 mt-1">
+                      <span className="text-[11px]" style={{ color: T.textMuted }}>{row.days}日</span>
                       <span className="text-[11px]" style={{ color: T.textMuted }}>支払: <span style={{ color: T.text }}>¥{row.total.toLocaleString()}</span></span>
+                      {row.transport > 0 && <span className="text-[11px]" style={{ color: T.textMuted }}>交通費: ¥{row.transport.toLocaleString()}</span>}
                       {row.tax > 0 && <span className="text-[11px]" style={{ color: "#c45555" }}>源泉: ¥{row.tax.toLocaleString()}</span>}
                       <span className="text-[11px] font-medium" style={{ color: "#22c55e" }}>差引: ¥{(row.total - row.tax).toLocaleString()}</span>
                     </div>
