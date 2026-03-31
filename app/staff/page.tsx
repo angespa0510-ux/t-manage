@@ -76,7 +76,7 @@ export default function StaffPage() {
 
     // セラピスト支払調書
     const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
-    const { data: therapists } = await supabase.from("therapists").select("id, name, has_withholding");
+    const { data: therapists } = await supabase.from("therapists").select("id, name, has_withholding, address");
     const thMap: Record<number, { name: string; address: string; total: number; tax: number }> = {};
     (settlements || []).forEach(s => {
       if (!thMap[s.therapist_id]) {
