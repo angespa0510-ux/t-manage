@@ -15,7 +15,7 @@ type Therapist = {
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
-  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string;
+  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number;
 };
 
 export default function TherapistManagement() {
