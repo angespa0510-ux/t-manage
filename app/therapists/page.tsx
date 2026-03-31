@@ -71,7 +71,7 @@ export default function TherapistManagement() {
     setPayrollLoading(true);
     const startDate = `${payrollYear}-01-01`;
     const endDate = `${payrollYear}-12-31`;
-    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax, adjustment").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
     const thMap: Record<number, { name: string; address: string; total: number; deduction: number }> = {};
     (settlements || []).forEach(s => {
       if (!thMap[s.therapist_id]) {
@@ -79,7 +79,14 @@ export default function TherapistManagement() {
         thMap[s.therapist_id] = { name: th?.name || "不明", address: "", total: 0, deduction: 0 };
       }
       thMap[s.therapist_id].total += s.total_back || 0;
-      thMap[s.therapist_id].deduction += s.invoice_deduction || 0;
+      const th = therapists.find(t => t.id === s.therapist_id);
+      if (th && (th as any).has_withholding) {
+        const backAmt = s.total_back || 0;
+        const invDed = s.invoice_deduction || 0;
+        const adjusted = backAmt - invDed + (s.adjustment || 0);
+        const wBase = Math.max(adjusted - 5000, 0);
+        thMap[s.therapist_id].deduction += Math.floor(wBase * 0.1021);
+      }
     });
     const result = Object.entries(thMap).map(([id, d]) => ({ id: Number(id), name: d.name, address: d.address, total: d.total, tax: d.deduction }));
     result.sort((a, b) => b.total - a.total);

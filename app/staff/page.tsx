@@ -64,8 +64,8 @@ export default function StaffPage() {
     const endDate = `${year}-12-31`;
 
     // セラピスト支払調書
-    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
-    const { data: therapists } = await supabase.from("therapists").select("id, name");
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
+    const { data: therapists } = await supabase.from("therapists").select("id, name, has_withholding");
     const thMap: Record<number, { name: string; address: string; total: number; tax: number }> = {};
     (settlements || []).forEach(s => {
       if (!thMap[s.therapist_id]) {
@@ -73,7 +73,14 @@ export default function StaffPage() {
         thMap[s.therapist_id] = { name: th?.name || "不明", address: th?.address || "", total: 0, tax: 0 };
       }
       thMap[s.therapist_id].total += s.total_back || 0;
-      thMap[s.therapist_id].tax += s.invoice_deduction || 0;
+      const th2 = (therapists || []).find(t => t.id === s.therapist_id);
+      if (th2 && (th2 as any).has_withholding) {
+        const backAmt = s.total_back || 0;
+        const invDed = s.invoice_deduction || 0;
+        const adjusted = backAmt - invDed;
+        const wBase = Math.max(adjusted - 5000, 0);
+        thMap[s.therapist_id].tax += Math.floor(wBase * 0.1021);
+      }
     });
 
     // 内勤スタッフ支払調書
