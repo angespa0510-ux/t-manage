@@ -77,7 +77,7 @@ export default function TherapistManagement() {
   const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null); const [deleting, setDeleting] = useState(false);
 
   const fetchTherapists = useCallback(async () => {
-    const { data } = await supabase.from("therapists").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("therapists").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
     if (data) setTherapists(data);
   }, []);
 
@@ -367,39 +367,34 @@ export default function TherapistManagement() {
             {therapists.length === 0 && <button onClick={() => setShowAdd(true)} className="mt-4 px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">+ セラピストを登録</button>}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-w-[1200px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
             {filtered.map((t, i) => {
               const st = statusMap[t.status] || statusMap.active;
               return (
-                <div key={t.id} className="rounded-2xl border p-4 transition-all duration-300 cursor-pointer" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={() => setDetailTarget(t)}>
-                  <div className="flex items-start gap-3 mb-3">
+                <div key={t.id} draggable onDragStart={(e) => { e.dataTransfer.setData("therapistId", String(t.id)); e.dataTransfer.setData("sortOrder", String(t.sort_order || i)); }} onDragOver={(e) => e.preventDefault()} onDrop={async (e) => { e.preventDefault(); const fromId = Number(e.dataTransfer.getData("therapistId")); if (fromId === t.id) return; const fromIdx = filtered.findIndex(x => x.id === fromId); const toIdx = filtered.findIndex(x => x.id === t.id); if (fromIdx < 0 || toIdx < 0) return; const reordered = [...filtered]; const [moved] = reordered.splice(fromIdx, 1); reordered.splice(toIdx, 0, moved); for (let j = 0; j < reordered.length; j++) { await supabase.from("therapists").update({ sort_order: j }).eq("id", reordered[j].id); } fetchTherapists(); }} className="rounded-xl border p-2.5 transition-all duration-200 cursor-grab active:cursor-grabbing hover:shadow-md" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={() => setDetailTarget(t)}>
+                  <div className="flex items-center gap-2 mb-1.5">
                     {t.photo_url ? (
-                      <img src={t.photo_url} alt={t.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+                      <img src={t.photo_url} alt={t.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                     ) : (
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-[16px] text-white font-medium flex-shrink-0" style={{ backgroundColor: colors[i % colors.length] }}>{t.name?.charAt(0)}</div>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium flex-shrink-0" style={{ backgroundColor: colors[i % colors.length] }}>{t.name?.charAt(0)}</div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2"><p className="text-[14px] font-medium truncate">{t.name}</p><span className="px-2 py-0.5 rounded-md text-[9px] font-medium flex-shrink-0" style={{ backgroundColor: st.bg, color: st.text }}>{st.label}</span></div>
-                      <p className="text-[11px]" style={{ color: T.textMuted }}>{t.phone || "電話番号なし"}</p>
-                      {t.email && <p className="text-[10px] flex items-center gap-1" style={{ color: T.textMuted }}>✉️ {t.email} {t.email_verified ? <span style={{ color: "#22c55e", fontSize: 8 }}>✅</span> : <span style={{ color: "#f59e0b", fontSize: 8 }}>⏳</span>}</p>}
+                      <div className="flex items-center gap-1"><p className="text-[11px] font-medium truncate">{t.name}</p><span className="px-1.5 py-0.5 rounded text-[7px] font-medium flex-shrink-0" style={{ backgroundColor: st.bg, color: st.text }}>{st.label}</span></div>
+                      <p className="text-[9px] truncate" style={{ color: T.textMuted }}>{t.phone || "電話番号なし"}</p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] mb-3" style={{ color: T.textSub }}>
+                  <div className="flex flex-wrap gap-x-2 text-[8px] mb-1" style={{ color: T.textSub }}>
                     {t.age > 0 && <span>{t.age}歳</span>}
-                    {getSalaryLabel(t) && <span style={{ color: "#c3a782" }}>{getSalaryLabel(t)}</span>}
-                    {t.interval_minutes > 0 && <span>インターバル{t.interval_minutes}分</span>}
+                    {t.interval_minutes > 0 && <span>{t.interval_minutes}分</span>}
                     {t.height_cm > 0 && <span>{t.height_cm}cm</span>}
-                    {(t.bust > 0 || t.waist > 0 || t.hip > 0) && <span>B{t.bust} W{t.waist} H{t.hip}</span>}
-                    {t.cup && <span>{t.cup}カップ</span>}
+                    {t.cup && <span>{t.cup}</span>}
                   </div>
-                  {t.notes && <p className="text-[10px] mb-2 truncate" style={{ color: T.textMuted }}>📝 {t.notes}</p>}
-                  <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px solid ${T.cardAlt}` }}>
-                    <p className="text-[10px]" style={{ color: T.textFaint }}>登録: {new Date(t.created_at).toLocaleDateString("ja-JP")}</p>
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      {t.email && !t.email_verified && <button onClick={() => sendConfirmEmail(t)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>📧 確認</button>}
-                      <button onClick={() => startEdit(t)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
-                      <button onClick={() => setDeleteTarget(t)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
+                  <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-1">
+                      <button onClick={() => startEdit(t)} className="px-2 py-1 text-[8px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
+                      <button onClick={() => setDeleteTarget(t)} className="px-2 py-1 text-[8px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                     </div>
+                    <span className="text-[7px]" style={{ color: T.textFaint }}>⋮⋮</span>
                   </div>
                 </div>
               );
