@@ -168,15 +168,17 @@ export default function StaffPage() {
   for (let h = 0; h <= 5; h++) { TIMES_15MIN.push(`${String(h).padStart(2, "0")}:00`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:15`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:30`); TIMES_15MIN.push(`${String(h).padStart(2, "0")}:45`); }
 
   // 深夜帯(0:00-5:00)のユニット数を計算
-  const calcNightUnits = (start: string, end: string) => {
+  const calcNightUnits = (start: string, end: string, nightStartTime: string = "00:00", nightEndTime: string = "05:00") => {
     const [sh, sm] = start.split(":").map(Number);
     const [eh, em] = end.split(":").map(Number);
     // 24時間に正規化（0-5は24-29として扱う）
     const sMin = (sh < 6 ? sh + 24 : sh) * 60 + sm;
     const eMin = (eh < 6 ? eh + 24 : eh) * 60 + em;
     // 深夜帯: 24:00(1440) ～ 29:00(1740)
-    const nightStart = 24 * 60;
-    const nightEnd = 29 * 60;
+    const [nsh, nsm] = nightStartTime.split(":").map(Number);
+    const [neh, nem] = nightEndTime.split(":").map(Number);
+    const nightStart = (nsh < 6 ? nsh + 24 : nsh) * 60 + nsm;
+    const nightEnd = (neh < 6 ? neh + 24 : neh) * 60 + nem;
     const overlapStart = Math.max(sMin, nightStart);
     const overlapEnd = Math.min(eMin, nightEnd);
     if (overlapStart >= overlapEnd) return 0;
@@ -195,12 +197,14 @@ export default function StaffPage() {
 
   const calcFullPayment = (start: string, end: string, staff: Staff | undefined, breakMin: number = 0) => {
     const units = calcUnits(start, end, breakMin);
-    const nightUnits = calcNightUnits(start, end);
+    const nightUnits = calcNightUnits(start, end, staff?.night_start_time || "00:00", staff?.night_end_time || "05:00");
     const biz = isBizCommission(staff?.company_position || "業務委託");
     const up = staff?.unit_price || 1200;
     const commission = biz ? Math.round(up * units) : 0;
-    const nightPremium = biz ? Math.round(100 * nightUnits) : 0;
-    const licensePremium = biz && staff?.has_license ? Math.round(50 * units) : 0;
+    const nightPrice = staff?.night_unit_price || 100;
+    const nightPremium = biz ? Math.round(nightPrice * nightUnits) : 0;
+    const licPrice = storeInfo?.license_unit_price || 50;
+    const licensePremium = biz && staff?.has_license ? Math.round(licPrice * units) : 0;
     const transport = staff?.transport_fee || 0;
     const total = commission + nightPremium + licensePremium + transport;
     return { units, nightUnits, commission, nightPremium, licensePremium, transport, total };
@@ -307,17 +311,28 @@ export default function StaffPage() {
     setShowMonthly(true);
   };
 
-  const openPaymentStatement = (sch: Schedule) => {
+const openPaymentStatement = (sch: Schedule) => {
     const staff = staffList.find(s => s.id === sch.staff_id); const store = storeInfo;
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払明細書</title><style>body{font-family:'Hiragino Sans','Yu Gothic',sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#333}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:8px 12px;font-size:13px}th{background:#f5f0e8;text-align:left;width:40%}.right{text-align:right}.total{font-size:16px;font-weight:bold;color:#c3a782}.header-info{display:flex;justify-content:space-between;margin-bottom:20px;font-size:12px}.company{text-align:right;font-size:11px;line-height:1.8}.sign{margin-top:50px;display:flex;justify-content:space-between}.sign-box{border-top:1px solid #333;width:200px;text-align:center;padding-top:5px;font-size:11px}@media print{body{margin:0;padding:20px}}</style></head><body>
-    <h1>支払明細書（業務委託費）</h1><div class="header-info"><div><p><strong>支払先：</strong>${staff?.name||""} 様</p><p><strong>業務実施日：</strong>${sch.date}</p><p><strong>業務内容：</strong>店舗管理・受付業務一式</p></div><div class="company"><p><strong>${store?.company_name||""}</strong></p><p>${store?.company_address||""}</p><p>TEL: ${store?.company_phone||""}</p>${store?.invoice_number?`<p>適格事業者番号: ${store.invoice_number}</p>`:""}</div></div>
+    const subtotal = sch.commission_fee + (sch.night_premium||0) + (sch.license_premium||0);
+    const hasInv = staff?.has_invoice || false;
+    const invDed = hasInv ? 0 : Math.round(subtotal * 0.1);
+    const adjusted = subtotal - invDed;
+    const hasWT = staff?.has_withholding || false;
+    const wtTax = hasWT ? Math.floor(adjusted * 0.1021) : 0;
+    const finalTotal = adjusted - wtTax + (sch.transport_fee||0);
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払明細書</title><style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#333}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:8px 12px;font-size:13px}th{background:#f5f0e8;text-align:left;width:35%}.right{text-align:right}.total{font-size:16px;font-weight:bold;color:#c3a782}.header-info{display:flex;justify-content:space-between;margin-bottom:20px;font-size:12px}.company{text-align:right;font-size:11px;line-height:1.8}.sign{margin-top:50px;display:flex;justify-content:space-between}.sign-box{border-top:1px solid #333;width:200px;text-align:center;padding-top:5px;font-size:11px}@media print{body{margin:0;padding:20px}}</style></head><body>
+    <h1>支払明細書（業務委託費）</h1>
+    <div class="header-info"><div><p><strong>支払先：</strong>${staff?.name||""} 様</p><p><strong>業務実施日：</strong>${sch.date}</p><p><strong>業務内容：</strong>店舗管理・受付業務一式</p></div><div class="company"><p><strong>${store?.company_name||""}</strong></p><p>${store?.company_address||""}</p><p>TEL: ${store?.company_phone||""}</p>${store?.invoice_number?`<p>適格事業者番号: ${store.invoice_number}</p>`:""}</div></div>
     <table><tr><th>項目</th><th class="right">金額</th><th>備考</th></tr>
-    <tr><td>業務委託費</td><td class="right">&yen;${sch.commission_fee.toLocaleString()}</td><td style="font-size:11px;color:#888">業務単価 &yen;${sch.unit_price.toLocaleString()} × ${sch.units}ユニット</td></tr>
-    ${(sch.night_premium||0)>0?`<tr><td>深夜手当</td><td class="right">&yen;${sch.night_premium.toLocaleString()}</td><td style="font-size:11px;color:#888">24:00〜5:00 +¥100/ユニット</td></tr>`:""}
-    ${(sch.license_premium||0)>0?`<tr><td>免許手当</td><td class="right">&yen;${sch.license_premium.toLocaleString()}</td><td style="font-size:11px;color:#888">+¥50/ユニット</td></tr>`:""}
-    ${sch.transport_fee>0?`<tr><td>交通費（非課税）</td><td class="right">&yen;${sch.transport_fee.toLocaleString()}</td><td style="font-size:11px;color:#888">実費精算</td></tr>`:""}
-    <tr style="background:#f9f6f0"><td><strong>合計支払額</strong></td><td class="right total">&yen;${sch.total_payment.toLocaleString()}</td><td></td></tr></table>
+    <tr><td>業務委託費（基本）</td><td class="right">&yen;${sch.commission_fee.toLocaleString()}</td><td style="font-size:11px;color:#888">業務単価 &yen;${sch.unit_price.toLocaleString()} × ${sch.units}ユニット</td></tr>
+    ${(sch.night_premium||0)>0?`<tr><td>深夜時間帯業務加算</td><td class="right">&yen;${sch.night_premium.toLocaleString()}</td><td style="font-size:11px;color:#888">${staff?.night_start_time||"00:00"}〜${staff?.night_end_time||"05:00"} +&yen;${staff?.night_unit_price||100}/ユニット</td></tr>`:""}
+    ${(sch.license_premium||0)>0?`<tr><td>免許資格業務加算</td><td class="right">&yen;${sch.license_premium.toLocaleString()}</td><td style="font-size:11px;color:#888">+&yen;${storeInfo?.license_unit_price||50}/ユニット</td></tr>`:""}
+    <tr style="background:#f9f6f0"><td><strong>小計（額面）</strong></td><td class="right"><strong>&yen;${subtotal.toLocaleString()}</strong></td><td></td></tr>
+    ${invDed>0?`<tr><td style="color:#c45555">インボイス未登録調整</td><td class="right" style="color:#c45555">-&yen;${invDed.toLocaleString()}</td><td style="font-size:11px;color:#888">小計の10%</td></tr>`:`<tr><td style="color:#22c55e">適格事業者登録あり</td><td class="right" style="color:#22c55e">控除なし</td><td style="font-size:11px;color:#888">${staff?.invoice_number||""}</td></tr>`}
+    ${hasWT?`<tr><td style="color:#c45555">源泉徴収税（10.21%）</td><td class="right" style="color:#c45555">-&yen;${wtTax.toLocaleString()}</td><td style="font-size:11px;color:#888">(&yen;${subtotal.toLocaleString()} - &yen;${invDed.toLocaleString()}) = &yen;${adjusted.toLocaleString()} × 10.21%</td></tr>`:`<tr><td>源泉徴収</td><td class="right">なし</td><td style="font-size:11px;color:#888">源泉徴収対象外</td></tr>`}
+    ${sch.transport_fee>0?`<tr><td>交通費（実費精算分）</td><td class="right">&yen;${sch.transport_fee.toLocaleString()}</td><td style="font-size:11px;color:#888">※源泉対象外</td></tr>`:""}
+    <tr style="background:#f9f6f0"><td><strong>合計支払額</strong></td><td class="right total">&yen;${finalTotal.toLocaleString()}</td><td></td></tr></table>
     <div class="sign"><div class="sign-box">支払者（${store?.company_name||""}）</div><div class="sign-box">受領者（${staff?.name||""} 様）</div></div></body></html>`);
     w.document.close();
   };
