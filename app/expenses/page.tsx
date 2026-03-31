@@ -5,10 +5,12 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { jsPDF } from "jspdf";
 
 type Expense = {
   id: number; date: string; category: string; name: string; amount: number;
   store_id: number; is_recurring: boolean; notes: string; type: string;
+  receipt_url: string; receipt_name: string; receipt_thumb_url: string;
 };
 type Store = { id: number; name: string };
 
@@ -58,6 +60,8 @@ export default function ExpensesPage() {
   const [editRecurring, setEditRecurring] = useState(false);
   const [editNotes, setEditNotes] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [addReceiptFile, setAddReceiptFile] = useState<File | null>(null);
+  const [editReceiptFile, setEditReceiptFile] = useState<File | null>(null);
   const [editMsg, setEditMsg] = useState("");
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
@@ -74,6 +78,35 @@ export default function ExpensesPage() {
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
 
+  const uploadReceipt = async (file: File, expenseId: number, meta: { date: string; category: string; name: string }): Promise<{ url: string; name: string; thumbUrl: string }> => {
+    const img = new Image();
+    const reader = new FileReader();
+    const dataUrl = await new Promise<string>((resolve) => { reader.onload = () => resolve(reader.result as string); reader.readAsDataURL(file); });
+    await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = dataUrl; });
+    const catLabel = CATEGORIES[meta.category]?.label || meta.category;
+    const headerH = 80;
+    const pW = Math.max(img.width, 600);
+    const pH = img.height + headerH;
+    const pdf = new jsPDF({ orientation: pW > pH ? "landscape" : "portrait", unit: "px", format: [pW, pH] });
+    pdf.setFontSize(18); pdf.setTextColor(60, 60, 60);
+    pdf.text(`${catLabel}`, 20, 30);
+    pdf.setFontSize(14); pdf.setTextColor(100, 100, 100);
+    pdf.text(`${meta.name}`, 20, 52);
+    pdf.setFontSize(11); pdf.setTextColor(150, 150, 150);
+    pdf.text(`日付: ${meta.date}`, 20, 70);
+    pdf.addImage(dataUrl, "JPEG", 0, headerH, img.width, img.height);
+    const pdfBlob = pdf.output("blob");
+    const ts = Date.now();
+    const pdfName = `receipt_${meta.date}_${expenseId}.pdf`;
+    const thumbName = `thumb_${meta.date}_${expenseId}.jpg`;
+    await supabase.storage.from("receipts").upload(pdfName, pdfBlob, { contentType: "application/pdf", upsert: true });
+    const thumbBlob = await new Promise<Blob>((resolve) => { const c = document.createElement("canvas"); const ctx = c.getContext("2d")!; const scale = 200 / Math.max(img.width, img.height); c.width = img.width * scale; c.height = img.height * scale; ctx.drawImage(img, 0, 0, c.width, c.height); c.toBlob(b => resolve(b!), "image/jpeg", 0.7); });
+    await supabase.storage.from("receipts").upload(thumbName, thumbBlob, { contentType: "image/jpeg", upsert: true });
+    const { data: pdfUrl } = supabase.storage.from("receipts").getPublicUrl(pdfName);
+    const { data: thumbUrl } = supabase.storage.from("receipts").getPublicUrl(thumbName);
+    return { url: pdfUrl.publicUrl, name: file.name, thumbUrl: thumbUrl.publicUrl };
+  };
+
   const handleAdd = async () => {
     if (!addName.trim() || !addAmount) { setMsg("名目と金額を入力してください"); return; }
     setSaving(true); setMsg("");
@@ -85,7 +118,11 @@ export default function ExpensesPage() {
     setSaving(false);
     if (error) { setMsg("登録失敗: " + error.message); }
     else {
-      setMsg("登録しました！"); setAddName(""); setAddAmount(""); setAddNotes(""); setAddRecurring(false);
+      setMsg("登録しました！"); if (addReceiptFile) {
+        const { data: latest } = await supabase.from("expenses").select("id").order("id", { ascending: false }).limit(1).single();
+        if (latest) { try { const r = await uploadReceipt(addReceiptFile, latest.id, { date: addDate, category: addType === "income" ? "income" : addCategory, name: addName.trim() }); await supabase.from("expenses").update({ receipt_url: r.url, receipt_name: `${addDate}_${addName.trim()}`, receipt_thumb_url: r.thumbUrl }).eq("id", latest.id); } catch (e) { console.error(e); } }
+      }
+      setAddName(""); setAddAmount(""); setAddNotes(""); setAddRecurring(false); setAddReceiptFile(null);
       fetchData(); setTimeout(() => { setShowAdd(false); setMsg(""); }, 600);
     }
   };
@@ -106,7 +143,8 @@ export default function ExpensesPage() {
     }).eq("id", editTarget.id);
     setEditSaving(false);
     if (error) { setEditMsg("更新失敗: " + error.message); }
-    else { setEditMsg("更新しました！"); fetchData(); setTimeout(() => { setEditTarget(null); setEditMsg(""); }, 600); }
+    else { setEditMsg("更新しました！"); if (editReceiptFile) { try { const r = await uploadReceipt(editReceiptFile, editTarget.id, { date: editDate, category: editType === "income" ? "income" : editCategory, name: editName.trim() }); await supabase.from("expenses").update({ receipt_url: r.url, receipt_name: `${editDate}_${editName.trim()}`, receipt_thumb_url: r.thumbUrl }).eq("id", editTarget.id); } catch (e) { console.error(e); } }
+      fetchData(); setTimeout(() => { setEditTarget(null); setEditMsg(""); }, 600); }
   };
 
   const handleDelete = async (id: number) => {
@@ -238,7 +276,7 @@ export default function ExpensesPage() {
                         </td>
                         <td className="py-2.5 px-3"><span className="text-[11px]">{cat.icon} {cat.label}</span></td>
                         <td className="py-2.5 px-3 font-medium">
-                          {e.name}
+                          {e.name}{e.receipt_url && <a href={e.receipt_url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>{e.receipt_thumb_url ? <img src={e.receipt_thumb_url} alt="レシート" className="inline-block rounded" style={{ width: 28, height: 28, objectFit: "cover" }} /> : "📄"}PDF</a>}
                           {e.is_recurring && <span className="ml-1 text-[8px] px-1 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>固定</span>}
                         </td>
                         <td className="py-2.5 px-3 font-medium" style={{ color: isIncome ? "#22c55e" : "#c45555" }}>
@@ -290,6 +328,7 @@ export default function ExpensesPage() {
                 <button onClick={() => setAddRecurring(!addRecurring)} className="px-3 py-1.5 rounded-xl text-[11px] cursor-pointer border" style={{ borderColor: addRecurring ? "#f59e0b" : T.border, backgroundColor: addRecurring ? "#f59e0b18" : "transparent", color: addRecurring ? "#f59e0b" : T.textMuted }}>{addRecurring ? "✅ 毎月固定" : "毎月固定"}</button>
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メモ</label><input type="text" value={addNotes} onChange={(e) => setAddNotes(e.target.value)} placeholder="メモ" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📸 レシート写真</label><input type="file" accept="image/*" capture="environment" onChange={(e) => setAddReceiptFile(e.target.files?.[0] || null)} className="w-full text-[11px]" style={{ color: T.textSub }} />{addReceiptFile && <p className="text-[10px] mt-1" style={{ color: "#22c55e" }}>✅ {addReceiptFile.name}</p>}</div>
               {msg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: msg.includes("失敗") || msg.includes("入力") ? "#c4988518" : "#7ab88f18", color: msg.includes("失敗") || msg.includes("入力") ? "#c49885" : "#5a9e6f" }}>{msg}</div>}
               <div className="flex gap-3 pt-2">
                 <button onClick={handleAdd} disabled={saving} className="px-6 py-2.5 text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60" style={{ backgroundColor: addType === "income" ? "#22c55e" : "#c3a782" }}>{saving ? "登録中..." : "登録する"}</button>
@@ -328,6 +367,7 @@ export default function ExpensesPage() {
                 <button onClick={() => setEditRecurring(!editRecurring)} className="px-3 py-1.5 rounded-xl text-[11px] cursor-pointer border" style={{ borderColor: editRecurring ? "#f59e0b" : T.border, backgroundColor: editRecurring ? "#f59e0b18" : "transparent", color: editRecurring ? "#f59e0b" : T.textMuted }}>{editRecurring ? "✅ 毎月固定" : "毎月固定"}</button>
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メモ</label><input type="text" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📸 レシート写真</label>{editTarget?.receipt_url && <a href={editTarget.receipt_url} target="_blank" rel="noreferrer" className="text-[10px] underline mb-1 block" style={{ color: "#85a8c4" }}>📄 現在のレシート: {editTarget.receipt_name || "PDF"}</a>}<input type="file" accept="image/*" capture="environment" onChange={(e) => setEditReceiptFile(e.target.files?.[0] || null)} className="w-full text-[11px]" style={{ color: T.textSub }} />{editReceiptFile && <p className="text-[10px] mt-1" style={{ color: "#22c55e" }}>✅ {editReceiptFile.name}（新しいレシート）</p>}</div>
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
               <div className="flex gap-3 pt-2">
                 <button onClick={handleUpdate} disabled={editSaving} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
