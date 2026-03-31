@@ -8,8 +8,8 @@ import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 
-type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number };
-type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string };
+type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean };
+type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
 type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number; break_minutes: number };
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
 
@@ -51,7 +51,18 @@ export default function StaffPage() {
   const [editSchedule, setEditSchedule] = useState<Schedule | null>(null);
   const [eschStart, setEschStart] = useState(""); const [eschEnd, setEschEnd] = useState(""); const [eschNotes, setEschNotes] = useState(""); const [eschStatus, setEschStatus] = useState("scheduled"); const [eschBreak, setEschBreak] = useState("0");
   const [addWithholding, setAddWithholding] = useState(false);
+  const [addNightStart, setAddNightStart] = useState("00:00");
+  const [addNightEnd, setAddNightEnd] = useState("05:00");
+  const [addNightPrice, setAddNightPrice] = useState("100");
+  const [addHasInvoice, setAddHasInvoice] = useState(false);
+  const [addInvoiceNum, setAddInvoiceNum] = useState("");
   const [editWithholding, setEditWithholding] = useState(false);
+  const [editNightStart, setEditNightStart] = useState("00:00");
+  const [editNightEnd, setEditNightEnd] = useState("05:00");
+  const [editNightPrice, setEditNightPrice] = useState("100");
+  const [editHasInvoice, setEditHasInvoice] = useState(false);
+  const [editInvoiceNum, setEditInvoiceNum] = useState("");
+  const [editInvoicePhoto, setEditInvoicePhoto] = useState<File | null>(null);
   const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
   const [payrollData, setPayrollData] = useState<{ type: string; id: number; name: string; address: string; total: number; tax: number }[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
@@ -213,14 +224,14 @@ export default function StaffPage() {
   // Staff CRUD
   const addStaffFn = async () => {
     if (!addName.trim()) return;
-    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, has_withholding: addWithholding, email_verified: false, email_token: crypto.randomUUID(), status: "active" });
+    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, has_withholding: addWithholding, night_start_time: addNightStart, night_end_time: addNightEnd, night_unit_price: parseInt(addNightPrice) || 100, has_invoice: addHasInvoice, invoice_number: addInvoiceNum.trim(), email_verified: false, email_token: crypto.randomUUID(), status: "active" });
     toast.show("スタッフを登録しました", "success");
     setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddPosition("業務委託"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false); setAddLicenseNum(""); setAddOiriBonus("0");
     fetchData();
   };
   const updateStaffFn = async () => {
     if (!editStaff) return;
-    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, has_withholding: editWithholding, ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
+    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, has_withholding: editWithholding, night_start_time: editNightStart, night_end_time: editNightEnd, night_unit_price: parseInt(editNightPrice) || 100, has_invoice: editHasInvoice, invoice_number: editInvoiceNum.trim(), ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
     toast.show("スタッフ情報を更新しました", "success"); setEditStaff(null); fetchData();
   };
   const deleteStaffFn = async (id: number, name: string) => { if (!confirm(`${name}を削除しますか？`)) return; await supabase.from("staff").delete().eq("id", id); toast.show("スタッフを削除しました", "info"); fetchData(); };
@@ -389,7 +400,7 @@ export default function StaffPage() {
                 </div>
                 <div className="flex gap-2">
                   {s.email && !s.email_verified && <button onClick={() => sendStaffConfirmEmail(s)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>📧 確認</button>}
-                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); setEditNightStart(s.night_start_time||"00:00"); setEditNightEnd(s.night_end_time||"05:00"); setEditNightPrice(String(s.night_unit_price||100)); setEditHasInvoice(!!s.has_invoice); setEditInvoiceNum(s.invoice_number||""); setEditInvoicePhoto(null); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                   <button onClick={() => deleteStaffFn(s.id, s.name)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
                 </div>
               </div>
@@ -624,6 +635,8 @@ export default function StaffPage() {
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={editOiriBonus} onChange={(e) => setEditOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🌙 深夜時間帯単価</label><div className="flex gap-2 items-center"><select value={editNightStart} onChange={(e) => setEditNightStart(e.target.value)} className="px-2 py-2 rounded-xl text-[11px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.filter(t => t >= "20:00" || t <= "06:00").map(t => <option key={t} value={t}>{t}</option>)}</select><span className="text-[10px]" style={{ color: T.textFaint }}>〜</span><select value={editNightEnd} onChange={(e) => setEditNightEnd(e.target.value)} className="px-2 py-2 rounded-xl text-[11px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.filter(t => t >= "00:00" && t <= "08:00").map(t => <option key={t} value={t}>{t}</option>)}</select><span className="text-[10px]" style={{ color: T.textFaint }}>+</span><input type="text" inputMode="numeric" value={editNightPrice} onChange={(e) => setEditNightPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-20 px-2 py-2 rounded-xl text-[11px] outline-none text-center" style={inputStyle} /><span className="text-[10px]" style={{ color: T.textFaint }}>円/u</span></div></div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>📋 適格事業者登録</label><button type="button" onClick={() => setEditHasInvoice(!editHasInvoice)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer mb-2" style={{ backgroundColor: editHasInvoice ? "#22c55e22" : "#88878022", color: editHasInvoice ? "#22c55e" : "#888780", border: `1px solid ${editHasInvoice ? "#22c55e44" : "#88878044"}` }}>{editHasInvoice ? "✅ 適格事業者登録あり" : "⬜ 適格事業者登録なし"}</button>{editHasInvoice && <div className="space-y-2"><input type="text" value={editInvoiceNum} onChange={(e) => setEditInvoiceNum(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2 rounded-xl text-[11px] outline-none" style={inputStyle} /><input type="file" accept="image/*" onChange={(e) => setEditInvoicePhoto(e.target.files?.[0] || null)} className="text-[10px]" style={{ color: T.textSub }} />{editStaff?.invoice_photo_url && <a href={editStaff.invoice_photo_url} target="_blank" rel="noreferrer" className="text-[10px] underline" style={{ color: "#85a8c4" }}>📄 現在の写真</a>}</div>}</div>
               {/* 身分証アップロード（表・裏） */}
               <div>
                 <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 身分証アップロード</label>
