@@ -40,7 +40,7 @@ export default function StaffPage() {
   const [editLicenseNum, setEditLicenseNum] = useState(""); const [editOiriBonus, setEditOiriBonus] = useState("0");
 
   // Company states
-  const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [licenseUnitPrice, setLicenseUnitPrice] = useState("50");
 
   // Schedule states
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -209,7 +209,7 @@ export default function StaffPage() {
   const fetchData = useCallback(async () => {
     const { data: s } = await supabase.from("staff").select("*").order("id"); if (s) setStaffList(s);
     const { data: st } = await supabase.from("stores").select("*").limit(1).single();
-    if (st) { setStoreInfo(st); setCompanyName(st.company_name || ""); setCompanyAddress(st.company_address || ""); setCompanyPhone(st.company_phone || ""); setInvoiceNumber(st.invoice_number || ""); }
+    if (st) { setStoreInfo(st); setCompanyName(st.company_name || ""); setCompanyAddress(st.company_address || ""); setCompanyPhone(st.company_phone || ""); setInvoiceNumber(st.invoice_number || ""); setLicenseUnitPrice(String(st.license_unit_price || 50)); }
     const { data: oi } = await supabase.from("oiri_settings").select("*").eq("is_active", true).limit(1).single();
     if (oi) { setOiriSettings(oi); setOiriSales(String(oi.sales_threshold)); setOiriCount(String(oi.count_threshold)); setOiriBonus(String(oi.bonus_amount)); }
   }, []);
@@ -263,7 +263,7 @@ export default function StaffPage() {
     toast.show("スタッフ情報を更新しました", "success"); setEditStaff(null); fetchData();
   };
   const deleteStaffFn = async (id: number, name: string) => { if (!confirm(`${name}を削除しますか？`)) return; await supabase.from("staff").delete().eq("id", id); toast.show("スタッフを削除しました", "info"); fetchData(); };
-  const saveCompany = async () => { if (!storeInfo) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim() }).eq("id", storeInfo.id); toast.show("会社情報を更新しました", "success"); fetchData(); };
+  const saveCompany = async () => { if (!storeInfo) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim(), license_unit_price: parseInt(licenseUnitPrice) || 50 }).eq("id", storeInfo.id); toast.show("会社情報を更新しました", "success"); fetchData(); };
   const saveOiri = async () => {
     const data = { sales_threshold: parseInt(oiriSales) || 0, count_threshold: parseInt(oiriCount) || 0, bonus_amount: parseInt(oiriBonus) || 1000 };
     if (oiriSettings) { await supabase.from("oiri_settings").update(data).eq("id", oiriSettings.id); }
@@ -581,6 +581,7 @@ export default function StaffPage() {
             </div>
             <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
             <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>適格事業者番号</label><input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🚗 免許資格単価（全スタッフ共通）</label><div className="flex items-center gap-2"><input type="text" inputMode="numeric" value={licenseUnitPrice} onChange={(e) => setLicenseUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-24 px-3 py-2.5 rounded-xl text-[12px] outline-none text-center" style={inputStyle} /><span className="text-[11px]" style={{ color: T.textMuted }}>円/ユニット（免許所持スタッフに加算）</span></div><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>デフォルト: ¥50/u</p></div>
             <button onClick={saveCompany} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
           </div>
         )}
