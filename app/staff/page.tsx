@@ -53,6 +53,7 @@ export default function StaffPage() {
   const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
   const [payrollData, setPayrollData] = useState<{ type: string; id: number; name: string; address: string; total: number; tax: number }[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
+  const [payrollFilter, setPayrollFilter] = useState("all");
 
   const fetchPayroll = async () => {
     setPayrollLoading(true);
@@ -61,8 +62,8 @@ export default function StaffPage() {
     const endDate = `${year}-12-31`;
 
     // セラピスト支払調書
-    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, withholding_tax").gte("date", startDate).lte("date", endDate);
-    const { data: therapists } = await supabase.from("therapists").select("id, name, address");
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
+    const { data: therapists } = await supabase.from("therapists").select("id, name");
     const thMap: Record<number, { name: string; address: string; total: number; tax: number }> = {};
     (settlements || []).forEach(s => {
       if (!thMap[s.therapist_id]) {
@@ -70,7 +71,7 @@ export default function StaffPage() {
         thMap[s.therapist_id] = { name: th?.name || "不明", address: th?.address || "", total: 0, tax: 0 };
       }
       thMap[s.therapist_id].total += s.total_back || 0;
-      thMap[s.therapist_id].tax += s.withholding_tax || 0;
+      thMap[s.therapist_id].tax += s.invoice_deduction || 0;
     });
 
     // 内勤スタッフ支払調書
@@ -488,8 +489,13 @@ export default function StaffPage() {
             </div>
             {payrollData.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[11px]" style={{ color: T.textMuted }}>{payrollYear}年 — {payrollData.length}名</p>
-                {payrollData.map((row, i) => (
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>{payrollYear}年 — {payrollData.length}名</p>
+                  {["all", "セラピスト", "内勤スタッフ"].map(f => (
+                    <button key={f} onClick={() => setPayrollFilter(f)} className="px-2.5 py-1 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: payrollFilter === f ? (f === "セラピスト" ? "#c3a78222" : f === "内勤スタッフ" ? "#85a8c422" : T.cardAlt) : T.cardAlt, color: payrollFilter === f ? (f === "セラピスト" ? "#c3a782" : f === "内勤スタッフ" ? "#85a8c4" : T.text) : T.textMuted, border: `1px solid ${payrollFilter === f ? (f === "セラピスト" ? "#c3a78244" : f === "内勤スタッフ" ? "#85a8c444" : T.border) : T.border}` }}>{f === "all" ? "全て" : f}</button>
+                  ))}
+                </div>
+                {payrollData.filter(r => payrollFilter === "all" || r.type === payrollFilter).map((row, i) => (
                   <div key={i} className="rounded-xl p-4 flex items-center justify-between" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                     <div>
                       <div className="flex items-center gap-2">

@@ -20,6 +20,11 @@ export default function TherapistManagement() {
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [storeInfo, setStoreInfo] = useState<{ company_name: string; company_address: string; company_phone: string; invoice_number: string } | null>(null);
+  const [showPayroll, setShowPayroll] = useState(false);
+  const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
+  const [payrollData, setPayrollData] = useState<{ id: number; name: string; address: string; total: number; tax: number }[]>([]);
+  const [payrollLoading, setPayrollLoading] = useState(false);
 
   // Add
   const [showAdd, setShowAdd] = useState(false);
@@ -58,7 +63,35 @@ export default function TherapistManagement() {
     if (data) setTherapists(data);
   }, []);
 
-  useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); }, [router, fetchTherapists]);
+  useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); const fetchStore = async () => { const { data } = await supabase.from("stores").select("company_name, company_address, company_phone, invoice_number"); if (data?.[0]) setStoreInfo(data[0]); }; fetchStore(); }, [router, fetchTherapists]);
+
+  const fetchPayroll = async () => {
+    setPayrollLoading(true);
+    const startDate = `${payrollYear}-01-01`;
+    const endDate = `${payrollYear}-12-31`;
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
+    const thMap: Record<number, { name: string; address: string; total: number; deduction: number }> = {};
+    (settlements || []).forEach(s => {
+      if (!thMap[s.therapist_id]) {
+        const th = therapists.find(t => t.id === s.therapist_id);
+        thMap[s.therapist_id] = { name: th?.name || "不明", address: "", total: 0, deduction: 0 };
+      }
+      thMap[s.therapist_id].total += s.total_back || 0;
+      thMap[s.therapist_id].deduction += s.invoice_deduction || 0;
+    });
+    const result = Object.entries(thMap).map(([id, d]) => ({ id: Number(id), name: d.name, address: d.address, total: d.total, tax: d.deduction }));
+    result.sort((a, b) => b.total - a.total);
+    setPayrollData(result);
+    setPayrollLoading(false);
+  };
+
+  const openPayrollPDF = (row: typeof payrollData[0]) => {
+    const store = storeInfo;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${payrollYear}_${row.name}</title><style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:22px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #ccc;padding:10px 14px;font-size:13px}th{background:#f5f0e8;text-align:left;width:40%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:15px}.section{margin-top:30px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}@media print{body{margin:0;padding:20px}}</style></head><body><h1>支払調書</h1><h2>${payrollYear}年1月1日 〜 ${payrollYear}年12月31日</h2><table><tr><th>支払先（氏名）</th><td>${row.name}</td></tr><tr><th>区分</th><td>セラピスト（業務委託）</td></tr></table><table><tr><th>項目</th><th class="right">金額</th></tr><tr><td>支払金額</td><td class="right">¥${row.total.toLocaleString()}</td></tr>${row.tax > 0 ? `<tr><td>源泉徴収税額</td><td class="right" style="color:#c45555">¥${row.tax.toLocaleString()}</td></tr>` : ""}<tr class="total-row"><td>差引支払額</td><td class="right">¥${(row.total - row.tax).toLocaleString()}</td></tr></table><div class="section"><p style="font-size:12px;color:#888">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格事業者番号: ${store.invoice_number}</p>` : ""}</div></div></body></html>`);
+    w.document.close();
+  };
 
   const uploadPhoto = async (file: File, therapistId: number): Promise<string> => {
     const ext = file.name.split(".").pop(); const fileName = `${therapistId}_${Date.now()}.${ext}`;
@@ -193,9 +226,45 @@ export default function TherapistManagement() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
+          <button onClick={() => setShowPayroll(!showPayroll)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📑 支払調書</button>
           <button onClick={() => { setShowAdd(true); setMsg(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 新規登録</button>
         </div>
       </div>
+
+      {showPayroll && (
+        <div className="mx-6 mt-4 rounded-2xl p-5" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+          <h2 className="text-[14px] font-medium mb-3">📑 セラピスト支払調書</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <select value={payrollYear} onChange={(e) => setPayrollYear(e.target.value)} className="px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>
+              {[...Array(5)].map((_, i) => { const y = new Date().getFullYear() - i; return <option key={y} value={String(y)}>{y}年</option>; })}
+            </select>
+            <button onClick={fetchPayroll} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">{payrollLoading ? "読込中..." : "生成する"}</button>
+            {payrollData.length > 0 && <button onClick={() => payrollData.forEach(r => openPayrollPDF(r))} className="px-3 py-1.5 border text-[10px] rounded-xl cursor-pointer" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📥 全員分表示</button>}
+          </div>
+          {payrollData.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px]" style={{ color: T.textMuted }}>{payrollYear}年 — {payrollData.length}名</p>
+              {payrollData.map((row, i) => (
+                <div key={i} className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: T.cardAlt }}>
+                  <div>
+                    <span className="text-[13px] font-medium">{row.name}</span>
+                    <div className="flex gap-4 mt-1">
+                      <span className="text-[11px]" style={{ color: T.textMuted }}>支払: <span style={{ color: T.text }}>¥{row.total.toLocaleString()}</span></span>
+                      {row.tax > 0 && <span className="text-[11px]" style={{ color: "#c45555" }}>源泉: ¥{row.tax.toLocaleString()}</span>}
+                      <span className="text-[11px] font-medium" style={{ color: "#22c55e" }}>差引: ¥{(row.total - row.tax).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => openPayrollPDF(row)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 表示</button>
+                </div>
+              ))}
+              <div className="rounded-xl p-3 mt-2" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="flex justify-between text-[12px] font-medium"><span>合計支払額</span><span>¥{payrollData.reduce((s, r) => s + r.total, 0).toLocaleString()}</span></div>
+                <div className="flex justify-between text-[11px] mt-1" style={{ color: "#c45555" }}><span>合計源泉徴収</span><span>¥{payrollData.reduce((s, r) => s + r.tax, 0).toLocaleString()}</span></div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search + Filter */}
       <div className="border-b px-6 py-3 flex items-center gap-4 flex-wrap" style={{ backgroundColor: T.card, borderColor: T.border }}>
