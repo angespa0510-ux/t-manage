@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 
@@ -76,9 +77,10 @@ export default function StaffPage() {
     const { data: staffScheds } = await supabase.from("staff_schedules").select("staff_id, total_payment").gte("date", startDate).lte("date", endDate).eq("status", "completed");
     const stMap: Record<number, { name: string; address: string; total: number }> = {};
     (staffScheds || []).forEach(s => {
+      const st = staffList.find(x => x.id === s.staff_id);
+      if (!st || !isBizCommission(st.company_position || "")) return;
       if (!stMap[s.staff_id]) {
-        const st = staffList.find(x => x.id === s.staff_id);
-        stMap[s.staff_id] = { name: st?.name || "不明", address: st?.address || "", total: 0 };
+        stMap[s.staff_id] = { name: st.name || "不明", address: st.address || "", total: 0 };
       }
       stMap[s.staff_id].total += s.total_payment || 0;
     });
@@ -93,55 +95,25 @@ export default function StaffPage() {
 
   const downloadPayrollPDF = (row: typeof payrollData[0]) => {
     const store = storeInfo;
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    pdf.setFontSize(20);
-    pdf.text("支払調書", 105, 25, { align: "center" });
-    pdf.setFontSize(10);
-    pdf.text(`${payrollYear}年1月1日 〜 ${payrollYear}年12月31日`, 105, 33, { align: "center" });
-
-    pdf.setFontSize(11);
-    pdf.text("支払先", 20, 50);
-    pdf.setFontSize(12);
-    pdf.text(row.name, 50, 50);
-    pdf.setFontSize(9);
-    if (row.address) pdf.text(row.address, 50, 57);
-    pdf.text(`区分: ${row.type}`, 50, row.address ? 64 : 57);
-
-    const startY = 80;
-    pdf.setFontSize(10);
-    pdf.setDrawColor(200);
-    pdf.setFillColor(245, 240, 232);
-    pdf.rect(20, startY, 170, 10, "FD");
-    pdf.text("項目", 25, startY + 7);
-    pdf.text("金額", 160, startY + 7, { align: "right" });
-
-    let y = startY + 15;
-    pdf.text("支払金額", 25, y);
-    pdf.text(`${row.total.toLocaleString()} 円`, 160, y, { align: "right" });
-    y += 10;
-    if (row.tax > 0) {
-      pdf.text("源泉徴収税額", 25, y);
-      pdf.text(`${row.tax.toLocaleString()} 円`, 160, y, { align: "right" });
-      y += 10;
-    }
-    pdf.setDrawColor(200);
-    pdf.line(20, y, 190, y);
-    y += 8;
-    pdf.setFontSize(12);
-    pdf.text("差引支払額", 25, y);
-    pdf.text(`${(row.total - row.tax).toLocaleString()} 円`, 160, y, { align: "right" });
-
-    y += 25;
-    pdf.setFontSize(9);
-    pdf.text("支払者", 20, y);
-    pdf.setFontSize(11);
-    pdf.text(store?.company_name || "", 50, y);
-    pdf.setFontSize(9);
-    pdf.text(store?.company_address || "", 50, y + 7);
-    pdf.text(`TEL: ${store?.company_phone || ""}`, 50, y + 14);
-    if (store?.invoice_number) pdf.text(`適格事業者番号: ${store.invoice_number}`, 50, y + 21);
-
-    pdf.save(`支払調書_${payrollYear}_${row.name}.pdf`);
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${payrollYear}_${row.name}</title><style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:22px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #ccc;padding:10px 14px;font-size:13px}th{background:#f5f0e8;text-align:left;width:40%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:15px}.section{margin-top:30px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}@media print{body{margin:0;padding:20px}}</style></head><body>
+    <h1>支払調書</h1>
+    <h2>${payrollYear}年1月1日 〜 ${payrollYear}年12月31日</h2>
+    <table>
+    <tr><th>支払先（氏名）</th><td>${row.name}</td></tr>
+    ${row.address ? `<tr><th>住所</th><td>${row.address}</td></tr>` : ""}
+    <tr><th>区分</th><td>${row.type}</td></tr>
+    </table>
+    <table>
+    <tr><th>項目</th><th class="right">金額</th></tr>
+    <tr><td>支払金額</td><td class="right">¥${row.total.toLocaleString()}</td></tr>
+    ${row.tax > 0 ? `<tr><td>源泉徴収税額</td><td class="right" style="color:#c45555">¥${row.tax.toLocaleString()}</td></tr>` : ""}
+    <tr class="total-row"><td>差引支払額</td><td class="right">¥${(row.total - row.tax).toLocaleString()}</td></tr>
+    </table>
+    <div class="section"><p style="font-size:12px;color:#888">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格事業者番号: ${store.invoice_number}</p>` : ""}</div></div>
+    </body></html>`);
+    w.document.close();
   };
 
   const downloadAllPayrollPDF = () => {
