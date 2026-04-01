@@ -28,7 +28,7 @@ export default function TherapistManagement() {
   const [storeInfo, setStoreInfo] = useState<{ company_name: string; company_address: string; company_phone: string; invoice_number: string } | null>(null);
   const [showPayroll, setShowPayroll] = useState(false);
   const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
-  const [payrollData, setPayrollData] = useState<{ id: number; name: string; address: string; total: number; tax: number; transport: number; days: number }[]>([]);
+  const [payrollData, setPayrollData] = useState<{ id: number; name: string; address: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; total: number; days: number }[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
 
   // Add
@@ -87,15 +87,15 @@ export default function TherapistManagement() {
     setPayrollLoading(true);
     const startDate = `${payrollYear}-01-01`;
     const endDate = `${payrollYear}-12-31`;
-    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax, adjustment, total_sales, total_cash, total_card, total_paypay").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
-    const thMap: Record<number, { name: string; address: string; gross: number; tax: number; transport: number; days: number }> = {};
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax, adjustment, final_payment, transport_fee, welfare_fee").gte("date", startDate).lte("date", endDate).eq("is_settled", true);
+    const thMap: Record<number, { name: string; address: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }> = {};
     (settlements || []).forEach(s => {
       if (!thMap[s.therapist_id]) {
         const th = therapists.find(t => t.id === s.therapist_id);
-        thMap[s.therapist_id] = { name: th?.name || "不明", address: th?.address || "", gross: 0, tax: 0, transport: 0, days: 0 };
+        thMap[s.therapist_id] = { name: th?.name || "不明", address: th?.address || "", gross: 0, invoiceDed: 0, tax: 0, welfare: 0, transport: 0, final: 0, days: 0 };
       }
       const th = therapists.find(t => t.id === s.therapist_id);
-      const transportFee = th?.transport_fee || 0;
+      const transportFee = s.transport_fee || th?.transport_fee || 0;
       const backAmt = (s.total_back || 0) + (s.adjustment || 0);
       const invDed = s.invoice_deduction || 0;
       const adjusted = backAmt - invDed + (s.adjustment || 0);
@@ -104,11 +104,14 @@ export default function TherapistManagement() {
         dayWT = Math.floor(Math.max(adjusted - 5000, 0) * 0.1021);
       }
       thMap[s.therapist_id].gross += backAmt;
+      thMap[s.therapist_id].invoiceDed += (s.invoice_deduction || 0);
       thMap[s.therapist_id].tax += dayWT;
+      thMap[s.therapist_id].welfare += (s.welfare_fee || 0);
+      thMap[s.therapist_id].final += (s.final_payment || 0);
       thMap[s.therapist_id].transport += transportFee;
       thMap[s.therapist_id].days += 1;
     });
-    const result = Object.entries(thMap).map(([id, d]) => ({ id: Number(id), name: d.name, address: d.address, total: d.gross, tax: d.tax, transport: d.transport, days: d.days }));
+    const result = Object.entries(thMap).map(([id, d]) => ({ id: Number(id), name: d.name, address: d.address, gross: d.gross, invoiceDed: d.invoiceDed, tax: d.tax, welfare: d.welfare, transport: d.transport, total: d.final, days: d.days }));
     result.sort((a, b) => b.total - a.total);
     setPayrollData(result);
     setPayrollLoading(false);
@@ -135,10 +138,13 @@ export default function TherapistManagement() {
     <table>
     <tr><th>項目</th><th class="right">金額</th><th>備考</th></tr>
     <tr><td>稼働日数</td><td class="right">${row.days}日</td><td style="font-size:11px;color:#888">年間清算回数</td></tr>
-    <tr><td>支払金額（税込）</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:11px;color:#888">年間バック合計（税込・源泉前）</td></tr>
-    ${row.transport > 0 ? `<tr><td>うち交通費（非課税）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:11px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日</td></tr>` : ""}
-    ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額（清算時控除済）</td><td class="right" style="color:#c45555">&yen;${row.tax.toLocaleString()}</td><td style="font-size:11px;color:#888">日次清算で差し引き済み</td></tr>` : `<tr><td>源泉徴収</td><td class="right">なし</td><td style="font-size:11px;color:#888">源泉徴収対象外</td></tr>`}
-    <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${(row.total - row.tax).toLocaleString()}</td><td></td></tr>
+    <tr><td><strong>業務委託報酬（税込）</strong></td><td class="right"><strong>&yen;${row.gross.toLocaleString()}</strong></td><td style="font-size:11px;color:#888">年間バック合計（税込・控除前）</td></tr>
+    ${row.invoiceDed > 0 ? `<tr><td style="color:#c45555">インボイス未登録控除</td><td class="right" style="color:#c45555">-&yen;${row.invoiceDed.toLocaleString()}</td><td style="font-size:11px;color:#888">報酬総額の10%（適格事業者未登録）</td></tr>
+    <tr style="background:#f9f6f0"><td>調整後の報酬額</td><td class="right">&yen;${(row.gross - row.invoiceDed).toLocaleString()}</td><td style="font-size:11px;color:#888">報酬 - インボイス控除</td></tr>` : ""}
+    ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税（10.21%）</td><td class="right" style="color:#c45555">-&yen;${row.tax.toLocaleString()}</td><td style="font-size:11px;color:#888">（調整後報酬 - &yen;5,000）× 10.21% の年間合計</td></tr>` : `<tr><td>源泉徴収</td><td class="right">なし</td><td style="font-size:11px;color:#888">源泉徴収対象外</td></tr>`}
+    ${row.welfare > 0 ? `<tr><td style="color:#c45555">厚生費</td><td class="right" style="color:#c45555">-&yen;${row.welfare.toLocaleString()}</td><td style="font-size:11px;color:#888">&yen;500/日 × ${row.days}日</td></tr>` : ""}
+    ${row.transport > 0 ? `<tr><td>交通費（非課税）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:11px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日</td></tr>` : ""}
+    <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:11px;color:#888">実際の年間支給額合計（100円切上後）</td></tr>
     </table>
     <p class="note">※ 支払金額は全て税込（内税方式）で記載しています。</p>
     <p class="note">※ 本書は所得税法第225条に基づく「報酬、料金、契約金及び賞金の支払調書」に準じて発行しています。</p>

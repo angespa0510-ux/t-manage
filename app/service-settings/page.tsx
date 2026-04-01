@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 
-type Nomination = { id: number; name: string; price: number };
+type Nomination = { id: number; name: string; price: number; therapist_back: number };
 type Discount = { id: number; name: string; amount: number; type: string };
 type Extension = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Option = { id: number; name: string; price: number; therapist_back: number };
@@ -62,7 +62,7 @@ export default function ServiceSettings() {
     setSaving(true); setMsg("");
     let error = null;
     if (tab === "nomination") {
-      ({ error } = await supabase.from("nominations").insert({ name: addName.trim(), price: parseInt(addPrice) || 0 }));
+      ({ error } = await supabase.from("nominations").insert({ name: addName.trim(), price: parseInt(addPrice) || 0, therapist_back: parseInt(addBack) || 0 }));
     } else if (tab === "discount") {
       ({ error } = await supabase.from("discounts").insert({ name: addName.trim(), amount: parseInt(addAmount) || 0, type: addDiscountType }));
     } else if (tab === "extension") {
@@ -79,7 +79,7 @@ export default function ServiceSettings() {
   const handleUpdate = async () => {
     if (!editId || !editName.trim()) return;
     if (tab === "nomination") {
-      await supabase.from("nominations").update({ name: editName.trim(), price: parseInt(editPrice) || 0 }).eq("id", editId);
+      await supabase.from("nominations").update({ name: editName.trim(), price: parseInt(editPrice) || 0, therapist_back: parseInt(editBack) || 0 }).eq("id", editId);
     } else if (tab === "discount") {
       await supabase.from("discounts").update({ name: editName.trim(), amount: parseInt(editAmount) || 0, type: editDiscountType }).eq("id", editId);
     } else if (tab === "extension") {
@@ -217,18 +217,22 @@ export default function ServiceSettings() {
               nominations.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>指名が登録されていません</p> : (
                 <table className="w-full text-[12px]">
                   <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["指名名", "料金", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                    {["指名名", "料金", "バック", "利益", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
                   </tr></thead>
                   <tbody>{nominations.map((n) => (
                     <tr key={n.id} style={{ borderBottom: `1px solid ${T.border}` }}>
                       {editId === n.id ? (<>
                         <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
                         <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editPrice} onChange={(e) => setEditPrice(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editBack} onChange={(e) => setEditBack(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                        <td></td>
                         <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
                       </>) : (<>
                         <td className="py-3 px-4 font-medium">{n.name}</td>
                         <td className="py-3 px-4" style={{ color: currentTab.color }}>{fmt(n.price)}</td>
-                        <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(n.id); setEditName(n.name); setEditPrice(String(n.price)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(n.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
+                        <td className="py-3 px-4" style={{ color: "#c3a782" }}>{fmt(n.therapist_back || 0)}</td>
+                        <td className="py-3 px-4" style={{ color: "#4a7c59" }}>{fmt(n.price - (n.therapist_back || 0))}</td>
+                        <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(n.id); setEditName(n.name); setEditPrice(String(n.price)); setEditBack(String(n.therapist_back || 0)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(n.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
                       </>)}
                     </tr>
                   ))}</tbody>
