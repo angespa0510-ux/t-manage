@@ -112,7 +112,7 @@ export default function TimeChart() {
   const [replenishTherapistId, setReplenishTherapistId] = useState(0);
   const [staffMembers, setStaffMembers] = useState<{ id: number; name: string; role: string }[]>([]); // ★追加: スタッフ一覧
 
-  const [nominations, setNominations] = useState<{ id: number; name: string; price: number; back_amount?: number }[]>([]);
+  const [nominations, setNominations] = useState<{ id: number; name: string; price: number; back_amount?: number; therapist_back?: number }[]>([]);
   const [options, setOptions] = useState<{ id: number; name: string; price: number }[]>([]);
   const [discounts, setDiscounts] = useState<{ id: number; name: string; amount: number; type: string }[]>([]);
   const [extensions, setExtensions] = useState<{ id: number; name: string; duration: number; price: number }[]>([]);
@@ -613,7 +613,8 @@ export default function TimeChart() {
         const salaryType = (settleTh as any).salary_type || "fixed";
         const salaryAmount = (settleTh as any).salary_amount || 0;
         const salaryBonus = salaryType === "percent" ? Math.round(totalBack * salaryAmount / 100) : salaryAmount * tRes.length;
-        const totalNom = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
+        const totalNomFee = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
+        const totalNom = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.therapist_back || (r as any).nomination_fee || 0); }, 0);
         const totalNomBack = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.back_amount || 0); }, 0);
         const welfareFee = 500;
         const transportFee = (settleTh as any).transport_fee || 0;
