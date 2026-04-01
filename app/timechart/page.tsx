@@ -105,6 +105,7 @@ export default function TimeChart() {
   const [showReplenish, setShowReplenish] = useState<number | null>(null);
   const [showDailySummary, setShowDailySummary] = useState(false);
   const [dailySettlements, setDailySettlements] = useState<{ therapist_id: number; sales_collected: boolean; change_collected: boolean; total_cash: number; total_back: number; room_id: number; safe_deposited: boolean }[]>([]);
+  const [settledIds, setSettledIds] = useState<Set<number>>(new Set());
   const [pastCollected, setPastCollected] = useState<{ date: string; total_cash: number; total_back: number; room_id: number; replenish: number; therapist_name: string }[]>([]);
   const [safeCollectedToday, setSafeCollectedToday] = useState<{ date: string; total_cash: number; total_back: number; room_id: number; replenish: number; therapist_name: string }[]>([]);
   const [replenishAmount, setReplenishAmount] = useState("");
@@ -180,6 +181,7 @@ export default function TimeChart() {
     const { data: ra } = await supabase.from("room_assignments").select("*").eq("date", selectedDate); if (ra) setRoomAssigns(ra);
     const { data: rep } = await supabase.from("room_cash_replenishments").select("*").eq("date", selectedDate); if (rep) setReplenishments(rep);
     const { data: exp } = await supabase.from("expenses").select("*").eq("date", selectedDate); if (exp) setDailyExpenses(exp);
+    const { data: settled } = await supabase.from("therapist_daily_settlements").select("therapist_id").eq("date", selectedDate).eq("is_settled", true); if (settled) setSettledIds(new Set(settled.map(s => s.therapist_id)));
     const { data: stf } = await supabase.from("staff").select("id,name,role").eq("status", "active").order("id"); if (stf) setStaffMembers(stf); // ★追加: スタッフ取得
   }, [selectedDate]);
 
@@ -309,7 +311,7 @@ export default function TimeChart() {
         ) : (
           <div className="flex" style={{ minWidth: totalWidth + 170 }}>
             {/* Names */}
-            <div className="w-[170px] flex-shrink-0 sticky left-0 z-20" style={{ backgroundColor: T.bg }}>
+            <div className="w-[200px] flex-shrink-0 sticky left-0 z-20" style={{ backgroundColor: T.bg }}>
               <div className="h-[40px] border-b border-r flex items-center px-3" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
                 <span className="text-[11px]" style={{ color: T.textSub }}>セラピスト</span>
               </div>
@@ -330,6 +332,7 @@ export default function TimeChart() {
                       </div>
                       {(t as any).notes && <div style={{ overflow: "hidden", maxWidth: 120 }}><span className="text-[6px] block" style={{ color: "#f59e0b", whiteSpace: "nowrap", animation: (t as any).notes.length > 12 ? `scrollLeft ${Math.max(3, (t as any).notes.length * 0.2)}s linear infinite` : "none" }}>📝{(t as any).notes}</span></div>}
                       {isCO && <span className="text-[7px]" style={{ color: "#c45555" }}>退勤済</span>}
+                      {settledIds.has(t.id) && <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`${t.name}の清算確定を取り消しますか？`)) return; await supabase.from("therapist_daily_settlements").delete().eq("therapist_id", t.id).eq("date", selectedDate); setSettledIds(prev => { const next = new Set(prev); next.delete(t.id); return next; }); toast.show("清算を取り消しました", "info"); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded font-bold cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>✓ 清算済</button>}
                     </div>
                     <div className="flex flex-col gap-0.5 flex-shrink-0">
                       <button onClick={() => toggleClockOut(t.id)} className="text-[7px] px-1 py-0.5 rounded cursor-pointer border"
@@ -752,7 +755,7 @@ ${adj !== 0 ? `<tr><td>調整金${settleAdjNote ? "（" + settleAdjNote + "）" 
 ${invoiceDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${invoiceDed.toLocaleString()}</td><td style="font-size:10px;color:#888">適格請求書発行事業者以外<br>報酬額の10%を控除</td></tr>
 <tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${adjustedPay.toLocaleString()}</td><td style="font-size:10px;color:#888">税金計算の基準額</td></tr>` : ""}
 ${(th as any)?.has_withholding ? `<tr><td style="color:#c45555">源泉徴収税（10.21%）</td><td class="right" style="color:#c45555">-&yen;${withholding.toLocaleString()}</td><td style="font-size:10px;color:#888">（&yen;${adjustedPay.toLocaleString()} − &yen;5,000）× 10.21%<br>所得税及び復興特別所得税</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
-<tr><td style="color:#c45555">福利厚生費</td><td class="right" style="color:#c45555">-&yen;${welfareFee.toLocaleString()}</td><td style="font-size:10px;color:#888">備品・リネン代等</td></tr>
+<tr><td style="color:#c45555">備品・リネン代</td><td class="right" style="color:#c45555">-&yen;${welfareFee.toLocaleString()}</td><td style="font-size:10px;color:#888">備品・リネン代等</td></tr>
 ${transportFee > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right" style="color:#22c55e">+&yen;${transportFee.toLocaleString()}</td><td style="font-size:10px;color:#888">源泉対象外</td></tr>` : ""}
 <tr class="total-row"><td>差引支給額（100円切上）</td><td class="right" style="color:#c3a782">&yen;${finalPay.toLocaleString()}</td><td style="font-size:10px;color:#888">実際にお渡しする金額</td></tr>
 </table>
