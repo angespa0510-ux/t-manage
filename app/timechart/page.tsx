@@ -619,17 +619,7 @@ export default function TimeChart() {
         const totalNomFee = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
         const totalNom = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.therapist_back || (r as any).nomination_fee || 0); }, 0);
         const totalNomBack = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.back_amount || 0); }, 0);
-        const welfareFee = (() => {
-          if (tRes.length === 0) return 0;
-          const base = (settleTh as any).welfare_fee ?? 500;
-          const ordTh = (settleTh as any).welfare_fee_orders_threshold || 0;
-          const ordAmt = (settleTh as any).welfare_fee_orders_amount || 0;
-          const payTh = (settleTh as any).welfare_fee_pay_threshold || 0;
-          const payAmt = (settleTh as any).welfare_fee_pay_amount || 0;
-          if (payTh > 0 && backTotal >= payTh) return payAmt;
-          if (ordTh > 0 && tRes.length >= ordTh) return ordAmt;
-          return base;
-        })();
+        
         const transportFee = (settleTh as any).transport_fee || 0;
         const totalOpt = tRes.reduce((s,r) => s + ((r as any).options_total || 0), 0);
         const totalOptBack = tRes.reduce((s,r) => { const optNames = ((r as any).options_text || "").split(",").filter((n: string) => n); return s + optNames.reduce((os: number, n: string) => { const o = options.find(x => x.name === n); return os + ((o as any)?.therapist_back || 0); }, 0); }, 0);
@@ -641,6 +631,17 @@ export default function TimeChart() {
         const totalCash = tRes.reduce((s,r) => s + ((r as any).cash_amount || 0), 0);
         const adj = parseInt(settleAdj) || 0;
         const backTotal = totalBack + salaryBonus + totalNom + totalOptBack + totalExtBack + adj;
+        const welfareFee = (() => {
+          if (tRes.length === 0) return 0;
+          const base = (settleTh as any).welfare_fee ?? 500;
+          const ordTh = (settleTh as any).welfare_fee_orders_threshold || 0;
+          const ordAmt = (settleTh as any).welfare_fee_orders_amount || 0;
+          const payTh = (settleTh as any).welfare_fee_pay_threshold || 0;
+          const payAmt = (settleTh as any).welfare_fee_pay_amount || 0;
+          if (payTh > 0 && backTotal >= payTh) return payAmt;
+          if (ordTh > 0 && tRes.length >= ordTh) return ordAmt;
+          return base;
+        })();
         const invoiceDed = settleInvoice ? 0 : Math.round(backTotal * 0.1);
         const adjustedPay = backTotal - invoiceDed;
         const hasWT = settleTh?.has_withholding || false;
