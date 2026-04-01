@@ -30,6 +30,7 @@ const RANKS: Record<string, { label: string; color: string; bg: string; desc: st
 
 const menuItems = [
   { label: "HOME", icon: "home", sub: [] },
+  { label: "営業締め", icon: "clipboard", sub: [] },
   { label: "顧客管理", icon: "users", sub: ["顧客一覧", "顧客登録"] },
   { label: "予約管理", icon: "calendar", sub: ["タイムチャート", "オーダー一覧", "SMS送信履歴一覧"] },
   { label: "勤怠管理", icon: "clock", sub: ["セラピスト勤怠", "スタッフ勤怠", "部屋割り管理"] },
@@ -73,6 +74,10 @@ export default function Dashboard() {
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [storesList, setStoresList] = useState<Store[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [closingDate, setClosingDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [closingData, setClosingData] = useState<any>(null);
+  const [closingLoading, setClosingLoading] = useState(false);
+  const [closingOpen, setClosingOpen] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRank, setFilterRank] = useState<string>("all");
 
@@ -99,6 +104,36 @@ export default function Dashboard() {
   const [vCourseId, setVCourseId] = useState(0); const [vNomination, setVNomination] = useState(""); const [vOptions, setVOptions] = useState("");
   const [vDiscount, setVDiscount] = useState("0"); const [vPayment, setVPayment] = useState(""); const [vNotes, setVNotes] = useState("");
   const [vSaving, setVSaving] = useState(false);
+
+  const fetchClosingReport = useCallback(async (date: string) => {
+    setClosingLoading(true);
+    const { data: res } = await supabase.from("reservations").select("*").eq("date", date);
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("*").eq("date", date).eq("is_settled", true);
+    const { data: exp } = await supabase.from("expenses").select("*").eq("date", date);
+    const { data: rooms } = await supabase.from("rooms").select("*, buildings(name)");
+    const completed = (res || []).filter(r => (r as any).status === "completed");
+    const orderCount = completed.length;
+    const honNom = completed.filter(r => (r as any).nomination === "本指名").length;
+    const pNom = completed.filter(r => (r as any).nomination === "P指名").length;
+    const totalSales = completed.reduce((s, r) => s + ((r as any).total_price || 0), 0);
+    const avgPrice = orderCount > 0 ? Math.round(totalSales / orderCount) : 0;
+    const totalCard = completed.reduce((s, r) => s + ((r as any).card_billing || 0), 0);
+    const totalPaypay = completed.reduce((s, r) => s + ((r as any).paypay_amount || 0), 0);
+    const cashSales = completed.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
+    const roomSummary = (settlements || []).map(s => {
+      const rm = (rooms || []).find(r => r.id === s.room_id);
+      const bldName = (rm as any)?.buildings?.name || "";
+      return { label: `${bldName}${rm?.name || ""}`, therapist_id: s.therapist_id, total_cash: s.total_cash || 0, total_back: s.total_back || 0, sales_collected: s.sales_collected, change_collected: s.change_collected, safe_deposited: s.safe_deposited, invoice_deduction: s.invoice_deduction || 0, withholding_tax: s.withholding_tax || 0, final_payment: s.final_payment || 0 };
+    });
+    const expenseList = (exp || []).filter(e => e.type !== "income");
+    const expenseTotal = expenseList.reduce((s, e) => s + (e.amount || 0), 0);
+    const totalInvoiceDed = (settlements || []).reduce((s, d) => s + (d.invoice_deduction || 0), 0);
+    const totalWithholding = (settlements || []).reduce((s, d) => s + (d.withholding_tax || 0), 0);
+    const totalFinalPay = (settlements || []).reduce((s, d) => s + (d.final_payment || 0), 0);
+    const netCash = cashSales - totalFinalPay - expenseTotal;
+    setClosingData({ orderCount, honNom, pNom, avgPrice, totalSales, totalCard, totalPaypay, cashSales, roomSummary, expenseList, expenseTotal, totalInvoiceDed, totalWithholding, totalFinalPay, netCash });
+    setClosingLoading(false);
+  }, []);
 
   const fetchCustomers = useCallback(async () => {
     const { data } = await supabase.from("customers").select("*").order("created_at", { ascending: false }); if (data) setCustomers(data);
@@ -346,8 +381,37 @@ export default function Dashboard() {
             </div>
           )}
 
+　　　　　　　　{activePage === "営業締め" && (
+            <div className="animate-[fadeIn_0.4s] max-w-[800px]">
+              <h2 className="text-[18px] font-medium mb-4">📋 営業締め報告書</h2>
+              <div className="flex items-center gap-3 mb-5">
+                <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} className="px-3 py-2 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
+                <button onClick={() => fetchClosingReport(closingDate)} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">{closingLoading ? "読込中..." : "📊 集計する"}</button>
+              </div>
+              {closingData && (
+                <div className="space-y-3">
+                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, order: !p.order}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.order ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">📦 オーダー概要</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.order ? "▲" : "▼"}</span></button>
+                    {closingOpen.order && <div className="px-4 py-3 space-y-1 text-[12px]"><div className="flex justify-between"><span style={{ color: T.textMuted }}>オーダー本数</span><span className="font-medium">{closingData.orderCount}件</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>本指名</span><span>{closingData.honNom}件</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>P指名</span><span>{closingData.pNom}件</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>客単価</span><span>¥{closingData.avgPrice.toLocaleString()}</span></div></div>}
+                  </div>
+                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, room: !p.room}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.room ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">🏠 ルーム別清算状況</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.room ? "▲" : "▼"}</span></button>
+                    {closingOpen.room && <div className="px-4 py-3 space-y-2 text-[11px]">{closingData.roomSummary.map((rm: any, i: number) => { const th2 = therapists.find(t => t.id === rm.therapist_id); return <div key={i} className="flex justify-between items-center rounded-lg px-3 py-2" style={{ backgroundColor: T.cardAlt }}><div><span className="font-medium">{rm.label}</span><span className="ml-2" style={{ color: T.textMuted }}>{th2?.name || ""}</span></div><div className="flex items-center gap-2"><span>¥{rm.total_cash.toLocaleString()}</span><span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: rm.sales_collected ? "#22c55e18" : "#f59e0b18", color: rm.sales_collected ? "#22c55e" : "#f59e0b" }}>{rm.sales_collected ? "回収済" : "未回収"}</span><span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: rm.safe_deposited ? "#22c55e18" : "#88878018", color: rm.safe_deposited ? "#22c55e" : "#888780" }}>{rm.safe_deposited ? "金庫済" : "未投入"}</span></div></div>; })}</div>}
+                  </div>
+                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, sales: !p.sales}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.sales ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">💰 売上内訳</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.sales ? "▲" : "▼"}</span></button>
+                    {closingOpen.sales && <div className="px-4 py-3 space-y-1 text-[12px]"><div className="flex justify-between"><span style={{ color: T.textMuted }}>現金売上</span><span>¥{closingData.cashSales.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>💳 カード売上</span><span>¥{closingData.totalCard.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>📱 PayPay売上</span><span>¥{closingData.totalPaypay.toLocaleString()}</span></div><div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}` }}><span>売上合計</span><span>¥{closingData.totalSales.toLocaleString()}</span></div></div>}
+                  </div>
+                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, expense: !p.expense}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.expense ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">📝 経費</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.expense ? "▲" : "▼"}</span></button>
+                    {closingOpen.expense && <div className="px-4 py-3 space-y-1 text-[12px]">{closingData.expenseList.length === 0 ? <p style={{ color: T.textFaint }}>経費なし</p> : closingData.expenseList.map((e: any, i: number) => (<div key={i} className="flex justify-between"><span style={{ color: T.textMuted }}>{e.name || e.category}</span><span style={{ color: "#c45555" }}>¥{e.amount.toLocaleString()}</span></div>))}<div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>経費合計</span><span>¥{closingData.expenseTotal.toLocaleString()}</span></div></div>}
+                  </div>
+                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, final: !p.final}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.final ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">💵 最終現金残</span><span className="text-[14px] font-bold" style={{ color: "#c3a782" }}>¥{closingData.netCash.toLocaleString()}</span></button>
+                    {closingOpen.final && <div className="px-4 py-3 space-y-1 text-[12px]"><div className="flex justify-between"><span style={{ color: T.textMuted }}>現金売上</span><span>¥{closingData.cashSales.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>セラピスト支給合計</span><span style={{ color: "#c45555" }}>-¥{closingData.totalFinalPay.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>経費合計</span><span style={{ color: "#c45555" }}>-¥{closingData.expenseTotal.toLocaleString()}</span></div><div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}` }}><span>最終現金残</span><span style={{ color: closingData.netCash >= 0 ? "#22c55e" : "#c45555" }}>¥{closingData.netCash.toLocaleString()}</span></div><div className="flex justify-between mt-2"><span style={{ color: T.textMuted }}>内インボイス控除額</span><span>¥{closingData.totalInvoiceDed.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>内源泉徴収額</span><span>¥{closingData.totalWithholding.toLocaleString()}</span></div></div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Other pages */}
-          {activePage !== "HOME" && activePage !== "顧客一覧" && activePage !== "顧客登録" && (
+          {activePage !== "HOME" && activePage !== "顧客一覧" && activePage !== "顧客登録" && activePage !== "営業締め" && (
             <div className="animate-[fadeIn_0.4s]">
               <div className="rounded-2xl border p-8" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="flex flex-col items-center justify-center py-20">

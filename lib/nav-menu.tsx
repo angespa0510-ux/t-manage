@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: "売上分析", path: "/analytics" },
   { label: "経費管理", path: "/expenses" },
   { label: "税務報告", path: "/tax-dashboard" },
+  { label: "営業締め", path: "DASHBOARD_PAGE:営業締め" },
   { label: "スタッフ設定", path: "/staff" },
   { label: "顧客一覧", path: "DASHBOARD_PAGE:顧客一覧" },
   { label: "顧客登録", path: "DASHBOARD_PAGE:顧客登録" },
