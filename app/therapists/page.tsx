@@ -125,30 +125,71 @@ export default function TherapistManagement() {
     const invoiceNum = (th as any)?.therapist_invoice_number || "";
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${payrollYear}_${realName}</title><style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:22px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #ccc;padding:10px 14px;font-size:13px}th{background:#f5f0e8;text-align:left;width:40%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:15px}.section{margin-top:30px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:10px;color:#888;margin-top:5px}@media print{body{margin:0;padding:20px}}</style></head><body>
-    <h1>支払調書</h1>
-    <h2>${payrollYear}年1月1日 〜 ${payrollYear}年12月31日</h2>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${payrollYear}_${realName}</title>
+    <style>
+      body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:750px;margin:40px auto;padding:30px;color:#333}
+      h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}
+      h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}
+      table{width:100%;border-collapse:collapse;margin:15px 0}
+      td,th{border:1px solid #ccc;padding:9px 14px;font-size:12px}
+      th{background:#f5f0e8;text-align:left;width:38%}
+      .right{text-align:right}
+      .total-row{background:#f9f6f0;font-weight:bold;font-size:14px}
+      .section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}
+      .company{font-size:11px;line-height:2;color:#555}
+      .note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}
+      .doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}
+      .stamp-area{display:flex;justify-content:space-between;margin-top:40px}
+      .stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:10px;color:#888}
+      @media print{body{margin:0;padding:20px}}
+    </style></head><body>
+    <p class="doc-title">報酬、料金、契約金及び賞金の支払調書</p>
+    <h1>支　払　調　書</h1>
+    <h2>対象期間：${payrollYear}年1月1日 〜 ${payrollYear}年12月31日</h2>
+
     <table>
-    <tr><th>支払先（氏名）</th><td>${realName}</td></tr>
-    <tr><th>源氏名</th><td>${row.name}</td></tr>
-    ${th?.address ? `<tr><th>住所</th><td>${th.address}</td></tr>` : ""}
-    <tr><th>区分</th><td>セラピスト（業務委託）</td></tr>
-    <tr><th>適格事業者</th><td>${hasInvoice ? `登録あり（${invoiceNum}）` : "未登録"}</td></tr>
+    <tr><th>支払を受ける者（氏名）</th><td>${realName}</td></tr>
+    ${realName !== row.name ? `<tr><th>業務上の名称</th><td>${row.name}</td></tr>` : ""}
+    <tr><th>支払を受ける者（住所）</th><td>${th?.address || '<span style="color:#c45555">※未登録（税務署提出時は必須）</span>'}</td></tr>
+    ${th?.birth_date ? `<tr><th>生年月日</th><td>${th.birth_date}</td></tr>` : ""}
+    <tr><th>区分</th><td>${th?.has_withholding ? "報酬（所得税法第204条第1項第6号）" : "報酬（所得税法第204条第1項第1号）"}</td></tr>
+    <tr><th>細目</th><td>${th?.has_withholding ? "ホステス等の業務に関する報酬" : "エステティック施術業務"}</td></tr>
+    <tr><th>適格請求書発行事業者</th><td>${hasInvoice ? `登録あり（登録番号：${invoiceNum}）` : "未登録"}</td></tr>
     </table>
+
     <table>
-    <tr><th>項目</th><th class="right">金額</th><th>備考</th></tr>
-    <tr><td>稼働日数</td><td class="right">${row.days}日</td><td style="font-size:11px;color:#888">年間清算回数</td></tr>
-    <tr><td><strong>業務委託報酬（税込）</strong></td><td class="right"><strong>&yen;${row.gross.toLocaleString()}</strong></td><td style="font-size:11px;color:#888">年間バック合計（税込・控除前）</td></tr>
-    ${row.invoiceDed > 0 ? `<tr><td style="color:#c45555">インボイス未登録控除</td><td class="right" style="color:#c45555">-&yen;${row.invoiceDed.toLocaleString()}</td><td style="font-size:11px;color:#888">報酬総額の10%（適格事業者未登録）</td></tr>
-    <tr style="background:#f9f6f0"><td>調整後の報酬額</td><td class="right">&yen;${(row.gross - row.invoiceDed).toLocaleString()}</td><td style="font-size:11px;color:#888">報酬 - インボイス控除</td></tr>` : ""}
-    ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税（10.21%）</td><td class="right" style="color:#c45555">-&yen;${row.tax.toLocaleString()}</td><td style="font-size:11px;color:#888">（調整後報酬 - &yen;5,000）× 10.21% の年間合計</td></tr>` : `<tr><td>源泉徴収</td><td class="right">なし</td><td style="font-size:11px;color:#888">源泉徴収対象外</td></tr>`}
-    ${row.welfare > 0 ? `<tr><td style="color:#c45555">厚生費</td><td class="right" style="color:#c45555">-&yen;${row.welfare.toLocaleString()}</td><td style="font-size:11px;color:#888">&yen;500/日 × ${row.days}日</td></tr>` : ""}
-    ${row.transport > 0 ? `<tr><td>交通費（非課税）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:11px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日</td></tr>` : ""}
-    <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:11px;color:#888">実際の年間支給額合計（100円切上後）</td></tr>
+    <tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
+    <tr><td>稼働日数</td><td class="right">${row.days}日</td><td style="font-size:10px;color:#888">年間清算回数</td></tr>
+    <tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${row.gross.toLocaleString()}</strong></td><td style="font-size:10px;color:#888">業務委託報酬の年間合計<br>（基本バック＋指名料＋延長＋オプション）</td></tr>
+    ${row.invoiceDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${row.invoiceDed.toLocaleString()}</td><td style="font-size:10px;color:#888">適格請求書発行事業者以外からの<br>課税仕入れにつき、報酬額の10%を控除</td></tr>
+    <tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(row.gross - row.invoiceDed).toLocaleString()}</td><td style="font-size:10px;color:#888">支払金額 − 仕入税額控除</td></tr>` : ""}
+    ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="right" style="color:#c45555">-&yen;${row.tax.toLocaleString()}</td><td style="font-size:10px;color:#888">所得税及び復興特別所得税<br>${th?.has_withholding ? "（控除後報酬 − ¥5,000/日）× 10.21%<br>第6号：同一人に対し1回の支払ごとに<br>¥5,000を控除した残額に課税" : "控除後報酬 × 10.21%<br>の日次合計"}</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
+    ${row.welfare > 0 ? `<tr><td style="color:#c45555">福利厚生費</td><td class="right" style="color:#c45555">-&yen;${row.welfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;500/日 × ${row.days}日<br>（備品・リネン代等）</td></tr>` : ""}
+    ${row.transport > 0 ? `<tr><td>交通費（非課税）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日<br>（実費精算・源泉対象外）</td></tr>` : ""}
+    <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:10px;color:#888">実際の年間支給額合計<br>（日次100円単位切上後）</td></tr>
     </table>
-    <p class="note">※ 支払金額は全て税込（内税方式）で記載しています。</p>
-    <p class="note">※ 本書は所得税法第225条に基づく「報酬、料金、契約金及び賞金の支払調書」に準じて発行しています。</p>
-    <div class="section"><p style="font-size:12px;color:#888">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格事業者番号: ${store.invoice_number}</p>` : ""}</div></div>
+
+    <div style="margin-top:15px">
+    <p class="note">※ 支払金額は全て税込（内税方式）で記載しています。消費税等の額についてはこの中に含まれます。</p>
+    <p class="note">※ 源泉徴収税額は、所得税法第204条第1項${th?.has_withholding ? "第6号" : "第1号"}に基づき、日次清算時に控除済みです。${th?.has_withholding ? "1回の支払につき¥5,000を控除した残額に対し10.21%を適用。" : ""}</p>
+    <p class="note">※ 本書は所得税法第225条第1項に基づく「報酬、料金、契約金及び賞金の支払調書」に準じて作成しています。</p>
+    ${row.invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、消費税法附則第52条・第53条に基づきます。</p>` : ""}
+    </div>
+
+    <div class="section">
+      <p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p>
+      <div class="company">
+        <p><strong>${store?.company_name || ""}</strong></p>
+        <p>${store?.company_address || ""}</p>
+        <p>TEL: ${store?.company_phone || ""}</p>
+        ${store?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${store.invoice_number}</p>` : ""}
+      </div>
+    </div>
+
+    <div class="stamp-area">
+      <div class="stamp-box">支払者（${store?.company_name || ""}）</div>
+      <div class="stamp-box">支払を受ける者（${realName} 様）</div>
+    </div>
     </body></html>`);
     w.document.close();
   };
