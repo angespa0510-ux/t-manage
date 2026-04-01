@@ -52,6 +52,11 @@ export default function TherapistManagement() {
   const [editHeight, setEditHeight] = useState(""); const [editBust, setEditBust] = useState(""); const [editWaist, setEditWaist] = useState(""); const [editHip, setEditHip] = useState(""); const [editCup, setEditCup] = useState("");
   const [editPhotoW, setEditPhotoW] = useState("400"); const [editPhotoH, setEditPhotoH] = useState("600");
   const [editWithholding, setEditWithholding] = useState(false);
+  const [editWelfareFee, setEditWelfareFee] = useState("500");
+  const [editWelfareOrdersThreshold, setEditWelfareOrdersThreshold] = useState("0");
+  const [editWelfareOrdersAmount, setEditWelfareOrdersAmount] = useState("0");
+  const [editWelfarePayThreshold, setEditWelfarePayThreshold] = useState("0");
+  const [editWelfarePayAmount, setEditWelfarePayAmount] = useState("0");
   const [editTab, setEditTab] = useState<"basic" | "personal">("basic");
   const [editPinInput, setEditPinInput] = useState("");
   const [editPinAuthed, setEditPinAuthed] = useState(false);
@@ -164,8 +169,8 @@ export default function TherapistManagement() {
     ${row.invoiceDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${row.invoiceDed.toLocaleString()}</td><td style="font-size:10px;color:#888">適格請求書発行事業者以外からの<br>課税仕入れにつき、報酬額の10%を控除</td></tr>
     <tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(row.gross - row.invoiceDed).toLocaleString()}</td><td style="font-size:10px;color:#888">支払金額 − 仕入税額控除</td></tr>` : ""}
     ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="right" style="color:#c45555">-&yen;${row.tax.toLocaleString()}</td><td style="font-size:10px;color:#888">所得税及び復興特別所得税<br>${th?.has_withholding ? "（控除後報酬 − ¥5,000/日）× 10.21%<br>第6号：同一人に対し1回の支払ごとに<br>¥5,000を控除した残額に課税" : "控除後報酬 × 10.21%<br>の日次合計"}</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
-    ${row.welfare > 0 ? `<tr><td style="color:#c45555">福利厚生費</td><td class="right" style="color:#c45555">-&yen;${row.welfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;500/日 × ${row.days}日<br>（備品・リネン代等）</td></tr>` : ""}
-    ${row.transport > 0 ? `<tr><td>交通費（非課税）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日<br>（実費精算・源泉対象外）</td></tr>` : ""}
+    ${row.welfare > 0 ? `<tr><td style="color:#c45555">備品・リネン代</td><td class="right" style="color:#c45555">-&yen;${row.welfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;500/日 × ${row.days}日<br>（備品・リネン代等）</td></tr>` : ""}
+    ${row.transport > 0 ? `<tr><td>交通費（実費精算分）（実費精算分）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日<br>（実費精算・源泉対象外）</td></tr>` : ""}
     <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:10px;color:#888">実際の年間支給額合計<br>（日次100円単位切上後）</td></tr>
     </table>
 
@@ -238,6 +243,11 @@ export default function TherapistManagement() {
     setEditInvoicePhoto(null); setEditLicensePhoto(null); setEditLicensePhotoBack(null);
     setEditBirthDate(t.birth_date || "");
     setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditMsg("");
+    setEditWelfareFee(String((t as any).welfare_fee ?? 500));
+    setEditWelfareOrdersThreshold(String((t as any).welfare_fee_orders_threshold || 0));
+    setEditWelfareOrdersAmount(String((t as any).welfare_fee_orders_amount || 0));
+    setEditWelfarePayThreshold(String((t as any).welfare_fee_pay_threshold || 0));
+    setEditWelfarePayAmount(String((t as any).welfare_fee_pay_amount || 0));
   };
 
   const handleUpdate = async () => {
@@ -256,6 +266,11 @@ export default function TherapistManagement() {
       real_name: editRealName.trim(), address: editAddress.trim(), birth_date: editBirthDate,
       has_invoice: editHasInvoice, therapist_invoice_number: editInvoiceNum.trim(),
       email: editEmail.trim(),
+      welfare_fee: parseInt(editWelfareFee) || 500,
+      welfare_fee_orders_threshold: parseInt(editWelfareOrdersThreshold) || 0,
+      welfare_fee_orders_amount: parseInt(editWelfareOrdersAmount) || 0,
+      welfare_fee_pay_threshold: parseInt(editWelfarePayThreshold) || 0,
+      welfare_fee_pay_amount: parseInt(editWelfarePayAmount) || 0,
       ...(editEmail.trim() !== (editTarget.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}),
     }).eq("id", editTarget.id);
     setEditSaving(false);
@@ -475,7 +490,7 @@ export default function TherapistManagement() {
                 {getSalaryLabel(detailTarget) && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>給料ランク</span><span className="font-medium" style={{ color: "#c3a782" }}>{getSalaryLabel(detailTarget)}</span></div>}
                 {detailTarget.age > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>年齢</span><span>{detailTarget.age}歳</span></div>}
                 {detailTarget.interval_minutes > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>インターバル</span><span>{detailTarget.interval_minutes}分</span></div>}
-                {detailTarget.transport_fee > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>交通費</span><span>¥{detailTarget.transport_fee.toLocaleString()}</span></div>}
+                {detailTarget.transport_fee > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>交通費（実費精算分）</span><span>¥{detailTarget.transport_fee.toLocaleString()}</span></div>}
                 {detailTarget.height_cm > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>身長</span><span>{detailTarget.height_cm}cm</span></div>}
                 {(detailTarget.bust > 0 || detailTarget.waist > 0 || detailTarget.hip > 0) && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>スリーサイズ</span><span>B{detailTarget.bust} W{detailTarget.waist} H{detailTarget.hip}</span></div>}
                 {detailTarget.cup && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>カップ</span><span>{detailTarget.cup}カップ</span></div>}
@@ -511,7 +526,7 @@ export default function TherapistManagement() {
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>年齢</label><input type="text" inputMode="numeric" value={addAge} onChange={(e) => setAddAge(e.target.value.replace(/[^0-9]/g, ""))} placeholder="25" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>インターバル</label><select value={addInterval} onChange={(e) => setAddInterval(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{INTERVALS.map((m) => <option key={m} value={m}>{m}分</option>)}</select></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費</label><select value={addTransport} onChange={(e) => setAddTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費（実費精算分）</label><select value={addTransport} onChange={(e) => setAddTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>身長</label><input type="text" inputMode="numeric" value={addHeight} onChange={(e) => setAddHeight(e.target.value.replace(/[^0-9]/g, ""))} placeholder="160" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div className="grid grid-cols-4 gap-3">
@@ -557,7 +572,7 @@ export default function TherapistManagement() {
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>年齢</label><input type="text" inputMode="numeric" value={editAge} onChange={(e) => setEditAge(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>インターバル</label><select value={editInterval} onChange={(e) => setEditInterval(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{INTERVALS.map((m) => <option key={m} value={m}>{m}分</option>)}</select></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>交通費（実費精算分）</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option><option value="2500">¥2,500</option><option value="3000">¥3,000</option></select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>身長</label><input type="text" inputMode="numeric" value={editHeight} onChange={(e) => setEditHeight(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
@@ -567,6 +582,27 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ウエスト</label><input type="text" inputMode="numeric" value={editWaist} onChange={(e) => setEditWaist(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ヒップ</label><input type="text" inputMode="numeric" value={editHip} onChange={(e) => setEditHip(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>カップ</label><select value={editCup} onChange={(e) => setEditCup(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{CUPS.map((c) => <option key={c} value={c}>{c || "—"}</option>)}</select></div>
+              </div>
+              <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>🧹 備品・リネン代</p>
+                <div className="space-y-2">
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>基本金額（1本以上で適用）</label><input type="text" inputMode="numeric" value={editWelfareFee} onChange={(e) => setEditWelfareFee(e.target.value.replace(/[^0-9]/g, ""))} placeholder="500" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                  <div className="rounded-lg p-2.5" style={{ backgroundColor: dark ? "#ffffff06" : "#00000006" }}>
+                    <p className="text-[9px] font-medium mb-1.5" style={{ color: "#f59e0b" }}>条件① 本数が一定以上の場合</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><label className="block text-[8px] mb-0.5" style={{ color: T.textFaint }}>○本以上</label><input type="text" inputMode="numeric" value={editWelfareOrdersThreshold} onChange={(e) => setEditWelfareOrdersThreshold(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-2 py-1.5 rounded-lg text-[11px] outline-none" style={inputStyle} /></div>
+                      <div><label className="block text-[8px] mb-0.5" style={{ color: T.textFaint }}>→ 金額</label><input type="text" inputMode="numeric" value={editWelfareOrdersAmount} onChange={(e) => setEditWelfareOrdersAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-2 py-1.5 rounded-lg text-[11px] outline-none" style={inputStyle} /></div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg p-2.5" style={{ backgroundColor: dark ? "#ffffff06" : "#00000006" }}>
+                    <p className="text-[9px] font-medium mb-1.5" style={{ color: "#a855f7" }}>条件② 給料が一定以上の場合（優先）</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><label className="block text-[8px] mb-0.5" style={{ color: T.textFaint }}>¥○以上</label><input type="text" inputMode="numeric" value={editWelfarePayThreshold} onChange={(e) => setEditWelfarePayThreshold(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-2 py-1.5 rounded-lg text-[11px] outline-none" style={inputStyle} /></div>
+                      <div><label className="block text-[8px] mb-0.5" style={{ color: T.textFaint }}>→ 金額</label><input type="text" inputMode="numeric" value={editWelfarePayAmount} onChange={(e) => setEditWelfarePayAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-2 py-1.5 rounded-lg text-[11px] outline-none" style={inputStyle} /></div>
+                    </div>
+                  </div>
+                  <p className="text-[8px]" style={{ color: T.textFaint }}>※ 条件②（給料）→ 条件①（本数）→ 基本金額 の優先順で判定</p>
+                </div>
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📝 備考・メモ</label><textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="セラピストの備考を入力" rows={2} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} /></div>
               <PhotoField preview={editPhotoPreview} fileRef={editFileRef} onFileChange={(f) => handleFileChange(f, true)} width={editPhotoW} height={editPhotoH} onWidthChange={setEditPhotoW} onHeightChange={setEditPhotoH} />

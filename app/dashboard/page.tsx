@@ -77,7 +77,6 @@ export default function Dashboard() {
   const [closingDate, setClosingDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [closingData, setClosingData] = useState<any>(null);
   const [closingLoading, setClosingLoading] = useState(false);
-  const [closingOpen, setClosingOpen] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRank, setFilterRank] = useState<string>("all");
 
@@ -108,32 +107,100 @@ export default function Dashboard() {
   const fetchClosingReport = useCallback(async (date: string) => {
     setClosingLoading(true);
     const { data: res } = await supabase.from("reservations").select("*").eq("date", date);
-    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("*").eq("date", date).eq("is_settled", true);
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("*").eq("date", date);
     const { data: exp } = await supabase.from("expenses").select("*").eq("date", date);
     const { data: rooms } = await supabase.from("rooms").select("*, buildings(name)");
-    const completed = (res || []).filter(r => (r as any).status === "completed");
-    const orderCount = completed.length;
-    const honNom = completed.filter(r => (r as any).nomination === "本指名").length;
-    const pNom = completed.filter(r => (r as any).nomination === "P指名").length;
+    const { data: repData } = await supabase.from("room_cash_replenishments").select("*").eq("date", date);
+    const { data: crs } = await supabase.from("courses").select("*");
+    const { data: ra } = await supabase.from("room_assignments").select("*").eq("date", date);
+    const { data: thList } = await supabase.from("therapists").select("id,name");
+    const allRes = res || [];
+    const completed = allRes.filter(r => (r as any).status === "completed");
+    const getCourseByName = (name: string) => (crs || []).find((c: any) => c.name === name);
+    const getThName = (id: number) => (thList || []).find((t: any) => t.id === id)?.name || "不明";
+    // 売上サマリー
     const totalSales = completed.reduce((s, r) => s + ((r as any).total_price || 0), 0);
-    const avgPrice = orderCount > 0 ? Math.round(totalSales / orderCount) : 0;
+    // 売上内訳
+    const totalNom = completed.reduce((s, r) => s + ((r as any).nomination_fee || 0), 0);
+    const totalOpt = completed.reduce((s, r) => s + ((r as any).options_total || 0), 0);
+    const totalExt = completed.reduce((s, r) => s + ((r as any).extension_price || 0), 0);
+    const totalDisc = completed.reduce((s, r) => s + ((r as any).discount_amount || 0), 0);
+    // 支払い方法別
     const totalCard = completed.reduce((s, r) => s + ((r as any).card_billing || 0), 0);
     const totalPaypay = completed.reduce((s, r) => s + ((r as any).paypay_amount || 0), 0);
-    const cashSales = completed.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
-    const roomSummary = (settlements || []).map(s => {
-      const rm = (rooms || []).find(r => r.id === s.room_id);
+    const totalCashSales = completed.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
+    // セラピスト支払い
+    const totalBack = completed.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
+    // 釣銭補充（明細付き）
+    const replenishList = (repData || []).map((r: any) => {
+      const rm = (rooms || []).find((x: any) => x.id === r.room_id);
       const bldName = (rm as any)?.buildings?.name || "";
-      return { label: `${bldName}${rm?.name || ""}`, therapist_id: s.therapist_id, total_cash: s.total_cash || 0, total_back: s.total_back || 0, sales_collected: s.sales_collected, change_collected: s.change_collected, safe_deposited: s.safe_deposited, invoice_deduction: s.invoice_deduction || 0, withholding_tax: s.withholding_tax || 0, final_payment: s.final_payment || 0 };
+      const thName = r.therapist_id ? getThName(r.therapist_id) : "";
+      return { id: r.id, room: `${bldName}${rm?.name || ""}`, therapist: thName, staff: r.staff_name || "", amount: r.amount || 0, time: r.created_at ? new Date(r.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "" };
     });
-    const expenseList = (exp || []).filter(e => e.type !== "income");
-    const expenseTotal = expenseList.reduce((s, e) => s + (e.amount || 0), 0);
-    const totalInvoiceDed = (settlements || []).reduce((s, d) => s + (d.invoice_deduction || 0), 0);
-    const totalWithholding = (settlements || []).reduce((s, d) => s + (d.withholding_tax || 0), 0);
-    const totalFinalPay = (settlements || []).reduce((s, d) => s + (d.final_payment || 0), 0);
-    const netCash = cashSales - totalFinalPay - expenseTotal;
-    setClosingData({ orderCount, honNom, pNom, avgPrice, totalSales, totalCard, totalPaypay, cashSales, roomSummary, expenseList, expenseTotal, totalInvoiceDed, totalWithholding, totalFinalPay, netCash });
+    const totalReplenish = replenishList.reduce((s: number, r: any) => s + r.amount, 0);
+    // 経費・入金
+    const expenseList = (exp || []).filter((e: any) => e.type === "expense");
+    const expenseTotal = expenseList.reduce((s: number, e: any) => s + (e.amount || 0), 0);
+    const incomeList = (exp || []).filter((e: any) => e.type === "income");
+    const incomeTotal = incomeList.reduce((s: number, e: any) => s + (e.amount || 0), 0);
+    // 本日の収支
+    const netProfit = totalSales - totalBack - expenseTotal + incomeTotal;
+    // 現金確認シート
+    const settledList = settlements || [];
+    const therapistData = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
+      const tRes = completed.filter(r => r.therapist_id === tid);
+      const tCash = tRes.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
+      const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
+      const assign = (ra || []).find((a: any) => a.therapist_id === tid);
+      const rm = assign ? (rooms || []).find((r: any) => r.id === assign.room_id) : null;
+      const bldName = (rm as any)?.buildings?.name || "";
+      const ds = settledList.find((s: any) => s.therapist_id === tid);
+      return { id: tid, name: getThName(tid), room: `${bldName}${rm?.name || ""}`, cash: tCash, back: tBack, net: tCash - tBack, salesCollected: !!ds?.sales_collected, safeDeposited: !!ds?.safe_deposited };
+    });
+    const totalOut = totalReplenish + totalBack + expenseTotal;
+    const staffCollectedAmt = therapistData.filter(t => t.salesCollected && !t.safeDeposited).reduce((s, t) => s + t.net, 0);
+    const safeDepositedAmt = therapistData.filter(t => t.salesCollected && t.safeDeposited).reduce((s, t) => s + t.net, 0);
+    const totalUncollected = therapistData.filter(t => !t.salesCollected).reduce((s, t) => s + t.net, 0);
+    const cashOnHand = -totalReplenish - totalBack - expenseTotal + incomeTotal + staffCollectedAmt;
+    // セラピスト別売上
+    const therapistSales = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
+      const tRes = completed.filter(r => r.therapist_id === tid);
+      const tSales = tRes.reduce((s, r) => s + ((r as any).total_price || 0), 0);
+      const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
+      return { name: getThName(tid), count: tRes.length, sales: tSales, back: tBack };
+    });
+    setClosingData({
+      resCount: allRes.length, compCount: completed.length, totalSales,
+      totalNom, totalOpt, totalExt, totalDisc,
+      totalCard, totalPaypay, totalCashSales,
+      totalBack, totalReplenish, replenishList,
+      expenseList, expenseTotal, incomeList, incomeTotal,
+      netProfit, therapistData, totalOut,
+      staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
+      therapistSales
+    });
     setClosingLoading(false);
   }, []);
+
+  // Auto-fetch closing report when date changes or page becomes active
+  useEffect(() => {
+    if (activePage === "営業締め") {
+      fetchClosingReport(closingDate);
+    }
+  }, [closingDate, activePage, fetchClosingReport]);
+
+  const shiftClosingDate = (days: number) => {
+    const d = new Date(closingDate + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    setClosingDate(d.toISOString().split("T")[0]);
+  };
+
+  const formatClosingDateLabel = (dateStr: string) => {
+    const d = new Date(dateStr + "T00:00:00");
+    const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}（${dayNames[d.getDay()]}）`;
+  };
 
   const fetchCustomers = useCallback(async () => {
     const { data } = await supabase.from("customers").select("*").order("created_at", { ascending: false }); if (data) setCustomers(data);
@@ -381,30 +448,142 @@ export default function Dashboard() {
             </div>
           )}
 
-　　　　　　　　{activePage === "営業締め" && (
+          {/* 営業締め */}
+          {activePage === "営業締め" && (
             <div className="animate-[fadeIn_0.4s] max-w-[800px]">
-              <h2 className="text-[18px] font-medium mb-4">📋 営業締め報告書</h2>
-              <div className="flex items-center gap-3 mb-5">
+              <h2 className="text-[18px] font-medium mb-4">📊 日次集計</h2>
+              <div className="flex items-center gap-2 mb-6">
+                <button onClick={() => shiftClosingDate(-1)} className="px-3 py-2 rounded-xl text-[12px] cursor-pointer border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub }}>◀ 前日</button>
                 <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} className="px-3 py-2 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
-                <button onClick={() => fetchClosingReport(closingDate)} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">{closingLoading ? "読込中..." : "📊 集計する"}</button>
+                <span className="text-[13px] font-medium ml-1" style={{ color: T.textSub }}>{formatClosingDateLabel(closingDate)}</span>
+                <button onClick={() => shiftClosingDate(1)} className="px-3 py-2 rounded-xl text-[12px] cursor-pointer border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub }}>翌日 ▶</button>
+                {closingLoading && <span className="text-[11px] ml-2" style={{ color: T.textMuted }}>読込中...</span>}
               </div>
               {closingData && (
                 <div className="space-y-3">
-                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, order: !p.order}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.order ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">📦 オーダー概要</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.order ? "▲" : "▼"}</span></button>
-                    {closingOpen.order && <div className="px-4 py-3 space-y-1 text-[12px]"><div className="flex justify-between"><span style={{ color: T.textMuted }}>オーダー本数</span><span className="font-medium">{closingData.orderCount}件</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>本指名</span><span>{closingData.honNom}件</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>P指名</span><span>{closingData.pNom}件</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>客単価</span><span>¥{closingData.avgPrice.toLocaleString()}</span></div></div>}
+                  {/* 売上サマリー */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: "#c3a782" }}>売上サマリー</p>
+                    <div className="space-y-1 text-[12px]">
+                      <div className="flex justify-between"><span style={{ color: T.textSub }}>予約件数</span><span>{closingData.resCount}件</span></div>
+                      <div className="flex justify-between"><span style={{ color: T.textSub }}>終了件数</span><span style={{ color: "#c3a782" }}>{closingData.compCount}件</span></div>
+                      <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #c3a78233", color: "#c3a782" }}><span>総売上</span><span>{fmt(closingData.totalSales)}</span></div>
+                    </div>
                   </div>
-                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, room: !p.room}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.room ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">🏠 ルーム別清算状況</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.room ? "▲" : "▼"}</span></button>
-                    {closingOpen.room && <div className="px-4 py-3 space-y-2 text-[11px]">{closingData.roomSummary.map((rm: any, i: number) => { const th2 = therapists.find(t => t.id === rm.therapist_id); return <div key={i} className="flex justify-between items-center rounded-lg px-3 py-2" style={{ backgroundColor: T.cardAlt }}><div><span className="font-medium">{rm.label}</span><span className="ml-2" style={{ color: T.textMuted }}>{th2?.name || ""}</span></div><div className="flex items-center gap-2"><span>¥{rm.total_cash.toLocaleString()}</span><span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: rm.sales_collected ? "#22c55e18" : "#f59e0b18", color: rm.sales_collected ? "#22c55e" : "#f59e0b" }}>{rm.sales_collected ? "回収済" : "未回収"}</span><span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: rm.safe_deposited ? "#22c55e18" : "#88878018", color: rm.safe_deposited ? "#22c55e" : "#888780" }}>{rm.safe_deposited ? "金庫済" : "未投入"}</span></div></div>; })}</div>}
+                  {/* 売上内訳 */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>売上内訳</p>
+                    <div className="space-y-1 text-[12px]">
+                      <div className="flex justify-between"><span style={{ color: T.textSub }}>指名料合計</span><span>+{fmt(closingData.totalNom)}</span></div>
+                      <div className="flex justify-between"><span style={{ color: T.textSub }}>オプション合計</span><span>+{fmt(closingData.totalOpt)}</span></div>
+                      <div className="flex justify-between"><span style={{ color: T.textSub }}>延長合計</span><span>+{fmt(closingData.totalExt)}</span></div>
+                      {closingData.totalDisc > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>割引合計</span><span>-{fmt(closingData.totalDisc)}</span></div>}
+                    </div>
                   </div>
-                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, sales: !p.sales}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.sales ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">💰 売上内訳</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.sales ? "▲" : "▼"}</span></button>
-                    {closingOpen.sales && <div className="px-4 py-3 space-y-1 text-[12px]"><div className="flex justify-between"><span style={{ color: T.textMuted }}>現金売上</span><span>¥{closingData.cashSales.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>💳 カード売上</span><span>¥{closingData.totalCard.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>📱 PayPay売上</span><span>¥{closingData.totalPaypay.toLocaleString()}</span></div><div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}` }}><span>売上合計</span><span>¥{closingData.totalSales.toLocaleString()}</span></div></div>}
+                  {/* 支払い方法別 */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>支払い方法別</p>
+                    <div className="space-y-1 text-[12px]">
+                      <div className="flex justify-between"><span style={{ color: "#85a8c4" }}>💳 カード決済</span><span>{fmt(closingData.totalCard)}</span></div>
+                      <div className="flex justify-between"><span style={{ color: "#22c55e" }}>📱 PayPay</span><span>{fmt(closingData.totalPaypay)}</span></div>
+                      <div className="flex justify-between"><span style={{ color: "#f59e0b" }}>💴 現金</span><span>{fmt(closingData.totalCashSales)}</span></div>
+                    </div>
                   </div>
-                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, expense: !p.expense}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.expense ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">📝 経費</span><span className="text-[10px]" style={{ color: T.textMuted }}>{closingOpen.expense ? "▲" : "▼"}</span></button>
-                    {closingOpen.expense && <div className="px-4 py-3 space-y-1 text-[12px]">{closingData.expenseList.length === 0 ? <p style={{ color: T.textFaint }}>経費なし</p> : closingData.expenseList.map((e: any, i: number) => (<div key={i} className="flex justify-between"><span style={{ color: T.textMuted }}>{e.name || e.category}</span><span style={{ color: "#c45555" }}>¥{e.amount.toLocaleString()}</span></div>))}<div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>経費合計</span><span>¥{closingData.expenseTotal.toLocaleString()}</span></div></div>}
+                  {/* セラピスト支払い */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>セラピスト支払い</p>
+                    <div className="space-y-1 text-[12px]">
+                      <div className="flex justify-between"><span style={{ color: T.textSub }}>バック合計</span><span style={{ color: "#c45555" }}>-{fmt(closingData.totalBack)}</span></div>
+                    </div>
                   </div>
-                  <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><button onClick={() => setClosingOpen(p => ({...p, final: !p.final}))} className="w-full px-4 py-3 flex items-center justify-between cursor-pointer" style={{ borderBottom: closingOpen.final ? `1px solid ${T.border}` : "none" }}><span className="text-[12px] font-medium">💵 最終現金残</span><span className="text-[14px] font-bold" style={{ color: "#c3a782" }}>¥{closingData.netCash.toLocaleString()}</span></button>
-                    {closingOpen.final && <div className="px-4 py-3 space-y-1 text-[12px]"><div className="flex justify-between"><span style={{ color: T.textMuted }}>現金売上</span><span>¥{closingData.cashSales.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>セラピスト支給合計</span><span style={{ color: "#c45555" }}>-¥{closingData.totalFinalPay.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>経費合計</span><span style={{ color: "#c45555" }}>-¥{closingData.expenseTotal.toLocaleString()}</span></div><div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}` }}><span>最終現金残</span><span style={{ color: closingData.netCash >= 0 ? "#22c55e" : "#c45555" }}>¥{closingData.netCash.toLocaleString()}</span></div><div className="flex justify-between mt-2"><span style={{ color: T.textMuted }}>内インボイス控除額</span><span>¥{closingData.totalInvoiceDed.toLocaleString()}</span></div><div className="flex justify-between"><span style={{ color: T.textMuted }}>内源泉徴収額</span><span>¥{closingData.totalWithholding.toLocaleString()}</span></div></div>}
+                  {/* 釣銭状況 */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>釣銭状況</p>
+                    <div className="space-y-1 text-[12px]">
+                      {closingData.replenishList.length > 0 ? closingData.replenishList.map((r: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center py-1 px-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}>
+                          <span className="text-[11px]">🏠 {r.room}{r.therapist ? ` / ${r.therapist}` : ""}{r.staff ? <span style={{ color: T.textFaint }}> 👤{r.staff}</span> : ""}{r.time ? <span style={{ color: T.textFaint, fontSize: 9 }}> {r.time}</span> : ""}</span>
+                          <span style={{ color: "#22c55e", fontWeight: 600 }}>{fmt(r.amount)}</span>
+                        </div>
+                      )) : <p className="text-[10px]" style={{ color: T.textFaint }}>本日の補充はありません</p>}
+                      {closingData.replenishList.length > 0 && <div className="flex justify-between pt-1 font-bold" style={{ borderTop: `1px solid ${T.border}` }}><span>補充合計</span><span style={{ color: "#22c55e" }}>{fmt(closingData.totalReplenish)}</span></div>}
+                    </div>
                   </div>
+                  {/* 経費・支出 */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>経費・支出</p>
+                    <div className="space-y-1 text-[12px]">
+                      {closingData.expenseList.length > 0 ? closingData.expenseList.map((e: any, i: number) => (
+                        <div key={i} className="flex justify-between"><span style={{ color: T.textSub }}>{e.category}: {e.name}</span><span style={{ color: "#c45555" }}>-{fmt(e.amount)}</span></div>
+                      )) : <p className="text-[10px]" style={{ color: T.textFaint }}>本日の経費はありません</p>}
+                      {closingData.expenseList.length > 0 && <div className="flex justify-between pt-1 font-bold" style={{ borderTop: `1px solid ${T.border}` }}><span>経費合計</span><span style={{ color: "#c45555" }}>-{fmt(closingData.expenseTotal)}</span></div>}
+                    </div>
+                  </div>
+                  {/* 入金 */}
+                  {closingData.incomeList.length > 0 && (
+                    <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>入金</p>
+                      <div className="space-y-1 text-[12px]">
+                        {closingData.incomeList.map((e: any, i: number) => (
+                          <div key={i} className="flex justify-between"><span style={{ color: T.textSub }}>{e.category}: {e.name}</span><span style={{ color: "#22c55e" }}>+{fmt(e.amount)}</span></div>
+                        ))}
+                        <div className="flex justify-between pt-1 font-bold" style={{ borderTop: `1px solid ${T.border}` }}><span>入金合計</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.incomeTotal)}</span></div>
+                      </div>
+                    </div>
+                  )}
+                  {/* 本日の収支 */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: "#22c55e12", border: "1px solid #22c55e33" }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: "#22c55e" }}>本日の収支</p>
+                    <div className="space-y-1 text-[12px]">
+                      <div className="flex justify-between"><span>売上</span><span>{fmt(closingData.totalSales)}</span></div>
+                      <div className="flex justify-between" style={{ color: "#c45555" }}><span>セラピスト支払い</span><span>-{fmt(closingData.totalBack)}</span></div>
+                      {closingData.expenseTotal > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>経費</span><span>-{fmt(closingData.expenseTotal)}</span></div>}
+                      {closingData.incomeTotal > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>入金</span><span>+{fmt(closingData.incomeTotal)}</span></div>}
+                      <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #22c55e33", color: "#22c55e" }}><span>粗利</span><span>{fmt(closingData.netProfit)}</span></div>
+                    </div>
+                  </div>
+                  {/* 現金確認シート */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
+                    <p className="text-[10px] font-medium mb-3" style={{ color: "#f59e0b" }}>💴 現金確認シート</p>
+                    <div className="space-y-1 text-[12px]">
+                      <p className="text-[9px] font-medium" style={{ color: "#c45555" }}>出金（事務所から出たお金）</p>
+                      <div className="flex justify-between"><span>釣銭補充（ルームへ）</span><span style={{ color: "#c45555" }}>-{fmt(closingData.totalReplenish)}</span></div>
+                      <div className="flex justify-between"><span>セラピスト支払い（バック）</span><span style={{ color: "#c45555" }}>-{fmt(closingData.totalBack)}</span></div>
+                      {closingData.expenseTotal > 0 && <div className="flex justify-between"><span>経費</span><span style={{ color: "#c45555" }}>-{fmt(closingData.expenseTotal)}</span></div>}
+                      <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>出金合計</span><span>-{fmt(closingData.totalOut)}</span></div>
+                      {closingData.incomeTotal > 0 && (<><p className="text-[9px] font-medium mt-2" style={{ color: "#22c55e" }}>入金</p><div className="flex justify-between"><span>入金合計</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.incomeTotal)}</span></div></>)}
+                      <p className="text-[9px] font-medium mt-3" style={{ color: "#f59e0b" }}>ルーム別 現金状況（未回収 = 事務所にまだ戻っていない）</p>
+                      {closingData.therapistData.map((t: any, i: number) => (
+                        <div key={i} className="flex justify-between py-0.5">
+                          <span>{t.name} <span style={{ color: T.textFaint, fontSize: 9 }}>({t.room})</span></span>
+                          <span>{fmt(t.net)} {t.salesCollected && !t.safeDeposited ? <span style={{ color: "#22c55e", fontSize: 9, fontWeight: 700 }}>✅ スタッフ回収</span> : t.salesCollected && t.safeDeposited ? <span style={{ color: "#a855f7", fontSize: 9, fontWeight: 700 }}>🔐 金庫投函</span> : <span style={{ color: "#c45555", fontSize: 9 }}>未回収</span>}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#f59e0b" }}><span>未回収合計（ルームにある現金）</span><span>{fmt(closingData.totalUncollected)}</span></div>
+                      <div className="pt-3 mt-2" style={{ borderTop: "2px solid #f59e0b44" }}>
+                        <div className="flex justify-between font-bold text-[15px]"><span style={{ color: "#f59e0b" }}>💴 事務所の残金</span><span style={{ color: closingData.cashOnHand >= 0 ? "#22c55e" : "#c45555" }}>{fmt(closingData.cashOnHand)}</span></div>
+                        <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 未回収の売上はルームにあるため含まれません。回収後に事務所の残金が増えます。</p>
+                        {closingData.safeDepositedAmt > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#a855f7" }}>🔐 金庫回収後の残金</span><span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeDepositedAmt)}</span></div>}
+                        {closingData.totalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#22c55e" }}>全額回収後の残金</span><span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeDepositedAmt + closingData.totalUncollected)}</span></div>}
+                      </div>
+                    </div>
+                  </div>
+                  {/* セラピスト別売上 */}
+                  <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>セラピスト別売上</p>
+                    <div className="space-y-1 text-[11px]">
+                      {closingData.therapistSales.length === 0 ? (
+                        <p className="text-[10px]" style={{ color: T.textFaint }}>データなし</p>
+                      ) : closingData.therapistSales.map((t: any, i: number) => (
+                        <div key={i} className="flex justify-between py-0.5"><span>{t.name}（{t.count}件）</span><span>売上{fmt(t.sales)} / バック{fmt(t.back)}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {!closingData && !closingLoading && (
+                <div className="rounded-xl border p-12 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                  <p className="text-[13px]" style={{ color: T.textFaint }}>日付を選択すると自動で集計されます</p>
                 </div>
               )}
             </div>
