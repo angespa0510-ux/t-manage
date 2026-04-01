@@ -149,13 +149,19 @@ export default function ServiceSettings() {
                   onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
               </div>
 
-              {tab === "nomination" && (
+              {tab === "nomination" && (<>
                 <div className="w-[120px]">
                   <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>料金</label>
                   <input type="text" inputMode="numeric" value={addPrice} onChange={(e) => setAddPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="2000"
                     className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
                 </div>
-              )}
+                
+              <div className="w-[120px]">
+                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>バック</label>
+                  <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
+                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                </div>
+              </>)}
 
               {tab === "discount" && (<>
                 <div className="w-[120px]">
@@ -217,7 +223,7 @@ export default function ServiceSettings() {
               nominations.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>指名が登録されていません</p> : (
                 <table className="w-full text-[12px]">
                   <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["指名名", "料金", "バック", "利益", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                    {["指名名", "料金", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
                   </tr></thead>
                   <tbody>{nominations.map((n) => (
                     <tr key={n.id} style={{ borderBottom: `1px solid ${T.border}` }}>
