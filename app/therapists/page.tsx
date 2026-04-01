@@ -378,47 +378,9 @@ export default function TherapistManagement() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={() => setShowPayroll(!showPayroll)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📑 支払調書</button>
           <button onClick={() => { setShowAdd(true); setMsg(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 新規登録</button>
         </div>
       </div>
-
-      {showPayroll && (
-        <div className="mx-6 mt-4 rounded-2xl p-5" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-          <h2 className="text-[14px] font-medium mb-3">📑 セラピスト支払調書</h2>
-          <div className="flex items-center gap-3 mb-4">
-            <select value={payrollYear} onChange={(e) => setPayrollYear(e.target.value)} className="px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>
-              {[...Array(5)].map((_, i) => { const y = new Date().getFullYear() - i; return <option key={y} value={String(y)}>{y}年</option>; })}
-            </select>
-            <button onClick={fetchPayroll} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">{payrollLoading ? "読込中..." : "生成する"}</button>
-            {payrollData.length > 0 && <button onClick={() => payrollData.forEach(r => openPayrollPDF(r))} className="px-3 py-1.5 border text-[10px] rounded-xl cursor-pointer" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📥 全員分表示</button>}
-          </div>
-          {payrollData.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[11px]" style={{ color: T.textMuted }}>{payrollYear}年 — {payrollData.length}名</p>
-              {payrollData.map((row, i) => (
-                <div key={i} className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: T.cardAlt }}>
-                  <div>
-                    <span className="text-[13px] font-medium">{row.name}</span>
-                    <div className="flex gap-4 mt-1">
-                      <span className="text-[11px]" style={{ color: T.textMuted }}>{row.days}日</span>
-                      <span className="text-[11px]" style={{ color: T.textMuted }}>支払: <span style={{ color: T.text }}>¥{row.total.toLocaleString()}</span></span>
-                      {row.transport > 0 && <span className="text-[11px]" style={{ color: T.textMuted }}>交通費: ¥{row.transport.toLocaleString()}</span>}
-                      {row.tax > 0 && <span className="text-[11px]" style={{ color: "#c45555" }}>源泉: ¥{row.tax.toLocaleString()}</span>}
-                      <span className="text-[11px] font-medium" style={{ color: "#22c55e" }}>差引: ¥{(row.total - row.tax).toLocaleString()}</span>
-                    </div>
-                  </div>
-                  <button onClick={() => openPayrollPDF(row)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 表示</button>
-                </div>
-              ))}
-              <div className="rounded-xl p-3 mt-2" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                <div className="flex justify-between text-[12px] font-medium"><span>合計支払額</span><span>¥{payrollData.reduce((s, r) => s + r.total, 0).toLocaleString()}</span></div>
-                <div className="flex justify-between text-[11px] mt-1" style={{ color: "#c45555" }}><span>合計源泉徴収</span><span>¥{payrollData.reduce((s, r) => s + r.tax, 0).toLocaleString()}</span></div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Search + Filter */}
       <div className="border-b px-6 py-3 flex items-center gap-4 flex-wrap" style={{ backgroundColor: T.card, borderColor: T.border }}>

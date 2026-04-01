@@ -18,7 +18,7 @@ export default function StaffPage() {
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "company" | "payroll">("staff");
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "company">("staff");
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 
@@ -410,7 +410,7 @@ const openPaymentStatement = (sch: Schedule) => {
 
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["staff", "schedule", "oiri", "company", "payroll"] as const).map(t => (
+          {(["staff", "schedule", "oiri", "company"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: tab === t ? "#c3a78222" : T.cardAlt, color: tab === t ? "#c3a782" : T.textMuted, border: `1px solid ${tab === t ? "#c3a782" : T.border}`, fontWeight: tab === t ? 700 : 400 }}>
               {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : t === "company" ? "🏢 会社情報" : "📑 支払調書"}
             </button>
@@ -544,52 +544,7 @@ const openPaymentStatement = (sch: Schedule) => {
         )}
 
         {/* ========== Tab 4: Company Info ========== */}
-        {tab === "payroll" && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <select value={payrollYear} onChange={(e) => setPayrollYear(e.target.value)} className="px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }}>
-                {[...Array(5)].map((_, i) => { const y = new Date().getFullYear() - i; return <option key={y} value={String(y)}>{y}年</option>; })}
-              </select>
-              <button onClick={fetchPayroll} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">{payrollLoading ? "読込中..." : "📑 支払調書を生成"}</button>
-              {payrollData.length > 0 && <button onClick={downloadAllPayrollPDF} className="px-4 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📥 全員分ダウンロード</button>}
-            </div>
-            {payrollData.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-[11px]" style={{ color: T.textMuted }}>{payrollYear}年 — {payrollData.length}名</p>
-                  {["all", "セラピスト", "内勤スタッフ"].map(f => (
-                    <button key={f} onClick={() => setPayrollFilter(f)} className="px-2.5 py-1 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: payrollFilter === f ? (f === "セラピスト" ? "#c3a78222" : f === "内勤スタッフ" ? "#85a8c422" : T.cardAlt) : T.cardAlt, color: payrollFilter === f ? (f === "セラピスト" ? "#c3a782" : f === "内勤スタッフ" ? "#85a8c4" : T.text) : T.textMuted, border: `1px solid ${payrollFilter === f ? (f === "セラピスト" ? "#c3a78244" : f === "内勤スタッフ" ? "#85a8c444" : T.border) : T.border}` }}>{f === "all" ? "全て" : f}</button>
-                  ))}
-                </div>
-                {payrollData.filter(r => payrollFilter === "all" || r.type === payrollFilter).map((row, i) => (
-                  <div key={i} className="rounded-xl p-4 flex items-center justify-between" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: row.type === "セラピスト" ? "#c3a78222" : "#85a8c422", color: row.type === "セラピスト" ? "#c3a782" : "#85a8c4" }}>{row.type}</span>
-                        <span className="text-[13px] font-medium">{row.name}</span>
-                      </div>
-                      <div className="flex gap-4 mt-1">
-                        <span className="text-[11px]" style={{ color: T.textMuted }}>支払金額: <span style={{ color: T.text }}>{fmt(row.total)}</span></span>
-                        {row.tax > 0 && <span className="text-[11px]" style={{ color: "#c45555" }}>源泉徴収: {fmt(row.tax)}</span>}
-                        <span className="text-[11px] font-medium" style={{ color: "#22c55e" }}>差引: {fmt(row.total - row.tax)}</span>
-                      </div>
-                    </div>
-                    <button onClick={() => downloadPayrollPDF(row)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📄 PDF</button>
-                  </div>
-                ))}
-                <div className="rounded-xl p-4 mt-2" style={{ backgroundColor: T.cardAlt }}>
-                  <div className="flex justify-between text-[12px] font-medium">
-                    <span>合計支払額</span><span>{fmt(payrollData.reduce((s, r) => s + r.total, 0))}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px] mt-1" style={{ color: "#c45555" }}>
-                    <span>合計源泉徴収</span><span>{fmt(payrollData.reduce((s, r) => s + r.tax, 0))}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
+        
         {tab === "company" && (
           <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
             <h2 className="text-[15px] font-medium">🏢 会社情報</h2>
