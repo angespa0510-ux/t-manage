@@ -70,7 +70,7 @@ export default function TimeChart() {
   const [editStatus, setEditStatus] = useState("unprocessed");
   const [editCardBase, setEditCardBase] = useState("");
   const [editPaypay, setEditPaypay] = useState("");
-  const [editStaffName, setEditStaffName] = useState(""); // ★追加: 編集用スタッフ名
+  const [editStaffName, setEditStaffName] = useState("");
   const [editMsg, setEditMsg] = useState("");
 
   const [showNewTherapist, setShowNewTherapist] = useState(false);
@@ -99,20 +99,14 @@ export default function TimeChart() {
   const [settleSalesCollected, setSettleSalesCollected] = useState(false);
   const [settleChangeCollected, setSettleChangeCollected] = useState(false);
   const [settleSafeDeposited, setSettleSafeDeposited] = useState(false);
-  const [showSafeList, setShowSafeList] = useState(false);
-  const [safeUncollected, setSafeUncollected] = useState<{ id: number; therapist_id: number; date: string; total_cash: number; total_back: number; room_id: number; therapist_name: string; room_label: string; replenish: number }[]>([]);
-  const [safeHistory, setSafeHistory] = useState<{ id: number; date: string; total_cash: number; total_back: number; room_id: number; therapist_name: string; room_label: string; replenish: number; safe_collected_date: string }[]>([]);
   const [showReplenish, setShowReplenish] = useState<number | null>(null);
-  const [showDailySummary, setShowDailySummary] = useState(false);
-  const [dailySettlements, setDailySettlements] = useState<{ therapist_id: number; sales_collected: boolean; change_collected: boolean; total_cash: number; total_back: number; room_id: number; safe_deposited: boolean }[]>([]);
   const [settledIds, setSettledIds] = useState<Set<number>>(new Set());
   const [changeCollectedIds, setChangeCollectedIds] = useState<Set<number>>(new Set());
-  const [pastCollected, setPastCollected] = useState<{ date: string; total_cash: number; total_back: number; room_id: number; replenish: number; therapist_name: string }[]>([]);
-  const [safeCollectedToday, setSafeCollectedToday] = useState<{ date: string; total_cash: number; total_back: number; room_id: number; replenish: number; therapist_name: string }[]>([]);
   const [replenishAmount, setReplenishAmount] = useState("");
   const [replenishStaff, setReplenishStaff] = useState("");
   const [replenishTherapistId, setReplenishTherapistId] = useState(0);
-  const [staffMembers, setStaffMembers] = useState<{ id: number; name: string; role: string }[]>([]); // ★追加: スタッフ一覧
+  const [staffMembers, setStaffMembers] = useState<{ id: number; name: string; role: string }[]>([]);
+  const [dailySettlements, setDailySettlements] = useState<{ therapist_id: number; sales_collected: boolean; change_collected: boolean; total_cash: number; total_back: number; room_id: number; safe_deposited: boolean }[]>([]);
 
   const [nominations, setNominations] = useState<{ id: number; name: string; price: number; back_amount?: number; therapist_back?: number }[]>([]);
   const [options, setOptions] = useState<{ id: number; name: string; price: number }[]>([]);
@@ -141,7 +135,7 @@ export default function TimeChart() {
   const [newExtDur, setNewExtDur] = useState(0);
   const [newCardBase, setNewCardBase] = useState("");
   const [newPaypay, setNewPaypay] = useState("");
-  const [newStaffName, setNewStaffName] = useState(""); // ★追加: 新規登録用スタッフ名
+  const [newStaffName, setNewStaffName] = useState("");
 
   const [dragInfo, setDragInfo] = useState<{ resId: number; edge: "start" | "end" | "move"; initX: number; initMin: number; initEndMin: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -183,15 +177,13 @@ export default function TimeChart() {
     const { data: rep } = await supabase.from("room_cash_replenishments").select("*").eq("date", selectedDate); if (rep) setReplenishments(rep);
     const { data: exp } = await supabase.from("expenses").select("*").eq("date", selectedDate); if (exp) setDailyExpenses(exp);
     const { data: settled } = await supabase.from("therapist_daily_settlements").select("therapist_id,change_collected").eq("date", selectedDate).eq("is_settled", true); if (settled) { setSettledIds(new Set(settled.map(s => s.therapist_id))); setChangeCollectedIds(new Set(settled.filter(s => s.change_collected).map(s => s.therapist_id))); }
-    const { data: stf } = await supabase.from("staff").select("id,name,role").eq("status", "active").order("id"); if (stf) setStaffMembers(stf); // ★追加: スタッフ取得
+    const { data: stf } = await supabase.from("staff").select("id,name,role").eq("status", "active").order("id"); if (stf) setStaffMembers(stf);
   }, [selectedDate]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
 
-  // 日付変更時に退勤リセット
   useEffect(() => { setClockedOut(new Set()); }, [selectedDate]);
 
-  // シフトに入っているセラピストだけ表示（退勤者は下に）
   const shiftTherapistIds = new Set(shifts.map((s) => s.therapist_id));
   const sortByBuildingAndTime = (list: Therapist[]) => list.sort((a, b) => {
     const raA = roomAssigns.find(r => r.therapist_id === a.id); const raB = roomAssigns.find(r => r.therapist_id === b.id);
@@ -216,12 +208,10 @@ export default function TimeChart() {
     });
   };
 
-  // Pan handlers
   const handlePanStart = (e: React.MouseEvent) => { if ((e.target as HTMLElement).closest(".res-block")) return; const c = timelineRef.current; if (!c) return; setIsPanning(true); panMoved.current = false; panStartX.current = e.clientX; panScrollLeft.current = c.scrollLeft; lastX.current = e.clientX; lastTime2.current = Date.now(); velocity.current = 0; cancelAnimationFrame(animFrame.current); };
   const handlePanMove = (e: React.MouseEvent) => { if (!isPanning) return; const c = timelineRef.current; if (!c) return; e.preventDefault(); const dx = e.clientX - panStartX.current; c.scrollLeft = panScrollLeft.current - dx; if (Math.abs(dx) > 5) panMoved.current = true; const now = Date.now(); const dt = now - lastTime2.current; if (dt > 0) velocity.current = (e.clientX - lastX.current) / dt; lastX.current = e.clientX; lastTime2.current = now; };
   const handlePanEnd = () => { if (!isPanning) return; setIsPanning(false); const c = timelineRef.current; if (!c) return; let v = velocity.current * 15; const dec = () => { if (Math.abs(v) < 0.5) return; c.scrollLeft -= v; v *= 0.92; animFrame.current = requestAnimationFrame(dec); }; dec(); };
 
-  // Drag handlers
   useEffect(() => {
     if (!dragInfo) return;
     const hm = (e: MouseEvent) => {
@@ -245,7 +235,7 @@ export default function TimeChart() {
     if (!newCourseId) { setSaving(false); setMsg("コースを選択してください"); return; }
     const optText = newOptions.map(o => o.name).join(","); const optTotal = newOptions.reduce((s, o) => s + o.price, 0);
     const coursePrice = selectedCourse?.price || 0; const discText = newDiscounts.map(d => d.name).join(","); const discTotal = newDiscounts.reduce((s, d) => s + d.amount, 0); const total = coursePrice + newNomFee + optTotal + newExtPrice - discTotal;
-    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: discText, discount_amount: discTotal, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0), staff_name: newStaffName }); // ★追加: staff_name
+    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: discText, discount_amount: discTotal, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0), staff_name: newStaffName });
     if (!error) {
       const { data: cust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle();
       if (cust) {
@@ -255,11 +245,11 @@ export default function TimeChart() {
     }
     setSaving(false);
     if (error) { toast.show("登録失敗: " + error.message, "error"); }
-    else { toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewStaffName(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); } // ★追加: setNewStaffName リセット
+    else { toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewStaffName(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
   };
 
-  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); }; // ★追加: setEditStaffName
-  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eDiscText = editDiscounts.map(d=>d.name).join(","); const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0); const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - eDiscTotal; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: eDiscText, discount_amount: eDiscTotal, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0), staff_name: editStaffName }).eq("id", editRes.id); setEditSaving(false); if (error) { toast.show("更新失敗: " + error.message, "error"); } else { toast.show("更新しました！", "success"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } }; // ★追加: staff_name
+  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); };
+  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eDiscText = editDiscounts.map(d=>d.name).join(","); const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0); const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - eDiscTotal; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: eDiscText, discount_amount: eDiscTotal, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0), staff_name: editStaffName }).eq("id", editRes.id); setEditSaving(false); if (error) { toast.show("更新失敗: " + error.message, "error"); } else { toast.show("更新しました！", "success"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
   const deleteReservation = async (id: number) => { await supabase.from("reservations").delete().eq("id", id); setEditRes(null); fetchData(); };
   const addShiftTherapist = async () => { if (!addShiftTherapistId) return; await supabase.from("shifts").insert({ therapist_id: addShiftTherapistId, date: selectedDate, start_time: addShiftStart, end_time: addShiftEnd, status: "confirmed" }); if (addShiftRoom) { await supabase.from("room_assignments").insert({ date: selectedDate, room_id: addShiftRoom, therapist_id: addShiftTherapistId, slot: "early" }); } setShowNewTherapist(false); setAddShiftTherapistId(0); fetchData(); };
 
@@ -285,8 +275,8 @@ export default function TimeChart() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={async () => { setShowSafeList(true); const { data: sf } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).is("safe_collected_date", null); if (sf) { const items: typeof safeUncollected = []; for (const s of sf) { const th = therapists.find(t => t.id === s.therapist_id); const rm = allRooms.find(r => r.id === s.room_id); const bl = rm ? buildings.find(b => b.id === rm.building_id) : null; const { data: rep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", s.room_id).eq("date", s.date); const repAmt = rep ? rep.reduce((sum: number, r: { amount: number }) => sum + r.amount, 0) : 0; items.push({ id: s.id, therapist_id: s.therapist_id, date: s.date, total_cash: s.total_cash || 0, total_back: s.final_payment || s.total_back || 0, room_id: s.room_id, therapist_name: th?.name || "不明", room_label: (bl?.name || "") + (rm?.name || ""), replenish: repAmt }); } setSafeUncollected(items); } const { data: sfH } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).not("safe_collected_date", "is", null).order("safe_collected_date", { ascending: false }).limit(20); const hItems: typeof safeHistory = []; if (sfH) { for (const s of sfH) { const th = therapists.find(t => t.id === s.therapist_id); const rm = allRooms.find(r => r.id === s.room_id); const bl = rm ? buildings.find(b => b.id === rm.building_id) : null; const { data: rep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", s.room_id).eq("date", s.date); const repAmt = rep ? rep.reduce((sum: number, r: { amount: number }) => sum + r.amount, 0) : 0; hItems.push({ id: s.id, date: s.date, total_cash: s.total_cash || 0, total_back: s.final_payment || s.total_back || 0, room_id: s.room_id, therapist_name: th?.name || "", room_label: (bl?.name || "") + (rm?.name || ""), replenish: repAmt, safe_collected_date: s.safe_collected_date }); } } setSafeHistory(hItems); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
-          <button onClick={async () => { setShowDailySummary(true); const { data: ds } = await supabase.from("therapist_daily_settlements").select("therapist_id,sales_collected,change_collected,total_cash,total_back,room_id,safe_deposited").eq("date", selectedDate); if (ds) setDailySettlements(ds); const roomIds = [...new Set(roomAssigns.map(r => r.room_id))]; const past: typeof pastCollected = []; for (const rid of roomIds) { for (let d = 1; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds2 = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", rid).eq("date", ds2); if (ps) { for (const p of ps) { if ((p.sales_collected || p.change_collected) && !p.safe_deposited) { const { data: rep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", rid).eq("date", ds2); const repAmt = rep ? rep.reduce((s: number, r: { amount: number }) => s + r.amount, 0) : 0; const th3 = therapists.find(x => x.id === p.therapist_id); past.push({ date: ds2, total_cash: p.total_cash || 0, total_back: p.total_back || 0, room_id: rid, replenish: repAmt, therapist_name: th3?.name || "" }); } } } } } setPastCollected(past); const { data: safeColl } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_collected_date", selectedDate).eq("safe_deposited", true); const safeItems: typeof safeCollectedToday = []; if (safeColl) { for (const sc of safeColl) { const th4 = therapists.find(x => x.id === sc.therapist_id); const rm4 = allRooms.find(r => r.id === sc.room_id); const bl4 = rm4 ? buildings.find(b => b.id === rm4.building_id) : null; const { data: rep4 } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", sc.room_id).eq("date", sc.date); const repAmt4 = rep4 ? rep4.reduce((s2: number, r2: { amount: number }) => s2 + r2.amount, 0) : 0; safeItems.push({ date: sc.date, total_cash: sc.total_cash || 0, total_back: sc.total_back || 0, room_id: sc.room_id, replenish: repAmt4, therapist_name: th4?.name || "" }); } } setSafeCollectedToday(safeItems); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }} onClick={(e) => { e.stopPropagation(); router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }}>📊 日次集計</button>
+          <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め")); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
+          <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
           <button onClick={() => setShowNewTherapist(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>+ セラピスト追加</button>
           <button onClick={() => { setNewDate(selectedDate); setNewCourseId(0); setNewStart("12:00"); setNewEnd("13:00"); setMsg(""); setNewTherapistId(0); setNewStaffName(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)}); }}
             className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 予約追加</button>
@@ -488,7 +478,7 @@ export default function TimeChart() {
         </div>
       )}
 
-      {/* ★ New Reservation Modal — スタッフ名セレクト追加 */}
+      {/* New Reservation Modal */}
       {showNewRes && (() => {
         const cp = selectedCourse?.price || 0; const optT = newOptions.reduce((s,o)=>s+o.price,0); const newDiscTotal = newDiscounts.reduce((s,d)=>s+d.amount,0); const totalCalc = cp + newNomFee + optT + newExtPrice - newDiscTotal;
         return (
@@ -501,7 +491,6 @@ export default function TimeChart() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={newCustName} readOnly className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ ...inputStyle, opacity: 0.7 }} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト <span style={{ color: "#c49885" }}>*</span></label><select value={newTherapistId} onChange={(e) => setNewTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
               </div>
-              {/* ★追加: 受付スタッフ選択 */}
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={newCourseId} onChange={(e) => handleCourseChange(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, borderColor: !newCourseId ? "#c49885" : "transparent" }}><option value={0}>— コースを選択してください —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
               {selectedCourse && (<div className="rounded-xl p-3 flex items-center gap-4 text-[11px]" style={{ backgroundColor: T.cardAlt }}><span style={{ color: T.textSub }}>料金: <strong style={{ color: T.text }}>{fmt(selectedCourse.price)}</strong></span><span style={{ color: T.textSub }}>バック: <strong style={{ color: "#7ab88f" }}>{fmt(selectedCourse.therapist_back)}</strong></span></div>)}
@@ -548,7 +537,7 @@ export default function TimeChart() {
         </div>);
       })()}
 
-      {/* ★ Edit Modal — スタッフ名セレクト追加 */}
+      {/* Edit Modal */}
       {editRes && (() => {
         const eCp = editSelectedCourse?.price || 0; const eOptT = editOptions.reduce((s,o)=>s+o.price,0); const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0); const eTotalCalc = eCp + editNomFee + eOptT + editExtPrice - eDiscTotal;
         return (
@@ -562,7 +551,6 @@ export default function TimeChart() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={editCustName} onChange={(e) => setEditCustName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト</label><select value={editTherapistId} onChange={(e) => setEditTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
               </div>
-              {/* ★追加: 受付スタッフ選択（編集） */}
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={editStaffName} onChange={(e) => setEditStaffName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={editCourseId} onChange={(e) => handleCourseChange(Number(e.target.value), true)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>— コースを選択 —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
               {editSelectedCourse && (<div className="rounded-xl p-3 flex items-center gap-4 text-[11px]" style={{ backgroundColor: T.cardAlt }}><span style={{ color: T.textSub }}>料金: <strong style={{ color: T.text }}>{fmt(editSelectedCourse.price)}</strong></span><span style={{ color: T.textSub }}>バック: <strong style={{ color: "#7ab88f" }}>{fmt(editSelectedCourse.therapist_back)}</strong></span></div>)}
@@ -609,7 +597,7 @@ export default function TimeChart() {
         </div>);
       })()}
 
-      {/* Settlement Modal — 以降は変更なし（元のコードと同じ） */}
+      {/* Settlement Modal */}
       {settleTh && (() => {
         const tRes = reservations.filter(r => r.therapist_id === settleTh.id && (r as any).status === "completed");
         const totalSales = tRes.reduce((s,r) => s + ((r as any).total_price || 0), 0);
@@ -822,234 +810,6 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
         </div>
       )}
 
-      {/* Safe/Daily/Replenish/Break/Shift/Room/AddShift Modals は元のコードと同じため省略 */}
-      {/* 以下、元のコードのモーダル部分をそのまま配置 */}
-
-{/* Safe List Modal */}
-      {showSafeList && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowSafeList(false)}>
-          <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div><h2 className="text-[16px] font-medium">🔐 金庫管理</h2><p className="text-[11px]" style={{ color: T.textFaint }}>投函・回収の一覧</p></div>
-              <button onClick={() => setShowSafeList(false)} className="text-[18px] cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>&times;</button>
-            </div>
-            <div className="space-y-4">
-              <div className="rounded-xl p-4" style={{ backgroundColor: "#a855f712", border: "1px solid #a855f733" }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: "#a855f7" }}>未回収（金庫内）</p>
-                {safeUncollected.length === 0 ? <p className="text-[11px] text-center py-3" style={{ color: T.textFaint }}>金庫に未回収の投函はありません</p> : (
-                <div className="space-y-1">
-                  {safeUncollected.map(s => {
-                    const netCash = s.total_cash - (s.final_payment || s.total_back);
-                    const safeAmount = (netCash > 0 ? netCash : 0) + s.replenish;
-                    return <div key={s.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg text-[11px]" style={{ backgroundColor: T.cardAlt }}>
-                      <span>{s.date.slice(5)} {s.therapist_name} <span style={{ color: T.textFaint, fontSize: 9 }}>({s.room_label})</span></span>
-                      <div className="flex items-center gap-2">
-                        <span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(safeAmount)}</span>
-                        <button onClick={async () => { if (!confirm(`${s.therapist_name}の${fmt(safeAmount)}を回収しますか？`)) return; const today = new Date().toISOString().split("T")[0]; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); toast.show(`${s.therapist_name}の${fmt(safeAmount)}を回収しました`, "success"); setSafeUncollected(prev => prev.filter(x => x.id !== s.id)); }} className="text-[8px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>回収</button>
-                      </div>
-                    </div>;
-                  })}
-                  <div className="flex justify-between font-bold text-[13px] pt-2" style={{ borderTop: "1px solid #a855f733", color: "#a855f7" }}>
-                    <span>金庫内合計</span>
-                    <span>{fmt(safeUncollected.reduce((s, x) => { const n = x.total_cash - x.total_back; return s + (n > 0 ? n : 0) + x.replenish; }, 0))}</span>
-                  </div>
-                  <button onClick={async () => { if (!confirm("金庫内の全額を回収しますか？")) return; const today = new Date().toISOString().split("T")[0]; for (const s of safeUncollected) { await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); } toast.show("金庫の全額を回収しました", "success"); setSafeUncollected([]); }} className="w-full px-3 py-2 bg-gradient-to-r from-[#a855f7] to-[#9333ea] text-white text-[11px] rounded-xl cursor-pointer font-medium mt-2">📦 全額回収</button>
-                </div>
-                )}
-              </div>
-              
-            <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: "#22c55e" }}>回収履歴（直近20件）</p>
-                {safeHistory.length === 0 ? <p className="text-[11px] text-center py-3" style={{ color: T.textFaint }}>回収履歴はありません</p> : (
-                <div className="space-y-1">
-                  {safeHistory.map(s => {
-                    const netCash = s.total_cash - (s.final_payment || s.total_back);
-                    const safeAmount = (netCash > 0 ? netCash : 0) + s.replenish;
-                    return <div key={s.id} className="flex items-center justify-between py-1 px-2 text-[10px]">
-                      <span style={{ color: T.textSub }}><span style={{ color: "#22c55e" }}>回収{s.safe_collected_date?.slice(5)}</span> | 投函{s.date.slice(5)} {s.therapist_name} <span style={{ fontSize: 8, color: T.textFaint }}>({s.room_label})</span></span>
-                      <div className="flex items-center gap-2">
-                        <span style={{ color: "#22c55e" }}>{fmt(safeAmount)}</span>
-                        <button onClick={async () => { if (!confirm("この回収を取り消しますか？")) return; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: null }).eq("id", s.id); toast.show("回収を取り消しました", "info"); setSafeHistory(prev => prev.filter(x => x.id !== s.id)); setSafeUncollected(prev => [...prev, { id: s.id, therapist_id: 0, date: s.date, total_cash: s.total_cash, total_back: s.total_back, room_id: s.room_id, therapist_name: s.therapist_name, room_label: s.room_label, replenish: s.replenish }]); }} className="text-[7px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "none" }}>取消</button>
-                      </div>
-                    </div>;
-                  })}
-                </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Daily Summary Modal */}
-      {showDailySummary && (() => {
-        const compRes = reservations.filter(r => (r as any).status === "completed");
-        const totalSales = compRes.reduce((s, r) => s + ((r as any).total_price || 0), 0);
-        const totalCard = compRes.reduce((s, r) => s + ((r as any).card_billing || 0), 0);
-        const totalPaypay = compRes.reduce((s, r) => s + ((r as any).paypay_amount || 0), 0);
-        const totalCashSales = compRes.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
-        const totalBack = compRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + (c?.therapist_back || 0); }, 0);
-        const totalNom = compRes.reduce((s, r) => s + ((r as any).nomination_fee || 0), 0);
-        const totalOpt = compRes.reduce((s, r) => s + ((r as any).options_total || 0), 0);
-        const totalExt = compRes.reduce((s, r) => s + ((r as any).extension_price || 0), 0);
-        const totalDisc = compRes.reduce((s, r) => s + ((r as any).discount_amount || 0), 0);
-        const totalReplenish = replenishments.reduce((s, r) => s + r.amount, 0);
-        const settledTherapists = therapists.filter(t => {
-          const ra = roomAssigns.find(a => a.therapist_id === t.id);
-          return ra && shiftTherapistIds.has(t.id);
-        });
-        const profit = totalSales - totalBack;
-        return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowDailySummary(false)}>
-          <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div><h2 className="text-[16px] font-medium">📊 日次集計</h2><p className="text-[11px]" style={{ color: T.textFaint }}>{selectedDate}</p></div>
-              <button onClick={() => setShowDailySummary(false)} className="text-[18px] cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>&times;</button>
-            </div>
-            <div className="space-y-3">
-              <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: "#c3a782" }}>売上サマリー</p>
-                <div className="space-y-1 text-[12px]">
-                  <div className="flex justify-between"><span style={{ color: T.textSub }}>予約件数</span><span>{reservations.length}件</span></div>
-                  <div className="flex justify-between"><span style={{ color: T.textSub }}>終了件数</span><span style={{ color: "#c3a782" }}>{compRes.length}件</span></div>
-                  <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #c3a78233", color: "#c3a782" }}><span>総売上</span><span>{fmt(totalSales)}</span></div>
-                </div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>売上内訳</p>
-                <div className="space-y-1 text-[12px]">
-                  <div className="flex justify-between"><span style={{ color: T.textSub }}>指名料合計</span><span>+{fmt(totalNom)}</span></div>
-                  <div className="flex justify-between"><span style={{ color: T.textSub }}>オプション合計</span><span>+{fmt(totalOpt)}</span></div>
-                  <div className="flex justify-between"><span style={{ color: T.textSub }}>延長合計</span><span>+{fmt(totalExt)}</span></div>
-                  {totalDisc > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>割引合計</span><span>-{fmt(totalDisc)}</span></div>}
-                </div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>支払い方法別</p>
-                <div className="space-y-1 text-[12px]">
-                  <div className="flex justify-between"><span style={{ color: "#85a8c4" }}>💳 カード決済</span><span>{fmt(totalCard)}</span></div>
-                  <div className="flex justify-between"><span style={{ color: "#22c55e" }}>📱 PayPay</span><span>{fmt(totalPaypay)}</span></div>
-                  <div className="flex justify-between"><span style={{ color: "#f59e0b" }}>💴 現金</span><span>{fmt(totalCashSales)}</span></div>
-                </div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>セラピスト支払い</p>
-                <div className="space-y-1 text-[12px]">
-                  <div className="flex justify-between"><span style={{ color: T.textSub }}>バック合計</span><span style={{ color: "#c45555" }}>-{fmt(totalBack)}</span></div>
-                </div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>釣銭状況</p>
-                <div className="space-y-1 text-[12px]">
-                  {replenishments.length > 0 ? replenishments.map(r => {
-                    const rm = allRooms.find(x => x.id === r.room_id);
-                    const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
-                    const thName = r.therapist_id ? therapists.find(t => t.id === r.therapist_id)?.name : "";
-                    return (
-                      <div key={r.id} className="flex justify-between items-center py-1 px-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                        <span className="text-[11px]">🏠 {bl?.name || ""}{rm?.name || ""}{thName ? ` / ${thName}` : ""}{r.staff_name ? <span style={{ color: T.textFaint }}> 👤{r.staff_name}</span> : ""}</span>
-                        <div className="flex items-center gap-2">
-                          <span style={{ color: "#22c55e", fontWeight: 600 }}>{fmt(r.amount)}</span>
-                          <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`${bl?.name || ""}${rm?.name || ""} の ${fmt(r.amount)} 補充を取り消しますか？`)) return; await supabase.from("room_cash_replenishments").delete().eq("id", r.id); toast.show("補充を取り消しました", "info"); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "1px solid #c4555533" }}>取消</button>
-                        </div>
-                      </div>
-                    );
-                  }) : <p className="text-[10px]" style={{ color: T.textFaint }}>本日の補充はありません</p>}
-                  {replenishments.length > 0 && <div className="flex justify-between pt-1 font-bold" style={{ borderTop: `1px solid ${T.border}` }}><span>補充合計</span><span style={{ color: "#22c55e" }}>{fmt(totalReplenish)}</span></div>}
-                </div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>経費・支出</p>
-                <div className="space-y-1 text-[12px]">
-                  {dailyExpenses.filter(e => e.type === "expense").length > 0 ? dailyExpenses.filter(e => e.type === "expense").map(e => <div key={e.id} className="flex justify-between"><span style={{ color: T.textSub }}>{e.category}: {e.name}</span><span style={{ color: "#c45555" }}>-{fmt(e.amount)}</span></div>) : <p className="text-[10px]" style={{ color: T.textFaint }}>本日の経費はありません</p>}
-                  {dailyExpenses.filter(e => e.type === "expense").length > 0 && <div className="flex justify-between pt-1 font-bold" style={{ borderTop: `1px solid ${T.border}` }}><span>経費合計</span><span style={{ color: "#c45555" }}>-{fmt(dailyExpenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0))}</span></div>}
-                </div>
-              </div>
-              {dailyExpenses.filter(e => e.type === "income").length > 0 && (
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>入金</p>
-                <div className="space-y-1 text-[12px]">
-                  {dailyExpenses.filter(e => e.type === "income").map(e => <div key={e.id} className="flex justify-between"><span style={{ color: T.textSub }}>{e.category}: {e.name}</span><span style={{ color: "#22c55e" }}>+{fmt(e.amount)}</span></div>)}
-                  <div className="flex justify-between pt-1 font-bold" style={{ borderTop: `1px solid ${T.border}` }}><span>入金合計</span><span style={{ color: "#22c55e" }}>+{fmt(dailyExpenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0))}</span></div>
-                </div>
-              </div>
-              )}
-              <div className="rounded-xl p-4" style={{ backgroundColor: "#22c55e12", border: "1px solid #22c55e33" }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: "#22c55e" }}>本日の収支</p>
-                {(() => { const expTotal = dailyExpenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0); const incTotal = dailyExpenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0); const netProfit = totalSales - totalBack - expTotal + incTotal; return (
-                <div className="space-y-1 text-[12px]">
-                  <div className="flex justify-between"><span>売上</span><span>{fmt(totalSales)}</span></div>
-                  <div className="flex justify-between" style={{ color: "#c45555" }}><span>セラピスト支払い</span><span>-{fmt(totalBack)}</span></div>
-                  {expTotal > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>経費</span><span>-{fmt(expTotal)}</span></div>}
-                  {incTotal > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>入金</span><span>+{fmt(incTotal)}</span></div>}
-                  <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #22c55e33", color: "#22c55e" }}><span>粗利</span><span>{fmt(netProfit)}</span></div>
-                </div>); })()}
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
-                <p className="text-[10px] font-medium mb-3" style={{ color: "#f59e0b" }}>💴 現金確認シート</p>
-                {(() => { const expTotal = dailyExpenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0); const incTotal = dailyExpenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0);
-                const therapistData = [...activeTherapists, ...clockedOutTherapists].map(t => {
-                  const tRes = compRes.filter(r => r.therapist_id === t.id); if (tRes.length === 0) return null;
-                  const tCash = tRes.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
-                  const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + (c?.therapist_back || 0); }, 0);
-                  const ra = roomAssigns.find(a => a.therapist_id === t.id);
-                  const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
-                  const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
-                  return { id: t.id, name: t.name, room: bl && rm ? `${bl.name}${rm.name}` : "", cash: tCash, back: tBack, net: tCash - tBack };
-                }).filter(Boolean) as { id: number; name: string; room: string; cash: number; back: number; net: number }[];
-                const totalOut = totalReplenish + totalBack + expTotal;
-                const staffCollectedAmount = therapistData.filter(t => { const ds = dailySettlements.find(d => d.therapist_id === t.id); return !!ds?.sales_collected && !ds?.safe_deposited; }).reduce((s, t) => s + t.net, 0);
-                const safeDepositedAmount = therapistData.filter(t => { const ds = dailySettlements.find(d => d.therapist_id === t.id); return !!ds?.sales_collected && !!ds?.safe_deposited; }).reduce((s, t) => s + t.net, 0);
-                const totalUncollected = therapistData.filter(t => { const ds = dailySettlements.find(d => d.therapist_id === t.id); return !ds?.sales_collected; }).reduce((s, t) => s + t.net, 0);
-                const cashOnHand = -totalReplenish - totalBack - expTotal + incTotal + staffCollectedAmount;
-                return (
-                <div className="space-y-1 text-[12px]">
-                  <p className="text-[9px] font-medium" style={{ color: "#c45555" }}>出金（事務所から出たお金）</p>
-                  <div className="flex justify-between"><span>釣銭補充（ルームへ）</span><span style={{ color: "#c45555" }}>-{fmt(totalReplenish)}</span></div>
-                  <div className="flex justify-between"><span>セラピスト支払い（バック）</span><span style={{ color: "#c45555" }}>-{fmt(totalBack)}</span></div>
-                  {expTotal > 0 && <div className="flex justify-between"><span>経費</span><span style={{ color: "#c45555" }}>-{fmt(expTotal)}</span></div>}
-                  <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>出金合計</span><span>-{fmt(totalOut)}</span></div>
-                  {incTotal > 0 && (<><p className="text-[9px] font-medium mt-2" style={{ color: "#22c55e" }}>入金</p><div className="flex justify-between"><span>入金合計</span><span style={{ color: "#22c55e" }}>+{fmt(incTotal)}</span></div></>)}
-                  <p className="text-[9px] font-medium mt-3" style={{ color: "#f59e0b" }}>ルーム別 現金状況（未回収 = 事務所にまだ戻っていない）</p>
-                  {therapistData.map((t, i) => { const ds = dailySettlements.find(d => d.therapist_id === t.id); const collected = !!ds?.sales_collected; const inSafe = !!ds?.safe_deposited; return <div key={i} className="flex justify-between py-0.5"><span>{t.name} <span style={{ color: T.textFaint, fontSize: 9 }}>({t.room})</span></span><span>{fmt(t.net)} {collected && !inSafe ? <span style={{ color: "#22c55e", fontSize: 9, fontWeight: 700 }}>✅ スタッフ回収</span> : collected && inSafe ? <span style={{ color: "#a855f7", fontSize: 9, fontWeight: 700 }}>🔐 金庫投函</span> : <span style={{ color: "#c45555", fontSize: 9 }}>未回収</span>}</span></div>; })}
-                  <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#f59e0b" }}><span>未回収合計（ルームにある現金）</span><span>{fmt(therapistData.filter(t => { const ds = dailySettlements.find(d => d.therapist_id === t.id); return !ds?.sales_collected; }).reduce((s, t) => s + t.net, 0))}</span></div>
-                  {(() => { const safeSales = therapistData.filter(t => { const ds = dailySettlements.find(d => d.therapist_id === t.id); return !!ds?.sales_collected && !!ds?.safe_deposited; }).reduce((s, t) => s + t.net, 0); const safeChange = therapistData.filter(t => { const ds = dailySettlements.find(d => d.therapist_id === t.id); return !!ds?.sales_collected && !!ds?.safe_deposited; }).length > 0 ? totalReplenish : 0; const safeTotal = safeSales + safeChange; return safeTotal > 0 ? <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#a855f7" }}><span>🔐 金庫未回収合計（売上{fmt(safeSales)} + 釣銭{fmt(safeChange)}）</span><span>{fmt(safeTotal)}</span></div> : null; })()}
-                  {pastCollected.length > 0 && (<>
-                    <p className="text-[9px] font-medium mt-3" style={{ color: "#22c55e" }}>過去の引き継ぎ回収分（本日回収済み）</p>
-                    {pastCollected.map((p, i) => { const rm2 = allRooms.find(r => r.id === p.room_id); const bl2 = rm2 ? buildings.find(b => b.id === rm2.building_id) : null; return <div key={i} className="flex justify-between py-0.5"><span style={{ color: T.textSub }}>{p.date.slice(5)} <span style={{ fontSize: 9 }}>{bl2?.name || ""}{rm2?.name || ""} {p.therapist_name}</span></span><span style={{ color: "#22c55e" }}>売上+{fmt(p.total_cash - p.total_back)} 釣銭+{fmt(p.replenish)}</span></div>; })}
-                    <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#22c55e" }}><span>過去回収合計</span><span>+{fmt(pastCollected.reduce((s, p) => s + (p.total_cash - p.total_back) + p.replenish, 0))}</span></div>
-                  </>)}
-                  {safeCollectedToday.length > 0 && (<>
-                    <p className="text-[9px] font-medium mt-3" style={{ color: "#a855f7" }}>🔐 金庫回収分（本日回収）</p>
-                    {safeCollectedToday.map((s, i) => { const rm3 = allRooms.find(r => r.id === s.room_id); const bl3 = rm3 ? buildings.find(b => b.id === rm3.building_id) : null; const net3 = s.total_cash - s.total_back; return <div key={i} className="flex justify-between py-0.5"><span style={{ color: T.textSub }}>{s.date.slice(5)} {bl3?.name || ""}{rm3?.name || ""} {s.therapist_name}</span><span style={{ color: "#a855f7" }}>+{fmt((net3 > 0 ? net3 : 0) + s.replenish)}</span></div>; })}
-                    <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#a855f7" }}><span>金庫回収合計</span><span>+{fmt(safeCollectedToday.reduce((s, x) => { const n = x.total_cash - x.total_back; return s + (n > 0 ? n : 0) + x.replenish; }, 0))}</span></div>
-                  </>)}
-                  {(() => { const pastRecovered = pastCollected.reduce((s, p) => s + (p.total_cash - p.total_back) + p.replenish, 0); const safeRecovered = safeCollectedToday.reduce((s, x) => { const n = x.total_cash - x.total_back; return s + (n > 0 ? n : 0) + x.replenish; }, 0); const finalCash = cashOnHand + pastRecovered + safeRecovered; return (
-                  <div className="pt-3 mt-2" style={{ borderTop: "2px solid #f59e0b44" }}>
-                    <div className="flex justify-between font-bold text-[15px]"><span style={{ color: "#f59e0b" }}>💴 事務所の残金</span><span style={{ color: finalCash >= 0 ? "#22c55e" : "#c45555" }}>{fmt(finalCash)}</span></div>
-                    <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 未回収の売上はルームにあるため含まれません。回収後に事務所の残金が増えます。</p>
-                    {safeDepositedAmount > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#a855f7" }}>🔐 金庫回収後の残金</span><span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(finalCash + safeDepositedAmount)}</span></div>}
-                    {totalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#22c55e" }}>全額回収後の残金</span><span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(finalCash + safeDepositedAmount + totalUncollected)}</span></div>}
-                  </div>); })()}
-                </div>); })()}
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>セラピスト別売上</p>
-                <div className="space-y-1 text-[11px]">
-                  {[...activeTherapists, ...clockedOutTherapists].map(t => {
-                    const tRes = compRes.filter(r => r.therapist_id === t.id);
-                    if (tRes.length === 0) return null;
-                    const tSales = tRes.reduce((s, r) => s + ((r as any).total_price || 0), 0);
-                    const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + (c?.therapist_back || 0); }, 0);
-                    return <div key={t.id} className="flex justify-between py-0.5"><span>{t.name}（{tRes.length}件）</span><span>売上{fmt(tSales)} / バック{fmt(tBack)}</span></div>;
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>);
-      })()}
-
       {/* Replenish Modal */}
       {showReplenish && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowReplenish(null)}>
@@ -1064,7 +824,6 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
                 <button onClick={async () => { const amt = parseInt(replenishAmount) || 0; if (amt <= 0) return; await supabase.from("room_cash_replenishments").insert({ room_id: showReplenish, date: selectedDate, amount: amt, therapist_id: replenishTherapistId, staff_name: replenishStaff }); toast.show(`${fmt(amt)} を補充しました`, "success"); setShowReplenish(null); fetchData(); }} className="px-5 py-2.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white text-[11px] rounded-xl cursor-pointer">補充する</button>
                 <button onClick={() => setShowReplenish(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
               </div>
-              {/* 補充履歴 */}
               {(() => { const roomReps = replenishments.filter(r => r.room_id === showReplenish); if (roomReps.length === 0) return null; return (
                 <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${T.border}` }}>
                   <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>📋 補充履歴（{allRooms.find(r => r.id === showReplenish)?.name || ""}）</p>
