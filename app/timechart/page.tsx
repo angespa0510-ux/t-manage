@@ -182,7 +182,7 @@ export default function TimeChart() {
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
 
-  useEffect(() => { setClockedOut(new Set()); }, [selectedDate]);
+  useEffect(() => { const p = new URLSearchParams(window.location.search).get("date"); if (p) setSelectedDate(p); }, []);
 
   const shiftTherapistIds = new Set(shifts.map((s) => s.therapist_id));
   const sortByBuildingAndTime = (list: Therapist[]) => list.sort((a, b) => {
@@ -275,7 +275,7 @@ export default function TimeChart() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め")); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
+          <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
           <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
           <button onClick={() => setShowNewTherapist(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>+ セラピスト追加</button>
           <button onClick={() => { setNewDate(selectedDate); setNewCourseId(0); setNewStart("12:00"); setNewEnd("13:00"); setMsg(""); setNewTherapistId(0); setNewStaffName(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)}); }}
