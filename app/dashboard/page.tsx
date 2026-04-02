@@ -147,6 +147,10 @@ export default function Dashboard() {
     const totalWithholding = settledList2.reduce((s: number, d: any) => s + (d.withholding_tax || 0), 0);
     const totalWelfare = settledList2.reduce((s: number, d: any) => s + (d.welfare_fee || 0), 0);
     const totalTransportSettle = settledList2.reduce((s: number, d: any) => s + (d.transport_fee || 0), 0);
+    const totalRounding = settledList2.reduce((s: number, d: any) => {
+      const raw = (d.total_back || 0) - (d.invoice_deduction || 0) - (d.withholding_tax || 0) - (d.welfare_fee || 0) + (d.transport_fee || 0);
+      return s + ((d.final_payment || 0) - raw);
+    }, 0);
     // 釣銭補充（明細付き）
     const replenishList = (repData || []).map((r: any) => {
       const rm = (rooms || []).find((x: any) => x.id === r.room_id);
@@ -198,7 +202,7 @@ export default function Dashboard() {
       resCount: allRes.length, compCount: completed.length, totalSales,
       totalCoursePrice, totalNom, totalOpt, totalExt, totalDisc,
       totalCard, totalPaypay, totalCashSales,
-      totalBack, totalCourseBack, totalNomBack, totalOptBack, totalExtBack, totalFinalPay, totalInvoiceDed, totalWithholding, totalWelfare, totalTransportSettle, totalReplenish, replenishList,
+      totalBack, totalCourseBack, totalNomBack, totalOptBack, totalExtBack, totalFinalPay, totalInvoiceDed, totalWithholding, totalWelfare, totalTransportSettle, totalRounding, totalReplenish, replenishList,
       expenseList, expenseTotal, incomeList, incomeTotal,
       netProfit, therapistData, totalOut,
       staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
@@ -527,6 +531,7 @@ export default function Dashboard() {
                       {closingData.totalWithholding > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>源泉徴収（店側預り）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalWithholding)}</span></div>}
                       {closingData.totalWelfare > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>備品・リネン代（店側収入）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalWelfare)}</span></div>}
                       {closingData.totalTransportSettle > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>交通費（店側支出）</span><span style={{ color: "#c45555" }}>-{fmt(closingData.totalTransportSettle)}</span></div>}
+                      {closingData.totalRounding !== 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>端数切上げ</span><span style={{ color: "#c45555" }}>-{fmt(Math.abs(closingData.totalRounding))}</span></div>}
                       <div className="flex justify-between pt-1 font-bold" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>実支給額合計</span><span>-{fmt(closingData.totalFinalPay)}</span></div>
                     </div>
                   </div>
