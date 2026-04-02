@@ -18,7 +18,30 @@ const ACCOUNT_MAP: Record<string, string> = {
   income: "売上高（入金）", other: "雑費",
 };
 
+const MONTH_NAMES = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+
+/* ───── 決算月から会計年度の開始・終了日を計算 ───── */
+function getFiscalYearRange(selectedYear: number, fiscalEndMonth: number) {
+  const startMonth = (fiscalEndMonth % 12) + 1;
+  if (startMonth <= fiscalEndMonth) {
+    // 例: 決算12月 → 1月〜12月（暦年と同じ）
+    const dim = new Date(selectedYear, fiscalEndMonth, 0).getDate();
+    return {
+      startDate: `${selectedYear}-${String(startMonth).padStart(2, "0")}-01`,
+      endDate: `${selectedYear}-${String(fiscalEndMonth).padStart(2, "0")}-${String(dim).padStart(2, "0")}`,
+      label: `${selectedYear}年度（${selectedYear}/${startMonth}月〜${selectedYear}/${fiscalEndMonth}月）`,
+    };
+  } else {
+    // 例: 決算3月 → 前年4月〜当年3月
+    const dim = new Date(selectedYear, fiscalEndMonth, 0).getDate();
+    return {
+      startDate: `${selectedYear - 1}-${String(startMonth).padStart(2, "0")}-01`,
+      endDate: `${selectedYear}-${String(fiscalEndMonth).padStart(2, "0")}-${String(dim).padStart(2, "0")}`,
+      label: `${selectedYear}年度（${selectedYear - 1}/${startMonth}月〜${selectedYear}/${fiscalEndMonth}月）`,
+    };
+  }
+}
 
 export default function TaxDashboard() {
   const router = useRouter();
@@ -35,7 +58,28 @@ export default function TaxDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
 
+  /* ───── 決算月設定 ───── */
+  const [fiscalMonth, setFiscalMonth] = useState(3);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingSaved, setSettingSaved] = useState(false);
+
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
+
+  /* ───── 決算月の取得 ───── */
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const { data } = await supabase.from("app_settings").select("value").eq("key", "fiscal_year_end_month").single();
+      if (data) setFiscalMonth(parseInt(data.value) || 3);
+    };
+    fetchSettings();
+  }, []);
+
+  const saveFiscalMonth = async (month: number) => {
+    setFiscalMonth(month);
+    await supabase.from("app_settings").upsert({ key: "fiscal_year_end_month", value: String(month), updated_at: new Date().toISOString() });
+    setSettingSaved(true);
+    setTimeout(() => setSettingSaved(false), 1500);
+  };
 
   const fetchData = useCallback(async () => {
     const { data: c } = await supabase.from("courses").select("*"); if (c) setCourses(c);
@@ -46,14 +90,15 @@ export default function TaxDashboard() {
       const dim = new Date(smYear, smMonth, 0).getDate();
       startDate = `${selectedMonth}-01`; endDate = `${selectedMonth}-${String(dim).padStart(2, "0")}`;
     } else {
-      startDate = `${selectedYear}-01-01`; endDate = `${selectedYear}-12-31`;
+      const range = getFiscalYearRange(selectedYear, fiscalMonth);
+      startDate = range.startDate; endDate = range.endDate;
     }
 
     const { data: r } = await supabase.from("reservations").select("*").gte("date", startDate).lte("date", endDate).order("date");
     if (r) setReservations(r);
     const { data: e } = await supabase.from("expenses").select("*").gte("date", startDate).lte("date", endDate).order("date");
     if (e) setExpenses(e);
-  }, [mode, selectedMonth, selectedYear, smYear, smMonth]);
+  }, [mode, selectedMonth, selectedYear, smYear, smMonth, fiscalMonth]);
 
   useEffect(() => {
     const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); };
@@ -121,7 +166,7 @@ export default function TaxDashboard() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const period = mode === "monthly" ? selectedMonth : String(selectedYear);
+    const period = mode === "monthly" ? selectedMonth : `${selectedYear}年度`;
     a.href = url; a.download = `税務報告_${period}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
@@ -136,7 +181,7 @@ export default function TaxDashboard() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const period = mode === "monthly" ? selectedMonth : String(selectedYear);
+    const period = mode === "monthly" ? selectedMonth : `${selectedYear}年度`;
     a.href = url; a.download = `勘定科目別_${period}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
@@ -144,7 +189,8 @@ export default function TaxDashboard() {
   const prevMonth = () => { const d = new Date(smYear, smMonth - 2, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   const nextMonth = () => { const d = new Date(smYear, smMonth, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
 
-  const periodLabel = mode === "monthly" ? `${smYear}年${smMonth}月` : `${selectedYear}年`;
+  const fiscalRange = getFiscalYearRange(selectedYear, fiscalMonth);
+  const periodLabel = mode === "monthly" ? `${smYear}年${smMonth}月` : fiscalRange.label;
 
   // 権限チェック
   if (roleLoading) return <div className="h-screen flex items-center justify-center" style={{ backgroundColor: T.bg, color: T.text }}><p className="text-[14px]" style={{ color: T.textMuted }}>読み込み中...</p></div>;
@@ -185,7 +231,7 @@ export default function TaxDashboard() {
       <div className="h-[48px] flex items-center justify-center gap-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex gap-1 mr-4">
           <button onClick={() => setMode("monthly")} className="px-3 py-1 text-[11px] rounded-lg cursor-pointer" style={{ backgroundColor: mode === "monthly" ? T.accent + "18" : "transparent", color: mode === "monthly" ? T.accent : T.textMuted, fontWeight: mode === "monthly" ? 600 : 400 }}>月次</button>
-          <button onClick={() => setMode("yearly")} className="px-3 py-1 text-[11px] rounded-lg cursor-pointer" style={{ backgroundColor: mode === "yearly" ? T.accent + "18" : "transparent", color: mode === "yearly" ? T.accent : T.textMuted, fontWeight: mode === "yearly" ? 600 : 400 }}>年次</button>
+          <button onClick={() => setMode("yearly")} className="px-3 py-1 text-[11px] rounded-lg cursor-pointer" style={{ backgroundColor: mode === "yearly" ? T.accent + "18" : "transparent", color: mode === "yearly" ? T.accent : T.textMuted, fontWeight: mode === "yearly" ? 600 : 400 }}>年度</button>
         </div>
         {mode === "monthly" ? (<>
           <button onClick={prevMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
@@ -193,10 +239,50 @@ export default function TaxDashboard() {
           <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
         </>) : (<>
           <button onClick={() => setSelectedYear(selectedYear - 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
-          <span className="text-[14px] font-medium min-w-[100px] text-center">{selectedYear}年</span>
+          <span className="text-[14px] font-medium min-w-[100px] text-center">{selectedYear}年度</span>
           <button onClick={() => setSelectedYear(selectedYear + 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
         </>)}
+        {/* 決算月設定ボタン */}
+        <div className="relative ml-4">
+          <button onClick={() => setShowSettings(!showSettings)}
+            className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer border"
+            style={{ borderColor: showSettings ? "#c3a782" : T.border, color: showSettings ? "#c3a782" : T.textMuted }}>
+            ⚙️ 決算月: {fiscalMonth}月
+          </button>
+          {showSettings && (
+            <div className="absolute top-full right-0 mt-2 rounded-xl border p-4 z-50 w-[260px] shadow-lg"
+              style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h3 className="text-[12px] font-medium mb-3">決算月の設定</h3>
+              <p className="text-[9px] mb-3" style={{ color: T.textFaint }}>会計年度の最終月を選択してください。年度の集計期間に反映されます。</p>
+              <div className="grid grid-cols-4 gap-1.5 mb-3">
+                {MONTH_NAMES.map((name, i) => (
+                  <button key={i} onClick={() => saveFiscalMonth(i + 1)}
+                    className="px-2 py-2 rounded-lg text-[11px] cursor-pointer border text-center"
+                    style={{
+                      backgroundColor: fiscalMonth === i + 1 ? "#c3a78225" : "transparent",
+                      color: fiscalMonth === i + 1 ? "#c3a782" : T.textMuted,
+                      borderColor: fiscalMonth === i + 1 ? "#c3a782" : T.border,
+                      fontWeight: fiscalMonth === i + 1 ? 700 : 400,
+                    }}>{name}</button>
+                ))}
+              </div>
+              {settingSaved && <p className="text-[10px] text-center" style={{ color: "#22c55e" }}>✅ 保存しました</p>}
+              <p className="text-[9px] mt-2" style={{ color: T.textMuted }}>
+                現在: {fiscalRange.label}
+              </p>
+              <button onClick={() => setShowSettings(false)}
+                className="w-full mt-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* 年度モード時の期間表示 */}
+      {mode === "yearly" && (
+        <div className="flex items-center justify-center py-1.5 flex-shrink-0" style={{ backgroundColor: T.cardAlt }}>
+          <span className="text-[10px]" style={{ color: T.textMuted }}>📅 集計期間: {fiscalRange.startDate} 〜 {fiscalRange.endDate}</span>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-[900px] mx-auto">
