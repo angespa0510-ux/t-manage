@@ -77,6 +77,9 @@ export default function Dashboard() {
   const [closingDate, setClosingDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [closingData, setClosingData] = useState<any>(null);
   const [closingLoading, setClosingLoading] = useState(false);
+  const [showSafeList, setShowSafeList] = useState(false);
+  const [safeUncollected, setSafeUncollected] = useState<{ id: number; date: string; total_cash: number; final_payment: number; room_id: number; therapist_name: string; room_label: string; replenish: number }[]>([]);
+  const [safeHistory, setSafeHistory] = useState<{ id: number; date: string; total_cash: number; final_payment: number; room_id: number; therapist_name: string; room_label: string; replenish: number; safe_collected_date: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRank, setFilterRank] = useState<string>("all");
 
@@ -191,6 +194,36 @@ export default function Dashboard() {
     const totalUncollected = therapistData.filter(t => !t.salesCollected).reduce((s, t) => s + t.replenish + t.netAfterPay, 0);
     const totalChangeUncollected = therapistData.filter(t => t.salesCollected && !t.changeCollected).reduce((s, t) => s + t.replenish, 0);
     const cashOnHand = -totalReplenish - expenseTotal + incomeTotal + staffCollectedAmt;
+    // 金庫未回収（金庫投函済み・未回収）
+    const { data: safeUncoll } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).is("safe_collected_date", null);
+    const safeUncollectedList = (safeUncoll || []).map((s: any) => {
+      const rm2 = (rooms || []).find((r: any) => r.id === s.room_id);
+      const bl2 = rm2 ? (blds || []).find((b: any) => b.id === rm2.building_id) : null;
+      return { date: s.date, therapist: getThName(s.therapist_id), room: `${bl2?.name || ""}${rm2?.name || ""}`, salesAmt: Math.max((s.total_cash || 0) - (s.final_payment || 0), 0), changeAmt: 0 };
+    });
+    // 各金庫投函の釣銭を取得
+    for (const su of safeUncollectedList) {
+      const roomMatch = (rooms || []).find((r: any) => su.room.includes(r.name || ""));
+      if (roomMatch) {
+        const { data: repSafe } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", roomMatch.id).eq("date", su.date);
+        su.changeAmt = (repSafe || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
+      }
+    }
+    const safeTotalUncollected = safeUncollectedList.reduce((s: number, x: any) => s + x.salesAmt + x.changeAmt, 0);
+
+    // 金庫回収分（本日回収）
+    const { data: safeCollToday } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_collected_date", date).eq("safe_deposited", true);
+    const safeCollectedTodayList: { date: string; therapist: string; room: string; amount: number }[] = [];
+    for (const sc of (safeCollToday || [])) {
+      const rm3 = (rooms || []).find((r: any) => r.id === sc.room_id);
+      const bl3 = rm3 ? (blds || []).find((b: any) => b.id === rm3.building_id) : null;
+      const net3 = Math.max((sc.total_cash || 0) - (sc.final_payment || 0), 0);
+      const { data: repSc } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", sc.room_id).eq("date", sc.date);
+      const repAmt3 = (repSc || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
+      safeCollectedTodayList.push({ date: sc.date, therapist: getThName(sc.therapist_id), room: `${bl3?.name || ""}${rm3?.name || ""}`, amount: net3 + repAmt3 });
+    }
+    const safeCollectedTodayTotal = safeCollectedTodayList.reduce((s: number, x: any) => s + x.amount, 0);
+
     // セラピスト別売上
     const therapistSales = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
       const tRes = completed.filter(r => r.therapist_id === tid);
@@ -206,7 +239,7 @@ export default function Dashboard() {
       expenseList, expenseTotal, incomeList, incomeTotal,
       netProfit, therapistData, totalOut,
       staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
-      therapistSales
+      therapistSales, safeUncollectedList, safeTotalUncollected, safeCollectedTodayList, safeCollectedTodayTotal,
     });
     setClosingLoading(false);
   }, []);
@@ -370,6 +403,7 @@ export default function Dashboard() {
             ) : (
               <button onClick={() => { setShowPinModal(true); setPinInput(""); setPinError(""); }} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer font-medium" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>🔑 スタッフログイン</button>
             )}
+            <button onClick={async () => { setShowSafeList(true); const { data: rooms2 } = await supabase.from("rooms").select("*"); const { data: blds2 } = await supabase.from("buildings").select("*"); const { data: thList2 } = await supabase.from("therapists").select("id,name"); const getName2 = (id: number) => (thList2 || []).find((t: any) => t.id === id)?.name || "不明"; const { data: sf } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).is("safe_collected_date", null); const items: typeof safeUncollected = []; for (const s of (sf || [])) { const rm = (rooms2 || []).find((r: any) => r.id === s.room_id); const bl = rm ? (blds2 || []).find((b: any) => b.id === rm.building_id) : null; const { data: rep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", s.room_id).eq("date", s.date); const repAmt = (rep || []).reduce((sum: number, r: any) => sum + r.amount, 0); items.push({ id: s.id, date: s.date, total_cash: s.total_cash || 0, final_payment: s.final_payment || 0, room_id: s.room_id, therapist_name: getName2(s.therapist_id), room_label: (bl?.name || "") + (rm?.name || ""), replenish: repAmt }); } setSafeUncollected(items); const { data: sfH } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).not("safe_collected_date", "is", null).order("safe_collected_date", { ascending: false }).limit(20); const hItems: typeof safeHistory = []; for (const s of (sfH || [])) { const rm = (rooms2 || []).find((r: any) => r.id === s.room_id); const bl = rm ? (blds2 || []).find((b: any) => b.id === rm.building_id) : null; const { data: rep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", s.room_id).eq("date", s.date); const repAmt = (rep || []).reduce((sum: number, r: any) => sum + r.amount, 0); hItems.push({ id: s.id, date: s.date, total_cash: s.total_cash || 0, final_payment: s.final_payment || 0, room_id: s.room_id, therapist_name: getName2(s.therapist_id), room_label: (bl?.name || "") + (rm?.name || ""), replenish: repAmt, safe_collected_date: s.safe_collected_date }); } setSafeHistory(hItems); }} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer border" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
             <button onClick={toggle} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
             <div className="w-px h-5" style={{ backgroundColor: T.border }} />
             <button onClick={handleLogout} className="text-[11px] cursor-pointer" style={{ color: T.textMuted }}>ログアウト</button>
@@ -610,11 +644,25 @@ export default function Dashboard() {
                         </div>
                       ))}
                       <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#f59e0b" }}><span>未回収合計（ルームにある現金）</span><span>{fmt(closingData.totalUncollected)}</span></div>
+                      {closingData.safeUncollectedList.length > 0 && (
+                        <div className="pt-2 mt-2" style={{ borderTop: `1px dashed ${T.border}` }}>
+                          <div className="flex justify-between font-bold pt-1" style={{ color: "#a855f7" }}><span>🔐 金庫未回収合計</span><span>{fmt(closingData.safeTotalUncollected)}</span></div>
+                        </div>
+                      )}
+                      {closingData.safeCollectedTodayList.length > 0 && (
+                        <div className="pt-2 mt-2" style={{ borderTop: `1px dashed ${T.border}` }}>
+                          <p className="text-[9px] font-medium mb-1" style={{ color: "#a855f7" }}>🔐 金庫回収分（本日回収）</p>
+                          {closingData.safeCollectedTodayList.map((s: any, i: number) => (
+                            <div key={i} className="flex justify-between py-0.5 text-[11px]"><span style={{ color: T.textSub }}>{s.date.slice(5)} {s.room} {s.therapist}</span><span style={{ color: "#a855f7" }}>+{fmt(s.amount)}</span></div>
+                          ))}
+                          <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#a855f7" }}><span>金庫回収合計</span><span>+{fmt(closingData.safeCollectedTodayTotal)}</span></div>
+                        </div>
+                      )}
                       <div className="pt-3 mt-2" style={{ borderTop: "2px solid #f59e0b44" }}>
-                        <div className="flex justify-between font-bold text-[15px]"><span style={{ color: "#f59e0b" }}>💴 事務所の残金</span><span style={{ color: closingData.cashOnHand >= 0 ? "#22c55e" : "#c45555" }}>{fmt(closingData.cashOnHand)}</span></div>
+                        <div className="flex justify-between font-bold text-[15px]"><span style={{ color: "#f59e0b" }}>💴 事務所の残金</span><span style={{ color: (closingData.cashOnHand + closingData.safeCollectedTodayTotal) >= 0 ? "#22c55e" : "#c45555" }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal)}</span></div>
                         <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 未回収の売上はルームにあるため含まれません。回収後に事務所の残金が増えます。</p>
-                        {closingData.safeDepositedAmt > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#a855f7" }}>🔐 金庫回収後の残金</span><span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeDepositedAmt)}</span></div>}
-                        {closingData.totalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#22c55e" }}>全額回収後の残金</span><span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeDepositedAmt + closingData.totalUncollected)}</span></div>}
+                        {closingData.safeTotalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#a855f7" }}>🔐 金庫回収後の残金</span><span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected)}</span></div>}
+                        {closingData.totalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#22c55e" }}>全額回収後の残金</span><span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected + closingData.totalUncollected)}</span></div>}
                       </div>
                     </div>
                   </div>
@@ -825,6 +873,58 @@ export default function Dashboard() {
             </div>
             {pinError && <p className="text-[11px] text-center" style={{ color: "#c45555" }}>{pinError}</p>}
             <button onClick={() => setShowPinModal(false)} className="w-full mt-2 py-2 text-[11px] rounded-xl cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+      {/* Safe List Modal */}
+      {showSafeList && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowSafeList(false)}>
+          <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div><h2 className="text-[16px] font-medium">🔐 金庫管理</h2><p className="text-[11px]" style={{ color: T.textFaint }}>投函・回収の一覧</p></div>
+              <button onClick={() => setShowSafeList(false)} className="text-[18px] cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>&times;</button>
+            </div>
+            <div className="space-y-4">
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#a855f712", border: "1px solid #a855f733" }}>
+                <p className="text-[10px] font-medium mb-2" style={{ color: "#a855f7" }}>未回収（金庫内）</p>
+                {safeUncollected.length === 0 ? <p className="text-[11px] text-center py-3" style={{ color: T.textFaint }}>金庫に未回収の投函はありません</p> : (
+                <div className="space-y-1">
+                  {safeUncollected.map(s => {
+                    const safeAmount = Math.max(s.total_cash - s.final_payment, 0) + s.replenish;
+                    return <div key={s.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg text-[11px]" style={{ backgroundColor: T.cardAlt }}>
+                      <span>{s.date.slice(5)} {s.therapist_name} <span style={{ color: T.textFaint, fontSize: 9 }}>({s.room_label})</span></span>
+                      <div className="flex items-center gap-2">
+                        <span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(safeAmount)}</span>
+                        <button onClick={async () => { if (!confirm(`${s.therapist_name}の${fmt(safeAmount)}を回収しますか？`)) return; const today = new Date().toISOString().split("T")[0]; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); setSafeUncollected(prev => prev.filter(x => x.id !== s.id)); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="text-[8px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>回収</button>
+                      </div>
+                    </div>;
+                  })}
+                  <div className="flex justify-between font-bold text-[13px] pt-2" style={{ borderTop: "1px solid #a855f733", color: "#a855f7" }}>
+                    <span>金庫内合計</span>
+                    <span>{fmt(safeUncollected.reduce((s, x) => s + Math.max(x.total_cash - x.final_payment, 0) + x.replenish, 0))}</span>
+                  </div>
+                  <button onClick={async () => { if (!confirm("金庫内の全額を回収しますか？")) return; const today = new Date().toISOString().split("T")[0]; for (const s of safeUncollected) { await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); } setSafeUncollected([]); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="w-full px-3 py-2 bg-gradient-to-r from-[#a855f7] to-[#9333ea] text-white text-[11px] rounded-xl cursor-pointer font-medium mt-2">📦 全額回収</button>
+                </div>
+                )}
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+                <p className="text-[10px] font-medium mb-2" style={{ color: "#22c55e" }}>回収履歴（直近20件）</p>
+                {safeHistory.length === 0 ? <p className="text-[11px] text-center py-3" style={{ color: T.textFaint }}>回収履歴はありません</p> : (
+                <div className="space-y-1">
+                  {safeHistory.map(s => {
+                    const safeAmount = Math.max(s.total_cash - s.final_payment, 0) + s.replenish;
+                    return <div key={s.id} className="flex items-center justify-between py-1 px-2 text-[10px]">
+                      <span style={{ color: T.textSub }}><span style={{ color: "#22c55e" }}>回収{s.safe_collected_date?.slice(5)}</span> | 投函{s.date.slice(5)} {s.therapist_name} <span style={{ fontSize: 8, color: T.textFaint }}>({s.room_label})</span></span>
+                      <div className="flex items-center gap-2">
+                        <span style={{ color: "#22c55e" }}>{fmt(safeAmount)}</span>
+                        <button onClick={async () => { if (!confirm("この回収を取り消しますか？")) return; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: null }).eq("id", s.id); setSafeHistory(prev => prev.filter(x => x.id !== s.id)); setSafeUncollected(prev => [...prev, { id: s.id, date: s.date, total_cash: s.total_cash, final_payment: s.final_payment, room_id: s.room_id, therapist_name: s.therapist_name, room_label: s.room_label, replenish: s.replenish }]); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="text-[7px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "none" }}>取消</button>
+                      </div>
+                    </div>;
+                  })}
+                </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
