@@ -41,6 +41,8 @@ export default function TherapistManagement() {
   const [addPhotoFile, setAddPhotoFile] = useState<File | null>(null); const [addPhotoPreview, setAddPhotoPreview] = useState("");
   const [addNotes, setAddNotes] = useState("");
   const [addEmail, setAddEmail] = useState("");
+  const [addLoginEmail, setAddLoginEmail] = useState("");
+const [addLoginPassword, setAddLoginPassword] = useState("");
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState("");
   const addFileRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +74,8 @@ export default function TherapistManagement() {
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editLoginEmail, setEditLoginEmail] = useState("");
+const [editLoginPassword, setEditLoginPassword] = useState("");
   const [editSaving, setEditSaving] = useState(false); const [editMsg, setEditMsg] = useState("");
   const editFileRef = useRef<HTMLInputElement>(null);
 
@@ -80,6 +84,13 @@ export default function TherapistManagement() {
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null); const [deleting, setDeleting] = useState(false);
+
+const generatePassword = () => {
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    let pw = "";
+    for (let i = 0; i < 8; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+    return pw;
+  };
 
   const fetchTherapists = useCallback(async () => {
     const { data } = await supabase.from("therapists").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
@@ -217,7 +228,7 @@ export default function TherapistManagement() {
       height_cm: parseInt(addHeight) || 0, bust: parseInt(addBust) || 0, waist: parseInt(addWaist) || 0, hip: parseInt(addHip) || 0, cup: addCup,
       photo_width: parseInt(addPhotoW) || 400, photo_height: parseInt(addPhotoH) || 600,
       notes: addNotes.trim(),
-      email: addEmail.trim(), email_verified: false, email_token: crypto.randomUUID(),
+      login_email: addLoginEmail.trim(), login_password: addLoginPassword,
     }).select().single();
     if (error) { setSaving(false); setMsg("登録失敗: " + error.message); return; }
     if (addPhotoFile && data) {
@@ -226,7 +237,7 @@ export default function TherapistManagement() {
     }
     setSaving(false); setMsg("登録しました！");
     setAddName(""); setAddPhone(""); setAddStatus("active"); setAddSalaryType("fixed"); setAddSalaryAmount(""); setAddAge(""); setAddInterval("10"); setAddTransport("0");
-    setAddHeight(""); setAddBust(""); setAddWaist(""); setAddHip(""); setAddCup(""); setAddPhotoFile(null); setAddPhotoPreview(""); setAddPhotoW("400"); setAddPhotoH("600"); setAddNotes(""); setAddEmail("");
+    setAddHeight(""); setAddBust(""); setAddWaist(""); setAddHip(""); setAddCup(""); setAddPhotoFile(null); setAddPhotoPreview(""); setAddPhotoW("400"); setAddPhotoH("600"); setAddNotes(""); setAddEmail(""); setAddLoginEmail(""); setAddLoginPassword("");
     fetchTherapists(); setTimeout(() => { setShowAdd(false); setMsg(""); }, 800);
   };
 
@@ -242,7 +253,7 @@ export default function TherapistManagement() {
     setEditHasInvoice(t.has_invoice || false); setEditInvoiceNum(t.therapist_invoice_number || "");
     setEditInvoicePhoto(null); setEditLicensePhoto(null); setEditLicensePhotoBack(null);
     setEditBirthDate(t.birth_date || "");
-    setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditMsg("");
+    setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditLoginEmail((t as any).login_email || ""); setEditLoginPassword((t as any).login_password || ""); setEditMsg("");
     setEditWelfareFee(String((t as any).welfare_fee ?? 500));
     setEditWelfareOrdersThreshold(String((t as any).welfare_fee_orders_threshold || 0));
     setEditWelfareOrdersAmount(String((t as any).welfare_fee_orders_amount || 0));
@@ -266,6 +277,7 @@ export default function TherapistManagement() {
       real_name: editRealName.trim(), address: editAddress.trim(), birth_date: editBirthDate,
       has_invoice: editHasInvoice, therapist_invoice_number: editInvoiceNum.trim(),
       email: editEmail.trim(),
+      login_email: editLoginEmail.trim(), login_password: editLoginPassword,
       welfare_fee: parseInt(editWelfareFee) || 500,
       welfare_fee_orders_threshold: parseInt(editWelfareOrdersThreshold) || 0,
       welfare_fee_orders_amount: parseInt(editWelfareOrdersAmount) || 0,
@@ -518,6 +530,13 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="090-xxxx-xxxx" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>✉️ メールアドレス</label><input type="email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="example@gmail.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: "#85a8c4" }}>🔐 マイページログイン設定</p>
+                <div className="space-y-2">
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>ログイン用メール</label><input type="email" value={addLoginEmail} onChange={(e) => setAddLoginEmail(e.target.value)} placeholder="mypage@example.com" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>パスワード</label><div className="flex gap-2"><input type="text" value={addLoginPassword} onChange={(e) => setAddLoginPassword(e.target.value)} placeholder="パスワード" className="flex-1 px-3 py-2 rounded-xl text-[12px] outline-none font-mono" style={inputStyle} /><button type="button" onClick={() => setAddLoginPassword(generatePassword())} className="px-3 py-2 text-[10px] rounded-xl cursor-pointer whitespace-nowrap" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>🔄 自動生成</button></div></div>
+                </div>
+              </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ステータス</label><div className="flex gap-2">{Object.entries(statusMap).map(([key, val]) => (<button key={key} onClick={() => setAddStatus(key)} className={`px-3 py-1.5 rounded-xl text-[11px] cursor-pointer ${addStatus === key ? "ring-2 ring-offset-1" : "opacity-50"}`} style={{ backgroundColor: val.bg, color: val.text }}>{val.label}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>給料タイプ</label><select value={addSalaryType} onChange={(e) => setAddSalaryType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">〇〇円UP</option><option value="percent">〇〇%UP</option></select></div>
@@ -564,6 +583,14 @@ export default function TherapistManagement() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📧 メールアドレス {editTarget?.email_verified ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 確認済み</span> : editTarget?.email ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未確認</span> : null}</label><input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="example@gmail.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+              <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: "#85a8c4" }}>🔐 マイページログイン設定</p>
+                <div className="space-y-2">
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>ログイン用メール</label><input type="email" value={editLoginEmail} onChange={(e) => setEditLoginEmail(e.target.value)} placeholder="mypage@example.com" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>パスワード</label><div className="flex gap-2"><input type="text" value={editLoginPassword} onChange={(e) => setEditLoginPassword(e.target.value)} placeholder="パスワード" className="flex-1 px-3 py-2 rounded-xl text-[12px] outline-none font-mono" style={inputStyle} /><button type="button" onClick={() => setEditLoginPassword(generatePassword())} className="px-3 py-2 text-[10px] rounded-xl cursor-pointer whitespace-nowrap" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>🔄 自動生成</button></div></div>
+                  {editLoginEmail && editLoginPassword && <div className="rounded-lg p-2 mt-1" style={{ backgroundColor: "#22c55e10" }}><p className="text-[9px]" style={{ color: "#22c55e" }}>✅ マイページURL: {typeof window !== "undefined" ? window.location.origin : ""}/mypage</p><p className="text-[9px]" style={{ color: T.textMuted }}>ID: {editLoginEmail} / PW: {editLoginPassword}</p></div>}
+                </div>
+              </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ステータス</label><div className="flex gap-2">{Object.entries(statusMap).map(([key, val]) => (<button key={key} onClick={() => setEditStatus(key)} className={`px-3 py-1.5 rounded-xl text-[11px] cursor-pointer ${editStatus === key ? "ring-2 ring-offset-1" : "opacity-50"}`} style={{ backgroundColor: val.bg, color: val.text }}>{val.label}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>給料タイプ</label><select value={editSalaryType} onChange={(e) => setEditSalaryType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">〇〇円UP</option><option value="percent">〇%UP</option></select></div>
