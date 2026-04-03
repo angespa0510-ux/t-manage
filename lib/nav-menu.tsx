@@ -20,12 +20,13 @@ const NAV_ITEMS = [
   { label: "コース登録", path: "/courses" },
   { label: "利用場所登録", path: "/rooms" },
   { label: "サービス設定", path: "/service-settings" },
+  { label: "マイページ", path: "/mypage" },
 ];
 
 const ICONS: Record<string, string> = {
   "HOME": "🏠", "タイムチャート": "📅", "部屋割り管理": "🏢", "セラピスト勤怠": "⏰",
   "売上分析": "📊", "顧客一覧": "👥", "顧客登録": "📝", "セラピスト登録": "💆",
-  "コース登録": "📋", "利用場所登録": "🔑", "サービス設定": "⚙️", "経費管理": "💰", "税務報告": "📑", "スタッフ設定": "👥",
+  "コース登録": "📋", "利用場所登録": "🔑", "サービス設定": "⚙️", "経費管理": "💰", "税務報告": "📑", "スタッフ設定": "👥","マイページ": "👤",
 };
 
 function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }) {
