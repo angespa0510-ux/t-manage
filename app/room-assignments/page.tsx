@@ -42,7 +42,7 @@ const BIZ_START = 1200; const BIZ_END = 2700; const MIN_GAP = 4; const INTERVAL_
 function isWeekend(d: string) { const dt = new Date(d + "T00:00:00"); const w = dt.getDay(); return w === 0 || w === 5 || w === 6; }
 function getWeekMonday(d: string) { const dt = new Date(d + "T00:00:00"); const w = dt.getDay(); dt.setDate(dt.getDate() - (w === 0 ? 6 : w - 1)); return dt.toISOString().split("T")[0]; }
 function getPrevDate(d: string) { const dt = new Date(d + "T00:00:00"); dt.setDate(dt.getDate() - 1); return dt.toISOString().split("T")[0]; }
-function timeToRaw(t: string) { const [h, m] = t.split(":").map(Number); return (h < 9 ? h + 24 : h) * 100 + m; }
+function timeToRaw(t: string) { if (!t) return 1200; const [h, m] = t.split(":").map(Number); return (h < 9 ? h + 24 : h) * 100 + m; }
 function rawToDisplay(r: number) { const h = Math.floor(r / 100); const m = r % 100; return `${h >= 24 ? h - 24 : h}:${String(m).padStart(2, "0")}`; }
 function formatDateShort(d: string) { const dt = new Date(d + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return `${dt.getMonth() + 1}/${dt.getDate()}(${days[dt.getDay()]})`; }
 
@@ -67,6 +67,29 @@ export default function RoomAssignments() {
   const [allStaffSchedules, setAllStaffSchedules] = useState<StaffSchedule[]>([]);
   const [allDailyTasks, setAllDailyTasks] = useState<DailyTask[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [dragTherapistId, setDragTherapistId] = useState<number>(0);
+  const [dragOverSlot, setDragOverSlot] = useState<string>("");
+ const dragScrollRef = useRef<number>(0);
+useEffect(() => {
+  if (!dragTherapistId) { cancelAnimationFrame(dragScrollRef.current); return; }
+  let mouseY = 0;
+  const handleDragOver = (e: DragEvent) => { e.preventDefault(); mouseY = e.clientY; };
+  const scrollLoop = () => {
+    const h = window.innerHeight;
+    const zone = 150;
+    if (mouseY > 0 && mouseY < zone) {
+      const speed = Math.round(((zone - mouseY) / zone) * 30);
+      window.scrollBy(0, -speed);
+    } else if (mouseY > h - zone) {
+      const speed = Math.round(((mouseY - (h - zone)) / zone) * 30);
+      window.scrollBy(0, speed);
+    }
+    dragScrollRef.current = requestAnimationFrame(scrollLoop);
+  };
+  window.addEventListener("dragover", handleDragOver);
+  dragScrollRef.current = requestAnimationFrame(scrollLoop);
+  return () => { window.removeEventListener("dragover", handleDragOver); cancelAnimationFrame(dragScrollRef.current); };
+}, [dragTherapistId]);
   const [staffOpen, setStaffOpen] = useState(true);
   const [taskOpen, setTaskOpen] = useState(true);
   const [viewFilter, setViewFilter] = useState<"all" | "rooms" | "staff" | "tasks">("all");
@@ -117,6 +140,19 @@ export default function RoomAssignments() {
   }, [currentMonth, daysInMonth, year, month]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
+
+  // リアルタイム同期
+  useEffect(() => {
+    const channel = supabase.channel("room-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_assignments" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "staff_schedules" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_tasks" }, () => fetchData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchData]); 
+  
   useEffect(() => { setTimeout(() => { dayRefs.current[todayStr]?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 300); }, []);
 
   const calcPoints = useCallback((tid: number) => {
@@ -338,6 +374,7 @@ export default function RoomAssignments() {
                     <span className="text-[15px] font-medium w-[28px]" style={{ color: f.isToday ? T.accent : f.isSun ? "#c45555" : f.isSat ? "#3d6b9f" : T.text }}>{f.day}</span>
                     <span className="text-[12px]" style={{ color: f.isSun ? "#c45555" : f.isSat ? "#3d6b9f" : T.textMuted }}>({f.dow})</span>
                     {f.isToday && <span className="px-2 py-0.5 text-white text-[9px] rounded-full" style={{ backgroundColor: T.accent }}>今日</span>}
+                    <span onClick={(e) => { e.stopPropagation(); router.push(`/timechart?date=${date}`); }} className="px-2 py-0.5 text-[9px] rounded-full cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📅 タイムチャート</span>
                     <span className="text-[11px] ml-2" style={{ color: T.textMuted }}>出勤:{dayShifts.length}名</span>
                     {dayA.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#7ab88f" }}>割当:{dayA.length}</span>}
                     {dayAb.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#c45555" }}>当欠:{dayAb.length}</span>}
@@ -352,13 +389,13 @@ export default function RoomAssignments() {
                   <div className="px-5 pb-5 animate-[fadeIn_0.3s]" style={{ backgroundColor: T.card }}>
                     
                     {(viewFilter === "all" || viewFilter === "rooms") && (<>
-                    <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                      <p className="text-[10px] mb-2" style={{ color: T.textMuted }}>出勤セラピスト</p>
+                    <div className="mb-4 p-3 rounded-xl transition-all" onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverSlot(`${date}-unassign`); }} onDragLeave={() => setDragOverSlot("")} onDrop={async (e) => { e.preventDefault(); if (dragTherapistId) { const oldA = dayA.find(a => a.therapist_id === dragTherapistId); if (oldA) { await supabase.from("room_assignments").delete().eq("id", oldA.id); fetchData(); } setDragTherapistId(0); setDragOverSlot(""); } }} style={{ backgroundColor: dragOverSlot === `${date}-unassign` ? "#c4555520" : T.cardAlt, border: dragOverSlot === `${date}-unassign` ? "2px dashed #c45555" : "2px solid transparent" }}>
+                     <p className="text-[10px] mb-2" style={{ color: dragOverSlot === `${date}-unassign` ? "#c45555" : T.textMuted }}>{dragOverSlot === `${date}-unassign` ? "🗑 ここにドロップで割り当て解除" : "出勤セラピスト"}</p>
                       {dayShifts.length === 0 ? <p className="text-[11px]" style={{ color: T.textFaint }}>シフトが登録されていません</p> : (
                         <div className="flex flex-wrap gap-1.5">
                           {dayShifts.map((s) => { const asgn = dayA.some((a) => a.therapist_id === s.therapist_id); const tp = getTherapistParking(date, s.therapist_id); const sn = tp ? parkingSpots.find((ps) => ps.id === tp.parking_spot_id)?.number : null; const { points } = calcPoints(s.therapist_id); const isW = points <= -5;
-                            return (<span key={s.id} className="px-2 py-1 rounded-md text-[10px] font-medium" style={{ backgroundColor: isW ? "#c4555518" : asgn ? "#7ab88f18" : "#f59e0b18", color: isW ? "#c45555" : asgn ? "#4a7c59" : "#854f0b", border: isW ? "1px solid #c4555544" : "none" }}>
-                              {getTherapistName(s.therapist_id)} {s.start_time}〜{s.end_time}{isW && <span className="ml-1">⚠{points}pt</span>}{sn && <span className="ml-1" style={{ color: "#3d6b9f" }}>🅿{sn}</span>}
+                            return (<span key={s.id} draggable onDragStart={(e) => { setDragTherapistId(s.therapist_id); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => { setDragTherapistId(0); setDragOverSlot(""); }} className="px-2 py-1 rounded-md text-[10px] font-medium" style={{ backgroundColor: isW ? "#c4555518" : dragTherapistId === s.therapist_id ? "#c3a78240" : asgn ? "#7ab88f18" : "#f59e0b18", color: isW ? "#c45555" : asgn ? "#4a7c59" : "#854f0b", border: isW ? "1px solid #c4555544" : dragTherapistId === s.therapist_id ? "2px solid #c3a782" : "none", cursor: "grab", opacity: dragTherapistId && dragTherapistId !== s.therapist_id ? 0.4 : 1, transition: "all 0.15s" }}>
+                              {!asgn && "⠿ "}{getTherapistName(s.therapist_id)} {s.start_time}〜{s.end_time}{isW && <span className="ml-1">⚠{points}pt</span>}{sn && <span className="ml-1" style={{ color: "#3d6b9f" }}>🅿{sn}</span>}
                             </span>); })}
                         </div>
                       )}
@@ -395,8 +432,9 @@ export default function RoomAssignments() {
                               <div className="flex items-stretch gap-2">
                                 <div className="w-[50px] rounded-lg flex items-center justify-center flex-shrink-0 font-medium text-[14px]" style={{ backgroundColor: sc + "18", color: sc }}>{room.name}</div>
                                 {/* Early */}
-                                <div className="flex-1 rounded-lg p-2" style={{ border: `2px solid ${eB}30`, backgroundColor: eA ? eB + "08" : T.card }}>
+                                <div className="flex-1 rounded-lg p-2 transition-all" onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverSlot(`${date}-${room.id}-early`); }} onDragLeave={() => setDragOverSlot("")} onDrop={async (e) => { e.preventDefault(); if (dragTherapistId) { const oldA = dayA.find(a => a.therapist_id === dragTherapistId); if (oldA) { await supabase.from("room_assignments").update({ room_id: room.id, slot: "early" }).eq("id", oldA.id); fetchData(); } else { const sh = allShifts.find(s => s.therapist_id === dragTherapistId && s.date === date); await supabase.from("room_assignments").insert({ date, room_id: room.id, slot: "early", therapist_id: dragTherapistId, start_time: sh?.start_time || "12:00", end_time: sh?.end_time || "18:00", attendance: "", cleaning: "", memo: "" }); fetchData(); } setDragTherapistId(0); setDragOverSlot(""); } }} style={{ border: dragOverSlot === `${date}-${room.id}-early` ? "2px solid #c3a782" : `2px solid ${eB}30`, backgroundColor: dragOverSlot === `${date}-${room.id}-early` ? "#c3a78218" : eA ? eB + "08" : T.card, transform: dragOverSlot === `${date}-${room.id}-early` ? "scale(1.02)" : "none" }}>
                                   <div className="flex items-center gap-2"><span className="text-[8px] font-medium" style={{ color: "#7ab88f" }}>早番</span>
+                                    {eA && <span draggable onDragStart={(e) => { setDragTherapistId(eA.therapist_id); e.dataTransfer.effectAllowed = "move"; e.stopPropagation(); }} onDragEnd={() => { setDragTherapistId(0); setDragOverSlot(""); }} className="text-[9px] cursor-grab px-1 rounded" style={{ color: "#c3a782" }} title="ドラッグで移動">⠿</span>}
                                     <select value={eA?.therapist_id || 0} onChange={(e) => assignTherapist(date, room.id, "early", Number(e.target.value))} className="flex-1 px-2 py-1 bg-transparent border-none text-[11px] outline-none cursor-pointer" style={{ color: T.text }}><option value={0}>—</option>{availE.map((s) => (<option key={s.therapist_id} value={s.therapist_id}>{getTherapistName(s.therapist_id)}</option>))}</select></div>
                                   {eA && (<>
                                     <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1">
@@ -410,8 +448,9 @@ export default function RoomAssignments() {
                                   </>)}
                                 </div>
                                 {/* Late */}
-                                <div className="flex-1 rounded-lg p-2" style={{ border: `2px solid ${lB}30`, backgroundColor: lA ? lB + "08" : T.card }}>
+                                <div className="flex-1 rounded-lg p-2 transition-all" onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverSlot(`${date}-${room.id}-late`); }} onDragLeave={() => setDragOverSlot("")} onDrop={async (e) => { e.preventDefault(); if (dragTherapistId) { const oldA = dayA.find(a => a.therapist_id === dragTherapistId); if (oldA) { await supabase.from("room_assignments").update({ room_id: room.id, slot: "late" }).eq("id", oldA.id); fetchData(); } else { const sh = allShifts.find(s => s.therapist_id === dragTherapistId && s.date === date); await supabase.from("room_assignments").insert({ date, room_id: room.id, slot: "late", therapist_id: dragTherapistId, start_time: sh?.start_time || "18:00", end_time: sh?.end_time || "03:00", attendance: "", cleaning: "", memo: "" }); fetchData(); } setDragTherapistId(0); setDragOverSlot(""); } }} style={{ border: dragOverSlot === `${date}-${room.id}-late` ? "2px solid #c3a782" : `2px solid ${lB}30`, backgroundColor: dragOverSlot === `${date}-${room.id}-late` ? "#c3a78218" : lA ? lB + "08" : T.card, transform: dragOverSlot === `${date}-${room.id}-late` ? "scale(1.02)" : "none" }}>
                                   <div className="flex items-center gap-2"><span className="text-[8px] font-medium" style={{ color: "#c49885" }}>遅番</span>
+                                    {lA && <span draggable onDragStart={(e) => { setDragTherapistId(lA.therapist_id); e.dataTransfer.effectAllowed = "move"; e.stopPropagation(); }} onDragEnd={() => { setDragTherapistId(0); setDragOverSlot(""); }} className="text-[9px] cursor-grab px-1 rounded" style={{ color: "#c3a782" }} title="ドラッグで移動">⠿</span>}
                                     <select value={lA?.therapist_id || 0} onChange={(e) => assignTherapist(date, room.id, "late", Number(e.target.value))} className="flex-1 px-2 py-1 bg-transparent border-none text-[11px] outline-none cursor-pointer" style={{ color: T.text }}><option value={0}>—</option>{availL.map((s) => (<option key={s.therapist_id} value={s.therapist_id}>{getTherapistName(s.therapist_id)}</option>))}</select></div>
                                   {lA && (<>
                                     <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1">
