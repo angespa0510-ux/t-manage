@@ -20,6 +20,7 @@ type Visit = {
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
+type CustomerNote = { id: number; therapist_id: number; customer_name: string; note: string; is_ng: boolean; ng_reason: string; rating: number };
 
 const RANKS: Record<string, { label: string; color: string; bg: string; desc: string }> = {
   banned: { label: "出禁", color: "#c45555", bg: "#c4555518", desc: "一切当店の利用を禁止" },
@@ -100,6 +101,7 @@ export default function Dashboard() {
   // Detail / History
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
   const [showAddVisit, setShowAddVisit] = useState(false);
   const [vDate, setVDate] = useState(""); const [vStart, setVStart] = useState("12:00"); const [vEnd, setVEnd] = useState("13:00");
   const [vTherapistId, setVTherapistId] = useState(0); const [vStoreId, setVStoreId] = useState(0);
@@ -310,7 +312,16 @@ export default function Dashboard() {
   const handleDelete = async () => { if (!deleteTarget) return; setDeleting(true); await supabase.from("customers").delete().eq("id", deleteTarget.id); setDeleting(false); setDeleteTarget(null); fetchCustomers(); };
 
   // Detail
-  const openDetail = (c: Customer) => { setDetailCustomer(c); fetchVisits(c.id); };
+  const fetchCustomerNotes = async (customerName: string) => {
+    const { data } = await supabase.from("therapist_customer_notes").select("*").eq("customer_name", customerName).order("id", { ascending: false });
+    if (data) setCustomerNotes(data);
+  };
+  const openDetail = (c: Customer) => { setDetailCustomer(c); fetchVisits(c.id); fetchCustomerNotes(c.name); };
+  const deleteCustomerNote = async (noteId: number) => {
+    if (!confirm("このセラピストメモを削除しますか？")) return;
+    await supabase.from("therapist_customer_notes").delete().eq("id", noteId);
+    if (detailCustomer) fetchCustomerNotes(detailCustomer.name);
+  };
 
   // Add Visit
   const handleAddVisit = async () => {
@@ -766,6 +777,36 @@ export default function Dashboard() {
 
             {/* Visit History */}
             <div className="px-6 py-4">
+
+              {/* セラピストメモ */}
+              {customerNotes.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-[14px] font-medium mb-3">💆 セラピストメモ（{customerNotes.length}件）</h3>
+                  <div className="space-y-2">
+                    {customerNotes.map((cn) => {
+                      const tName = getTherapistName(cn.therapist_id);
+                      const stars = "★".repeat(cn.rating || 0) + "☆".repeat(5 - (cn.rating || 0));
+                      return (
+                        <div key={cn.id} className="rounded-xl p-3 border" style={{ borderColor: cn.is_ng ? "#c4555544" : T.border, backgroundColor: cn.is_ng ? "#c4555508" : T.cardAlt }}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-[12px] font-medium">{tName}</span>
+                                {cn.rating > 0 && <span className="text-[10px]" style={{ color: "#f59e0b" }}>{stars}</span>}
+                                {cn.is_ng && <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠ NG</span>}
+                              </div>
+                              {cn.note && <p className="text-[11px] whitespace-pre-wrap" style={{ color: T.textSub }}>{cn.note}</p>}
+                              {cn.is_ng && cn.ng_reason && <p className="text-[10px] mt-1" style={{ color: "#c45555" }}>NG理由: {cn.ng_reason}</p>}
+                            </div>
+                            <button onClick={() => deleteCustomerNote(cn.id)} className="text-[9px] px-2 py-1 rounded cursor-pointer flex-shrink-0 ml-2" style={{ color: "#c45555", backgroundColor: "#c4555512" }}>削除</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[14px] font-medium">利用履歴（{visits.length}件）</h3>
                 <button onClick={() => { setShowAddVisit(true); setVDate(new Date().toISOString().split("T")[0]); }} className="px-3 py-1.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[10px] rounded-lg cursor-pointer">+ オーダー登録</button>

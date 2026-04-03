@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 export default function Home() {
   const router = useRouter();
-  const [role, setRole] = useState<"staff" | "therapist">("staff");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,11 +27,7 @@ export default function Home() {
     if (authError) {
       setError("メールアドレスまたはパスワードが正しくありません");
     } else if (data.user) {
-      if (role === "staff") {
-        router.push("/dashboard");
-      } else {
-        router.push("/mypage");
-      }
+      router.push("/dashboard");
     }
   };
 
@@ -74,66 +69,8 @@ export default function Home() {
 
         {/* Login Card */}
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8 backdrop-blur-xl">
-          {/* Role Selector */}
-          <div className="grid grid-cols-2 gap-2.5 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setRole("staff");
-                setError("");
-              }}
-              className={`h-11 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer ${
-                role === "staff"
-                  ? "border border-[#c3a782]/40 bg-[#c3a782]/15 text-[#c3a782]"
-                  : "border border-white/[0.06] text-[#f0ece4]/50 hover:border-white/10 hover:bg-white/[0.02]"
-              }`}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              スタッフ
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setRole("therapist");
-                setError("");
-              }}
-              className={`h-11 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer ${
-                role === "therapist"
-                  ? "border border-[#c3a782]/40 bg-[#c3a782]/15 text-[#c3a782]"
-                  : "border border-white/[0.06] text-[#f0ece4]/50 hover:border-white/10 hover:bg-white/[0.02]"
-              }`}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 22c5.5-3 8.5-6.5 8.5-11a8.5 8.5 0 0 0-17 0c0 4.5 3 8 8.5 11z" />
-                <circle cx="12" cy="11" r="3" />
-              </svg>
-              セラピスト
-            </button>
-          </div>
-
           {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
+          <div className="flex items-center gap-4 mb-6">
             <div className="flex-1 h-px bg-white/[0.06]" />
             <span className="text-[10px] tracking-[2px] uppercase text-[#f0ece4]/30">
               ログイン

@@ -20,6 +20,7 @@ type AbsentRecord = { id: number; date: string; therapist_id: number; room_id: n
 type StaffMember = { id: number; name: string; role: string; unit_price: number; transport_fee: number; status: string };
 type StaffSchedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_checked: boolean; checked_by: string; clock_in_time: string; clock_out_time: string; break_minutes: number };
 type DailyTask = { id: number; date: string; title: string; is_completed: boolean; completed_by: string; completed_at: string; sort_order: number };
+type ShiftRequest = { id: number; therapist_id: number; week_start: string; date: string; start_time: string; end_time: string; store_id: number; status: string; notes: string };
 
 const CLEAN_OPTS: { value: string; label: string; color: string }[] = [
   { value: "", label: "—", color: "#b4b2a9" },
@@ -66,6 +67,7 @@ export default function RoomAssignments() {
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [allStaffSchedules, setAllStaffSchedules] = useState<StaffSchedule[]>([]);
   const [allDailyTasks, setAllDailyTasks] = useState<DailyTask[]>([]);
+  const [allShiftRequests, setAllShiftRequests] = useState<ShiftRequest[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [dragTherapistId, setDragTherapistId] = useState<number>(0);
   const [dragOverSlot, setDragOverSlot] = useState<string>("");
@@ -132,6 +134,7 @@ useEffect(() => {
     const { data: stfList } = await supabase.from("staff").select("*").eq("status", "active").order("id"); if (stfList) setStaffList(stfList);
     const { data: stfSch } = await supabase.from("staff_schedules").select("*").gte("date", startDate).lte("date", endDate).order("start_time"); if (stfSch) setAllStaffSchedules(stfSch);
     const { data: dtasks } = await supabase.from("daily_tasks").select("*").gte("date", startDate).lte("date", endDate).order("sort_order"); if (dtasks) setAllDailyTasks(dtasks);
+    const { data: sr } = await supabase.from("shift_requests").select("*").gte("date", startDate).lte("date", endDate).in("status", ["pending", "approved"]).order("date"); if (sr) setAllShiftRequests(sr);
     const prevLastDay = getPrevDate(startDate);
     const { data: prevA } = await supabase.from("room_assignments").select("*").eq("date", prevLastDay).eq("slot", "late"); if (prevA) setPrevMonthAssignments(prevA);
     const tma = new Date(year, month - 4, 1); const pointStart = `${tma.getFullYear()}-${String(tma.getMonth() + 1).padStart(2, "0")}-01`;
@@ -179,6 +182,30 @@ useEffect(() => {
   const getAbsentsForDate = (date: string) => absentRecords.filter((ab) => ab.date === date);
   const isTherapistAssigned = (date: string, tid: number) => allAssignments.some((a) => a.date === date && a.therapist_id === tid);
   const getPrevLateCleaning = (date: string, roomId: number): string => { const p = getPrevDate(date); const pl = allAssignments.find((a) => a.date === p && a.room_id === roomId && a.slot === "late"); if (pl) return pl.cleaning || ""; const pml = prevMonthAssignments.find((a) => a.room_id === roomId); return pml?.cleaning || ""; };
+  const getShiftRequestsForDate = (date: string) => allShiftRequests.filter((sr) => sr.date === date);
+
+  // シフト希望を確定する（shift_requests→approved、shifts→confirmed挿入）
+  const approveShiftRequest = async (req: ShiftRequest) => {
+    await supabase.from("shift_requests").update({ status: "approved" }).eq("id", req.id);
+    const { data: existing } = await supabase.from("shifts").select("id").eq("therapist_id", req.therapist_id).eq("date", req.date).limit(1);
+    if (existing && existing.length > 0) {
+      await supabase.from("shifts").update({ store_id: req.store_id || null, start_time: req.start_time, end_time: req.end_time, status: "confirmed" }).eq("id", existing[0].id);
+    } else {
+      await supabase.from("shifts").insert({ therapist_id: req.therapist_id, store_id: req.store_id || null, date: req.date, start_time: req.start_time, end_time: req.end_time, status: "confirmed" });
+    }
+    fetchData();
+  };
+
+  // 確定したシフト希望を未確定に戻す
+  const revertShiftRequest = async (req: ShiftRequest) => {
+    await supabase.from("shift_requests").update({ status: "pending" }).eq("id", req.id);
+    // 対応するshiftsレコードを削除
+    const { data: existing } = await supabase.from("shifts").select("id").eq("therapist_id", req.therapist_id).eq("date", req.date).eq("status", "confirmed").limit(1);
+    if (existing && existing.length > 0) {
+      await supabase.from("shifts").delete().eq("id", existing[0].id);
+    }
+    fetchData();
+  };
 
   const assignTherapist = async (date: string, roomId: number, slot: string, tid: number) => {
     const ex = getAssignment(date, roomId, slot);
@@ -366,7 +393,7 @@ useEffect(() => {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[1100px] mx-auto py-4 px-4">
           {allDates.map((date) => {
-            const f = formatDay(date); const dayShifts = getShiftsForDate(date); const dayA = getAssignmentsForDate(date); const dayPU = getParkingUsageForDate(date); const dayAb = getAbsentsForDate(date); const isExp = expandedDays.has(date);
+            const f = formatDay(date); const dayShifts = getShiftsForDate(date); const dayA = getAssignmentsForDate(date); const dayPU = getParkingUsageForDate(date); const dayAb = getAbsentsForDate(date); const dayReqs = getShiftRequestsForDate(date); const isExp = expandedDays.has(date);
             return (
               <div key={date} ref={(el) => { dayRefs.current[date] = el; }} className="mb-1 rounded-xl overflow-hidden border transition-all" style={{ borderColor: isExp ? T.accent + "44" : "transparent", boxShadow: isExp ? "0 4px 20px rgba(0,0,0,0.06)" : "none" }}>
                 <button onClick={() => setExpandedDays(prev => { const next = new Set(prev); if (next.has(date)) next.delete(date); else next.add(date); return next; })} className="w-full flex items-center justify-between px-5 py-3 cursor-pointer" style={{ backgroundColor: isExp ? T.card : f.isToday ? T.accentBg : "transparent" }}>
@@ -381,6 +408,7 @@ useEffect(() => {
                     {dayPU.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#85a8c4" }}>🅿{dayPU.length}</span>}
                     {getStaffSchedulesForDate(date).length > 0 && <span className="text-[11px] ml-1" style={{ color: "#85a8c4" }}>👤{getStaffSchedulesForDate(date).length}</span>}
                     {getDailyTasksForDate(date).filter(t => !t.is_completed).length > 0 && <span className="text-[11px] ml-1" style={{ color: "#f59e0b" }}>📋{getDailyTasksForDate(date).filter(t => !t.is_completed).length}</span>}
+                    {dayReqs.filter(r => r.status === "pending").length > 0 && <span className="text-[11px] ml-1 px-1.5 py-0.5 rounded-full" style={{ color: "#fff", backgroundColor: "#c3a782" }}>⏳希望{dayReqs.filter(r => r.status === "pending").length}</span>}
                   </div>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textFaint} strokeWidth="2" style={{ transform: isExp ? "rotate(180deg)" : "", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
@@ -401,6 +429,43 @@ useEffect(() => {
                       )}
                       {dayAb.length > 0 && (<div className="mt-2 flex flex-wrap gap-1.5">{dayAb.map((ab) => (<span key={ab.id} className="px-2 py-1 rounded-md text-[10px] font-medium" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "1px solid #c4555530" }}>❌ {getTherapistName(ab.therapist_id)} 当欠<button onClick={() => cancelAbsent(ab.id)} className="ml-1.5 px-1 py-0.5 rounded text-[8px] cursor-pointer" style={{ backgroundColor: T.card, border: "1px solid #c4555530", color: "#c45555" }}>取消</button></span>))}</div>)}
                     </div>
+
+                    {/* 未確定シフト希望 */}
+                    {dayReqs.filter(r => r.status === "pending").length > 0 && (
+                      <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: "#c3a78212", border: "1px dashed #c3a78266" }}>
+                        <p className="text-[10px] mb-2 font-medium" style={{ color: "#b09672" }}>⏳ 未確定シフト希望（{dayReqs.filter(r => r.status === "pending").length}件）</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {dayReqs.filter(r => r.status === "pending").map((req) => {
+                            const sName = req.store_id ? (stores.find(s => s.id === req.store_id)?.name || "") : "";
+                            return (
+                              <span key={req.id} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium" style={{ backgroundColor: T.card, color: "#b09672", border: "1px solid #c3a78244" }}>
+                                {getTherapistName(req.therapist_id)} {req.start_time}〜{req.end_time}{sName && <span className="text-[9px]" style={{ color: T.textMuted }}>({sName})</span>}
+                                {req.notes && <span className="text-[9px]" style={{ color: T.textMuted }}>📝</span>}
+                                <button onClick={(e) => { e.stopPropagation(); approveShiftRequest(req); }} className="ml-1 px-2 py-0.5 rounded text-[9px] font-bold cursor-pointer" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59", border: "1px solid #4a7c5944" }}>✅ 確定</button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 確定済みシフト希望（戻すボタン付き） */}
+                    {dayReqs.filter(r => r.status === "approved").length > 0 && (
+                      <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: "#4a7c5908", border: "1px solid #4a7c5930" }}>
+                        <p className="text-[10px] mb-2 font-medium" style={{ color: "#4a7c59" }}>✅ 希望から確定済み（{dayReqs.filter(r => r.status === "approved").length}件）</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {dayReqs.filter(r => r.status === "approved").map((req) => {
+                            const sName = req.store_id ? (stores.find(s => s.id === req.store_id)?.name || "") : "";
+                            return (
+                              <span key={req.id} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium" style={{ backgroundColor: T.card, color: "#4a7c59", border: "1px solid #4a7c5944" }}>
+                                {getTherapistName(req.therapist_id)} {req.start_time}〜{req.end_time}{sName && <span className="text-[9px]" style={{ color: T.textMuted }}>({sName})</span>}
+                                <button onClick={(e) => { e.stopPropagation(); revertShiftRequest(req); }} className="ml-1 px-2 py-0.5 rounded text-[9px] font-bold cursor-pointer" style={{ backgroundColor: "#f59e0b18", color: "#b45309", border: "1px solid #f59e0b44" }}>↩ 戻す</button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {stores.map((store, si) => {
                       const sB = buildings.filter((b) => b.store_id === store.id); if (!sB.some((b) => rooms.some((r) => r.building_id === b.id))) return null;

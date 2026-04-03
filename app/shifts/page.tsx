@@ -9,6 +9,7 @@ import { NavMenu } from "../../lib/nav-menu";
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
 type Shift = { id: number; therapist_id: number; store_id: number; date: string; start_time: string; end_time: string; status: string };
+type ShiftRequest = { id: number; therapist_id: number; week_start: string; date: string; start_time: string; end_time: string; store_id: number; status: string; notes: string };
 
 export default function ShiftManagement() {
   const router = useRouter();
@@ -34,6 +35,12 @@ export default function ShiftManagement() {
   const [editEnd, setEditEnd] = useState("");
   const [editStatus, setEditStatus] = useState("");
 
+  // シフト希望タブ
+  const [tabMode, setTabMode] = useState<"shift" | "request">("shift");
+  const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
+  const [reqFilter, setReqFilter] = useState<"pending" | "all">("pending");
+  const [processingReqId, setProcessingReqId] = useState<number | null>(null);
+
   const weekDates = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart + "T00:00:00"); d.setDate(d.getDate() + i); return d.toISOString().split("T")[0]; });
 
   const fetchData = useCallback(async () => {
@@ -41,6 +48,7 @@ export default function ShiftManagement() {
     const { data: s } = await supabase.from("stores").select("*").order("id"); if (s) setStores(s);
     const startDate = weekDates[0]; const endDate = weekDates[6];
     const { data: sh } = await supabase.from("shifts").select("*").gte("date", startDate).lte("date", endDate).order("date"); if (sh) setShifts(sh);
+    const { data: sr } = await supabase.from("shift_requests").select("*").order("date"); if (sr) setShiftRequests(sr);
   }, [weekStart]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -76,6 +84,48 @@ export default function ShiftManagement() {
   const openAddForCell = (tid: number, date: string) => { setAddTherapistId(tid); setAddDate(date); setAddStoreId(stores.length > 0 ? stores[0].id : 0); setAddStart("12:00"); setAddEnd("03:00"); setAddStatus("confirmed"); setMsg(""); setShowAddShift(true); };
   const openEdit = (s: Shift) => { setEditShift(s); setEditStoreId(s.store_id); setEditStart(s.start_time); setEditEnd(s.end_time); setEditStatus(s.status); };
 
+  const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "—";
+
+  // シフト希望 承認
+  const approveRequest = async (req: ShiftRequest) => {
+    setProcessingReqId(req.id);
+    await supabase.from("shift_requests").update({ status: "approved" }).eq("id", req.id);
+    // shiftsテーブルに確定シフトとして登録（既存があれば更新、なければ追加）
+    const { data: existing } = await supabase.from("shifts").select("id").eq("therapist_id", req.therapist_id).eq("date", req.date).limit(1);
+    if (existing && existing.length > 0) {
+      await supabase.from("shifts").update({ store_id: req.store_id || null, start_time: req.start_time, end_time: req.end_time, status: "confirmed" }).eq("id", existing[0].id);
+    } else {
+      await supabase.from("shifts").insert({ therapist_id: req.therapist_id, store_id: req.store_id || null, date: req.date, start_time: req.start_time, end_time: req.end_time, status: "confirmed" });
+    }
+    setProcessingReqId(null);
+    fetchData();
+  };
+
+  // シフト希望 却下
+  const rejectRequest = async (req: ShiftRequest) => {
+    setProcessingReqId(req.id);
+    await supabase.from("shift_requests").update({ status: "rejected" }).eq("id", req.id);
+    setProcessingReqId(null);
+    fetchData();
+  };
+
+  // 一括承認
+  const approveAllPending = async () => {
+    const pending = shiftRequests.filter(r => r.status === "pending");
+    if (pending.length === 0) return;
+    if (!confirm(`未処理のシフト希望${pending.length}件をすべて承認しますか？`)) return;
+    for (const req of pending) {
+      await supabase.from("shift_requests").update({ status: "approved" }).eq("id", req.id);
+      const { data: existing } = await supabase.from("shifts").select("id").eq("therapist_id", req.therapist_id).eq("date", req.date).limit(1);
+      if (existing && existing.length > 0) {
+        await supabase.from("shifts").update({ store_id: req.store_id || null, start_time: req.start_time, end_time: req.end_time, status: "confirmed" }).eq("id", existing[0].id);
+      } else {
+        await supabase.from("shifts").insert({ therapist_id: req.therapist_id, store_id: req.store_id || null, date: req.date, start_time: req.start_time, end_time: req.end_time, status: "confirmed" });
+      }
+    }
+    fetchData();
+  };
+
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
 
   return (
@@ -89,11 +139,24 @@ export default function ShiftManagement() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={() => { setAddDate(new Date().toISOString().split("T")[0]); setAddTherapistId(0); setAddStoreId(stores.length > 0 ? stores[0].id : 0); setMsg(""); setShowAddShift(true); }}
-            className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ シフト追加</button>
+          {tabMode === "shift" && <button onClick={() => { setAddDate(new Date().toISOString().split("T")[0]); setAddTherapistId(0); setAddStoreId(stores.length > 0 ? stores[0].id : 0); setMsg(""); setShowAddShift(true); }}
+            className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ シフト追加</button>}
         </div>
       </div>
 
+      {/* Tab Toggle */}
+      <div className="h-[48px] border-b flex items-center gap-2 px-6 flex-shrink-0" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        <button onClick={() => setTabMode("shift")} className="px-4 py-1.5 rounded-lg text-[12px] cursor-pointer transition-all" style={{ backgroundColor: tabMode === "shift" ? T.accent + "18" : "transparent", color: tabMode === "shift" ? T.accent : T.textMuted, fontWeight: tabMode === "shift" ? 600 : 400 }}>📅 シフト表</button>
+        <button onClick={() => setTabMode("request")} className="px-4 py-1.5 rounded-lg text-[12px] cursor-pointer transition-all flex items-center gap-1.5" style={{ backgroundColor: tabMode === "request" ? "#c3a782" + "18" : "transparent", color: tabMode === "request" ? "#c3a782" : T.textMuted, fontWeight: tabMode === "request" ? 600 : 400 }}>
+          📋 シフト希望
+          {shiftRequests.filter(r => r.status === "pending").length > 0 && (
+            <span className="min-w-[18px] h-[18px] rounded-full bg-[#c45555] text-white text-[9px] font-bold flex items-center justify-center">{shiftRequests.filter(r => r.status === "pending").length}</span>
+          )}
+        </button>
+      </div>
+
+      {/* ===== シフト表タブ ===== */}
+      {tabMode === "shift" && <>
       {/* Week Nav */}
       <div className="h-[52px] border-b flex items-center justify-center gap-4 flex-shrink-0" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <button onClick={prevWeek} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6"/></svg></button>
@@ -180,6 +243,104 @@ export default function ShiftManagement() {
           </div>
         </div>
       </div>
+      </>}
+
+      {/* ===== シフト希望タブ ===== */}
+      {tabMode === "request" && (
+        <div className="flex-1 overflow-auto">
+          <div className="p-6">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-[15px] font-medium">セラピストからのシフト希望</h2>
+                <p className="text-[11px] mt-0.5" style={{ color: T.textFaint }}>マイページから提出されたシフト希望を承認・却下します</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: T.border }}>
+                  <button onClick={() => setReqFilter("pending")} className="px-3 py-1.5 text-[11px] cursor-pointer" style={{ backgroundColor: reqFilter === "pending" ? "#c3a782" + "18" : "transparent", color: reqFilter === "pending" ? "#c3a782" : T.textMuted, fontWeight: reqFilter === "pending" ? 600 : 400 }}>未処理</button>
+                  <button onClick={() => setReqFilter("all")} className="px-3 py-1.5 text-[11px] cursor-pointer border-l" style={{ borderColor: T.border, backgroundColor: reqFilter === "all" ? T.accent + "18" : "transparent", color: reqFilter === "all" ? T.accent : T.textMuted, fontWeight: reqFilter === "all" ? 600 : 400 }}>すべて</button>
+                </div>
+                {shiftRequests.filter(r => r.status === "pending").length > 0 && (
+                  <button onClick={approveAllPending} className="px-4 py-1.5 bg-gradient-to-r from-[#4a7c59] to-[#3d6b4c] text-white text-[11px] rounded-lg cursor-pointer">✅ 一括承認</button>
+                )}
+              </div>
+            </div>
+
+            {/* リスト */}
+            {(() => {
+              const filtered = reqFilter === "pending" ? shiftRequests.filter(r => r.status === "pending") : shiftRequests;
+              // 日付でグループ化
+              const grouped: Record<string, ShiftRequest[]> = {};
+              filtered.forEach(r => { if (!grouped[r.date]) grouped[r.date] = []; grouped[r.date].push(r); });
+              const sortedDates = Object.keys(grouped).sort();
+
+              if (sortedDates.length === 0) return (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <span className="text-[32px] mb-3">📋</span>
+                  <p className="text-[14px]" style={{ color: T.textMuted }}>{reqFilter === "pending" ? "未処理のシフト希望はありません" : "シフト希望はありません"}</p>
+                </div>
+              );
+
+              const reqStatusColors: Record<string, { bg: string; text: string; label: string }> = {
+                pending: { bg: "#f59e0b18", text: "#b45309", label: "⏳ 未処理" },
+                approved: { bg: "#4a7c5918", text: "#4a7c59", label: "✅ 承認済み" },
+                rejected: { bg: "#c4555518", text: "#c45555", label: "❌ 却下" },
+              };
+
+              return (
+                <div className="space-y-4">
+                  {sortedDates.map(date => {
+                    const fd = new Date(date + "T00:00:00");
+                    const days = ["日", "月", "火", "水", "木", "金", "土"];
+                    const isSun = fd.getDay() === 0; const isSat = fd.getDay() === 6;
+                    return (
+                      <div key={date}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[13px] font-medium" style={{ color: isSun ? "#c45555" : isSat ? "#3d6b9f" : T.text }}>{fd.getMonth() + 1}/{fd.getDate()}({days[fd.getDay()]})</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>{grouped[date].length}件</span>
+                        </div>
+                        <div className="space-y-2">
+                          {grouped[date].map(req => {
+                            const sc = reqStatusColors[req.status] || reqStatusColors.pending;
+                            const tName = getTherapistName(req.therapist_id);
+                            const sName = req.store_id ? (stores.find(s => s.id === req.store_id)?.name || "") : "";
+                            return (
+                              <div key={req.id} className="rounded-xl border p-4 transition-all" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-[12px] text-white font-medium flex-shrink-0" style={{ backgroundColor: colors[therapists.findIndex(t => t.id === req.therapist_id) % colors.length] || "#999" }}>{tName.charAt(0)}</div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-[13px] font-medium">{tName}</span>
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: sc.bg, color: sc.text }}>{sc.label}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3 mt-1 text-[11px]" style={{ color: T.textSub }}>
+                                        <span>🕐 {req.start_time}〜{req.end_time}</span>
+                                        {sName && <span>🏠 {sName}</span>}
+                                      </div>
+                                      {req.notes && <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>📝 {req.notes}</p>}
+                                    </div>
+                                  </div>
+                                  {req.status === "pending" && (
+                                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                                      <button onClick={() => approveRequest(req)} disabled={processingReqId === req.id} className="px-4 py-2 rounded-lg text-[11px] cursor-pointer transition-all disabled:opacity-50" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>✅ 承認</button>
+                                      <button onClick={() => rejectRequest(req)} disabled={processingReqId === req.id} className="px-4 py-2 rounded-lg text-[11px] cursor-pointer transition-all disabled:opacity-50" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>❌ 却下</button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Add Modal */}
       {showAddShift && (
