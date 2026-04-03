@@ -157,16 +157,16 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const getStoreShort = (id: number) => stores.find(s => s.id === id)?.name?.replace(/ルーム$/, "") || "";
 
   if (!loggedIn) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#0f0f1a" }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#fff0f3" }}>
       <div className="w-full max-w-[360px]">
-        <div className="text-center mb-8"><div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)" }}><span className="text-white text-2xl font-bold">C</span></div><h1 className="text-xl font-medium text-white">チョップ</h1><p className="text-xs mt-1" style={{ color: "#888" }}>セラピスト マイページ</p></div>
-        <div className="rounded-2xl p-6 space-y-4" style={{ backgroundColor: "#1a1a2e", border: "1px solid #2a2a3e" }}>
-          <div><label className="block text-[10px] mb-1.5" style={{ color: "#888" }}>メールアドレス</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#12121e", color: "#fff", border: "1px solid #2a2a3e" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
-          <div><label className="block text-[10px] mb-1.5" style={{ color: "#888" }}>パスワード</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#12121e", color: "#fff", border: "1px solid #2a2a3e" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
-          {loginError && <p className="text-[11px] text-center" style={{ color: "#c45555" }}>{loginError}</p>}
-          <button onClick={handleLogin} disabled={loginLoading} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)" }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
+        <div className="text-center mb-8"><div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}><span className="text-white text-2xl font-bold">C</span></div><h1 className="text-xl font-medium" style={{ color: "#d4687e" }}>チョップ</h1><p className="text-xs mt-1" style={{ color: "#c4879a" }}>セラピスト マイページ</p></div>
+        <div className="rounded-2xl p-6 space-y-4" style={{ backgroundColor: "#ffffff", border: "1px solid #f0c6d0", boxShadow: "0 8px 30px rgba(232,132,154,0.12)" }}>
+          <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>メールアドレス</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
+          <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>パスワード</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
+          {loginError && <p className="text-[11px] text-center" style={{ color: "#e85d75" }}>{loginError}</p>}
+          <button onClick={handleLogin} disabled={loginLoading} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
         </div>
-        <p className="text-[9px] text-center mt-4" style={{ color: "#555" }}>ログイン情報はオーナーにお問い合わせください</p>
+        <p className="text-[9px] text-center mt-4" style={{ color: "#c4879a" }}>ログイン情報はオーナーにお問い合わせください</p>
       </div>
     </div>
   );
@@ -182,19 +182,19 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium" style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)" }}>{therapist?.name?.charAt(0) || "?"}</div><div><p className="text-[13px] font-medium">{therapist?.name}</p><p className="text-[8px]" style={{ color: T.textMuted }}>マイページ</p></div></div>
-        <div className="flex items-center gap-2"><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>ログアウト</button></div>
+        <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{therapist?.name?.charAt(0) || "?"}</div><div><p className="text-[13px] font-medium">{therapist?.name}</p><p className="text-[8px]" style={{ color: T.textMuted }}>マイページ</p></div></div>
+        <div className="flex items-center gap-2"><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#fce4ec", color: "#d4687e" }}>ログアウト</button></div>
       </div>
       <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
         {[{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }].map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#c3a782")}>{t.label}</button>
+          <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#e8849a")}>{t.label}</button>
         ))}
       </div>
       <div className="flex-1 overflow-y-auto"><div className="max-w-[600px] mx-auto p-4">
 
         {tab === "home" && (<div className="space-y-4">
           {todayShift ? (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p>{todayShift.store_id > 0 && <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>{getStoreName(todayShift.store_id)}</p>}</div>) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
-          <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#c3a782" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
+          <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
 
           {/* カレンダー */}
           {(() => {
@@ -217,7 +217,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                   <div className="text-center">
                     <span className="text-[13px] font-medium">{cy}年{cm}月</span>
                     <div className="flex items-center gap-3 justify-center mt-0.5">
-                      <span className="text-[9px]" style={{ color: "#c3a782" }}>{fmt(calTotal)}</span>
+                      <span className="text-[9px]" style={{ color: "#e8849a" }}>{fmt(calTotal)}</span>
                       <span className="text-[9px]" style={{ color: T.textMuted }}>{calOrders}件</span>
                       <span className="text-[9px]" style={{ color: T.textMuted }}>{calDays}日出勤</span>
                     </div>
@@ -247,17 +247,17 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                     return (
                       <div key={date} onClick={() => setCalDetailDate(date)} className="rounded-lg p-1 text-center min-h-[58px] flex flex-col cursor-pointer hover:opacity-80"
                         style={{
-                          backgroundColor: isToday2 ? "#c3a78215" : hasSettled ? "#22c55e08" : hasWork ? "#85a8c408" : "transparent",
-                          border: isToday2 ? "1.5px solid #c3a782" : hasWork ? `1px solid ${T.border}` : "1px solid transparent",
+                          backgroundColor: isToday2 ? "#e8849a15" : hasSettled ? "#22c55e08" : hasWork ? "#e091a808" : "transparent",
+                          border: isToday2 ? "1.5px solid #e8849a" : hasWork ? `1px solid ${T.border}` : "1px solid transparent",
                         }}>
                         <span className="text-[11px] font-medium" style={{ color: dow === 0 ? "#c45555" : dow === 6 ? "#3d6b9f" : T.text }}>{dayNum}</span>
                         {hasWork && (
-                          <span className="text-[7px] mt-0.5" style={{ color: "#85a8c4" }}>
+                          <span className="text-[7px] mt-0.5" style={{ color: "#e091a8" }}>
                             {shift.start_time?.slice(0,5)}〜
                           </span>
                         )}
                         {hasSettled && (
-                          <span className="text-[7px] font-medium" style={{ color: "#c3a782" }}>
+                          <span className="text-[7px] font-medium" style={{ color: "#e8849a" }}>
                             {fmt(settlement.final_payment)}
                           </span>
                         )}
@@ -275,46 +275,46 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                 </div>
 
                 <div className="flex items-center gap-4 mt-3 pt-2 justify-center flex-wrap" style={{ borderTop: `1px solid ${T.border}` }}>
-                  <span className="flex items-center gap-1 text-[8px]" style={{ color: T.textMuted }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#85a8c420", border: "1px solid #85a8c4" }} /> 出勤予定</span>
+                  <span className="flex items-center gap-1 text-[8px]" style={{ color: T.textMuted }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#e091a820", border: "1px solid #e091a8" }} /> 出勤予定</span>
                   <span className="flex items-center gap-1 text-[8px]" style={{ color: T.textMuted }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#22c55e15" }} /> 清算済み</span>
-                  <span className="flex items-center gap-1 text-[8px]" style={{ color: "#c3a782" }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#c3a78220", border: "1.5px solid #c3a782" }} /> 今日</span>
+                  <span className="flex items-center gap-1 text-[8px]" style={{ color: "#e8849a" }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#e8849a20", border: "1.5px solid #e8849a" }} /> 今日</span>
                   <span className="flex items-center gap-1 text-[8px]" style={{ color: "#f59e0b" }}>⚠ 未清算</span>
                 </div>
               </div>
             );
           })()}
 
-          {upcomingShifts.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[11px] font-medium mb-3">直近の出勤予定</p><div className="space-y-1.5">{upcomingShifts.map(s => (<div key={s.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}><span className="text-[11px]">{formatDate(s.date)}</span><div className="flex items-center gap-2">{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>{getStoreShort(s.store_id)}</span>}<span className="text-[11px] font-medium">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div></div>))}</div></div>)}
+          {upcomingShifts.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[11px] font-medium mb-3">直近の出勤予定</p><div className="space-y-1.5">{upcomingShifts.map(s => (<div key={s.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}><span className="text-[11px]">{formatDate(s.date)}</span><div className="flex items-center gap-2">{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f8bbd018", color: "#e091a8" }}>{getStoreShort(s.store_id)}</span>}<span className="text-[11px] font-medium">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div></div>))}</div></div>)}
         </div>)}
 
         {tab === "shift" && (<div className="space-y-4">
           <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">📝 シフト希望提出</h2><div className="flex items-center gap-2"><button onClick={() => setWeekOffset(Math.max(1, weekOffset - 1))} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button><span className="text-[11px] font-medium min-w-[120px] text-center">{formatDate(weekDates[0])} 〜 {formatDate(weekDates[6])}</span><button onClick={() => setWeekOffset(weekOffset + 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button></div></div>
           <div className="space-y-2">{weekDates.map(d => { const draft = reqDrafts[d]; if (!draft) return null; const dt = new Date(d + "T00:00:00"); const dow = ["日","月","火","水","木","金","土"][dt.getDay()]; const isSun = dt.getDay() === 0; const isSat = dt.getDay() === 6; const existing = shiftRequests.find(r => r.date === d);
-            return (<div key={d} className="rounded-xl border p-3" style={{ backgroundColor: draft.enabled ? "#c3a78210" : T.card, borderColor: draft.enabled ? "#c3a78244" : T.border }}>
+            return (<div key={d} className="rounded-xl border p-3" style={{ backgroundColor: draft.enabled ? "#e8849a10" : T.card, borderColor: draft.enabled ? "#e8849a44" : T.border }}>
               <div className="flex items-center gap-2 mb-1"><button onClick={() => setReqDrafts({ ...reqDrafts, [d]: { ...draft, enabled: !draft.enabled } })} className="text-[14px] cursor-pointer flex-shrink-0" style={{ background: "none", border: "none" }}>{draft.enabled ? "✅" : "⬜"}</button><span className="text-[13px] font-medium min-w-[70px]" style={{ color: isSun ? "#c45555" : isSat ? "#3d6b9f" : T.text }}>{dt.getDate()}日 ({dow})</span>{existing && <span className="text-[8px] px-1.5 py-0.5 rounded ml-auto" style={{ backgroundColor: existing.status === "approved" ? "#22c55e18" : existing.status === "rejected" ? "#c4555518" : "#f59e0b18", color: existing.status === "approved" ? "#22c55e" : existing.status === "rejected" ? "#c45555" : "#f59e0b" }}>{existing.status === "approved" ? "承認済" : existing.status === "rejected" ? "却下" : "提出済"}</span>}</div>
-              {draft.enabled && (<div className="flex items-center gap-1.5 ml-7 flex-wrap"><select value={draft.store_id} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, store_id: Number(e.target.value) } })} className="px-2 py-1.5 rounded-lg text-[10px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: "#85a8c444", color: "#85a8c4", fontWeight: 600 }}><option value={0}>店舗未選択</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><select value={draft.start} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, start: e.target.value } })} className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>{TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select><span className="text-[10px]" style={{ color: T.textMuted }}>〜</span><select value={draft.end} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, end: e.target.value } })} className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>{TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select><input type="text" value={draft.notes} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, notes: e.target.value } })} placeholder="備考" className="flex-1 px-2 py-1.5 rounded-lg text-[10px] outline-none border min-w-[60px]" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} /></div>)}
+              {draft.enabled && (<div className="flex items-center gap-1.5 ml-7 flex-wrap"><select value={draft.store_id} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, store_id: Number(e.target.value) } })} className="px-2 py-1.5 rounded-lg text-[10px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: "#e091a844", color: "#e091a8", fontWeight: 600 }}><option value={0}>店舗未選択</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><select value={draft.start} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, start: e.target.value } })} className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>{TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select><span className="text-[10px]" style={{ color: T.textMuted }}>〜</span><select value={draft.end} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, end: e.target.value } })} className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>{TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select><input type="text" value={draft.notes} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, notes: e.target.value } })} placeholder="備考" className="flex-1 px-2 py-1.5 rounded-lg text-[10px] outline-none border min-w-[60px]" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} /></div>)}
             </div>); })}</div>
           {reqMsg && <p className="text-[11px] text-center" style={{ color: "#22c55e" }}>{reqMsg}</p>}
-          <div className="flex gap-2"><button onClick={submitShiftRequests} disabled={reqSaving} className="flex-1 py-3 rounded-xl text-[12px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)" }}>{reqSaving ? "送信中..." : "シフト希望を提出"}</button><button onClick={copyShiftToClipboard} className="px-4 py-3 rounded-xl text-[11px] font-medium cursor-pointer border" style={{ borderColor: copiedShift ? "#22c55e" : "#85a8c444", color: copiedShift ? "#22c55e" : "#85a8c4", backgroundColor: copiedShift ? "#22c55e18" : "transparent" }}>{copiedShift ? "✅ コピー済" : "📋 LINE用コピー"}</button></div>
+          <div className="flex gap-2"><button onClick={submitShiftRequests} disabled={reqSaving} className="flex-1 py-3 rounded-xl text-[12px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{reqSaving ? "送信中..." : "シフト希望を提出"}</button><button onClick={copyShiftToClipboard} className="px-4 py-3 rounded-xl text-[11px] font-medium cursor-pointer border" style={{ borderColor: copiedShift ? "#22c55e" : "#e091a844", color: copiedShift ? "#22c55e" : "#e091a8", backgroundColor: copiedShift ? "#22c55e18" : "transparent" }}>{copiedShift ? "✅ コピー済" : "📋 LINE用コピー"}</button></div>
           {weekDates.some(d => reqDrafts[d]?.enabled) && (<div className="rounded-xl border p-3" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}><p className="text-[9px] font-medium mb-1" style={{ color: T.textMuted }}>📋 コピー内容プレビュー</p><pre className="text-[10px] whitespace-pre-wrap" style={{ color: T.textSub }}>{generateShiftCopyText()}</pre></div>)}
         </div>)}
 
         {tab === "schedule" && (<div className="space-y-4">
           <h2 className="text-[14px] font-medium">📅 確定シフト</h2>
-          {shifts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>確定シフトがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{shifts.map(s => (<div key={s.id} className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center gap-3"><span className="text-[12px] font-medium min-w-[80px]">{formatDate(s.date)}</span>{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>{getStoreShort(s.store_id)}</span>}<span className="text-[12px]">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div>{s.date === today && <span className="text-[9px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: "#c3a782" }}>今日</span>}</div>))}</div>)}
-          {shiftRequests.filter(r => r.status === "pending").length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: "#f59e0b10", borderColor: "#f59e0b33" }}><p className="text-[11px] font-medium mb-2" style={{ color: "#f59e0b" }}>⏳ 承認待ちのシフト希望</p>{shiftRequests.filter(r => r.status === "pending").map(r => (<div key={r.id} className="flex items-center justify-between py-1 text-[11px]"><span>{formatDate(r.date)}</span><div className="flex items-center gap-2">{r.store_id > 0 && <span className="text-[9px]" style={{ color: "#85a8c4" }}>{getStoreShort(r.store_id)}</span>}<span>{r.start_time} 〜 {r.end_time}</span></div></div>))}</div>)}
+          {shifts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>確定シフトがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{shifts.map(s => (<div key={s.id} className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center gap-3"><span className="text-[12px] font-medium min-w-[80px]">{formatDate(s.date)}</span>{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f8bbd018", color: "#e091a8" }}>{getStoreShort(s.store_id)}</span>}<span className="text-[12px]">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div>{s.date === today && <span className="text-[9px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: "#e8849a" }}>今日</span>}</div>))}</div>)}
+          {shiftRequests.filter(r => r.status === "pending").length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: "#f59e0b10", borderColor: "#f59e0b33" }}><p className="text-[11px] font-medium mb-2" style={{ color: "#f59e0b" }}>⏳ 承認待ちのシフト希望</p>{shiftRequests.filter(r => r.status === "pending").map(r => (<div key={r.id} className="flex items-center justify-between py-1 text-[11px]"><span>{formatDate(r.date)}</span><div className="flex items-center gap-2">{r.store_id > 0 && <span className="text-[9px]" style={{ color: "#e091a8" }}>{getStoreShort(r.store_id)}</span>}<span>{r.start_time} 〜 {r.end_time}</span></div></div>))}</div>)}
         </div>)}
 
         {tab === "salary" && (<div className="space-y-4">
           <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">💰 給料明細</h2><div className="flex items-center gap-2"><button onClick={() => { const d = new Date(smY, smM - 2, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button><span className="text-[12px] font-medium">{smY}年{smM}月</span><button onClick={() => { const d = new Date(smY, smM, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button></div></div>
-          <div className="grid grid-cols-3 gap-3">{[{ l: "月合計", v: fmt(monthTotal), c: "#c3a782" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[18px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
-          {settlements.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>清算データがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{settlements.map(stl => (<div key={stl.id} className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{formatDate(stl.date)}</span><span className="text-[14px] font-medium" style={{ color: "#c3a782" }}>{fmt(stl.final_payment)}</span></div><div className="flex items-center gap-3 text-[9px] flex-wrap" style={{ color: T.textMuted }}><span>{stl.order_count}件</span><span>売上{fmt(stl.total_sales)}</span><span>バック{fmt(stl.total_back)}</span>{stl.invoice_deduction > 0 && <span style={{ color: "#c45555" }}>INV-{fmt(stl.invoice_deduction)}</span>}{stl.withholding_tax > 0 && <span style={{ color: "#c45555" }}>源泉-{fmt(stl.withholding_tax)}</span>}{stl.welfare_fee > 0 && <span style={{ color: "#c45555" }}>厚生-{fmt(stl.welfare_fee)}</span>}{stl.transport_fee > 0 && <span style={{ color: "#22c55e" }}>交通+{fmt(stl.transport_fee)}</span>}</div></div>))}</div>)}
+          <div className="grid grid-cols-3 gap-3">{[{ l: "月合計", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[18px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
+          {settlements.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>清算データがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{settlements.map(stl => (<div key={stl.id} className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{formatDate(stl.date)}</span><span className="text-[14px] font-medium" style={{ color: "#e8849a" }}>{fmt(stl.final_payment)}</span></div><div className="flex items-center gap-3 text-[9px] flex-wrap" style={{ color: T.textMuted }}><span>{stl.order_count}件</span><span>売上{fmt(stl.total_sales)}</span><span>バック{fmt(stl.total_back)}</span>{stl.invoice_deduction > 0 && <span style={{ color: "#c45555" }}>INV-{fmt(stl.invoice_deduction)}</span>}{stl.withholding_tax > 0 && <span style={{ color: "#c45555" }}>源泉-{fmt(stl.withholding_tax)}</span>}{stl.welfare_fee > 0 && <span style={{ color: "#c45555" }}>厚生-{fmt(stl.welfare_fee)}</span>}{stl.transport_fee > 0 && <span style={{ color: "#22c55e" }}>交通+{fmt(stl.transport_fee)}</span>}</div></div>))}</div>)}
         </div>)}
 
         {tab === "customers" && (<div className="space-y-4">
-          <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">👤 お客様メモ・NG</h2><button onClick={() => { setShowAddNote(true); setNoteForm({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0 }); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#c3a782" }}>+ メモ追加</button></div>
+          <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">👤 お客様メモ・NG</h2><button onClick={() => { setShowAddNote(true); setNoteForm({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0 }); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#e8849a" }}>+ メモ追加</button></div>
           <input type="text" value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="お客様名で検索..." className="w-full px-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
-          {uniqueCustomers.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>接客したお客様（全{uniqueCustomers.length}名）</p><div className="flex flex-wrap gap-1.5">{uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => { const note = customerNotes.find(n => n.customer_name === name); return (<button key={name} onClick={() => { if (note) setNoteViewTarget(note); else { setShowAddNote(true); setNoteForm({ customer_name: name, note: "", is_ng: false, ng_reason: "", rating: 0 }); } }} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ backgroundColor: note?.is_ng ? "#c4555515" : note ? "#c3a78215" : T.cardAlt, borderColor: note?.is_ng ? "#c4555544" : note ? "#c3a78244" : T.border, color: note?.is_ng ? "#c45555" : T.text }}>{note?.is_ng && "🚫"}{name}({info.count}回){note && " 📝"}</button>); })}</div></div>)}
+          {uniqueCustomers.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>接客したお客様（全{uniqueCustomers.length}名）</p><div className="flex flex-wrap gap-1.5">{uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => { const note = customerNotes.find(n => n.customer_name === name); return (<button key={name} onClick={() => { if (note) setNoteViewTarget(note); else { setShowAddNote(true); setNoteForm({ customer_name: name, note: "", is_ng: false, ng_reason: "", rating: 0 }); } }} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ backgroundColor: note?.is_ng ? "#c4555515" : note ? "#e8849a15" : T.cardAlt, borderColor: note?.is_ng ? "#c4555544" : note ? "#e8849a44" : T.border, color: note?.is_ng ? "#c45555" : T.text }}>{note?.is_ng && "🚫"}{name}({info.count}回){note && " 📝"}</button>); })}</div></div>)}
           <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><div className="px-4 py-2.5 border-b" style={{ borderColor: T.border }}><p className="text-[11px] font-medium">登録済みメモ（{customerNotes.length}件）</p><p className="text-[8px]" style={{ color: T.textFaint }}>※ メモの削除はスタッフにお申し付けください</p></div>
             {customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>メモがありません</p> : customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).map(n => (<div key={n.id} className="px-4 py-3 cursor-pointer" style={{ borderBottom: `1px solid ${T.border}` }} onClick={() => setNoteViewTarget(n)}><div className="flex items-center gap-2"><span className="text-[12px] font-medium">{n.customer_name}</span>{n.is_ng && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}</div>{n.note && <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textSub }}>{n.note}</p>}</div>))}
           </div>
@@ -342,8 +342,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
               {/* 出勤情報 */}
               {dShift ? (
-                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c430" }}>
-                  <p className="text-[10px] font-medium mb-1" style={{ color: "#85a8c4" }}>⏰ 出勤</p>
+                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#e091a810", border: "1px solid #e091a830" }}>
+                  <p className="text-[10px] font-medium mb-1" style={{ color: "#e091a8" }}>⏰ 出勤</p>
                   <p className="text-[14px] font-medium">{dShift.start_time?.slice(0,5)} 〜 {dShift.end_time?.slice(0,5)}</p>
                   {dShift.store_id > 0 && <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{getStoreName(dShift.store_id)}</p>}
                 </div>
@@ -355,8 +355,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
               {/* 給料明細 */}
               {dSettlement ? (
-                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78230" }}>
-                  <p className="text-[10px] font-medium mb-2" style={{ color: "#c3a782" }}>💰 清算明細</p>
+                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#e8849a10", border: "1px solid #e8849a30" }}>
+                  <p className="text-[10px] font-medium mb-2" style={{ color: "#e8849a" }}>💰 清算明細</p>
                   <div className="space-y-1 text-[11px]">
                     <div className="flex justify-between"><span>接客数</span><span className="font-medium">{dSettlement.order_count}件</span></div>
                     <div className="flex justify-between"><span>売上合計</span><span>{fmt(dSettlement.total_sales)}</span></div>
@@ -366,7 +366,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                     {dSettlement.withholding_tax > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>源泉徴収</span><span>-{fmt(dSettlement.withholding_tax)}</span></div>}
                     {dSettlement.welfare_fee > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>備品・リネン代</span><span>-{fmt(dSettlement.welfare_fee)}</span></div>}
                     {dSettlement.transport_fee > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>交通費</span><span>+{fmt(dSettlement.transport_fee)}</span></div>}
-                    <div className="flex justify-between pt-1.5 font-bold text-[13px]" style={{ borderTop: `1px solid #c3a78230`, color: "#c3a782" }}><span>支給額</span><span>{fmt(dSettlement.final_payment)}</span></div>
+                    <div className="flex justify-between pt-1.5 font-bold text-[13px]" style={{ borderTop: `1px solid #e8849a30`, color: "#e8849a" }}><span>支給額</span><span>{fmt(dSettlement.final_payment)}</span></div>
                     <div className="flex items-center gap-3 pt-1 text-[9px]" style={{ color: T.textMuted }}>
                       <span>💴現金 {fmt(dSettlement.total_cash)}</span>
                       {dSettlement.total_card > 0 && <span>💳カード {fmt(dSettlement.total_card)}</span>}
@@ -396,20 +396,20 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                             {note?.is_ng && <span className="text-[8px] px-1 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫NG</span>}
                             {note && note.rating > 0 && <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(note.rating)}{"☆".repeat(5 - note.rating)}</span>}
                           </div>
-                          <span className="text-[11px] font-medium" style={{ color: "#c3a782" }}>{fmt(r.total_price)}</span>
+                          <span className="text-[11px] font-medium" style={{ color: "#e8849a" }}>{fmt(r.total_price)}</span>
                         </div>
                         <div className="flex items-center gap-2 text-[10px] flex-wrap" style={{ color: T.textSub }}>
                           <span>🕐 {r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}</span>
                           <span>📋 {r.course}</span>
                         </div>
                         <div className="flex items-center gap-2 text-[9px] flex-wrap mt-0.5" style={{ color: T.textMuted }}>
-                          {r.nomination && <span style={{ color: "#c3a782" }}>指名: {r.nomination}（{fmt(r.nomination_fee)}）</span>}
-                          {r.options_text && <span style={{ color: "#85a8c4" }}>OP: {r.options_text}</span>}
+                          {r.nomination && <span style={{ color: "#e8849a" }}>指名: {r.nomination}（{fmt(r.nomination_fee)}）</span>}
+                          {r.options_text && <span style={{ color: "#e091a8" }}>OP: {r.options_text}</span>}
                           {r.extension_name && <span style={{ color: "#a855f7" }}>延長: {r.extension_name}</span>}
                           {(r as any).discount_name && <span style={{ color: "#c45555" }}>割引: {(r as any).discount_name}</span>}
                         </div>
                         <div className="flex items-center gap-2 text-[9px] flex-wrap mt-0.5" style={{ color: T.textMuted }}>
-                          {(r as any).card_billing > 0 && <span style={{ color: "#85a8c4" }}>💳{fmt((r as any).card_billing)}</span>}
+                          {(r as any).card_billing > 0 && <span style={{ color: "#e091a8" }}>💳{fmt((r as any).card_billing)}</span>}
                           {(r as any).paypay_amount > 0 && <span style={{ color: "#22c55e" }}>📱{fmt((r as any).paypay_amount)}</span>}
                           {(r as any).cash_amount > 0 && <span>💴{fmt((r as any).cash_amount)}</span>}
                         </div>
@@ -424,13 +424,13 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                           <div className="text-[9px] mt-1 px-2 py-1.5 rounded space-y-0.5" style={{ backgroundColor: "#7ab88f10", border: "1px solid #7ab88f20" }}>
                             <div className="flex items-center justify-between"><span style={{ color: "#7ab88f" }}>💵 バック詳細</span><span className="font-medium" style={{ color: "#7ab88f" }}>合計 {fmt(totalBack)}</span></div>
                             <div className="flex justify-between"><span>コースバック（{r.course}）</span><span style={{ color: "#7ab88f" }}>{fmt(courseBack)}</span></div>
-                            {r.nomination && <div className="flex justify-between"><span>指名バック（{r.nomination}）</span><span style={{ color: "#c3a782" }}>+{fmt(nomBack)}</span></div>}
-                            {optNames.length > 0 && optNames.map((n, oi) => { const ob = optsMaster.find(o => o.name === n)?.therapist_back || 0; return <div key={oi} className="flex justify-between"><span>OPバック（{n}）</span><span style={{ color: "#85a8c4" }}>+{fmt(ob)}</span></div>; })}
+                            {r.nomination && <div className="flex justify-between"><span>指名バック（{r.nomination}）</span><span style={{ color: "#e8849a" }}>+{fmt(nomBack)}</span></div>}
+                            {optNames.length > 0 && optNames.map((n, oi) => { const ob = optsMaster.find(o => o.name === n)?.therapist_back || 0; return <div key={oi} className="flex justify-between"><span>OPバック（{n}）</span><span style={{ color: "#e091a8" }}>+{fmt(ob)}</span></div>; })}
                             {r.extension_name && <div className="flex justify-between"><span>延長バック（{r.extension_name}）</span><span style={{ color: "#a855f7" }}>+{fmt(extBack)}</span></div>}
                           </div>
                         ); })()}
                         {note && note.note && (
-                          <div className="mt-1 px-2 py-1 rounded text-[9px]" style={{ backgroundColor: "#c3a78210", color: "#c3a782" }}>
+                          <div className="mt-1 px-2 py-1 rounded text-[9px]" style={{ backgroundColor: "#e8849a10", color: "#e8849a" }}>
                             📝 {note.note}
                           </div>
                         )}
@@ -441,7 +441,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                         )}
                         <div className="flex gap-1 mt-1.5">
                           <button onClick={(e) => { e.stopPropagation(); if (note) { setNoteForm({ customer_name: note.customer_name, note: note.note, is_ng: note.is_ng, ng_reason: note.ng_reason, rating: note.rating || 0 }); } else { setNoteForm({ customer_name: r.customer_name, note: "", is_ng: false, ng_reason: "", rating: 0 }); } setCalDetailDate(null); setShowAddNote(true); }}
-                            className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>
+                            className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ backgroundColor: "#e8849a18", color: "#e8849a" }}>
                             {note ? "✏️ メモ編集" : "📝 メモ追加"}
                           </button>
                           {note && <button onClick={(e) => { e.stopPropagation(); deleteCustomerNote(note.id); }}
@@ -469,7 +469,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         {noteViewTarget.is_ng && <p className="text-[10px] mb-2" style={{ color: "#c45555" }}>🚫 NG登録済み{noteViewTarget.ng_reason ? `（${noteViewTarget.ng_reason}）` : ""}</p>}{noteViewTarget.rating > 0 && <p className="text-[12px] mb-2" style={{ color: "#f59e0b" }}>{"★".repeat(noteViewTarget.rating)}{"☆".repeat(5 - noteViewTarget.rating)} <span className="text-[10px]">{noteViewTarget.rating}/5</span></p>}
         <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: T.cardAlt }}><p className="text-[10px] font-medium mb-1" style={{ color: T.textMuted }}>メモ</p><p className="text-[12px] whitespace-pre-wrap">{noteViewTarget.note || "メモなし"}</p></div>
         {(() => { const hist = allReservations.filter(r => r.customer_name === noteViewTarget.customer_name).slice(0, 10); if (hist.length === 0) return null; return (<div className="rounded-xl p-3 mb-3" style={{ backgroundColor: T.cardAlt }}><p className="text-[10px] font-medium mb-1" style={{ color: T.textMuted }}>接客履歴（直近{hist.length}件）</p>{hist.map(r => (<div key={r.id} className="flex items-center justify-between py-1 text-[10px]" style={{ borderBottom: `1px solid ${T.border}` }}><span>{formatDate(r.date)} {r.start_time?.slice(0,5)}</span><span style={{ color: T.textSub }}>{r.course}</span></div>))}</div>); })()}
-        <div className="flex gap-2"><button onClick={() => { setNoteForm({ customer_name: noteViewTarget.customer_name, note: noteViewTarget.note, is_ng: noteViewTarget.is_ng, ng_reason: noteViewTarget.ng_reason, rating: noteViewTarget.rating || 0 }); setNoteViewTarget(null); setShowAddNote(true); }} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)" }}>✏️ メモ編集</button><button onClick={() => setNoteViewTarget(null)} className="px-4 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button></div>
+        <div className="flex gap-2"><button onClick={() => { setNoteForm({ customer_name: noteViewTarget.customer_name, note: noteViewTarget.note, is_ng: noteViewTarget.is_ng, ng_reason: noteViewTarget.ng_reason, rating: noteViewTarget.rating || 0 }); setNoteViewTarget(null); setShowAddNote(true); }} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>✏️ メモ編集</button><button onClick={() => setNoteViewTarget(null)} className="px-4 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button></div>
       </div></div>)}
 
       {showAddNote && (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAddNote(false)}><div className="rounded-2xl border p-5 w-full max-w-sm" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
@@ -479,7 +479,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>メモ</label><textarea value={noteForm.note} onChange={(e) => setNoteForm({ ...noteForm, note: e.target.value })} placeholder="お客様についてのメモ" rows={4} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-y" style={{ backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" }} /></div>
           <div className="flex items-center gap-1.5">
                 <button onClick={() => { const now = new Date(); const ds = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`; setNoteForm({ ...noteForm, note: noteForm.note + (noteForm.note ? "\n" : "") + `[${ds}] ` }); }}
-                  className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📅 日時挿入</button>
+                  className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: "#e091a844", color: "#e091a8" }}>📅 日時挿入</button>
               </div>
               <div>
                 <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>お客様評価</label>
@@ -495,7 +495,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
               </div>
           <div className="flex items-center gap-3"><button onClick={() => setNoteForm({ ...noteForm, is_ng: !noteForm.is_ng })} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer border" style={chipStyle(noteForm.is_ng, "#c45555")}>{noteForm.is_ng ? "🚫 NG登録あり" : "NG登録なし"}</button></div>
           {noteForm.is_ng && (<div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>NG理由</label><input type="text" value={noteForm.ng_reason} onChange={(e) => setNoteForm({ ...noteForm, ng_reason: e.target.value })} placeholder="理由を入力" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" }} /></div>)}
-          <div className="flex gap-3 pt-2"><button onClick={saveCustomerNote} className="px-5 py-2.5 text-white text-[11px] rounded-xl cursor-pointer" style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)" }}>保存</button><button onClick={() => setShowAddNote(false)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button></div>
+          <div className="flex gap-3 pt-2"><button onClick={saveCustomerNote} className="px-5 py-2.5 text-white text-[11px] rounded-xl cursor-pointer" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>保存</button><button onClick={() => setShowAddNote(false)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button></div>
         </div>
       </div></div>)}
     </div>
