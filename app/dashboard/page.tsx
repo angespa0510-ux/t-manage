@@ -8,8 +8,9 @@ import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 
 type Customer = {
-  id: number; created_at: string; name: string; phone: string; phone2: string; phone3: string;
-  email: string; notes: string; user_id: string; rank: string; birthday: string;
+  id: number; created_at: string; name: string; self_name: string; phone: string; phone2: string; phone3: string;
+  email: string; notes: string; user_id: string; rank: string; birthday: string; mypage_registered_at: string;
+  login_email: string; login_password: string;
 };
 type Visit = {
   id: number; customer_id: number; date: string; start_time: string; end_time: string;
@@ -28,6 +29,8 @@ const RANKS: Record<string, { label: string; color: string; bg: string; desc: st
   normal: { label: "普通", color: "#888780", bg: "#88878018", desc: "デフォルト" },
   good: { label: "善良", color: "#4a7c59", bg: "#4a7c5918", desc: "とても良いお客様" },
 };
+
+const normPhone = (p: string) => p.replace(/[-\s\u3000()（）\u2010-\u2015\uff0d]/g, "");
 
 const menuItems = [
   { label: "HOME", icon: "home", sub: [] },
@@ -97,6 +100,13 @@ export default function Dashboard() {
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null); const [deleting, setDeleting] = useState(false);
+
+  // Merge
+  const [mergeSource, setMergeSource] = useState<Customer | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<number>(0);
+  const [mergeSearch, setMergeSearch] = useState("");
+  const [merging, setMerging] = useState(false);
+  const [mergeMsg, setMergeMsg] = useState("");
 
   // Detail / History
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
@@ -319,12 +329,12 @@ export default function Dashboard() {
   const handleRegister = async () => {
     if (!custName.trim()) { setSaveMsg("名前を入力してください"); return; }
     setSaving(true); setSaveMsg("");
-    const phoneToCheck = custPhone.trim();
-    if (phoneToCheck) {
-      const { data: dup } = await supabase.from("customers").select("id, name").or(`phone.eq.${phoneToCheck},phone2.eq.${phoneToCheck},phone3.eq.${phoneToCheck}`);
+    const p1 = normPhone(custPhone); const p2 = normPhone(custPhone2); const p3 = normPhone(custPhone3);
+    if (p1) {
+      const { data: dup } = await supabase.from("customers").select("id, name").or(`phone.eq.${p1},phone2.eq.${p1},phone3.eq.${p1}`);
       if (dup && dup.length > 0) { setSaving(false); setSaveMsg(`この電話番号は「${dup[0].name}」で既に登録されています`); return; }
     }
-    const { error } = await supabase.from("customers").insert({ name: custName.trim(), phone: custPhone.trim(), phone2: custPhone2.trim(), phone3: custPhone3.trim(), email: custEmail.trim(), notes: custNotes.trim(), rank: custRank, birthday: custBirthday || null, user_id: userId });
+    const { error } = await supabase.from("customers").insert({ name: custName.trim(), phone: p1, phone2: p2, phone3: p3, email: custEmail.trim(), notes: custNotes.trim(), rank: custRank, birthday: custBirthday || null, user_id: userId });
     setSaving(false);
     if (error) { setSaveMsg("登録に失敗しました: " + error.message); }
     else { setSaveMsg("登録しました！"); setCustName(""); setCustPhone(""); setCustPhone2(""); setCustPhone3(""); setCustEmail(""); setCustNotes(""); setCustRank("normal"); setCustBirthday(""); fetchCustomers(); setTimeout(() => { setSaveMsg(""); setActivePage("顧客一覧"); }, 1000); }
@@ -335,12 +345,47 @@ export default function Dashboard() {
   const handleUpdate = async () => {
     if (!editingCustomer || !editName.trim()) { setEditMsg("名前を入力してください"); return; }
     setEditSaving(true); setEditMsg("");
-    const { error } = await supabase.from("customers").update({ name: editName.trim(), phone: editPhone.trim(), phone2: editPhone2.trim(), phone3: editPhone3.trim(), email: editEmail.trim(), notes: editNotes.trim(), rank: editRank, birthday: editBirthday || null }).eq("id", editingCustomer.id);
+    const { error } = await supabase.from("customers").update({ name: editName.trim(), phone: normPhone(editPhone), phone2: normPhone(editPhone2), phone3: normPhone(editPhone3), email: editEmail.trim(), notes: editNotes.trim(), rank: editRank, birthday: editBirthday || null }).eq("id", editingCustomer.id);
     setEditSaving(false);
     if (error) { setEditMsg("更新に失敗しました: " + error.message); }
     else { setEditMsg("更新しました！"); fetchCustomers(); setTimeout(() => { setEditingCustomer(null); setEditMsg(""); }, 800); }
   };
   const handleDelete = async () => { if (!deleteTarget) return; setDeleting(true); await supabase.from("customers").delete().eq("id", deleteTarget.id); setDeleting(false); setDeleteTarget(null); fetchCustomers(); };
+
+  // Merge customers
+  const handleMerge = async () => {
+    if (!mergeSource || !mergeTargetId || mergeSource.id === mergeTargetId) return;
+    setMerging(true); setMergeMsg("");
+    try {
+      const srcId = mergeSource.id; const tgtId = mergeTargetId;
+      const tgt = customers.find(c => c.id === tgtId);
+      // Move customer_visits
+      await supabase.from("customer_visits").update({ customer_id: tgtId }).eq("customer_id", srcId);
+      // Move customer_points
+      await supabase.from("customer_points").update({ customer_id: tgtId }).eq("customer_id", srcId);
+      // Move reservations (update customer_name)
+      if (tgt) await supabase.from("reservations").update({ customer_name: tgt.name }).eq("customer_name", mergeSource.name);
+      // Move therapist_customer_notes
+      if (tgt) await supabase.from("therapist_customer_notes").update({ customer_name: tgt.name }).eq("customer_name", mergeSource.name);
+      // Move customer_favorites
+      await supabase.from("customer_favorites").update({ customer_id: tgtId }).eq("customer_id", srcId);
+      // Move customer_notifications
+      await supabase.from("customer_notifications").update({ target_customer_id: tgtId }).eq("target_customer_id", srcId);
+      // Copy self_name if target doesn't have one
+      if (tgt && !tgt.self_name && mergeSource.self_name) {
+        await supabase.from("customers").update({ self_name: mergeSource.self_name }).eq("id", tgtId);
+      }
+      // Copy login info if target doesn't have one
+      if (tgt && !tgt.login_email && mergeSource.login_email) {
+        await supabase.from("customers").update({ login_email: mergeSource.login_email, login_password: mergeSource.login_password }).eq("id", tgtId);
+      }
+      // Delete source
+      await supabase.from("customers").delete().eq("id", srcId);
+      setMergeMsg("統合完了！"); fetchCustomers();
+      setTimeout(() => { setMergeSource(null); setMergeMsg(""); setMergeTargetId(0); setMergeSearch(""); }, 1200);
+    } catch { setMergeMsg("統合に失敗しました"); }
+    setMerging(false);
+  };
 
   // Detail
   const fetchCustomerNotes = async (customerName: string) => {
@@ -506,7 +551,7 @@ export default function Dashboard() {
                         return (
                           <tr key={c.id} className="transition-colors cursor-pointer" style={{ borderBottom: `1px solid ${T.cardAlt}` }} onClick={() => openDetail(c)}>
                             <td className="py-3 px-4"><RankBadge rank={c.rank || "normal"} /></td>
-                            <td className="py-3 px-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{c.name?.charAt(0)}</div><span className="font-medium">{c.name}</span></div></td>
+                            <td className="py-3 px-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{c.name?.charAt(0)}</div><div><span className="font-medium">{c.name}</span>{c.self_name && c.self_name !== c.name && <span className="block text-[10px]" style={{ color: T.textMuted }}>👤 {c.self_name}</span>}</div></div></td>
                             <td className="py-3 px-4" style={{ color: T.textSub }}>
                               {phones.length === 0 ? "—" : phones.map((p, i) => (<span key={i} className="block text-[11px]">{p}</span>))}
                             </td>
@@ -516,6 +561,7 @@ export default function Dashboard() {
                               <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                 <button onClick={() => openDetail(c)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#c3a782", backgroundColor: "#c3a78218" }}>オーダー</button>
                                 <button onClick={() => startEdit(c)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
+                                <button onClick={() => { setMergeSource(c); setMergeTargetId(0); setMergeSearch(""); setMergeMsg(""); }} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#8b5cf6", backgroundColor: "#8b5cf618" }}>統合</button>
                                 <button onClick={() => setDeleteTarget(c)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                               </div>
                             </td>
@@ -787,7 +833,8 @@ export default function Dashboard() {
           <div className="rounded-2xl border p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <div className="mb-6"><h2 className="text-[16px] font-medium">顧客情報を編集</h2></div>
             <div className="space-y-4">
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前（スタッフ管理用） <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+              {editingCustomer?.self_name && <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 お客様登録名（本人入力）</label><p className="px-4 py-3 rounded-xl text-[13px]" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{editingCustomer.self_name}</p></div>}
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号①</label><input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号②</label><input type="tel" value={editPhone2} onChange={(e) => setEditPhone2(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号③</label><input type="tel" value={editPhone3} onChange={(e) => setEditPhone3(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
@@ -820,6 +867,46 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Merge Modal */}
+      {mergeSource && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setMergeSource(null)}>
+          <div className="rounded-2xl border p-8 w-full max-w-md animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: "#8b5cf618" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <h3 className="text-[15px] font-medium mb-1 text-center">顧客データ統合</h3>
+            <p className="text-[11px] mb-5 text-center" style={{ color: T.textMuted }}>「{mergeSource.name}」のデータを別の顧客に統合します</p>
+            <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: T.cardAlt }}>
+              <p className="text-[10px] font-medium mb-2" style={{ color: "#8b5cf6" }}>📋 統合される内容</p>
+              <p className="text-[10px]" style={{ color: T.textSub }}>来店履歴・ポイント・予約・セラピストメモ・お気に入り・通知</p>
+            </div>
+            <div className="mb-4">
+              <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>統合先の顧客を選択</label>
+              <input type="text" placeholder="名前・電話番号で検索" value={mergeSearch} onChange={e => setMergeSearch(e.target.value)} className="w-full px-4 py-2.5 rounded-xl text-[12px] outline-none mb-2" style={inputStyle} />
+              <div className="max-h-[200px] overflow-y-auto rounded-xl border" style={{ borderColor: T.border }}>
+                {customers.filter(c => c.id !== mergeSource.id && (mergeSearch === "" || c.name?.toLowerCase().includes(mergeSearch.toLowerCase()) || c.phone?.includes(mergeSearch) || c.self_name?.toLowerCase().includes(mergeSearch.toLowerCase()))).map(c => (
+                  <div key={c.id} onClick={() => setMergeTargetId(c.id)} className="px-4 py-2.5 cursor-pointer flex items-center justify-between text-[12px] transition-colors" style={{ backgroundColor: mergeTargetId === c.id ? "#8b5cf612" : "transparent", borderBottom: `1px solid ${T.cardAlt}` }}>
+                    <div><span className="font-medium">{c.name}</span>{c.self_name && c.self_name !== c.name && <span className="text-[10px] ml-1.5" style={{ color: T.textMuted }}>({c.self_name})</span>}</div>
+                    <span className="text-[10px]" style={{ color: T.textMuted }}>{c.phone}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {mergeTargetId > 0 && (() => { const t = customers.find(c => c.id === mergeTargetId); return t ? (
+              <div className="rounded-xl p-3 mb-4 text-[11px]" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
+                <p style={{ color: "#f59e0b" }}>⚠️ 「<b>{mergeSource.name}</b>」→「<b>{t.name}</b>」に統合</p>
+                <p className="mt-1" style={{ color: T.textMuted }}>統合元（{mergeSource.name}）は削除されます。この操作は取り消せません。</p>
+              </div>
+            ) : null; })()}
+            {mergeMsg && <div className="px-4 py-3 rounded-xl text-[12px] mb-3" style={{ backgroundColor: mergeMsg.includes("完了") ? "#4a7c5912" : "#c4555512", color: mergeMsg.includes("完了") ? "#5a9e6f" : "#c45555" }}>{mergeMsg}</div>}
+            <div className="flex gap-3 justify-center">
+              <button onClick={handleMerge} disabled={merging || !mergeTargetId} className="px-6 py-2.5 text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-40" style={{ backgroundColor: "#8b5cf6" }}>{merging ? "統合中..." : "統合する"}</button>
+              <button onClick={() => setMergeSource(null)} className="px-6 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Detail + History Modal */}
       {detailCustomer && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDetailCustomer(null)}>
@@ -831,6 +918,7 @@ export default function Dashboard() {
                   <div className="w-14 h-14 rounded-full flex items-center justify-center text-[18px] font-medium" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{detailCustomer.name?.charAt(0)}</div>
                   <div>
                     <div className="flex items-center gap-2"><h2 className="text-[18px] font-medium">{detailCustomer.name}</h2><RankBadge rank={detailCustomer.rank || "normal"} /></div>
+                    {detailCustomer.self_name && detailCustomer.self_name !== detailCustomer.name && <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>👤 お客様登録名: {detailCustomer.self_name}</p>}
                     <div className="flex flex-wrap gap-3 mt-1 text-[12px]" style={{ color: T.textSub }}>
                       {detailCustomer.phone && <span>📱 {detailCustomer.phone}</span>}
                       {detailCustomer.phone2 && <span>📱 {detailCustomer.phone2}</span>}
