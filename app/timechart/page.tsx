@@ -71,6 +71,9 @@ export default function TimeChart() {
   const [editCardBase, setEditCardBase] = useState("");
   const [editPaypay, setEditPaypay] = useState("");
   const [editStaffName, setEditStaffName] = useState("");
+  const [editManualPoints, setEditManualPoints] = useState("");
+  const [editManualPointDesc, setEditManualPointDesc] = useState("");
+  const [ptSettings, setPtSettings] = useState<{earn_per_yen:number;earn_points:number;expiry_months:number;rainy_day_active:boolean;rainy_day_multiplier:number}|null>(null);
   const [editMsg, setEditMsg] = useState("");
 
   const [showNewTherapist, setShowNewTherapist] = useState(false);
@@ -178,6 +181,7 @@ export default function TimeChart() {
     const { data: exp } = await supabase.from("expenses").select("*").eq("date", selectedDate); if (exp) setDailyExpenses(exp);
     const { data: settled } = await supabase.from("therapist_daily_settlements").select("therapist_id,change_collected").eq("date", selectedDate).eq("is_settled", true); if (settled) { setSettledIds(new Set(settled.map(s => s.therapist_id))); setChangeCollectedIds(new Set(settled.filter(s => s.change_collected).map(s => s.therapist_id))); }
     const { data: stf } = await supabase.from("staff").select("id,name,role").eq("status", "active").order("id"); if (stf) setStaffMembers(stf);
+    const { data: pts } = await supabase.from("point_settings").select("earn_per_yen,earn_points,expiry_months,rainy_day_active,rainy_day_multiplier").limit(1).single(); if (pts) setPtSettings(pts);
   }, [selectedDate]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -261,7 +265,123 @@ export default function TimeChart() {
   };
 
   const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); };
-  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eDiscText = editDiscounts.map(d=>d.name).join(","); const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0); const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - eDiscTotal; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: eDiscText, discount_amount: eDiscTotal, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0), staff_name: editStaffName }).eq("id", editRes.id); setEditSaving(false); if (error) { toast.show("更新失敗: " + error.message, "error"); } else { toast.show("更新しました！", "success"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
+  // ===== ポイント自動付与（completed時） =====
+  const awardPoints = async (resId: number, customerName: string, totalPrice: number, resDate: string) => {
+    try {
+      // 顧客取得
+      const { data: cust } = await supabase.from("customers").select("id,rank,birthday").eq("name", customerName).maybeSingle();
+      if (!cust) return;
+      // 既に付与済みかチェック
+      const { data: existingPt } = await supabase.from("customer_points").select("id").eq("customer_id", cust.id).eq("description", `予約#${resId}ポイント付与`).maybeSingle();
+      if (existingPt) return;
+      // ポイント設定取得
+      const { data: ps } = await supabase.from("point_settings").select("*").limit(1).single();
+      if (!ps) return;
+      // 基本ポイント計算
+      const basePoints = Math.floor(totalPrice / (ps.earn_per_yen || 1000)) * (ps.earn_points || 20);
+      if (basePoints <= 0) return;
+      // ボーナスルール取得
+      const { data: rules } = await supabase.from("point_bonus_rules").select("*").eq("is_active", true);
+      const { data: rankMults } = await supabase.from("rank_point_multipliers").select("*");
+      const d = new Date(resDate + "T00:00:00");
+      const dow = d.getDay();
+      const dayOfMonth = d.getDate();
+      let multiplier = 1.0;
+      let bonusLabels: string[] = [];
+      // 曜日ボーナス
+      (rules || []).filter(r => r.type === "weekday" && r.day_of_week === dow).forEach(r => {
+        if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `曜日${r.multiplier}倍`); }
+      });
+      // 期間ボーナス
+      (rules || []).filter(r => r.type === "period" && dayOfMonth >= (r.start_day || 1) && dayOfMonth <= (r.end_day || 31)).forEach(r => {
+        if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `期間${r.multiplier}倍`); }
+      });
+      // 誕生月ボーナス
+      if (cust.birthday) {
+        const bMonth = new Date(cust.birthday).getMonth();
+        const resMonth = d.getMonth();
+        (rules || []).filter(r => r.type === "birthday" && bMonth === resMonth).forEach(r => {
+          if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `誕生月${r.multiplier}倍`); }
+        });
+      }
+      // アイドルタイムボーナス（予約の開始時間で判定）
+      const resStartMinutes = (() => { const r = reservations.find(x => x.id === resId); if (!r) return 0; const [h, m] = r.start_time.split(":").map(Number); return h * 60 + m; })();
+      (rules || []).filter(r => r.type === "idle_time").forEach(r => {
+        const wd = r.weekdays || [];
+        if (!wd.includes(dow)) return;
+        const [sh, sm] = (r.start_time || "0:0").split(":").map(Number);
+        const [eh, em] = (r.end_time || "0:0").split(":").map(Number);
+        const startMin = sh * 60 + sm;
+        const endMin = eh * 60 + em;
+        if (resStartMinutes >= startMin && resStartMinutes < endMin) {
+          if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `アイドルタイム${r.multiplier}倍`); }
+        }
+      });
+      // 雨の日ボーナス
+      if (ps.rainy_day_active && ps.rainy_day_multiplier > multiplier) {
+        multiplier = ps.rainy_day_multiplier; bonusLabels.push(`☔雨の日${ps.rainy_day_multiplier}倍`);
+      }
+      // 会員ランク倍率
+      const rankMult = (rankMults || []).find(rm => rm.rank_name === (cust.rank || "normal"));
+      const rankMultiplier = rankMult?.multiplier || 1.0;
+      // 最終ポイント計算
+      const finalPoints = Math.floor(basePoints * multiplier * rankMultiplier);
+      // 有効期限
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + (ps.expiry_months || 12));
+      // ポイント付与
+      const desc = `予約#${resId}ポイント付与` + (bonusLabels.length > 0 ? `（${bonusLabels.join("・")}）` : "") + (rankMultiplier > 1 ? `（ランク×${rankMultiplier}）` : "");
+      await supabase.from("customer_points").insert({
+        customer_id: cust.id, amount: finalPoints, type: "earn",
+        description: desc, expires_at: expiresAt.toISOString(),
+      });
+      // 期限切れ通知予約（期限のexpiry_notify_days日前）
+      const notifyDate = new Date(expiresAt);
+      notifyDate.setDate(notifyDate.getDate() - (ps.expiry_notify_days || 30));
+      if (notifyDate > new Date()) {
+        await supabase.from("customer_notifications").insert({
+          title: "ポイント有効期限のお知らせ",
+          body: `${finalPoints}ptの有効期限が${expiresAt.toLocaleDateString("ja-JP")}に迫っています。お早めにご利用ください！`,
+          type: "campaign",
+          target_customer_id: cust.id,
+        });
+      }
+    // ===== 自動ランク判定 =====
+      try {
+        const { data: rankRules } = await supabase.from("rank_point_multipliers").select("*").order("min_total_visits", { ascending: false });
+        if (rankRules && rankRules.length > 0) {
+          // 累計来店回数
+          const { count: totalVisits } = await supabase.from("customer_visits").select("*", { count: "exact", head: true }).eq("customer_id", cust.id);
+          // 各ランクを上位から判定
+          let newRank = "normal";
+          for (const rule of rankRules) {
+            if (rule.rank_name === "normal") continue;
+            const periodStart = new Date();
+            periodStart.setMonth(periodStart.getMonth() - (rule.period_months || 3));
+            const { count: recentVisits } = await supabase.from("customer_visits").select("*", { count: "exact", head: true }).eq("customer_id", cust.id).gte("date", periodStart.toISOString().split("T")[0]);
+            if ((totalVisits || 0) >= (rule.min_total_visits || 0) && (recentVisits || 0) >= (rule.min_visits_in_period || 0)) {
+              newRank = rule.rank_name;
+              break;
+            }
+          }
+          // ランク変更があれば更新
+          if (newRank !== (cust.rank || "normal")) {
+            await supabase.from("customers").update({ rank: newRank }).eq("id", cust.id);
+            const rankLabel = newRank === "platinum" ? "💎プラチナ" : newRank === "gold" ? "🥇ゴールド" : newRank === "silver" ? "🥈シルバー" : "👤一般";
+            const isUp = ["platinum","gold","silver","normal"].indexOf(newRank) < ["platinum","gold","silver","normal"].indexOf(cust.rank || "normal");
+            if (isUp) {
+              await supabase.from("customer_notifications").insert({
+                title: "🎉 ランクアップおめでとうございます！",
+                body: `${rankLabel}会員にランクアップしました！ポイント倍率がアップします。`,
+                type: "campaign", target_customer_id: cust.id,
+              });
+            }
+          }
+        }
+      } catch (e2) { console.error("ランク判定エラー:", e2); }
+    } catch (e) { console.error("ポイント付与エラー:", e); }
+  };
+  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eDiscText = editDiscounts.map(d=>d.name).join(","); const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0); const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - eDiscTotal; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: eDiscText, discount_amount: eDiscTotal, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0), staff_name: editStaffName }).eq("id", editRes.id); setEditSaving(false); if (error) { toast.show("更新失敗: " + error.message, "error"); } else { if (editStatus === "completed" && (editRes as any).status !== "completed") { await awardPoints(editRes.id, editCustName.trim(), eTotal, editRes.date); } if (editManualPoints && parseInt(editManualPoints) !== 0) { const mp = parseInt(editManualPoints); const { data: cust } = await supabase.from("customers").select("id").eq("name", editCustName.trim()).maybeSingle(); if (cust) { const expAt = new Date(); expAt.setMonth(expAt.getMonth() + (ptSettings?.expiry_months || 12)); await supabase.from("customer_points").insert({ customer_id: cust.id, amount: mp, type: mp > 0 ? "earn" : "use", description: editManualPointDesc.trim() || (mp > 0 ? "手動ポイント付与" : "手動ポイント減算"), expires_at: mp > 0 ? expAt.toISOString() : null }); } setEditManualPoints(""); setEditManualPointDesc(""); } toast.show("更新しました！", "success"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
   const deleteReservation = async (id: number) => { await supabase.from("reservations").delete().eq("id", id); setEditRes(null); fetchData(); };
   const addShiftTherapist = async () => { if (!addShiftTherapistId) return; await supabase.from("shifts").insert({ therapist_id: addShiftTherapistId, date: selectedDate, start_time: addShiftStart, end_time: addShiftEnd, status: "confirmed" }); if (addShiftRoom) { await supabase.from("room_assignments").insert({ date: selectedDate, room_id: addShiftRoom, therapist_id: addShiftTherapistId, slot: "early", start_time: addShiftStart, end_time: addShiftEnd }); } setShowNewTherapist(false); setAddShiftTherapistId(0); fetchData(); };
 
@@ -626,6 +746,31 @@ export default function TimeChart() {
                   </>)}
                 </div>
               </div>
+              {/* ポイントプレビュー */}
+              {ptSettings && (() => {
+                const previewPts = Math.floor(eTotalCalc / (ptSettings.earn_per_yen || 1000)) * (ptSettings.earn_points || 20);
+                const isRainy = ptSettings.rainy_day_active;
+                const rainyMult = ptSettings.rainy_day_multiplier || 2.0;
+                const previewWithRainy = isRainy ? Math.floor(previewPts * rainyMult) : previewPts;
+                const alreadyAwarded = (editRes as any).status === "completed";
+                return (
+                <div className="rounded-xl p-4" style={{ backgroundColor: "#d4a84308", border: "1px solid #d4a84330" }}>
+                  <p className="text-[11px] font-medium mb-2" style={{ color: "#d4a843" }}>🎁 ポイント</p>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between"><span>自動付与（¥{(ptSettings.earn_per_yen||1000).toLocaleString()}={ptSettings.earn_points||20}pt）</span><span style={{ color: "#d4a843", fontWeight: 600 }}>+{previewPts}pt</span></div>
+                    {isRainy && <div className="flex justify-between"><span>☔ 雨の日ボーナス（×{rainyMult}）</span><span style={{ color: "#d4a843", fontWeight: 600 }}>+{previewWithRainy}pt</span></div>}
+                    <p className="text-[9px]" style={{ color: "#888" }}>※曜日・期間・誕生月・ランク倍率は終了時に自動計算されます</p>
+                    {alreadyAwarded && <p className="text-[9px] px-2 py-1 rounded-lg inline-block" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>✅ ポイント付与済み</p>}
+                    <div className="pt-2 mt-1" style={{ borderTop: "1px dashed #d4a84330" }}>
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: "#d4a843" }}>➕➖ 手動ポイント調整</p>
+                      <div className="flex gap-2 items-end">
+                        <div className="w-[100px]"><label className="block text-[9px] mb-0.5" style={{ color: "#888" }}>ポイント数</label><input type="text" inputMode="numeric" value={editManualPoints} onChange={e => setEditManualPoints(e.target.value.replace(/[^0-9-]/g, ""))} placeholder="例: 100 or -50" className="w-full px-2 py-2 rounded-lg text-[11px] outline-none" style={{ backgroundColor: "#d4a84310", color: "#d4a843", border: "1px solid #d4a84330" }} /></div>
+                        <div className="flex-1"><label className="block text-[9px] mb-0.5" style={{ color: "#888" }}>理由</label><input type="text" value={editManualPointDesc} onChange={e => setEditManualPointDesc(e.target.value)} placeholder="例: アンケート回答" className="w-full px-2 py-2 rounded-lg text-[11px] outline-none" style={{ backgroundColor: "#d4a84310", color: "#d4a843", border: "1px solid #d4a84330" }} /></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>);
+              })()}
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
               <div className="flex gap-3 pt-2">
                 <button onClick={updateReservation} disabled={editSaving} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>

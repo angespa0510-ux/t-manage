@@ -10,10 +10,24 @@ type Nomination = { id: number; name: string; price: number; therapist_back: num
 type Discount = { id: number; name: string; amount: number; type: string };
 type Extension = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Option = { id: number; name: string; price: number; therapist_back: number };
+type PointSettings = {
+  id: number; earn_per_yen: number; earn_points: number; discount_per_point: number;
+  min_use_points: number; expiry_months: number; expiry_notify_days: number;
+  registration_bonus: number; review_bonus: number;
+  rainy_day_active: boolean; rainy_day_multiplier: number;
+};
+type BonusRule = {
+  id: number; type: string; day_of_week: number | null; start_day: number | null;
+  end_day: number | null; multiplier: number; label: string; is_active: boolean;
+  start_time: string | null; end_time: string | null; weekdays: number[] | null;
+};
+type RankMultiplier = { id: number; rank_name: string; multiplier: number; min_visits_in_period: number; period_months: number; min_total_visits: number };
 
-type Tab = "nomination" | "discount" | "extension" | "option";
+type Tab = "nomination" | "discount" | "extension" | "option" | "point";
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+const RANK_LABELS: Record<string, string> = { normal: "一般", silver: "シルバー", gold: "ゴールド", platinum: "プラチナ" };
 
 export default function ServiceSettings() {
   const router = useRouter();
@@ -24,6 +38,39 @@ export default function ServiceSettings() {
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [extensions, setExtensions] = useState<Extension[]>([]);
   const [options, setOptions] = useState<Option[]>([]);
+
+  // Point states
+  const [pointSettings, setPointSettings] = useState<PointSettings | null>(null);
+  const [bonusRules, setBonusRules] = useState<BonusRule[]>([]);
+  const [rankMultipliers, setRankMultipliers] = useState<RankMultiplier[]>([]);
+  const [ptSaving, setPtSaving] = useState(false);
+  const [ptMsg, setPtMsg] = useState("");
+
+  // Point settings edit
+  const [ptEarnYen, setPtEarnYen] = useState("");
+  const [ptEarnPts, setPtEarnPts] = useState("");
+  const [ptDiscPer, setPtDiscPer] = useState("");
+  const [ptMinUse, setPtMinUse] = useState("");
+  const [ptExpiry, setPtExpiry] = useState("");
+  const [ptNotify, setPtNotify] = useState("");
+  const [ptRegBonus, setPtRegBonus] = useState("");
+  const [ptReviewBonus, setPtReviewBonus] = useState("");
+  const [ptRainyActive, setPtRainyActive] = useState(false);
+  const [ptRainyMult, setPtRainyMult] = useState("");
+
+  // Bonus rule add
+  const [brType, setBrType] = useState("weekday");
+  const [brDow, setBrDow] = useState(3);
+  const [brStartDay, setBrStartDay] = useState("1");
+  const [brEndDay, setBrEndDay] = useState("5");
+  const [brMult, setBrMult] = useState("2.0");
+  const [brLabel, setBrLabel] = useState("");
+  const [brStartTime, setBrStartTime] = useState("12:00");
+  const [brEndTime, setBrEndTime] = useState("15:00");
+  const [brWeekdays, setBrWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+
+  // Point sub-section
+  const [ptSection, setPtSection] = useState<"basic" | "bonus" | "rank">("basic");
 
   // Add states
   const [addName, setAddName] = useState("");
@@ -49,6 +96,18 @@ export default function ServiceSettings() {
     const { data: d } = await supabase.from("discounts").select("*").order("id"); if (d) setDiscounts(d);
     const { data: e } = await supabase.from("extensions").select("*").order("duration"); if (e) setExtensions(e);
     const { data: o } = await supabase.from("options").select("*").order("id"); if (o) setOptions(o);
+    // Point data
+    const { data: ps } = await supabase.from("point_settings").select("*").limit(1).single();
+    if (ps) {
+      setPointSettings(ps);
+      setPtEarnYen(String(ps.earn_per_yen)); setPtEarnPts(String(ps.earn_points));
+      setPtDiscPer(String(ps.discount_per_point)); setPtMinUse(String(ps.min_use_points));
+      setPtExpiry(String(ps.expiry_months)); setPtNotify(String(ps.expiry_notify_days));
+      setPtRegBonus(String(ps.registration_bonus)); setPtReviewBonus(String(ps.review_bonus || 50));
+      setPtRainyActive(ps.rainy_day_active || false); setPtRainyMult(String(ps.rainy_day_multiplier || 2.0));
+    }
+    const { data: br } = await supabase.from("point_bonus_rules").select("*").order("id"); if (br) setBonusRules(br);
+    const { data: rm } = await supabase.from("rank_point_multipliers").select("*").order("id"); if (rm) setRankMultipliers(rm);
   }, []);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -98,16 +157,125 @@ export default function ServiceSettings() {
     fetchData();
   };
 
+  // ===== Point Settings Save =====
+  const handleSavePointSettings = async () => {
+    if (!pointSettings) return;
+    setPtSaving(true); setPtMsg("");
+    try {
+      const { error } = await supabase.from("point_settings").update({
+        earn_per_yen: parseInt(ptEarnYen) || 1000,
+        earn_points: parseInt(ptEarnPts) || 20,
+        discount_per_point: parseFloat(ptDiscPer) || 1,
+        min_use_points: parseInt(ptMinUse) || 1000,
+        expiry_months: parseInt(ptExpiry) || 12,
+        expiry_notify_days: parseInt(ptNotify) || 30,
+        registration_bonus: parseInt(ptRegBonus) || 0,
+        review_bonus: parseInt(ptReviewBonus) || 0,
+        rainy_day_active: ptRainyActive,
+        rainy_day_multiplier: parseFloat(ptRainyMult) || 2.0,
+        updated_at: new Date().toISOString(),
+      }).eq("id", pointSettings.id);
+      if (error) throw error;
+      setPtMsg("保存しました！");
+      fetchData();
+      setTimeout(() => setPtMsg(""), 2000);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setPtMsg("保存失敗: " + (err.message || ""));
+    }
+    setPtSaving(false);
+  };
+
+  // ===== Bonus Rule Add =====
+  const handleAddBonusRule = async () => {
+    const rule: Record<string, unknown> = {
+      type: brType,
+      multiplier: parseFloat(brMult) || 2.0,
+      label: brLabel.trim() || null,
+      is_active: true,
+    };
+    if (brType === "weekday") { rule.day_of_week = brDow; }
+    else if (brType === "period") { rule.start_day = parseInt(brStartDay) || 1; rule.end_day = parseInt(brEndDay) || 5; }
+    else if (brType === "birthday") { /* no extra fields */ }
+    else if (brType === "idle_time") {
+      rule.start_time = brStartTime; rule.end_time = brEndTime;
+      rule.weekdays = brWeekdays;
+    }
+    try {
+      const { error } = await supabase.from("point_bonus_rules").insert(rule);
+      if (error) throw error;
+      setBrLabel(""); setBrMult("2.0");
+      fetchData();
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      alert("追加失敗: " + (err.message || ""));
+    }
+  };
+
+  // ===== Bonus Rule Toggle =====
+  const toggleBonusRule = async (id: number, current: boolean) => {
+    await supabase.from("point_bonus_rules").update({ is_active: !current }).eq("id", id);
+    fetchData();
+  };
+
+  // ===== Bonus Rule Delete =====
+  const deleteBonusRule = async (id: number) => {
+    if (!confirm("このボーナスルールを削除しますか？")) return;
+    await supabase.from("point_bonus_rules").delete().eq("id", id);
+    fetchData();
+  };
+
+  // ===== Rank Multiplier Update =====
+  const updateRankMult = async (id: number, mult: string) => {
+    await supabase.from("rank_point_multipliers").update({ multiplier: parseFloat(mult) || 1.0 }).eq("id", id);
+    fetchData();
+  };
+
+  const updateRankCondition = async (id: number, updates: Partial<{min_visits_in_period: number; period_months: number; min_total_visits: number}>) => {
+    await supabase.from("rank_point_multipliers").update(updates).eq("id", id);
+    fetchData();
+  };
+
+  // ===== Rainy Day Toggle =====
+  const toggleRainyDay = async () => {
+    if (!pointSettings) return;
+    const newVal = !ptRainyActive;
+    setPtRainyActive(newVal);
+    await supabase.from("point_settings").update({ rainy_day_active: newVal }).eq("id", pointSettings.id);
+    fetchData();
+  };
+
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
+  const PT_COLOR = "#d4a843";
 
   const tabs: { key: Tab; label: string; color: string; count: number }[] = [
     { key: "nomination", label: "指名", color: "#c3a782", count: nominations.length },
     { key: "extension", label: "延長", color: "#85a8c4", count: extensions.length },
     { key: "option", label: "オプション", color: "#7ab88f", count: options.length },
     { key: "discount", label: "割引", color: "#c49885", count: discounts.length },
+    { key: "point", label: "ポイント", color: PT_COLOR, count: bonusRules.filter(r => r.is_active).length },
   ];
 
   const currentTab = tabs.find((t) => t.key === tab)!;
+
+  const bonusTypeLabel = (type: string) => {
+    if (type === "weekday") return "📅 曜日";
+    if (type === "period") return "📆 期間";
+    if (type === "birthday") return "🎂 誕生月";
+    if (type === "idle_time") return "🕐 アイドルタイム";
+    return type;
+  };
+
+  const bonusRuleDesc = (r: BonusRule) => {
+    if (r.type === "weekday") return `毎週${WEEKDAY_LABELS[r.day_of_week || 0]}曜日`;
+    if (r.type === "period") return `毎月${r.start_day}日〜${r.end_day}日`;
+    if (r.type === "birthday") return "お客様の誕生月";
+    if (r.type === "idle_time") {
+      const days = (r.weekdays || []).map(d => WEEKDAY_LABELS[d]).join("・");
+      return `${days} ${r.start_time}〜${r.end_time}`;
+    }
+    return "";
+  };
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
@@ -120,14 +288,14 @@ export default function ServiceSettings() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={() => router.push("/courses")} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>コース管理</button>
+          <button onClick={() => router.push("/courses")} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>コース管理 →</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b flex-shrink-0" style={{ backgroundColor: T.card, borderColor: T.border }}>
+      <div className="flex items-center gap-2 px-4 py-2 border-b flex-shrink-0 overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => { setTab(t.key); resetAdd(); resetEdit(); }} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
+          <button key={t.key} onClick={() => { setTab(t.key); resetAdd(); resetEdit(); }} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer transition-all flex items-center gap-1.5 whitespace-nowrap"
             style={{ backgroundColor: tab === t.key ? t.color + "18" : "transparent", color: tab === t.key ? t.color : T.textMuted, fontWeight: tab === t.key ? 600 : 400 }}>
             {t.label}
             <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: tab === t.key ? t.color + "22" : T.cardAlt, color: tab === t.key ? t.color : T.textFaint }}>{t.count}</span>
@@ -138,198 +306,541 @@ export default function ServiceSettings() {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-[700px] mx-auto animate-[fadeIn_0.3s]">
 
-          {/* Add Form */}
-          <div className="rounded-2xl border p-5 mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <p className="text-[13px] font-medium mb-3">{currentTab.label}を追加</p>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[140px]">
-                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>名前 *</label>
-                <input type="text" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder={`${currentTab.label}名`}
-                  className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}
-                  onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
+          {/* ════════════ POINT TAB ════════════ */}
+          {tab === "point" && pointSettings && (
+            <div className="space-y-5">
+              {/* Sub-tabs */}
+              <div className="flex gap-2">
+                {([["basic", "⚙️ 基本設定"], ["bonus", "🎁 ボーナスルール"], ["rank", "📈 会員ランク"]] as [typeof ptSection, string][]).map(([k, l]) => (
+                  <button key={k} onClick={() => setPtSection(k)} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer transition-all"
+                    style={{ backgroundColor: ptSection === k ? PT_COLOR + "18" : T.cardAlt, color: ptSection === k ? PT_COLOR : T.textMuted, fontWeight: ptSection === k ? 600 : 400 }}>
+                    {l}
+                  </button>
+                ))}
               </div>
 
-              {tab === "nomination" && (<>
-                <div className="w-[120px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>料金</label>
-                  <input type="text" inputMode="numeric" value={addPrice} onChange={(e) => setAddPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="2000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-                
-              <div className="w-[120px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>バック</label>
-                  <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-              </>)}
+              {/* ── 基本設定 ── */}
+              {ptSection === "basic" && (
+                <div className="space-y-5">
+                  {/* ポイント付与ルール */}
+                  <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <p className="text-[13px] font-medium mb-4">💰 ポイント付与ルール</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>金額（円）あたり</label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>¥</span>
+                          <input type="text" inputMode="numeric" value={ptEarnYen} onChange={e => setPtEarnYen(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>付与ポイント</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={ptEarnPts} onChange={e => setPtEarnPts(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>pt</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] mt-3 px-1" style={{ color: T.textFaint }}>
+                      例: ¥{ptEarnYen || "1000"}利用ごとに{ptEarnPts || "20"}pt付与 → ¥10,000利用で{Math.floor(10000 / (parseInt(ptEarnYen) || 1000)) * (parseInt(ptEarnPts) || 20)}pt
+                    </p>
+                  </div>
 
-              {tab === "discount" && (<>
-                <div className="w-[120px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>金額/率</label>
-                  <input type="text" inputMode="numeric" value={addAmount} onChange={(e) => setAddAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-                <div className="w-[100px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>種類</label>
-                  <select value={addDiscountType} onChange={(e) => setAddDiscountType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
-                    <option value="fixed">固定額</option>
-                    <option value="percent">%割引</option>
-                  </select>
-                </div>
-              </>)}
+                  {/* ポイント利用ルール */}
+                  <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <p className="text-[13px] font-medium mb-4">🏷 ポイント利用ルール</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>1ptあたり割引額（円）</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={ptDiscPer} onChange={e => setPtDiscPer(e.target.value.replace(/[^0-9.]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>円/pt</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>最低利用ポイント</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={ptMinUse} onChange={e => setPtMinUse(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>pt〜</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] mt-3 px-1" style={{ color: T.textFaint }}>
+                      {ptMinUse || "1000"}pt以上で利用可能 → {ptMinUse || "1000"}pt = ¥{((parseInt(ptMinUse) || 1000) * (parseFloat(ptDiscPer) || 1)).toLocaleString()}OFF
+                    </p>
+                  </div>
 
-              {tab === "extension" && (<>
-                <div className="w-[90px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>時間(分)</label>
-                  <select value={addDuration} onChange={(e) => setAddDuration(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
-                    {[10, 15, 20, 30, 40, 50, 60].map((m) => (<option key={m} value={m}>{m}分</option>))}
-                  </select>
-                </div>
-                <div className="w-[100px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>料金</label>
-                  <input type="text" inputMode="numeric" value={addPrice} onChange={(e) => setAddPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="3000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-                <div className="w-[100px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>バック</label>
-                  <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-              </>)}
+                  {/* 有効期限 */}
+                  <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <p className="text-[13px] font-medium mb-4">⏰ 有効期限・通知</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>有効期限</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={ptExpiry} onChange={e => setPtExpiry(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>ヶ月</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>期限前通知</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={ptNotify} onChange={e => setPtNotify(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>日前</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-              {tab === "option" && (<>
-                <div className="w-[100px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>料金</label>
-                  <input type="text" inputMode="numeric" value={addPrice} onChange={(e) => setAddPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-                <div className="w-[100px]">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>バック</label>
-                  <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="500"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-              </>)}
+                  {/* 特別ボーナス */}
+                  <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <p className="text-[13px] font-medium mb-4">🎁 特別ボーナス</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>初回登録ボーナス</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={ptRegBonus} onChange={e => setPtRegBonus(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>pt</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>アンケート回答ボーナス</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={ptReviewBonus} onChange={e => setPtReviewBonus(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="flex-1 px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                          <span className="text-[11px]" style={{ color: T.textMuted }}>pt</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-              <button onClick={handleAdd} disabled={saving} className="px-4 py-2.5 text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60"
-                style={{ backgroundColor: currentTab.color }}>{saving ? "登録中..." : "追加"}</button>
+                  {/* 雨の日ボーナス */}
+                  <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <p className="text-[13px] font-medium mb-4">☔ 雨の日ボーナス</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[12px]">現在のステータス</span>
+                      <button onClick={toggleRainyDay} className="px-4 py-2 rounded-xl text-[11px] font-medium cursor-pointer transition-all"
+                        style={{ backgroundColor: ptRainyActive ? "#4a7c5920" : T.cardAlt, color: ptRainyActive ? "#4a7c59" : T.textMuted }}>
+                        {ptRainyActive ? "☔ ON（本日ポイントUP中）" : "OFF"}
+                      </button>
+                    </div>
+                    <div className="w-[200px]">
+                      <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>雨の日倍率</label>
+                      <select value={ptRainyMult} onChange={e => setPtRainyMult(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                        {["1.5", "2.0", "2.5", "3.0"].map(v => <option key={v} value={v}>{v}倍</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 保存ボタン */}
+                  <div className="flex items-center gap-3">
+                    <button onClick={handleSavePointSettings} disabled={ptSaving}
+                      className="px-6 py-3 text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60 font-medium"
+                      style={{ backgroundColor: PT_COLOR }}>
+                      {ptSaving ? "保存中..." : "💾 基本設定を保存"}
+                    </button>
+                    {ptMsg && <span className="text-[11px]" style={{ color: ptMsg.includes("失敗") ? "#c45555" : "#4a7c59" }}>{ptMsg}</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* ── ボーナスルール ── */}
+              {ptSection === "bonus" && (
+                <div className="space-y-5">
+                  {/* 追加フォーム */}
+                  <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <p className="text-[13px] font-medium mb-4">ボーナスルール追加</p>
+
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>種類</label>
+                        <select value={brType} onChange={e => setBrType(e.target.value)}
+                          className="px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                          <option value="weekday">📅 曜日ボーナス</option>
+                          <option value="period">📆 期間ボーナス</option>
+                          <option value="birthday">🎂 誕生月ボーナス</option>
+                          <option value="idle_time">🕐 アイドルタイム</option>
+                        </select>
+                      </div>
+
+                      {brType === "weekday" && (
+                        <div>
+                          <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>曜日</label>
+                          <select value={brDow} onChange={e => setBrDow(parseInt(e.target.value))}
+                            className="px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                            {WEEKDAY_LABELS.map((l, i) => <option key={i} value={i}>{l}曜日</option>)}
+                          </select>
+                        </div>
+                      )}
+
+                      {brType === "period" && (<>
+                        <div>
+                          <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始日</label>
+                          <input type="text" inputMode="numeric" value={brStartDay} onChange={e => setBrStartDay(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="w-[70px] px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} placeholder="1" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>終了日</label>
+                          <input type="text" inputMode="numeric" value={brEndDay} onChange={e => setBrEndDay(e.target.value.replace(/[^0-9]/g, ""))}
+                            className="w-[70px] px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} placeholder="5" />
+                        </div>
+                      </>)}
+
+                      {brType === "idle_time" && (<>
+                        <div>
+                          <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label>
+                          <input type="time" value={brStartTime} onChange={e => setBrStartTime(e.target.value)}
+                            className="px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>終了時間</label>
+                          <input type="time" value={brEndTime} onChange={e => setBrEndTime(e.target.value)}
+                            className="px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                        </div>
+                      </>)}
+
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>倍率</label>
+                        <select value={brMult} onChange={e => setBrMult(e.target.value)}
+                          className="px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                          {["1.5", "2.0", "2.5", "3.0", "5.0"].map(v => <option key={v} value={v}>{v}倍</option>)}
+                        </select>
+                      </div>
+
+                      <div className="flex-1 min-w-[120px]">
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>ラベル（任意）</label>
+                        <input type="text" value={brLabel} onChange={e => setBrLabel(e.target.value)} placeholder="例: 水曜ポイント2倍"
+                          className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                      </div>
+                    </div>
+
+                    {/* アイドルタイム曜日選択 */}
+                    {brType === "idle_time" && (
+                      <div className="mb-4">
+                        <label className="block text-[10px] mb-2" style={{ color: T.textSub }}>対象曜日</label>
+                        <div className="flex gap-2">
+                          {WEEKDAY_LABELS.map((l, i) => (
+                            <button key={i} onClick={() => setBrWeekdays(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
+                              className="w-[36px] h-[36px] rounded-lg text-[11px] cursor-pointer transition-all"
+                              style={{ backgroundColor: brWeekdays.includes(i) ? PT_COLOR + "25" : T.cardAlt, color: brWeekdays.includes(i) ? PT_COLOR : T.textMuted, fontWeight: brWeekdays.includes(i) ? 600 : 400 }}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <button onClick={handleAddBonusRule} className="px-4 py-2.5 text-white text-[11px] rounded-xl cursor-pointer"
+                      style={{ backgroundColor: PT_COLOR }}>追加</button>
+                  </div>
+
+                  {/* ルール一覧 */}
+                  <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <div className="px-5 py-3 border-b" style={{ borderColor: T.border }}>
+                      <p className="text-[12px] font-medium">登録済みルール</p>
+                    </div>
+                    {bonusRules.length === 0 ? (
+                      <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>ボーナスルールが登録されていません</p>
+                    ) : (
+                      <div className="divide-y" style={{ borderColor: T.border }}>
+                        {bonusRules.map(r => (
+                          <div key={r.id} className="px-5 py-3 flex items-center justify-between" style={{ borderColor: T.border, opacity: r.is_active ? 1 : 0.5 }}>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] px-2 py-1 rounded-lg" style={{ backgroundColor: PT_COLOR + "15", color: PT_COLOR }}>{bonusTypeLabel(r.type)}</span>
+                              <div>
+                                <p className="text-[12px] font-medium">{r.label || bonusRuleDesc(r)}</p>
+                                <p className="text-[10px]" style={{ color: T.textMuted }}>{bonusRuleDesc(r)} — ×{r.multiplier}倍</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => toggleBonusRule(r.id, r.is_active)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer"
+                                style={{ color: r.is_active ? "#4a7c59" : T.textMuted, backgroundColor: r.is_active ? "#4a7c5918" : T.cardAlt }}>
+                                {r.is_active ? "ON" : "OFF"}
+                              </button>
+                              <button onClick={() => deleteBonusRule(r.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer"
+                                style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── 会員ランク ── */}
+              {ptSection === "rank" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <div className="px-5 py-3 border-b" style={{ borderColor: T.border }}>
+                      <p className="text-[12px] font-medium">📈 会員ランク条件・倍率設定</p>
+                      <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>条件を満たすと自動的にランクアップします（予約終了時に判定）</p>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: T.border }}>
+                      {rankMultipliers.map(rm => {
+                        const icon = rm.rank_name === "platinum" ? "💎" : rm.rank_name === "gold" ? "🥇" : rm.rank_name === "silver" ? "🥈" : "👤";
+                        const isNormal = rm.rank_name === "normal";
+                        return (
+                        <div key={rm.id} className="px-5 py-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[20px]">{icon}</span>
+                              <span className="text-[13px] font-medium">{RANK_LABELS[rm.rank_name] || rm.rank_name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px]" style={{ color: T.textMuted }}>ポイント ×</span>
+                              <select value={Number(rm.multiplier).toFixed(1)} onChange={e => updateRankMult(rm.id, e.target.value)}
+                                className="px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                                {["1.0", "1.2", "1.5", "2.0", "2.5", "3.0"].map(v => <option key={v} value={v}>{v}倍</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          {!isNormal && (
+                            <div className="flex flex-wrap gap-3 items-end pl-8">
+                              <div>
+                                <label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>直近</label>
+                                <div className="flex items-center gap-1">
+                                  <select value={String(rm.period_months)} onChange={e => updateRankCondition(rm.id, { period_months: parseInt(e.target.value) })}
+                                    className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+                                    {[1,2,3,6,12].map(v => <option key={v} value={v}>{v}</option>)}
+                                  </select>
+                                  <span className="text-[10px]" style={{ color: T.textMuted }}>ヶ月間に</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>来店回数</label>
+                                <div className="flex items-center gap-1">
+                                  <input type="text" inputMode="numeric" value={String(rm.min_visits_in_period)} onChange={e => updateRankCondition(rm.id, { min_visits_in_period: parseInt(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
+                                    className="w-[50px] px-2 py-1.5 rounded-lg text-[11px] outline-none text-center" style={inputStyle} />
+                                  <span className="text-[10px]" style={{ color: T.textMuted }}>回以上</span>
+                                </div>
+                              </div>
+                              <div className="text-[10px] py-1.5" style={{ color: T.textMuted }}>かつ</div>
+                              <div>
+                                <label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>累計来店</label>
+                                <div className="flex items-center gap-1">
+                                  <input type="text" inputMode="numeric" value={String(rm.min_total_visits)} onChange={e => updateRankCondition(rm.id, { min_total_visits: parseInt(e.target.value.replace(/[^0-9]/g, "")) || 0 })}
+                                    className="w-[60px] px-2 py-1.5 rounded-lg text-[11px] outline-none text-center" style={inputStyle} />
+                                  <span className="text-[10px]" style={{ color: T.textMuted }}>回以上</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {isNormal && <p className="text-[10px] pl-8" style={{ color: T.textFaint }}>条件なし（デフォルト）</p>}
+                        </div>);
+                      })}
+                    </div>
+                  </div>
+                  <div className="rounded-xl p-4 text-[10px]" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>
+                    💡 ランクは上位から判定されます（プラチナ→ゴールド→シルバー→一般）。条件を満たす最上位のランクが自動適用されます。
+                  </div>
+                </div>
+              )}
             </div>
-            {msg && <p className="text-[11px] mt-2" style={{ color: msg.includes("失敗") || msg.includes("入力") ? "#c45555" : "#4a7c59" }}>{msg}</p>}
-          </div>
+          )}
 
-          {/* List */}
-          <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            {/* 指名 */}
-            {tab === "nomination" && (
-              nominations.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>指名が登録されていません</p> : (
-                <table className="w-full text-[12px]">
-                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["指名名", "料金", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
-                  </tr></thead>
-                  <tbody>{nominations.map((n) => (
-                    <tr key={n.id} style={{ borderBottom: `1px solid ${T.border}` }}>
-                      {editId === n.id ? (<>
-                        <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editPrice} onChange={(e) => setEditPrice(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editBack} onChange={(e) => setEditBack(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                        <td></td>
-                        <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
-                      </>) : (<>
-                        <td className="py-3 px-4 font-medium">{n.name}</td>
-                        <td className="py-3 px-4" style={{ color: currentTab.color }}>{fmt(n.price)}</td>
-                        <td className="py-3 px-4" style={{ color: "#c3a782" }}>{fmt(n.therapist_back || 0)}</td>
-                        <td className="py-3 px-4" style={{ color: "#4a7c59" }}>{fmt(n.price - (n.therapist_back || 0))}</td>
-                        <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(n.id); setEditName(n.name); setEditPrice(String(n.price)); setEditBack(String(n.therapist_back || 0)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(n.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
-                      </>)}
-                    </tr>
-                  ))}</tbody>
-                </table>
-              )
-            )}
+          {/* ════════════ OTHER TABS — Add Form ════════════ */}
+          {tab !== "point" && (
+            <div className="rounded-2xl border p-5 mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <p className="text-[13px] font-medium mb-3">{currentTab.label}を追加</p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[140px]">
+                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>名前 *</label>
+                  <input type="text" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder={`${currentTab.label}名`}
+                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}
+                    onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
+                </div>
 
-            {/* 割引 */}
-            {tab === "discount" && (
-              discounts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>割引が登録されていません</p> : (
-                <table className="w-full text-[12px]">
-                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["割引名", "金額/率", "種類", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
-                  </tr></thead>
-                  <tbody>{discounts.map((d) => (
-                    <tr key={d.id} style={{ borderBottom: `1px solid ${T.border}` }}>
-                      {editId === d.id ? (<>
-                        <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editAmount} onChange={(e) => setEditAmount(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><select value={editDiscountType} onChange={(e) => setEditDiscountType(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">固定額</option><option value="percent">%</option></select></td>
-                        <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
-                      </>) : (<>
-                        <td className="py-3 px-4 font-medium">{d.name}</td>
-                        <td className="py-3 px-4" style={{ color: currentTab.color }}>{d.type === "percent" ? `${d.amount}%` : fmt(d.amount)}</td>
-                        <td className="py-3 px-4" style={{ color: T.textSub }}>{d.type === "percent" ? "%割引" : "固定額"}</td>
-                        <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(d.id); setEditName(d.name); setEditAmount(String(d.amount)); setEditDiscountType(d.type); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(d.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
-                      </>)}
-                    </tr>
-                  ))}</tbody>
-                </table>
-              )
-            )}
+                {tab === "nomination" && (<>
+                  <div className="w-[120px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>料金</label>
+                    <input type="text" inputMode="numeric" value={addPrice} onChange={(e) => setAddPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="2000"
+                      className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div className="w-[120px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>バック</label>
+                    <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
+                      className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                </>)}
 
-            {/* 延長 */}
-            {tab === "extension" && (
-              extensions.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>延長が登録されていません</p> : (
-                <table className="w-full text-[12px]">
-                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["延長名", "時間", "料金", "バック", "利益", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
-                  </tr></thead>
-                  <tbody>{extensions.map((e) => (
-                    <tr key={e.id} style={{ borderBottom: `1px solid ${T.border}` }}>
-                      {editId === e.id ? (<>
-                        <td className="py-2 px-4"><input type="text" value={editName} onChange={(ev) => setEditName(ev.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><select value={editDuration} onChange={(ev) => setEditDuration(ev.target.value)} className="px-2 py-1 rounded text-[12px] outline-none cursor-pointer" style={inputStyle}>{[10,15,20,30,40,50,60].map((m) => <option key={m} value={m}>{m}分</option>)}</select></td>
-                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editPrice} onChange={(ev) => setEditPrice(ev.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editBack} onChange={(ev) => setEditBack(ev.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                        <td className="py-2 px-4" />
-                        <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
-                      </>) : (<>
-                        <td className="py-3 px-4 font-medium">{e.name}</td>
-                        <td className="py-3 px-4" style={{ color: T.textSub }}>{e.duration}分</td>
-                        <td className="py-3 px-4" style={{ color: currentTab.color }}>{fmt(e.price)}</td>
-                        <td className="py-3 px-4" style={{ color: "#7ab88f" }}>{fmt(e.therapist_back)}</td>
-                        <td className="py-3 px-4">{fmt(e.price - e.therapist_back)}</td>
-                        <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(e.id); setEditName(e.name); setEditDuration(String(e.duration)); setEditPrice(String(e.price)); setEditBack(String(e.therapist_back)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(e.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
-                      </>)}
-                    </tr>
-                  ))}</tbody>
-                </table>
-              )
-            )}
+                {tab === "discount" && (<>
+                  <div className="w-[120px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>金額/率</label>
+                    <input type="text" inputMode="numeric" value={addAmount} onChange={(e) => setAddAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
+                      className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div className="w-[100px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>種別</label>
+                    <select value={addDiscountType} onChange={(e) => setAddDiscountType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                      <option value="fixed">固定額</option>
+                      <option value="percent">%割引</option>
+                    </select>
+                  </div>
+                </>)}
 
-            {/* オプション */}
-            {tab === "option" && (
-              options.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>オプションが登録されていません</p> : (
-                <table className="w-full text-[12px]">
-                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["オプション名", "料金", "バック", "利益", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
-                  </tr></thead>
-                  <tbody>{options.map((o) => (
-                    <tr key={o.id} style={{ borderBottom: `1px solid ${T.border}` }}>
-                      {editId === o.id ? (<>
-                        <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editPrice} onChange={(e) => setEditPrice(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                        <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editBack} onChange={(e) => setEditBack(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                        <td className="py-2 px-4" />
-                        <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
-                      </>) : (<>
-                        <td className="py-3 px-4 font-medium">{o.name}</td>
-                        <td className="py-3 px-4" style={{ color: currentTab.color }}>{fmt(o.price)}</td>
-                        <td className="py-3 px-4" style={{ color: "#7ab88f" }}>{fmt(o.therapist_back)}</td>
-                        <td className="py-3 px-4">{fmt(o.price - o.therapist_back)}</td>
-                        <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(o.id); setEditName(o.name); setEditPrice(String(o.price)); setEditBack(String(o.therapist_back)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(o.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
-                      </>)}
-                    </tr>
-                  ))}</tbody>
-                </table>
-              )
-            )}
-          </div>
+                {tab === "extension" && (<>
+                  <div className="w-[90px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>時間(分)</label>
+                    <select value={addDuration} onChange={(e) => setAddDuration(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                      {[10, 15, 20, 30, 40, 50, 60].map((m) => (<option key={m} value={m}>{m}分</option>))}
+                    </select>
+                  </div>
+                  <div className="w-[100px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>料金</label>
+                    <input type="text" inputMode="numeric" value={addPrice} onChange={(e) => setAddPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="3000"
+                      className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div className="w-[100px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>バック</label>
+                    <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
+                      className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                </>)}
+
+                {tab === "option" && (<>
+                  <div className="w-[100px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>料金</label>
+                    <input type="text" inputMode="numeric" value={addPrice} onChange={(e) => setAddPrice(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000"
+                      className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div className="w-[100px]">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>バック</label>
+                    <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="500"
+                      className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                </>)}
+
+                <button onClick={handleAdd} disabled={saving} className="px-4 py-2.5 text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60"
+                  style={{ backgroundColor: currentTab.color }}>{saving ? "登録中..." : "追加"}</button>
+              </div>
+              {msg && <p className="text-[11px] mt-2" style={{ color: msg.includes("失敗") || msg.includes("入力") ? "#c45555" : "#4a7c59" }}>{msg}</p>}
+            </div>
+          )}
+
+          {/* ════════════ OTHER TABS — List ════════════ */}
+          {tab !== "point" && (
+            <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              {/* 指名 */}
+              {tab === "nomination" && (
+                nominations.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>指名が登録されていません</p> : (
+                  <table className="w-full text-[12px]">
+                    <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                      {["指名名", "料金", "バック", "利益", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                    </tr></thead>
+                    <tbody>{nominations.map((n) => (
+                      <tr key={n.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                        {editId === n.id ? (<>
+                          <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editPrice} onChange={(e) => setEditPrice(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editBack} onChange={(e) => setEditBack(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                          <td></td>
+                          <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
+                        </>) : (<>
+                          <td className="py-3 px-4 font-medium">{n.name}</td>
+                          <td className="py-3 px-4" style={{ color: currentTab.color }}>{fmt(n.price)}</td>
+                          <td className="py-3 px-4" style={{ color: "#c3a782" }}>{fmt(n.therapist_back || 0)}</td>
+                          <td className="py-3 px-4" style={{ color: "#4a7c59" }}>{fmt(n.price - (n.therapist_back || 0))}</td>
+                          <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(n.id); setEditName(n.name); setEditPrice(String(n.price)); setEditBack(String(n.therapist_back || 0)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(n.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
+                        </>)}
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                )
+              )}
+
+              {/* 割引 */}
+              {tab === "discount" && (
+                discounts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>割引が登録されていません</p> : (
+                  <table className="w-full text-[12px]">
+                    <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                      {["割引名", "金額/率", "種別", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                    </tr></thead>
+                    <tbody>{discounts.map((d) => (
+                      <tr key={d.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                        {editId === d.id ? (<>
+                          <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editAmount} onChange={(e) => setEditAmount(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><select value={editDiscountType} onChange={(e) => setEditDiscountType(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">固定額</option><option value="percent">%</option></select></td>
+                          <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
+                        </>) : (<>
+                          <td className="py-3 px-4 font-medium">{d.name}</td>
+                          <td className="py-3 px-4" style={{ color: currentTab.color }}>{d.type === "percent" ? `${d.amount}%` : fmt(d.amount)}</td>
+                          <td className="py-3 px-4" style={{ color: T.textSub }}>{d.type === "percent" ? "%割引" : "固定額"}</td>
+                          <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(d.id); setEditName(d.name); setEditAmount(String(d.amount)); setEditDiscountType(d.type); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(d.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
+                        </>)}
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                )
+              )}
+
+              {/* 延長 */}
+              {tab === "extension" && (
+                extensions.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>延長が登録されていません</p> : (
+                  <table className="w-full text-[12px]">
+                    <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                      {["延長名", "時間", "料金", "バック", "利益", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                    </tr></thead>
+                    <tbody>{extensions.map((e) => (
+                      <tr key={e.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                        {editId === e.id ? (<>
+                          <td className="py-2 px-4"><input type="text" value={editName} onChange={(ev) => setEditName(ev.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><select value={editDuration} onChange={(ev) => setEditDuration(ev.target.value)} className="px-2 py-1 rounded text-[12px] outline-none cursor-pointer" style={inputStyle}>{[10,15,20,30,40,50,60].map((m) => <option key={m} value={m}>{m}分</option>)}</select></td>
+                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editPrice} onChange={(ev) => setEditPrice(ev.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editBack} onChange={(ev) => setEditBack(ev.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                          <td className="py-2 px-4" />
+                          <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
+                        </>) : (<>
+                          <td className="py-3 px-4 font-medium">{e.name}</td>
+                          <td className="py-3 px-4" style={{ color: T.textSub }}>{e.duration}分</td>
+                          <td className="py-3 px-4" style={{ color: currentTab.color }}>{fmt(e.price)}</td>
+                          <td className="py-3 px-4" style={{ color: "#7ab88f" }}>{fmt(e.therapist_back)}</td>
+                          <td className="py-3 px-4">{fmt(e.price - e.therapist_back)}</td>
+                          <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(e.id); setEditName(e.name); setEditDuration(String(e.duration)); setEditPrice(String(e.price)); setEditBack(String(e.therapist_back)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(e.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
+                        </>)}
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                )
+              )}
+
+              {/* オプション */}
+              {tab === "option" && (
+                options.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>オプションが登録されていません</p> : (
+                  <table className="w-full text-[12px]">
+                    <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                      {["オプション名", "料金", "バック", "利益", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                    </tr></thead>
+                    <tbody>{options.map((o) => (
+                      <tr key={o.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                        {editId === o.id ? (<>
+                          <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editPrice} onChange={(e) => setEditPrice(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editBack} onChange={(e) => setEditBack(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
+                          <td className="py-2 px-4" />
+                          <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
+                        </>) : (<>
+                          <td className="py-3 px-4 font-medium">{o.name}</td>
+                          <td className="py-3 px-4" style={{ color: currentTab.color }}>{fmt(o.price)}</td>
+                          <td className="py-3 px-4" style={{ color: "#7ab88f" }}>{fmt(o.therapist_back)}</td>
+                          <td className="py-3 px-4">{fmt(o.price - o.therapist_back)}</td>
+                          <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(o.id); setEditName(o.name); setEditPrice(String(o.price)); setEditBack(String(o.therapist_back)); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(o.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
+                        </>)}
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                )
+              )}
+            </div>
+          )}
         </div>
       </div>
 
