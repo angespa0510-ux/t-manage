@@ -84,6 +84,8 @@ export default function CustomerMypage() {
   const [optionsList, setOptionsList] = useState<Option[]>([]);
   // ポイント
   const [showPoints, setShowPoints] = useState(false);
+  const [rankRules, setRankRules] = useState<{rank_name:string;multiplier:number;min_visits_in_period:number;period_months:number;min_total_visits:number}[]>([]);
+  const [recentVisitCount, setRecentVisitCount] = useState(0);
   const [tickerMsgs, setTickerMsgs] = useState<string[]>([]);
 
   useEffect(() => { const saved = localStorage.getItem("customer_mypage_id"); if (saved) { supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) { setCustomer(data); setSetEmail(data.login_email || ""); } }); } }, []);
@@ -95,6 +97,10 @@ export default function CustomerMypage() {
     const { data: c } = await supabase.from("courses").select("id,name,duration,price").order("id"); if (c) setCourses(c);
     const { data: s } = await supabase.from("stores").select("*").order("id"); if (s) setStores(s);
     const { data: f } = await supabase.from("customer_favorites").select("*").eq("customer_id", customer.id).order("created_at", { ascending: false }); if (f) setFavorites(f);
+    const { data: rr } = await supabase.from("rank_point_multipliers").select("*").order("min_total_visits", { ascending: true }); if (rr) setRankRules(rr);
+    const since3m = new Date(); since3m.setMonth(since3m.getMonth() - 3);
+    const { count: rc } = await supabase.from("reservations").select("*", { count: "exact", head: true }).eq("customer_name", customer.name).eq("status", "completed").gte("date", since3m.toISOString().split("T")[0]);
+    setRecentVisitCount(rc || 0);
     const { data: p } = await supabase.from("customer_points").select("*").eq("customer_id", customer.id).order("created_at", { ascending: false }); if (p) { setPoints(p); /* 期限切れ間近ポイント通知 */ const { data: ps } = await supabase.from("point_settings").select("expiry_notify_days").limit(1).single(); const notifyDays = ps?.expiry_notify_days || 30; const now = new Date(); const warnDate = new Date(); warnDate.setDate(warnDate.getDate() + notifyDays); const expiringPts = p.filter(pt => pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= warnDate); if (expiringPts.length > 0) { const totalExpiring = expiringPts.reduce((s, pt) => s + pt.amount, 0); const nearestExpiry = expiringPts.sort((a, b) => new Date(a.expires_at).getTime() - new Date(b.expires_at).getTime())[0]; const expiryStr = new Date(nearestExpiry.expires_at).toLocaleDateString("ja-JP"); const descKey = `ポイント期限通知_${expiryStr}`; const { data: existNotify } = await supabase.from("customer_notifications").select("id").eq("target_customer_id", customer.id).eq("title", "⏰ ポイント有効期限のお知らせ").like("body", `%${expiryStr}%`).maybeSingle(); if (!existNotify) { await supabase.from("customer_notifications").insert({ title: "⏰ ポイント有効期限のお知らせ", body: `${totalExpiring.toLocaleString()}ptが${expiryStr}までに期限切れになります。お早めにご利用ください！`, type: "campaign", target_customer_id: customer.id }); } } }
     const { data: n } = await supabase.from("customer_notifications").select("*").or(`target_customer_id.is.null,target_customer_id.eq.${customer.id}`).order("created_at", { ascending: false }); if (n) setNotifications(n);
     const { data: nr } = await supabase.from("customer_notification_reads").select("notification_id").eq("customer_id", customer.id); if (nr) setReadNotifIds(nr.map((x: { notification_id: number }) => x.notification_id));
@@ -195,10 +201,10 @@ export default function CustomerMypage() {
     const optText = selOpts.map(o => o.name).join(",");
     const optTotal = selOpts.reduce((s, o) => s + o.price, 0);
     const totalPrice = Math.max(0, (course?.price || 0) + nom.price + optTotal + (ext?.price || 0) - (disc?.amount || 0) - bookPointUse);
-    if (bookPointUse > 0 && bookPointUse < 1000) { alert("ポイントは1,000pt以上からご利用いただけます"); return; } if (bookPointUse > 0) { await supabase.from("customer_points").insert({ customer_id: customer.id, amount: -bookPointUse, type: "use", description: `予約利用 ${dateFmt(bookDate)}` }); }
-    const { error } = await supabase.from("reservations").insert({ customer_name: customer.name, therapist_id: bookTherapistId || null, date: bookDate, start_time: bookTime, end_time: endTime, course: course?.name || "", total_price: totalPrice, status: "unprocessed", notes: bookNotes, nomination: nom.name, nomination_fee: nom.price, options_text: optText, options_total: optTotal, extension_name: ext?.name || "", extension_price: ext?.price || 0, extension_duration: ext?.duration || 0, discount_name: disc?.name || "", discount_amount: disc?.amount || 0 });
+    if (bookPointUse > 0 && bookPointUse < 1000) { alert("ポイントは1,000pt以上からご利用いただけます"); setBookSaving(false); return; }
+    const { data: newRes, error } = await supabase.from("reservations").insert({ customer_name: customer.name, therapist_id: bookTherapistId || null, date: bookDate, start_time: bookTime, end_time: endTime, course: course?.name || "", total_price: totalPrice, status: "unprocessed", notes: bookNotes, nomination: nom.name, nomination_fee: nom.price, options_text: optText, options_total: optTotal, extension_name: ext?.name || "", extension_price: ext?.price || 0, extension_duration: ext?.duration || 0, discount_name: disc?.name || "", discount_amount: disc?.amount || 0, point_used: bookPointUse }).select("id").single();
     setBookSaving(false);
-    if (error) { setBookMsg("予約に失敗しました: " + error.message); } else { setBookDone(true); fetchData(); fetchDaySchedule(bookDate); }
+    if (error) { setBookMsg("予約に失敗しました: " + error.message); } else { if (bookPointUse > 0 && newRes) { await supabase.from("customer_points").insert({ customer_id: customer.id, amount: -bookPointUse, type: "use", description: `予約利用（仮押さえ）${dateFmt(bookDate)}`, status: "pending", reservation_id: newRes.id }); } setBookDone(true); fetchData(); fetchDaySchedule(bookDate); }
   };
   const saveSettings = async () => { if (!customer) return; setSettingMsg(""); setSettingSaving(true); const updates: Record<string, string> = {}; if (setEmail.trim() && setEmail.trim() !== customer.login_email) updates.login_email = setEmail.trim(); if (setPw) { if (setPw.length < 6) { setSettingMsg("パスワードは6文字以上にしてください"); setSettingSaving(false); return; } if (setPw !== setPwConfirm) { setSettingMsg("パスワードが一致しません"); setSettingSaving(false); return; } updates.login_password = setPw; } if (Object.keys(updates).length === 0) { setSettingMsg("変更がありません"); setSettingSaving(false); return; } const { error } = await supabase.from("customers").update(updates).eq("id", customer.id); setSettingSaving(false); if (error) setSettingMsg("保存に失敗しました"); else { setSettingMsg("保存しました！"); setSetPw(""); setSetPwConfirm(""); const { data } = await supabase.from("customers").select("*").eq("id", customer.id).single(); if (data) setCustomer(data); setTimeout(() => setSettingMsg(""), 2000); } };
 
@@ -572,7 +578,98 @@ export default function CustomerMypage() {
             </div>
 
             <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between"><div><p className="text-[11px]" style={{ color: C.textMuted }}>ポイント残高</p><p className="text-[24px] font-bold" style={{ color: C.accent }}>{pointBalance.toLocaleString()}<span className="text-[12px] font-normal ml-1">pt</span></p></div><button onClick={() => setShowPoints(true)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>履歴を見る</button></div></div>
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[11px] mb-2" style={{ color: C.textMuted }}>会員ランク</p><div className="flex items-center gap-2"><span className="px-3 py-1 rounded-full text-[12px] font-medium" style={{ backgroundColor: C.accentBg, color: C.accent }}>{customer.rank === "good" ? "⭐ 善良" : customer.rank === "caution" ? "⚠ 要注意" : "👤 一般"}</span><span className="text-[11px]" style={{ color: C.textMuted }}>累計{totalVisits}回ご来店</span></div></div>
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}>
+              <p className="text-[11px] mb-3" style={{ color: C.textMuted }}>会員ランク</p>
+              {(() => {
+                const currentRank = customer.rank || "normal";
+                const rankIcon = (r: string) => r === "platinum" ? "💎" : r === "gold" ? "🥇" : r === "silver" ? "🥈" : "👤";
+                const rankLabel = (r: string) => r === "platinum" ? "プラチナ" : r === "gold" ? "ゴールド" : r === "silver" ? "シルバー" : "一般";
+                const rankColor = (r: string) => r === "platinum" ? "#9b59b6" : r === "gold" ? "#f1c40f" : r === "silver" ? "#95a5a6" : C.accent;
+                const rankOrder = ["normal", "silver", "gold", "platinum"];
+                const currentIdx = rankOrder.indexOf(currentRank);
+                const nextRank = currentIdx < rankOrder.length - 1 ? rankOrder[currentIdx + 1] : null;
+                const nextRule = nextRank ? rankRules.find(r => r.rank_name === nextRank) : null;
+                const currentRule = rankRules.find(r => r.rank_name === currentRank);
+                const currentMult = currentRule?.multiplier || 1.0;
+                const periodMonths = nextRule?.period_months || 3;
+                const needTotal = nextRule?.min_total_visits || 0;
+                const needRecent = nextRule?.min_visits_in_period || 0;
+                const totalProg = needTotal > 0 ? Math.min(100, Math.round((totalVisits / needTotal) * 100)) : 100;
+                const recentProg = needRecent > 0 ? Math.min(100, Math.round((recentVisitCount / needRecent) * 100)) : 100;
+                const totalRemain = Math.max(0, needTotal - totalVisits);
+                const recentRemain = Math.max(0, needRecent - recentVisitCount);
+                return (<>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-[32px]">{rankIcon(currentRank)}</span>
+                    <div>
+                      <p className="text-[16px] font-bold" style={{ color: rankColor(currentRank) }}>{rankLabel(currentRank)}会員</p>
+                      <p className="text-[10px]" style={{ color: C.textMuted }}>ポイント <strong style={{ color: rankColor(currentRank) }}>×{currentMult}倍</strong> ・ 累計{totalVisits}回ご来店</p>
+                    </div>
+                  </div>
+                  {/* 全ランク表示 */}
+                  <div className="flex items-center gap-1 mb-4">
+                    {rankOrder.map((r, i) => (
+                      <div key={r} className="flex items-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[16px]">{rankIcon(r)}</span>
+                          <span className="text-[8px] mt-0.5" style={{ color: r === currentRank ? rankColor(r) : C.textFaint, fontWeight: r === currentRank ? 700 : 400 }}>{rankLabel(r)}</span>
+                        </div>
+                        {i < rankOrder.length - 1 && <div className="w-8 h-[2px] mx-1 rounded" style={{ backgroundColor: i < currentIdx ? rankColor(rankOrder[i+1]) : C.border }} />}
+                      </div>
+                    ))}
+                  </div>
+                  {nextRank && nextRule ? (
+                    <div className="rounded-xl p-4" style={{ backgroundColor: C.cardAlt, border: `1px solid ${rankColor(nextRank)}30` }}>
+                      <p className="text-[11px] font-medium mb-3" style={{ color: rankColor(nextRank) }}>🎯 {rankLabel(nextRank)}会員まであと少し！</p>
+                      {/* 累計来店プログレス */}
+                      <div className="mb-3">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-[10px]" style={{ color: C.textSub }}>累計来店回数</span>
+                          <span className="text-[10px] font-medium" style={{ color: totalProg >= 100 ? "#4a7c59" : C.text }}>{totalVisits} / {needTotal}回 {totalProg >= 100 ? "✅" : `(あと${totalRemain}回)`}</span>
+                        </div>
+                        <div className="w-full h-[6px] rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${totalProg}%`, background: totalProg >= 100 ? "#4a7c59" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
+                        </div>
+                      </div>
+                      {/* 直近来店プログレス */}
+                      <div className="mb-3">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-[10px]" style={{ color: C.textSub }}>直近{periodMonths}ヶ月の来店</span>
+                          <span className="text-[10px] font-medium" style={{ color: recentProg >= 100 ? "#4a7c59" : C.text }}>{recentVisitCount} / {needRecent}回 {recentProg >= 100 ? "✅" : `(あと${recentRemain}回)`}</span>
+                        </div>
+                        <div className="w-full h-[6px] rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${recentProg}%`, background: recentProg >= 100 ? "#4a7c59" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
+                        </div>
+                      </div>
+                      <p className="text-[9px]" style={{ color: C.textMuted }}>🎁 {rankLabel(nextRank)}になるとポイントが<strong style={{ color: rankColor(nextRank) }}>×{nextRule.multiplier}倍</strong>にアップ！</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl p-4 text-center" style={{ backgroundColor: C.cardAlt, border: `1px solid ${rankColor(currentRank)}30` }}>
+                      <p className="text-[11px]" style={{ color: rankColor(currentRank) }}>🏆 最高ランクに到達しました！</p>
+                      <p className="text-[9px] mt-1" style={{ color: C.textMuted }}>ポイント×{currentMult}倍の特典をお楽しみください</p>
+                    </div>
+                  )}
+                  {/* 全ランク特典一覧 */}
+                  <div className="mt-4 space-y-1.5">
+                    <p className="text-[10px] font-medium" style={{ color: C.textSub }}>📊 ランク特典一覧</p>
+                    {rankRules.filter(r => r.rank_name !== "normal").map(r => {
+                      const isCurrent = r.rank_name === currentRank;
+                      return (
+                      <div key={r.rank_name} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: isCurrent ? rankColor(r.rank_name) + "12" : "transparent", border: isCurrent ? `1px solid ${rankColor(r.rank_name)}30` : "1px solid transparent" }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px]">{rankIcon(r.rank_name)}</span>
+                          <span className="text-[11px]" style={{ color: isCurrent ? rankColor(r.rank_name) : C.textSub, fontWeight: isCurrent ? 600 : 400 }}>{rankLabel(r.rank_name)}</span>
+                        </div>
+                        <div className="text-[10px] text-right" style={{ color: C.textMuted }}>
+                          <span>直近{r.period_months}ヶ月に{r.min_visits_in_period}回 & 累計{r.min_total_visits}回</span>
+                          <span className="ml-2 font-medium" style={{ color: rankColor(r.rank_name) }}>×{r.multiplier}倍</span>
+                        </div>
+                      </div>);
+                    })}
+                  </div>
+                </>);
+              })()}
+            </div>
       </div>)}
     </div>
 
