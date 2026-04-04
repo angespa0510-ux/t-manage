@@ -152,6 +152,11 @@ export default function TimeChart() {
   const lastTime2 = useRef(0);
   const animFrame = useRef<number>(0);
 
+  // Shift request notifications
+  type ShiftReq = { id: number; therapist_id: number; date: string; start_time: string; end_time: string; store_id: number; notes: string; status: string; updated_at: string; week_start: string };
+  const [pendingShiftReqs, setPendingShiftReqs] = useState<ShiftReq[]>([]);
+  const [showShiftNotif, setShowShiftNotif] = useState(false);
+
   const selectedCourse = courses.find((c) => c.id === newCourseId);
   const editSelectedCourse = courses.find((c) => c.id === editCourseId);
 
@@ -194,9 +199,17 @@ export default function TimeChart() {
       .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "therapist_daily_settlements" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "room_cash_replenishments" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "shift_requests" }, () => fetchPendingShifts())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
+
+  // Shift request notifications
+  const fetchPendingShifts = async () => {
+    const { data } = await supabase.from("shift_requests").select("*").eq("status", "pending").order("updated_at", { ascending: false });
+    if (data) setPendingShiftReqs(data);
+  };
+  useEffect(() => { fetchPendingShifts(); }, []);
   
   useEffect(() => { const p = new URLSearchParams(window.location.search).get("date"); if (p) setSelectedDate(p); }, []);
 
@@ -411,6 +424,9 @@ export default function TimeChart() {
           <h1 className="text-[15px] font-medium">タイムチャート</h1>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowShiftNotif(!showShiftNotif)} className="relative px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: pendingShiftReqs.length > 0 ? "#f59e0b44" : T.border, color: pendingShiftReqs.length > 0 ? "#f59e0b" : T.textSub }}>
+            📝 出勤希望{pendingShiftReqs.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: "#f59e0b" }}>{new Set(pendingShiftReqs.map(r => r.therapist_id)).size}</span>}
+          </button>
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
           <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
@@ -1121,6 +1137,64 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
           </div>
         </div>
       )}
+      {/* Shift Request Notification Popup */}
+      {showShiftNotif && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center z-50 pt-20 p-4" onClick={() => setShowShiftNotif(false)}>
+          <div className="rounded-2xl border w-full max-w-lg max-h-[70vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <h2 className="text-[15px] font-medium">📝 出勤希望一覧</h2>
+              <button onClick={() => setShowShiftNotif(false)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
+            </div>
+            <div className="px-6 py-4">
+              {pendingShiftReqs.length === 0 ? (
+                <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>未処理の出勤希望はありません</p>
+              ) : (() => {
+                const grouped: Record<number, ShiftReq[]> = {};
+                pendingShiftReqs.forEach(r => { if (!grouped[r.therapist_id]) grouped[r.therapist_id] = []; grouped[r.therapist_id].push(r); });
+                return (
+                  <div className="space-y-4">
+                    {Object.entries(grouped).map(([tid, reqs]) => {
+                      const t = therapists.find(x => x.id === Number(tid));
+                      const sorted = [...reqs].sort((a, b) => a.date.localeCompare(b.date));
+                      const weekLabel = sorted[0]?.week_start ? (() => { const ws = new Date(sorted[0].week_start + "T00:00:00"); return `${ws.getMonth()+1}/${ws.getDate()}〜`; })() : "";
+                      return (
+                        <div key={tid} className="rounded-xl border p-4" style={{ borderColor: "#f59e0b33", backgroundColor: "#f59e0b08" }}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[14px] font-medium">{t?.name || "不明"}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未処理 {weekLabel}</span>
+                            </div>
+                            <span className="text-[9px]" style={{ color: T.textMuted }}>{sorted[0]?.updated_at ? new Date(sorted[0].updated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) + " 提出" : ""}</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {sorted.map(r => {
+                              const d = new Date(r.date + "T00:00:00");
+                              const days = ["日","月","火","水","木","金","土"];
+                              const store = stores.find(s => s.id === r.store_id);
+                              return (
+                                <div key={r.id} className="flex items-center justify-between rounded-lg px-3 py-2 text-[12px]" style={{ backgroundColor: T.card }}>
+                                  <span className="font-medium">{d.getMonth()+1}/{d.getDate()}({days[d.getDay()]})</span>
+                                  <span style={{ color: T.textSub }}>{r.start_time?.slice(0,5)} 〜 {r.end_time?.slice(0,5)}</span>
+                                  {store && <span className="text-[10px]" style={{ color: T.textMuted }}>{store.name}</span>}
+                                  {r.notes && <span className="text-[10px]" style={{ color: "#f59e0b" }}>📝 {r.notes}</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex gap-2 mt-3">
+                            <button onClick={() => { router.push("/shifts"); }} className="px-4 py-2 text-[11px] rounded-lg cursor-pointer" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>シフト管理で確認</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
     </div>
   );
