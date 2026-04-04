@@ -84,6 +84,7 @@ export default function CustomerMypage() {
   const [optionsList, setOptionsList] = useState<Option[]>([]);
   // ポイント
   const [showPoints, setShowPoints] = useState(false);
+  const [tickerMsgs, setTickerMsgs] = useState<string[]>([]);
 
   useEffect(() => { const saved = localStorage.getItem("customer_mypage_id"); if (saved) { supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) { setCustomer(data); setSetEmail(data.login_email || ""); } }); } }, []);
 
@@ -145,6 +146,35 @@ export default function CustomerMypage() {
   const isFav = (type: string, itemId: number) => favorites.some(f => f.type === type && f.item_id === itemId);
   const toggleFav = async (type: string, itemId: number) => { if (!customer) return; const ex = favorites.find(f => f.type === type && f.item_id === itemId); if (ex) { await supabase.from("customer_favorites").delete().eq("id", ex.id); } else { await supabase.from("customer_favorites").insert({ customer_id: customer.id, type, item_id: itemId }); } fetchData(); };
   const pointBalance = points.reduce((sum, p) => sum + p.amount, 0);
+
+  // テロップ: リアルタイム予約速報
+  useEffect(() => {
+    if (!customer) return;
+    // 直近3時間の予約を取得してテロップ初期化
+    const loadRecent = async () => {
+      const since = new Date(); since.setHours(since.getHours() - 10);
+      const { data: recent } = await supabase.from("reservations").select("therapist_id,course,created_at").gte("created_at", since.toISOString()).order("created_at", { ascending: false }).limit(30);
+      const { data: thAll } = await supabase.from("therapists").select("id,name");
+      if (recent && thAll) {
+        const msgs = recent.map(r => {
+          const th = thAll.find(t => t.id === r.therapist_id);
+          const ago = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60000);
+          const agoText = ago < 1 ? "たった今" : ago < 60 ? `${ago}分前` : `${Math.floor(ago / 60)}時間前`;
+          return `🔥 ${agoText} ${th?.name || "セラピスト"}さん ${r.course || "コース"}の予約が入りました！`;
+        });
+        setTickerMsgs(msgs);
+      }
+    };
+    loadRecent();
+    // リアルタイム購読
+    const ch = supabase.channel("ticker-reservations").on("postgres_changes", { event: "INSERT", schema: "public", table: "reservations" }, async (payload) => {
+      const r = payload.new as { therapist_id: number; course: string };
+      const { data: th } = await supabase.from("therapists").select("name").eq("id", r.therapist_id).maybeSingle();
+      const msg = `🔥 たった今 ${th?.name || "セラピスト"}さん ${r.course || "コース"}の予約が入りました！`;
+      setTickerMsgs(prev => [msg, ...prev].slice(0, 15));
+    }).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [customer]);
   const unreadCount = notifications.filter(n => !readNotifIds.includes(n.id)).length;
   const markRead = async (nid: number) => { if (!customer || readNotifIds.includes(nid)) return; await supabase.from("customer_notification_reads").insert({ customer_id: customer.id, notification_id: nid }); setReadNotifIds(prev => [...prev, nid]); };
   const markAllRead = async () => { if (!customer) return; for (const n of notifications.filter(n => !readNotifIds.includes(n.id))) { try { await supabase.from("customer_notification_reads").insert({ customer_id: customer.id, notification_id: n.id }); } catch {} } setReadNotifIds(notifications.map(n => n.id)); };
@@ -214,6 +244,15 @@ export default function CustomerMypage() {
     {/* Header */}
     <div className="sticky top-0 z-30 border-b backdrop-blur-xl" style={{ backgroundColor: C.card + "ee", borderColor: C.border }}><div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] text-white font-medium" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{customer.name?.charAt(0)}</div><div><p className="text-[14px] font-medium">{customer.name} 様</p><p className="text-[10px]" style={{ color: C.textMuted }}>ポイント: <span style={{ color: C.accent, fontWeight: 600 }}>{pointBalance.toLocaleString()}pt</span></p></div></div><div className="flex items-center gap-2"><button onClick={() => setTab("notifications")} className="relative p-2 cursor-pointer"><span className="text-[18px]">🔔</span>{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: C.red }}>{unreadCount}</span>}</button><button onClick={handleLogout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: C.border, color: C.textMuted }}>ログアウト</button></div></div></div>
 
+    {/* 予約速報テロップ */}
+    {tickerMsgs.length > 0 && (
+      <div className="overflow-hidden border-b" style={{ backgroundColor: C.accent + "08", borderColor: C.accent + "20", height: 32 }}>
+        <div className="ticker-scroll flex items-center gap-16 whitespace-nowrap h-full text-[11px]" style={{ color: C.accent }}>
+          {tickerMsgs.map((m, i) => <span key={i} className="inline-block px-4">{m}</span>)}
+          {tickerMsgs.map((m, i) => <span key={`dup-${i}`} className="inline-block px-4">{m}</span>)}
+        </div>
+      </div>
+    )}
     <div className="max-w-lg mx-auto px-4 py-4">
 
       {/* ═══ ホーム ═══ */}
@@ -541,6 +580,9 @@ export default function CustomerMypage() {
     {/* ポイント履歴モーダル */}
     {showPoints && (()=>{ const now = new Date(); const expiringPts = points.filter(pt => pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= new Date(now.getTime() + 30*24*60*60*1000)); const totalExpiring = expiringPts.reduce((s,pt) => s+pt.amount, 0); return (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50" onClick={() => setShowPoints(false)}><div className="rounded-t-2xl sm:rounded-2xl border w-full max-w-md max-h-[80vh] overflow-y-auto animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}><div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}><h3 className="text-[16px] font-medium">🎁 ポイント履歴</h3><button onClick={() => setShowPoints(false)} className="text-[14px] cursor-pointer p-1" style={{ color: C.textMuted }}>✕</button></div><div className="px-6 py-4"><div className="text-center mb-4"><p className="text-[11px]" style={{ color: C.textMuted }}>ポイント残高</p><p className="text-[28px] font-bold" style={{ color: C.accent }}>{pointBalance.toLocaleString()}<span className="text-[12px] font-normal ml-1">pt</span></p>{customer.rank && customer.rank !== "normal" && <p className="text-[10px] mt-1" style={{ color: C.accent }}>{customer.rank === "platinum" ? "💎 プラチナ会員" : customer.rank === "gold" ? "🥇 ゴールド会員" : customer.rank === "silver" ? "🥈 シルバー会員" : ""}</p>}</div>{totalExpiring > 0 && (<div className="rounded-xl p-3 mb-3 flex items-center gap-2" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b30" }}><span className="text-[14px]">⏰</span><div><p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>期限切れ間近: {totalExpiring.toLocaleString()}pt</p><p className="text-[9px]" style={{ color: "#f59e0b88" }}>30日以内に有効期限を迎えるポイントがあります</p></div></div>)}{points.length === 0 ? (<p className="text-center py-4 text-[12px]" style={{ color: C.textFaint }}>ポイント履歴がありません</p>) : (<div className="space-y-2">{points.map(pt => { const isExpiring = pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= new Date(now.getTime() + 30*24*60*60*1000); const isExpired = pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) <= now; const desc = pt.description || (pt.type === "earn" ? "ポイント付与" : "ポイント利用"); const icon = desc.includes("初回") ? "🎉" : desc.includes("誕生") ? "🎂" : desc.includes("雨") ? "☔" : desc.includes("曜日") || desc.includes("期間") ? "📅" : desc.includes("アイドル") ? "🕐" : desc.includes("ランク") ? "📈" : desc.includes("アンケート") ? "📝" : pt.amount > 0 ? "💰" : "🏷"; return (<div key={pt.id} className="rounded-xl border p-3" style={{ borderColor: C.border, opacity: isExpired ? 0.4 : 1 }}><div className="flex items-center justify-between"><div className="flex items-center gap-2 flex-1 min-w-0"><span className="text-[14px]">{icon}</span><div className="min-w-0"><p className="text-[12px] font-medium truncate">{desc}{isExpired && <span className="ml-1 text-[9px]" style={{ color: C.red }}>（期限切れ）</span>}</p><div className="flex gap-2 items-center"><span className="text-[10px]" style={{ color: C.textMuted }}>{new Date(pt.created_at).toLocaleDateString("ja-JP")}</span>{pt.expires_at && !isExpired && <span className="text-[9px]" style={{ color: isExpiring ? "#f59e0b" : C.textFaint }}>{isExpiring ? "⚠ " : ""}期限: {new Date(pt.expires_at).toLocaleDateString("ja-JP")}</span>}</div></div></div><span className="text-[14px] font-bold flex-shrink-0" style={{ color: isExpired ? C.textFaint : pt.amount > 0 ? C.green : C.red }}>{pt.amount > 0 ? "+" : ""}{pt.amount.toLocaleString()}pt</span></div></div>); })}</div>)}</div></div></div>); })()}
 
-    <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }`}</style>
+    <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .ticker-scroll { animation: tickerScroll 30s linear infinite; }
+        .ticker-scroll:hover { animation-play-state: paused; } @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }`}</style>
   </div>);
 }
