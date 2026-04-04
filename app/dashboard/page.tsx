@@ -9,7 +9,7 @@ import { useStaffSession } from "../../lib/staff-session";
 
 type Customer = {
   id: number; created_at: string; name: string; phone: string; phone2: string; phone3: string;
-  email: string; notes: string; user_id: string; rank: string;
+  email: string; notes: string; user_id: string; rank: string; birthday: string;
 };
 type Visit = {
   id: number; customer_id: number; date: string; start_time: string; end_time: string;
@@ -86,13 +86,13 @@ export default function Dashboard() {
 
   // Register
   const [custName, setCustName] = useState(""); const [custPhone, setCustPhone] = useState(""); const [custPhone2, setCustPhone2] = useState(""); const [custPhone3, setCustPhone3] = useState("");
-  const [custEmail, setCustEmail] = useState(""); const [custNotes, setCustNotes] = useState(""); const [custRank, setCustRank] = useState("normal");
+  const [custEmail, setCustEmail] = useState(""); const [custNotes, setCustNotes] = useState(""); const [custRank, setCustRank] = useState("normal"); const [custBirthday, setCustBirthday] = useState("");
   const [saving, setSaving] = useState(false); const [saveMsg, setSaveMsg] = useState("");
 
   // Edit
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [editName, setEditName] = useState(""); const [editPhone, setEditPhone] = useState(""); const [editPhone2, setEditPhone2] = useState(""); const [editPhone3, setEditPhone3] = useState("");
-  const [editEmail, setEditEmail] = useState(""); const [editNotes, setEditNotes] = useState(""); const [editRank, setEditRank] = useState("normal");
+  const [editEmail, setEditEmail] = useState(""); const [editNotes, setEditNotes] = useState(""); const [editRank, setEditRank] = useState("normal"); const [editBirthday, setEditBirthday] = useState("");
   const [editSaving, setEditSaving] = useState(false); const [editMsg, setEditMsg] = useState("");
 
   // Delete
@@ -324,18 +324,18 @@ export default function Dashboard() {
       const { data: dup } = await supabase.from("customers").select("id, name").or(`phone.eq.${phoneToCheck},phone2.eq.${phoneToCheck},phone3.eq.${phoneToCheck}`);
       if (dup && dup.length > 0) { setSaving(false); setSaveMsg(`この電話番号は「${dup[0].name}」で既に登録されています`); return; }
     }
-    const { error } = await supabase.from("customers").insert({ name: custName.trim(), phone: custPhone.trim(), phone2: custPhone2.trim(), phone3: custPhone3.trim(), email: custEmail.trim(), notes: custNotes.trim(), rank: custRank, user_id: userId });
+    const { error } = await supabase.from("customers").insert({ name: custName.trim(), phone: custPhone.trim(), phone2: custPhone2.trim(), phone3: custPhone3.trim(), email: custEmail.trim(), notes: custNotes.trim(), rank: custRank, birthday: custBirthday || null, user_id: userId });
     setSaving(false);
     if (error) { setSaveMsg("登録に失敗しました: " + error.message); }
-    else { setSaveMsg("登録しました！"); setCustName(""); setCustPhone(""); setCustPhone2(""); setCustPhone3(""); setCustEmail(""); setCustNotes(""); setCustRank("normal"); fetchCustomers(); setTimeout(() => { setSaveMsg(""); setActivePage("顧客一覧"); }, 1000); }
+    else { setSaveMsg("登録しました！"); setCustName(""); setCustPhone(""); setCustPhone2(""); setCustPhone3(""); setCustEmail(""); setCustNotes(""); setCustRank("normal"); setCustBirthday(""); fetchCustomers(); setTimeout(() => { setSaveMsg(""); setActivePage("顧客一覧"); }, 1000); }
   };
 
   // Edit
-  const startEdit = (c: Customer) => { setEditingCustomer(c); setEditName(c.name || ""); setEditPhone(c.phone || ""); setEditPhone2(c.phone2 || ""); setEditPhone3(c.phone3 || ""); setEditEmail(c.email || ""); setEditNotes(c.notes || ""); setEditRank(c.rank || "normal"); setEditMsg(""); };
+  const startEdit = (c: Customer) => { setEditingCustomer(c); setEditName(c.name || ""); setEditPhone(c.phone || ""); setEditPhone2(c.phone2 || ""); setEditPhone3(c.phone3 || ""); setEditEmail(c.email || ""); setEditNotes(c.notes || ""); setEditRank(c.rank || "normal"); setEditBirthday(c.birthday || ""); setEditMsg(""); };
   const handleUpdate = async () => {
     if (!editingCustomer || !editName.trim()) { setEditMsg("名前を入力してください"); return; }
     setEditSaving(true); setEditMsg("");
-    const { error } = await supabase.from("customers").update({ name: editName.trim(), phone: editPhone.trim(), phone2: editPhone2.trim(), phone3: editPhone3.trim(), email: editEmail.trim(), notes: editNotes.trim(), rank: editRank }).eq("id", editingCustomer.id);
+    const { error } = await supabase.from("customers").update({ name: editName.trim(), phone: editPhone.trim(), phone2: editPhone2.trim(), phone3: editPhone3.trim(), email: editEmail.trim(), notes: editNotes.trim(), rank: editRank, birthday: editBirthday || null }).eq("id", editingCustomer.id);
     setEditSaving(false);
     if (error) { setEditMsg("更新に失敗しました: " + error.message); }
     else { setEditMsg("更新しました！"); fetchCustomers(); setTimeout(() => { setEditingCustomer(null); setEditMsg(""); }, 800); }
@@ -540,6 +540,7 @@ export default function Dashboard() {
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号②</label><input type="tel" placeholder="2つ目の電話番号（任意）" value={custPhone2} onChange={(e) => setCustPhone2(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号③</label><input type="tel" placeholder="3つ目の電話番号（任意）" value={custPhone3} onChange={(e) => setCustPhone3(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メールアドレス</label><input type="email" placeholder="example@email.com" value={custEmail} onChange={(e) => setCustEmail(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+                  <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎂 誕生日</label><input type="date" value={custBirthday} onChange={(e) => setCustBirthday(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>お客様ランク</label><RankSelector value={custRank} onChange={setCustRank} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><textarea placeholder="メモ・備考を入力" rows={3} value={custNotes} onChange={(e) => setCustNotes(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none resize-none" style={inputStyle} /></div>
                   {saveMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: saveMsg.includes("失敗") || saveMsg.includes("入力") ? "#c4988518" : "#7ab88f18", color: saveMsg.includes("失敗") || saveMsg.includes("入力") ? "#c49885" : "#5a9e6f" }}>{saveMsg}</div>}
@@ -791,6 +792,7 @@ export default function Dashboard() {
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号②</label><input type="tel" value={editPhone2} onChange={(e) => setEditPhone2(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号③</label><input type="tel" value={editPhone3} onChange={(e) => setEditPhone3(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メールアドレス</label><input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎂 誕生日</label><input type="date" value={editBirthday} onChange={(e) => setEditBirthday(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>お客様ランク</label><RankSelector value={editRank} onChange={setEditRank} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><textarea rows={3} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none resize-none" style={inputStyle} /></div>
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") || editMsg.includes("入力") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") || editMsg.includes("入力") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
@@ -834,6 +836,7 @@ export default function Dashboard() {
                       {detailCustomer.phone2 && <span>📱 {detailCustomer.phone2}</span>}
                       {detailCustomer.phone3 && <span>📱 {detailCustomer.phone3}</span>}
                       {detailCustomer.email && <span>✉ {detailCustomer.email}</span>}
+                      {detailCustomer.birthday && <span>🎂 {new Date(detailCustomer.birthday + "T00:00:00").toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</span>}
                     </div>
                     {detailCustomer.notes && <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>📝 {detailCustomer.notes}</p>}
                   </div>
