@@ -138,7 +138,7 @@ export default function TimeChart() {
   const [newExtDur, setNewExtDur] = useState(0);
   const [newCardBase, setNewCardBase] = useState("");
   const [newPaypay, setNewPaypay] = useState("");
-  const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffName, setNewStaffName] = useState(() => typeof window !== "undefined" ? localStorage.getItem("last_staff_name") || "" : "");
 
   const [dragInfo, setDragInfo] = useState<{ resId: number; edge: "start" | "end" | "move"; initX: number; initMin: number; initEndMin: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -162,6 +162,13 @@ export default function TimeChart() {
   const [notifyInfo, setNotifyInfo] = useState<NotifyInfo | null>(null);
   const [notifySender, setNotifySender] = useState(() => typeof window !== "undefined" ? localStorage.getItem("notify_sender") || "" : "");
   const [notifyTab, setNotifyTab] = useState<"staff"|"customer">("customer");
+  // DB templates
+  type NtTemplate = { template_key: string; body: string };
+  const [ntTemplates, setNtTemplates] = useState<NtTemplate[]>([]);
+  const [ntUrlDays, setNtUrlDays] = useState(1);
+  const [ntLocToyohashi, setNtLocToyohashi] = useState("https://quiet-banana-895.notion.site/2f4db1122fba80fb931afe6989118990");
+  const [ntLocMycourt, setNtLocMycourt] = useState("https://quiet-banana-895.notion.site/2f4db1122fba8020b500c46883464fd7?pvs=73");
+  const [ntLocOasis, setNtLocOasis] = useState("https://quiet-banana-895.notion.site/fd809514263e4351af42b67cbfbd06ef");
 
   const selectedCourse = courses.find((c) => c.id === newCourseId);
   const editSelectedCourse = courses.find((c) => c.id === editCourseId);
@@ -193,6 +200,11 @@ export default function TimeChart() {
     const { data: settled } = await supabase.from("therapist_daily_settlements").select("therapist_id,change_collected").eq("date", selectedDate).eq("is_settled", true); if (settled) { setSettledIds(new Set(settled.map(s => s.therapist_id))); setChangeCollectedIds(new Set(settled.filter(s => s.change_collected).map(s => s.therapist_id))); }
     const { data: stf } = await supabase.from("staff").select("id,name,role").eq("status", "active").order("id"); if (stf) setStaffMembers(stf);
     const { data: pts } = await supabase.from("point_settings").select("earn_per_yen,earn_points,expiry_months,rainy_day_active,rainy_day_multiplier").limit(1).single(); if (pts) setPtSettings(pts);
+    // Notification templates from DB
+    const { data: nts } = await supabase.from("notification_templates").select("template_key,body"); if (nts) setNtTemplates(nts);
+    const ntKeys = ["notify_url_days", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis", "notify_sender_default"];
+    const { data: ntSets } = await supabase.from("store_settings").select("key,value").in("key", ntKeys);
+    if (ntSets) { for (const s of ntSets) { if (s.key === "notify_url_days") setNtUrlDays(parseInt(s.value) || 1); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); else if (s.key === "notify_sender_default" && s.value && !notifySender) setNotifySender(s.value); } }
   }, [selectedDate]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -292,7 +304,7 @@ export default function TimeChart() {
       const st = rm ? stores.find(s => s.id === rm.store_id) : null;
       const courseWithExt = (selectedCourse?.name || "") + (newExtension ? `＋${newExtension}` : "");
       setNotifyInfo({ custName: newCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: newDate || selectedDate, startTime: newStart, endTime: newEnd, course: courseWithExt, therapistName: thName, total: coursePrice + newNomFee + optTotal + newExtPrice - discTotal, nomination: newNomination || "指名なし", discountName: newDiscounts.map(d => d.name).join(",") || "なし", extensionName: newExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
-      toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewStaffName(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
+      toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
     }
   };
 
@@ -450,7 +462,7 @@ export default function TimeChart() {
           <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
           <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
           <button onClick={() => setShowNewTherapist(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>+ セラピスト追加</button>
-          <button onClick={() => { setNewDate(selectedDate); setNewCourseId(0); setNewStart("12:00"); setNewEnd("13:00"); setMsg(""); setNewTherapistId(0); setNewStaffName(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)}); }}
+          <button onClick={() => { setNewDate(selectedDate); setNewCourseId(0); setNewStart("12:00"); setNewEnd("13:00"); setMsg(""); setNewTherapistId(0); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)}); }}
             className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 予約追加</button>
         </div>
       </div>
@@ -541,7 +553,7 @@ export default function TimeChart() {
                       if ((e.target as HTMLElement).closest(".res-block") || isCO) return;
                       const rect = e.currentTarget.getBoundingClientRect(); const x = e.clientX - rect.left; const min = Math.round(x / MIN_10_WIDTH) * 10;
                       if (panMoved.current) return;
-                      setNewTherapistId(t.id); setNewStart(minutesToTime(min)); setNewEnd(minutesToTime(min + 60)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setNewStaffName(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
+                      setNewTherapistId(t.id); setNewStart(minutesToTime(min)); setNewEnd(minutesToTime(min + 60)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
                     }}>
                     {(() => { const sh = shifts.find(s => s.therapist_id === t.id); if (sh) { const shStart = timeToMinutes(sh.start_time); const shEnd = timeToMinutes(sh.end_time); const left = shStart * MIN_10_WIDTH / 10; const w = (shEnd - shStart) * MIN_10_WIDTH / 10; return <div className="absolute top-0 bottom-0" style={{ left, width: w, backgroundColor: dark ? "#c3a78208" : "#c3a78210", borderLeft: "2px solid #c3a78233", borderRight: "2px solid #c3a78233", zIndex: 1 }} />; } return null; })()}
                     {HOURS_RAW.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - START_HOUR) * HOUR_WIDTH, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
@@ -665,7 +677,7 @@ export default function TimeChart() {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={newCustName} readOnly className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ ...inputStyle, opacity: 0.7 }} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト <span style={{ color: "#c49885" }}>*</span></label><select value={newTherapistId} onChange={(e) => setNewTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
               </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={newStaffName} onChange={(e) => { setNewStaffName(e.target.value); localStorage.setItem("last_staff_name", e.target.value); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={newCourseId} onChange={(e) => handleCourseChange(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, borderColor: !newCourseId ? "#c49885" : "transparent" }}><option value={0}>— コースを選択してください —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
               {selectedCourse && (<div className="rounded-xl p-3 flex items-center gap-4 text-[11px]" style={{ backgroundColor: T.cardAlt }}><span style={{ color: T.textSub }}>料金: <strong style={{ color: T.text }}>{fmt(selectedCourse.price)}</strong></span><span style={{ color: T.textSub }}>バック: <strong style={{ color: "#7ab88f" }}>{fmt(selectedCourse.therapist_back)}</strong></span></div>)}
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>指名</label><select value={newNomination} onChange={(e) => { const n = nominations.find(x=>x.name===e.target.value); setNewNomination(e.target.value); setNewNomFee(n?.price||0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">指名なし</option>{nominations.map((n) => (<option key={n.id} value={n.name}>{n.name}（{fmt(n.price)}）</option>))}</select>{newNomination && <p className="text-[10px] mt-1" style={{ color: "#c3a782" }}>指名料: {fmt(newNomFee)}</p>}</div>
@@ -814,6 +826,21 @@ export default function TimeChart() {
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
               <div className="flex gap-3 pt-2">
                 <button onClick={updateReservation} disabled={editSaving} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
+                <button onClick={async () => {
+                  const thName = therapists.find(t => t.id === editTherapistId)?.name || "";
+                  const { data: custInfo } = await supabase.from("customers").select("phone,login_email,self_name").eq("name", editCustName.trim()).maybeSingle();
+                  const hasLine = /\sL$/i.test(editCustName.trim()) || /\sL\s/i.test(editCustName.trim());
+                  const isMember = !!(custInfo?.login_email);
+                  const ra = roomAssigns.find(a => a.therapist_id === editTherapistId);
+                  const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
+                  const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
+                  const st = rm ? stores.find(s => s.id === rm.store_id) : null;
+                  const courseWithExt = (editSelectedCourse?.name || editRes.course) + (editExtension ? `＋${editExtension}` : "");
+                  const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0);
+                  const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0);
+                  const eTotal = (editSelectedCourse?.price || 0) + editNomFee + eOptTotal + editExtPrice - eDiscTotal;
+                  setNotifyInfo({ custName: editCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: editRes.date, startTime: editStart, endTime: editEnd, course: courseWithExt, therapistName: thName, total: eTotal, nomination: editNomination || "指名なし", discountName: editDiscounts.map(d => d.name).join(",") || "なし", extensionName: editExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
+                }} className="px-5 py-2.5 text-[12px] rounded-xl cursor-pointer" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f44" }}>📩 通知</button>
                 <button onClick={() => deleteReservation(editRes.id)} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer">削除</button>
                 <button onClick={() => setEditRes(null)} className="px-6 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
               </div>
@@ -1221,21 +1248,44 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
         const dateStr = `${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}（${days[d.getDay()]}）`;
         const dateFull = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
         const cleanName = ni.custName.replace(/\s*L$/i, "").replace(/\s+\d+～\d+歳$/, "");
-        // URL判定: 今日/明日→あり、明後日以降→なし
+        // URL判定: DB設定の日数 or デフォルト1日
         const now = new Date(); const h = now.getHours();
         const today = h < 5 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const diff = Math.floor((d.getTime() - today.getTime()) / 86400000);
-        const showUrl = diff <= 1;
-        // 場所URL切替
-        const locUrl = ni.storeName.includes("豊橋") ? "https://quiet-banana-895.notion.site/2f4db1122fba80fb931afe6989118990" : ni.buildingName.includes("マイコート") ? "https://quiet-banana-895.notion.site/2f4db1122fba8020b500c46883464fd7?pvs=73" : "https://quiet-banana-895.notion.site/fd809514263e4351af42b67cbfbd06ef";
-        // セラピスト向けメッセージ
-        const staffMsg = `お疲れ様です！\n\nお時間 : ${dateFull} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\n\nお客様 : ${cleanName}\n\nコース : ${ni.course}\n\n割引 : ${ni.discountName}\n\n指名 : ${ni.nomination}\n\n店舗名 : ${ni.storeName || "チョップ"}\n\n金額 : ${ni.total.toLocaleString()}円\n\nよろしくお願いします。${notifySender ? `\n\n送信者 : ${notifySender}` : ""}`;
-        // お客様向けメッセージ
+        const showUrl = diff <= ntUrlDays;
+        // 場所URL切替（DB値使用）
+        const locUrl = ni.storeName.includes("豊橋") ? ntLocToyohashi : ni.buildingName.includes("マイコート") ? ntLocMycourt : ntLocOasis;
+        // 条件行の値を計算
         const nomLine = ni.nomination && ni.nomination !== "フリー" && ni.nomination !== "指名なし" ? `\n指名 : ${ni.nomination}` : "";
         const discLine = ni.discountName && ni.discountName !== "なし" ? `\n割引 : ${ni.discountName}` : "";
         const thLine = ni.nomination !== "フリー" ? `\n${ni.therapistName}セラピスト` : "";
-        const custMsgUrl = `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します。\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n場所等はリンクURLからご確認ください\n${locUrl}\n\n※リンクが開けない場合はWEBで「シークレットモード」で開いていただくか\n「Yahoo」の検索ページでURLを張り付けて検索をお願いします。\n\n当店より、ご来店時のお願いでございます。\n当店は近隣に居住されている方もいらっしゃいます。\nつきましては、施術中はお静かにお過ごしいただけますよう、ご理解とご協力をお願い申し上げます。\n\n皆様に心地よい時間をお過ごしいただけるよう努めてまいります。\n当日のご来店を心よりお待ちしております。`;
-        const custMsgNoUrl = `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n当日のルーム等詳細につきましては\n前日の夜、または当日の11時半までにご連絡致しますので\nご確認よろしくお願い致します🙇‍♂️`;
+        const senderLine = notifySender ? `\n\n送信者 : ${notifySender}` : "";
+        // テンプレート変数マッピング
+        const applyTemplate = (tpl: string) => {
+          let text = tpl;
+          const vars: Record<string, string> = {
+            "{お客様名}": cleanName, "{日時}": dateFull, "{日付}": dateStr,
+            "{開始時刻}": ni.startTime?.slice(0,5) || "", "{終了時刻}": ni.endTime?.slice(0,5) || "",
+            "{コース}": ni.course, "{指名}": ni.nomination || "指名なし", "{割引}": ni.discountName || "なし",
+            "{店舗名}": ni.storeName || "チョップ", "{金額}": ni.total.toLocaleString(),
+            "{送信者}": notifySender, "{セラピスト名}": ni.therapistName, "{場所URL}": locUrl,
+            "{お客様リンク}": `https://t-manage.vercel.app/mypage/customer?name=${encodeURIComponent(cleanName)}`,
+          };
+          text = text.replace(/\{指名行\}/g, nomLine);
+          text = text.replace(/\{割引行\}/g, discLine);
+          text = text.replace(/\{セラピスト行\}/g, thLine);
+          text = text.replace(/\{送信者行\}/g, senderLine);
+          for (const [k, v] of Object.entries(vars)) text = text.replaceAll(k, v);
+          return text;
+        };
+        // DBテンプレートがあれば使用、なければフォールバック
+        const staffTpl = ntTemplates.find(t => t.template_key === "staff");
+        const custUrlTpl = ntTemplates.find(t => t.template_key === "customer_url");
+        const custNoUrlTpl = ntTemplates.find(t => t.template_key === "customer_no_url");
+        const custLink = `https://t-manage.vercel.app/mypage/customer?name=${encodeURIComponent(cleanName)}`;
+        const staffMsg = staffTpl ? applyTemplate(staffTpl.body) : `お疲れ様です！\n\nお時間 : ${dateFull} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\n\nお客様 : ${cleanName}\n\nコース : ${ni.course}\n\n割引 : ${ni.discountName}\n\n指名 : ${ni.nomination}\n\n店舗名 : ${ni.storeName || "チョップ"}\n\n金額 : ${ni.total.toLocaleString()}円\n\nお客様情報 : ${custLink}\n\nよろしくお願いします。${senderLine}`;
+        const custMsgUrl = custUrlTpl ? applyTemplate(custUrlTpl.body) : `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します。\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n場所等はリンクURLからご確認ください\n${locUrl}\n\n※リンクが開けない場合はWEBで「シークレットモード」で開いていただくか\n「Yahoo」の検索ページでURLを張り付けて検索をお願いします。\n\n当店より、ご来店時のお願いでございます。\n当店は近隣に居住されている方もいらっしゃいます。\nつきましては、施術中はお静かにお過ごしいただけますよう、ご理解とご協力をお願い申し上げます。\n\n皆様に心地よい時間をお過ごしいただけるよう努めてまいります。\n当日のご来店を心よりお待ちしております。`;
+        const custMsgNoUrl = custNoUrlTpl ? applyTemplate(custNoUrlTpl.body) : `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n当日のルーム等詳細につきましては\n前日の夜、または当日の11時半までにご連絡致しますので\nご確認よろしくお願い致します🙇‍♂️`;
         const custMsg = showUrl ? custMsgUrl : custMsgNoUrl;
         return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setNotifyInfo(null)}>
@@ -1243,7 +1293,7 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
             <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
               <div>
                 <h2 className="text-[15px] font-medium">📩 予約確認通知</h2>
-                <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{cleanName} 様 | {dateStr} {ni.startTime?.slice(0,5)}〜 | {showUrl ? "URL付き" : "URLなし（明後日以降）"}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{cleanName} 様 | {dateStr} {ni.startTime?.slice(0,5)}〜 | {showUrl ? "URL付き" : `URLなし（${ntUrlDays + 1}日以降）`}</p>
               </div>
               <button onClick={() => setNotifyInfo(null)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
             </div>
@@ -1270,8 +1320,12 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
               {/* 送信者名（セラピスト向け） */}
               {notifyTab === "staff" && (
                 <div className="mb-3">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>送信者名</label>
-                  <input type="text" value={notifySender} onChange={e => { setNotifySender(e.target.value); localStorage.setItem("notify_sender", e.target.value); }} placeholder="田中" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                  <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>送信者名（受付スタッフ）</label>
+                  <select value={notifySender} onChange={e => { setNotifySender(e.target.value); localStorage.setItem("notify_sender", e.target.value); }}
+                    className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }}>
+                    <option value="">送信者なし</option>
+                    {staffMembers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
                 </div>
               )}
 

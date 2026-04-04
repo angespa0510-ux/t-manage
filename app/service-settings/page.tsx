@@ -24,7 +24,9 @@ type BonusRule = {
 type RankMultiplier = { id: number; rank_name: string; multiplier: number; min_visits_in_period: number; period_months: number; min_total_visits: number };
 type BackRateRule = { id: number; min_sessions: number; min_nomination_rate: number; back_increase: number; salary_type: string; is_active: boolean; sort_order: number };
 
-type Tab = "nomination" | "discount" | "extension" | "option" | "point" | "backrate";
+type Tab = "nomination" | "discount" | "extension" | "option" | "point" | "backrate" | "notify";
+type NotifyTemplate = { id: number; template_key: string; body: string };
+type NotifySubTab = "staff" | "customer_url" | "customer_no_url";
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -90,6 +92,19 @@ export default function ServiceSettings() {
   const [brLoading, setBrLoading] = useState(false);
   const [brCopiedId, setBrCopiedId] = useState<number | null>(null);
 
+  // Notification template states
+  const [ntTemplates, setNtTemplates] = useState<NotifyTemplate[]>([]);
+  const [ntSubTab, setNtSubTab] = useState<NotifySubTab>("staff");
+  const [ntBody, setNtBody] = useState("");
+  const [ntSaving, setNtSaving] = useState(false);
+  const [ntMsg, setNtMsg] = useState("");
+  const [ntUrlDays, setNtUrlDays] = useState("1");
+  const [ntSenderDefault, setNtSenderDefault] = useState("");
+  const [ntLocToyohashi, setNtLocToyohashi] = useState("");
+  const [ntLocMycourt, setNtLocMycourt] = useState("");
+  const [ntLocOasis, setNtLocOasis] = useState("");
+  const [ntPreview, setNtPreview] = useState(false);
+
   // Add states
   const [addName, setAddName] = useState("");
   const [addPrice, setAddPrice] = useState("");
@@ -129,6 +144,11 @@ export default function ServiceSettings() {
     // Back rate rules
     const { data: brr } = await supabase.from("back_rate_rules").select("*").order("sort_order"); if (brr) setBrRules(brr);
     const { data: ss } = await supabase.from("store_settings").select("*").eq("key", "newcomer_duration_months").maybeSingle(); if (ss) setNewcomerMonths(ss.value);
+    // Notification templates
+    const { data: nts } = await supabase.from("notification_templates").select("*").order("id"); if (nts) setNtTemplates(nts);
+    const ntKeys = ["notify_url_days", "notify_sender_default", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis"];
+    const { data: ntSettings } = await supabase.from("store_settings").select("*").in("key", ntKeys);
+    if (ntSettings) { for (const s of ntSettings) { if (s.key === "notify_url_days") setNtUrlDays(s.value); else if (s.key === "notify_sender_default") setNtSenderDefault(s.value); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); } }
   }, []);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -177,6 +197,7 @@ export default function ServiceSettings() {
   }, []);
 
   useEffect(() => { if (tab === "backrate") fetchBrData(); }, [tab, fetchBrData]);
+  useEffect(() => { const t = ntTemplates.find(t => t.template_key === ntSubTab); if (t) setNtBody(t.body); }, [ntSubTab, ntTemplates]);
 
   const copyBrLine = (r: BrResult, ym: string) => {
     const change = r.back_increase > 0;
@@ -329,6 +350,7 @@ export default function ServiceSettings() {
     { key: "discount", label: "割引", color: "#c49885", count: discounts.length },
     { key: "point", label: "ポイント", color: PT_COLOR, count: bonusRules.filter(r => r.is_active).length },
     { key: "backrate", label: "バックレート", color: "#8b5cf6", count: brRules.filter(r => r.is_active).length },
+    { key: "notify", label: "📩 通知テンプレート", color: "#3d6b9f", count: ntTemplates.length },
   ];
 
   const currentTab = tabs.find((t) => t.key === tab)!;
@@ -1017,6 +1039,158 @@ export default function ServiceSettings() {
                     })}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ════════════ NOTIFY TAB ════════════ */}
+          {tab === "notify" && (
+            <div className="animate-[fadeIn_0.3s] space-y-6">
+              {/* Sub-tabs: 3テンプレート切替 */}
+              <div className="flex gap-2">
+                {([["staff", "💼 セラピスト向け"], ["customer_url", "👤 お客様（URL付）"], ["customer_no_url", "👤 お客様（URLなし）"]] as [NotifySubTab, string][]).map(([k, l]) => (
+                  <button key={k} onClick={() => { setNtSubTab(k); setNtMsg(""); setNtPreview(false); }} className="px-3 py-2 text-[10px] rounded-xl cursor-pointer transition-all whitespace-nowrap"
+                    style={{ backgroundColor: ntSubTab === k ? "#3d6b9f18" : T.cardAlt, color: ntSubTab === k ? "#3d6b9f" : T.textMuted, fontWeight: ntSubTab === k ? 600 : 400 }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {/* テンプレート編集 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <h3 className="text-[14px] font-medium mb-1">📝 テンプレート本文</h3>
+                <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>
+                  {ntSubTab === "staff" ? "セラピストLINEに送る予約確認メッセージ" : ntSubTab === "customer_url" ? "お客様向け（今日/明日）場所URL付きメッセージ" : "お客様向け（明後日以降）URLなしメッセージ"}
+                </p>
+
+                {/* 変数挿入ボタン */}
+                <div className="mb-3">
+                  <p className="text-[10px] mb-2" style={{ color: T.textMuted }}>📌 変数を挿入（タップでカーソル位置に挿入）</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(ntSubTab === "staff"
+                      ? ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名}","{割引}","{店舗名}","{金額}","{送信者}","{送信者行}","{お客様リンク}"]
+                      : ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名行}","{割引行}","{セラピスト行}","{店舗名}","{金額}","{場所URL}"]
+                    ).map(v => (
+                      <button key={v} onClick={() => {
+                        const ta = document.getElementById("nt-body") as HTMLTextAreaElement;
+                        if (ta) { const s = ta.selectionStart; const e = ta.selectionEnd; const newBody = ntBody.slice(0, s) + v + ntBody.slice(e); setNtBody(newBody); setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = s + v.length; }, 0); }
+                        else setNtBody(ntBody + v);
+                      }} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: "#3d6b9f12", color: "#3d6b9f", border: "1px solid #3d6b9f33" }}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 変数説明 */}
+                <details className="mb-3">
+                  <summary className="text-[10px] cursor-pointer" style={{ color: T.textFaint }}>📖 変数の説明を見る</summary>
+                  <div className="mt-2 rounded-xl p-3 text-[10px] space-y-1" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>
+                    <p><b>{"{お客様名}"}</b> — 顧客名（名前末尾のLや年齢情報は除去）</p>
+                    <p><b>{"{日時}"}</b> — 2025年1月15日（水）形式</p>
+                    <p><b>{"{日付}"}</b> — 01/15（水）形式</p>
+                    <p><b>{"{開始時刻}"}</b> / <b>{"{終了時刻}"}</b> — 12:00 形式</p>
+                    <p><b>{"{コース}"}</b> — コース名（延長含む）</p>
+                    <p><b>{"{指名}"}</b> — 指名種別　<b>{"{指名行}"}</b> — フリー時は行ごと非表示</p>
+                    <p><b>{"{割引}"}</b> — 割引名　<b>{"{割引行}"}</b> — 割引なし時は行ごと非表示</p>
+                    <p><b>{"{セラピスト行}"}</b> — フリー時は行ごと非表示</p>
+                    <p><b>{"{店舗名}"}</b> — 店舗名　<b>{"{金額}"}</b> — 合計金額</p>
+                    <p><b>{"{送信者}"}</b> — 送信者名　<b>{"{送信者行}"}</b> — 未入力時は行ごと非表示</p>
+                    <p><b>{"{場所URL}"}</b> — 店舗に応じた場所リンク（下の設定で変更可能）</p>
+                    <p><b>{"{お客様リンク}"}</b> — セラピストマイページのお客様詳細ページURL</p>
+                  </div>
+                </details>
+
+                <textarea id="nt-body" value={ntBody} onChange={e => setNtBody(e.target.value)} rows={14}
+                  className="w-full px-4 py-3 rounded-xl text-[12px] outline-none leading-relaxed resize-none"
+                  style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: "var(--font-mono, monospace)" }} />
+
+                {ntMsg && <p className="text-[11px] mt-2" style={{ color: ntMsg.includes("保存") || ntMsg.includes("リセット") ? "#4a7c59" : "#c45555" }}>{ntMsg}</p>}
+                <div className="flex gap-2 mt-3">
+                  <button disabled={ntSaving} onClick={async () => {
+                    setNtSaving(true); setNtMsg("");
+                    const existing = ntTemplates.find(t => t.template_key === ntSubTab);
+                    if (existing) {
+                      const { error } = await supabase.from("notification_templates").update({ body: ntBody, updated_at: new Date().toISOString() }).eq("id", existing.id);
+                      if (error) setNtMsg("保存失敗: " + error.message); else { setNtMsg("✅ 保存しました！"); fetchData(); }
+                    } else {
+                      const { error } = await supabase.from("notification_templates").insert({ template_key: ntSubTab, body: ntBody });
+                      if (error) setNtMsg("保存失敗: " + error.message); else { setNtMsg("✅ 保存しました！"); fetchData(); }
+                    }
+                    setNtSaving(false); setTimeout(() => setNtMsg(""), 2000);
+                  }} className="px-6 py-2.5 text-[11px] rounded-xl cursor-pointer text-white disabled:opacity-50" style={{ backgroundColor: "#3d6b9f" }}>{ntSaving ? "保存中..." : "💾 保存"}</button>
+                  <button onClick={() => setNtPreview(!ntPreview)} className="px-4 py-2.5 text-[11px] rounded-xl cursor-pointer" style={{ backgroundColor: ntPreview ? "#d4a84318" : T.cardAlt, color: ntPreview ? "#d4a843" : T.textMuted }}>{ntPreview ? "✕ プレビューを閉じる" : "👁 プレビュー"}</button>
+                  <button onClick={() => { const t = ntTemplates.find(t => t.template_key === ntSubTab); if (t) { setNtBody(t.body); setNtMsg("リセットしました"); setTimeout(() => setNtMsg(""), 1500); } }} className="px-4 py-2.5 text-[11px] rounded-xl cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>↩ リセット</button>
+                </div>
+              </div>
+
+              {/* プレビュー */}
+              {ntPreview && (
+                <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                  <h3 className="text-[14px] font-medium mb-3">👁 プレビュー（サンプルデータ）</h3>
+                  <div className="rounded-xl p-4 text-[11px] whitespace-pre-wrap leading-relaxed" style={{ backgroundColor: T.cardAlt, color: T.textSub, fontFamily: "var(--font-mono, monospace)" }}>
+                    {(() => {
+                      let text = ntBody;
+                      const sampleVars: Record<string, string> = {
+                        "{お客様名}": "田中太郎", "{日時}": "2025年4月10日（木）", "{日付}": "04/10（木）",
+                        "{開始時刻}": "13:00", "{終了時刻}": "14:30", "{コース}": "90分コース",
+                        "{指名}": "本指名", "{割引}": "新規割引", "{店舗名}": "チョップ豊橋店",
+                        "{金額}": "12,000", "{送信者}": "田中", "{セラピスト名}": "花子",
+                        "{場所URL}": ntLocToyohashi || "https://example.com/location",
+                        "{お客様リンク}": "https://t-manage.vercel.app/mypage/customer?name=田中太郎",
+                      };
+                      text = text.replace(/\{指名行\}/g, "\n指名 : 本指名");
+                      text = text.replace(/\{割引行\}/g, "\n割引 : 新規割引");
+                      text = text.replace(/\{セラピスト行\}/g, "\n花子セラピスト");
+                      text = text.replace(/\{送信者行\}/g, "\n\n送信者 : 田中");
+                      for (const [k, v] of Object.entries(sampleVars)) text = text.replaceAll(k, v);
+                      return text;
+                    })()}
+                  </div>
+                  <p className="text-[9px] mt-2 text-center" style={{ color: T.textFaint }}>※ サンプルデータでの表示です。実際の送信時は予約データが入ります。</p>
+                </div>
+              )}
+
+              {/* 場所URL設定 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <h3 className="text-[14px] font-medium mb-1">📍 場所URL設定</h3>
+                <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>店舗・ビル名に応じて自動切替されるURLです</p>
+                <div className="space-y-3">
+                  {([["豊橋ルーム", ntLocToyohashi, setNtLocToyohashi, "notify_loc_toyohashi"],
+                    ["マイコート", ntLocMycourt, setNtLocMycourt, "notify_loc_mycourt"],
+                    ["オアシス等（その他）", ntLocOasis, setNtLocOasis, "notify_loc_oasis"]
+                  ] as [string, string, (v: string) => void, string][]).map(([label, val, setter, key]) => (
+                    <div key={key}>
+                      <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>🏢 {label}</label>
+                      <input type="text" value={val} onChange={e => setter(e.target.value)} onBlur={async () => { await supabase.from("store_settings").upsert({ key, value: val }, { onConflict: "key" }); }}
+                        className="w-full px-3 py-2.5 rounded-xl text-[11px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} placeholder="https://..." />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[9px] mt-3" style={{ color: T.textFaint }}>💡 判定: 店舗名に「豊橋」含む→豊橋URL / ビル名に「マイコート」含む→マイコートURL / それ以外→オアシスURL</p>
+              </div>
+
+              {/* 通知設定 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <h3 className="text-[14px] font-medium mb-4">⚙️ 通知設定</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>📅 URL付きテンプレートの適用範囲</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px]" style={{ color: T.textSub }}>予約日が</span>
+                      <select value={ntUrlDays} onChange={async (e) => { setNtUrlDays(e.target.value); await supabase.from("store_settings").upsert({ key: "notify_url_days", value: e.target.value }, { onConflict: "key" }); }}
+                        className="px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }}>
+                        <option value="0">当日のみ</option><option value="1">明日まで</option><option value="2">明後日まで</option><option value="3">3日後まで</option>
+                      </select>
+                      <span className="text-[12px]" style={{ color: T.textSub }}>→ URL付きテンプレート</span>
+                    </div>
+                    <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>それ以降の日付は「URLなし」テンプレートが自動適用されます</p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>✍️ 送信者名デフォルト</label>
+                    <input type="text" value={ntSenderDefault} onChange={e => setNtSenderDefault(e.target.value)} onBlur={async () => { await supabase.from("store_settings").upsert({ key: "notify_sender_default", value: ntSenderDefault }, { onConflict: "key" }); }}
+                      className="w-full max-w-[200px] px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} placeholder="田中" />
+                    <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>セラピスト向けテンプレートの送信者名のデフォルト値</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
