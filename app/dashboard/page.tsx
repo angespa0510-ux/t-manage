@@ -32,7 +32,7 @@ const RANKS: Record<string, { label: string; color: string; bg: string; desc: st
 const menuItems = [
   { label: "HOME", icon: "home", sub: [] },
   { label: "営業締め", icon: "clipboard", sub: [] },
-  { label: "顧客管理", icon: "users", sub: ["顧客一覧", "顧客登録"] },
+  { label: "顧客管理", icon: "users", sub: ["顧客一覧", "顧客登録", "ポイント管理"] },
   { label: "予約管理", icon: "calendar", sub: ["タイムチャート", "オーダー一覧", "SMS送信履歴一覧"] },
   { label: "勤怠管理", icon: "clock", sub: ["セラピスト勤怠", "スタッフ勤怠", "部屋割り管理"] },
   { label: "売上分析", icon: "chart", sub: ["年別分析", "月別分析", "日別分析"] },
@@ -100,6 +100,37 @@ export default function Dashboard() {
 
   // Detail / History
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
+  const [custPoints, setCustPoints] = useState<{id:number;amount:number;type:string;description:string;expires_at:string;created_at:string}[]>([]);
+  const [manualPt, setManualPt] = useState("");
+  const [manualPtDesc, setManualPtDesc] = useState("");
+  const [ptSaving, setPtSaving] = useState(false);
+  const [ptData, setPtData] = useState<{customer_id:number;name:string;rank:string;balance:number;total_earned:number;total_used:number}[]>([]);
+  const [ptLoading, setPtLoading] = useState(false);
+  const [ptSort, setPtSort] = useState<"balance"|"earned"|"used">("balance");
+
+  useEffect(() => {
+    if (activePage !== "ポイント管理") return;
+    setPtLoading(true);
+    (async () => {
+      const { data: allPts } = await supabase.from("customer_points").select("customer_id,amount,type");
+      const { data: custs } = await supabase.from("customers").select("id,name,rank");
+      if (allPts && custs) {
+        const map = new Map<number, {balance:number;earned:number;used:number}>();
+        allPts.forEach(p => {
+          const e = map.get(p.customer_id) || {balance:0,earned:0,used:0};
+          e.balance += p.amount;
+          if (p.amount > 0) e.earned += p.amount; else e.used += Math.abs(p.amount);
+          map.set(p.customer_id, e);
+        });
+        const rows = custs.filter(c => map.has(c.id)).map(c => {
+          const e = map.get(c.id)!;
+          return { customer_id: c.id, name: c.name, rank: c.rank || "normal", balance: e.balance, total_earned: e.earned, total_used: e.used };
+        });
+        setPtData(rows);
+      }
+      setPtLoading(false);
+    })();
+  }, [activePage]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
   const [showAddVisit, setShowAddVisit] = useState(false);
@@ -316,7 +347,7 @@ export default function Dashboard() {
     const { data } = await supabase.from("therapist_customer_notes").select("*").eq("customer_name", customerName).order("id", { ascending: false });
     if (data) setCustomerNotes(data);
   };
-  const openDetail = (c: Customer) => { setDetailCustomer(c); fetchVisits(c.id); fetchCustomerNotes(c.name); };
+  const openDetail = (c: Customer) => { setDetailCustomer(c); fetchVisits(c.id); fetchCustomerNotes(c.name); supabase.from("customer_points").select("*").eq("customer_id", c.id).order("created_at", { ascending: false }).then(({ data }) => { if (data) setCustPoints(data); }); };
   const deleteCustomerNote = async (noteId: number) => {
     if (!confirm("このセラピストメモを削除しますか？")) return;
     await supabase.from("therapist_customer_notes").delete().eq("id", noteId);
@@ -521,6 +552,42 @@ export default function Dashboard() {
             </div>
           )}
 
+{/* ポイント管理 */}
+          {activePage === "ポイント管理" && (() => {
+            const sorted = [...ptData].sort((a, b) => ptSort === "balance" ? b.balance - a.balance : ptSort === "earned" ? b.total_earned - a.total_earned : b.total_used - a.total_used);
+            const totalBal = ptData.reduce((s,r) => s+r.balance, 0);
+            const totalEarned = ptData.reduce((s,r) => s+r.total_earned, 0);
+            const totalUsed = ptData.reduce((s,r) => s+r.total_used, 0);
+            const rankIcon = (r: string) => r === "platinum" ? "💎" : r === "gold" ? "🥇" : r === "silver" ? "🥈" : "👤";
+            return (
+            <div className="max-w-4xl mx-auto animate-[fadeIn_0.3s]">
+              <div className="mb-6 flex items-center justify-between"><div><h2 className="text-[15px] font-medium">🎁 ポイント管理</h2><p className="text-[11px] mt-0.5" style={{ color: T.textFaint }}>全顧客のポイント状況を確認・管理</p></div><button onClick={() => { setActivePage("HOME"); setTimeout(() => setActivePage("ポイント管理"), 100); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>🔄 更新</button></div>
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="rounded-2xl border p-5 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] mb-1" style={{ color: T.textMuted }}>総ポイント残高</p><p className="text-[22px] font-bold" style={{ color: "#d4a843" }}>{totalBal.toLocaleString()}<span className="text-[11px] font-normal">pt</span></p></div>
+                <div className="rounded-2xl border p-5 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] mb-1" style={{ color: T.textMuted }}>累計付与</p><p className="text-[22px] font-bold" style={{ color: "#4a7c59" }}>+{totalEarned.toLocaleString()}<span className="text-[11px] font-normal">pt</span></p></div>
+                <div className="rounded-2xl border p-5 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] mb-1" style={{ color: T.textMuted }}>累計利用</p><p className="text-[22px] font-bold" style={{ color: "#c45555" }}>-{totalUsed.toLocaleString()}<span className="text-[11px] font-normal">pt</span></p></div>
+              </div>
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+                  <p className="text-[12px] font-medium">顧客別ポイント一覧（{ptData.length}名）</p>
+                  <div className="flex gap-1">{([ ["balance","残高順"], ["earned","付与順"], ["used","利用順"] ] as const).map(([k,l]) => (<button key={k} onClick={() => setPtSort(k)} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: ptSort===k ? "#d4a84318" : "transparent", color: ptSort===k ? "#d4a843" : T.textMuted, fontWeight: ptSort===k ? 600 : 400 }}>{l}</button>))}</div>
+                </div>
+                {ptLoading ? <p className="text-center py-8 text-[12px]" style={{ color: T.textFaint }}>読み込み中...</p> : ptData.length === 0 ? <p className="text-center py-8 text-[12px]" style={{ color: T.textFaint }}>ポイントデータがありません（予約終了時に自動付与されます）</p> : (
+                <table className="w-full text-[12px]"><thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>{["","お客様","ランク","残高","累計付与","累計利用"].map(h => <th key={h} className="py-3 px-4 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>)}</tr></thead><tbody>{sorted.map((r,i) => (
+                  <tr key={r.customer_id} className="cursor-pointer hover:opacity-80" style={{ borderBottom: `1px solid ${T.border}` }} onClick={() => { const c = customers.find(x => x.id === r.customer_id); if (c) openDetail(c); }}>
+                    <td className="py-2.5 px-4 text-[10px]" style={{ color: T.textFaint }}>{i+1}</td>
+                    <td className="py-2.5 px-4 font-medium">{r.name}</td>
+                    <td className="py-2.5 px-4">{rankIcon(r.rank)}</td>
+                    <td className="py-2.5 px-4 font-bold" style={{ color: "#d4a843" }}>{r.balance.toLocaleString()}pt</td>
+                    <td className="py-2.5 px-4" style={{ color: "#4a7c59" }}>+{r.total_earned.toLocaleString()}</td>
+                    <td className="py-2.5 px-4" style={{ color: "#c45555" }}>-{r.total_used.toLocaleString()}</td>
+                  </tr>
+                ))}</tbody></table>
+                )}
+              </div>
+            </div>);
+          })()}
+
           {/* 営業締め */}
           {activePage === "営業締め" && (
             <div className="animate-[fadeIn_0.4s] max-w-[800px]">
@@ -699,7 +766,7 @@ export default function Dashboard() {
           )}
 
           {/* Other pages */}
-          {activePage !== "HOME" && activePage !== "顧客一覧" && activePage !== "顧客登録" && activePage !== "営業締め" && (
+          {activePage !== "HOME" && activePage !== "顧客一覧" && activePage !== "顧客登録" && activePage !== "営業締め" && activePage !== "ポイント管理" && (
             <div className="animate-[fadeIn_0.4s]">
               <div className="rounded-2xl border p-8" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="flex flex-col items-center justify-center py-20">
@@ -777,6 +844,22 @@ export default function Dashboard() {
 
             {/* Visit History */}
             <div className="px-6 py-4">
+
+              {/* ポイント管理 */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-[14px] font-medium">🎁 ポイント（残高: <span style={{ color: "#d4a843" }}>{custPoints.reduce((s,p) => s+p.amount, 0).toLocaleString()}pt</span>）</h3>
+                </div>
+                <div className="rounded-xl border p-4 mb-3" style={{ borderColor: T.border, backgroundColor: T.cardAlt }}>
+                  <p className="text-[10px] font-medium mb-2" style={{ color: "#d4a843" }}>➕➖ 手動ポイント調整</p>
+                  <div className="flex gap-2 items-end">
+                    <div className="w-[100px]"><label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>ポイント</label><input type="text" inputMode="numeric" value={manualPt} onChange={e => setManualPt(e.target.value.replace(/[^0-9-]/g, ""))} placeholder="100 or -50" className="w-full px-2 py-2 rounded-lg text-[11px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} /></div>
+                    <div className="flex-1"><label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>理由</label><input type="text" value={manualPtDesc} onChange={e => setManualPtDesc(e.target.value)} placeholder="例: アンケート回答" className="w-full px-2 py-2 rounded-lg text-[11px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} /></div>
+                    <button disabled={ptSaving || !manualPt} onClick={async () => { if (!detailCustomer || !manualPt) return; const mp = parseInt(manualPt); if (mp === 0) return; setPtSaving(true); const expAt = new Date(); expAt.setMonth(expAt.getMonth() + 12); await supabase.from("customer_points").insert({ customer_id: detailCustomer.id, amount: mp, type: mp > 0 ? "earn" : "use", description: manualPtDesc.trim() || (mp > 0 ? "手動ポイント付与" : "手動ポイント減算"), expires_at: mp > 0 ? expAt.toISOString() : null }); setManualPt(""); setManualPtDesc(""); setPtSaving(false); supabase.from("customer_points").select("*").eq("customer_id", detailCustomer.id).order("created_at", { ascending: false }).then(({ data }) => { if (data) setCustPoints(data); }); }} className="px-3 py-2 text-[10px] rounded-lg cursor-pointer text-white disabled:opacity-50" style={{ backgroundColor: "#d4a843" }}>{ptSaving ? "..." : "付与"}</button>
+                  </div>
+                </div>
+                {custPoints.length > 0 && (<div className="space-y-1 max-h-[150px] overflow-y-auto">{custPoints.slice(0, 10).map(p => (<div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-[11px]" style={{ backgroundColor: T.cardAlt }}><div className="min-w-0 flex-1"><p className="truncate">{p.description || (p.type === "earn" ? "ポイント付与" : "ポイント利用")}</p><span className="text-[9px]" style={{ color: T.textMuted }}>{new Date(p.created_at).toLocaleDateString("ja-JP")}{p.expires_at && ` / 期限:${new Date(p.expires_at).toLocaleDateString("ja-JP")}`}</span></div><span className="font-bold ml-2 flex-shrink-0" style={{ color: p.amount > 0 ? "#4a7c59" : "#c45555" }}>{p.amount > 0 ? "+" : ""}{p.amount.toLocaleString()}pt</span></div>))}{custPoints.length > 10 && <p className="text-[9px] text-center py-1" style={{ color: T.textFaint }}>他{custPoints.length - 10}件</p>}</div>)}
+              </div>
 
               {/* セラピストメモ */}
               {customerNotes.length > 0 && (
