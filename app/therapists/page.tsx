@@ -15,7 +15,7 @@ type Therapist = {
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
-  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number;
+  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string;
 };
 
 export default function TherapistManagement() {
@@ -41,6 +41,7 @@ export default function TherapistManagement() {
   const [addPhotoFile, setAddPhotoFile] = useState<File | null>(null); const [addPhotoPreview, setAddPhotoPreview] = useState("");
   const [addNotes, setAddNotes] = useState("");
   const [addEmail, setAddEmail] = useState("");
+  const [addEntryDate, setAddEntryDate] = useState("");
   const [addLoginEmail, setAddLoginEmail] = useState("");
 const [addLoginPassword, setAddLoginPassword] = useState("");
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState("");
@@ -71,6 +72,7 @@ const [addLoginPassword, setAddLoginPassword] = useState("");
   const [editLicensePhoto, setEditLicensePhoto] = useState<File | null>(null);
   const [editLicensePhotoBack, setEditLicensePhotoBack] = useState<File | null>(null);
   const [editBirthDate, setEditBirthDate] = useState("");
+  const [editEntryDate, setEditEntryDate] = useState("");
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -84,6 +86,7 @@ const [editLoginPassword, setEditLoginPassword] = useState("");
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null); const [deleting, setDeleting] = useState(false);
+  const [newcomerMonths, setNewcomerMonths] = useState(2);
 
 const generatePassword = () => {
     const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -97,7 +100,7 @@ const generatePassword = () => {
     if (data) setTherapists(data);
   }, []);
 
-  useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); const fetchStore = async () => { const { data } = await supabase.from("stores").select("company_name, company_address, company_phone, invoice_number"); if (data?.[0]) setStoreInfo(data[0]); }; fetchStore(); }, [router, fetchTherapists]);
+  useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); const fetchStore = async () => { const { data } = await supabase.from("stores").select("company_name, company_address, company_phone, invoice_number"); if (data?.[0]) setStoreInfo(data[0]); }; fetchStore(); const fetchNewcomer = async () => { const { data } = await supabase.from("store_settings").select("value").eq("key", "newcomer_duration_months").maybeSingle(); if (data) setNewcomerMonths(parseInt(data.value) || 2); }; fetchNewcomer(); }, [router, fetchTherapists]);
 
     const fetchPayroll = async () => {
     setPayrollLoading(true);
@@ -229,6 +232,7 @@ const generatePassword = () => {
       photo_width: parseInt(addPhotoW) || 400, photo_height: parseInt(addPhotoH) || 600,
       notes: addNotes.trim(),
       login_email: addLoginEmail.trim(), login_password: addLoginPassword,
+      entry_date: addEntryDate || null,
     }).select().single();
     if (error) { setSaving(false); setMsg("登録失敗: " + error.message); return; }
     if (addPhotoFile && data) {
@@ -253,6 +257,7 @@ const generatePassword = () => {
     setEditHasInvoice(t.has_invoice || false); setEditInvoiceNum(t.therapist_invoice_number || "");
     setEditInvoicePhoto(null); setEditLicensePhoto(null); setEditLicensePhotoBack(null);
     setEditBirthDate(t.birth_date || "");
+    setEditEntryDate(t.entry_date || "");
     setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditLoginEmail((t as any).login_email || ""); setEditLoginPassword((t as any).login_password || ""); setEditMsg("");
     setEditWelfareFee(String((t as any).welfare_fee ?? 500));
     setEditWelfareOrdersThreshold(String((t as any).welfare_fee_orders_threshold || 0));
@@ -274,7 +279,7 @@ const generatePassword = () => {
       photo_url: photoUrl, photo_width: parseInt(editPhotoW) || 400, photo_height: parseInt(editPhotoH) || 600,
       notes: editNotes.trim(),
       has_withholding: editWithholding,
-      real_name: editRealName.trim(), address: editAddress.trim(), birth_date: editBirthDate,
+      real_name: editRealName.trim(), address: editAddress.trim(), birth_date: editBirthDate, entry_date: editEntryDate || null,
       has_invoice: editHasInvoice, therapist_invoice_number: editInvoiceNum.trim(),
       email: editEmail.trim(),
       login_email: editLoginEmail.trim(), login_password: editLoginPassword,
@@ -370,6 +375,11 @@ const generatePassword = () => {
     if (!t.salary_amount) return "";
     return t.salary_type === "percent" ? `${t.salary_amount}%UP` : `${t.salary_amount.toLocaleString()}円UP`;
   };
+  const isNewcomer = (t: Therapist) => {
+    if (!t.entry_date) return false;
+    const diff = Date.now() - new Date(t.entry_date).getTime();
+    return diff < newcomerMonths * 30 * 86400000;
+  };
 
   const PhotoField = ({ preview, fileRef, onFileChange, width, height, onWidthChange, onHeightChange }: { preview: string; fileRef: React.RefObject<HTMLInputElement | null>; onFileChange: (f: File | null) => void; width: string; height: string; onWidthChange: (v: string) => void; onHeightChange: (v: string) => void }) => (
     <div>
@@ -446,7 +456,7 @@ const generatePassword = () => {
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium flex-shrink-0" style={{ backgroundColor: colors[i % colors.length] }}>{t.name?.charAt(0)}</div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1"><p className="text-[11px] font-medium truncate">{t.name}</p><span className="px-1.5 py-0.5 rounded text-[7px] font-medium flex-shrink-0" style={{ backgroundColor: st.bg, color: st.text }}>{st.label}</span></div>
+                      <div className="flex items-center gap-1"><p className="text-[11px] font-medium truncate">{t.name}</p>{isNewcomer(t) && <span className="px-1 py-0.5 rounded text-[7px] font-medium flex-shrink-0" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6" }}>NEW</span>}<span className="px-1.5 py-0.5 rounded text-[7px] font-medium flex-shrink-0" style={{ backgroundColor: st.bg, color: st.text }}>{st.label}</span></div>
                       <p className="text-[9px] truncate" style={{ color: T.textMuted }}>{t.phone || "電話番号なし"}</p>
                     </div>
                   </div>
@@ -455,6 +465,7 @@ const generatePassword = () => {
                     {t.interval_minutes > 0 && <span>{t.interval_minutes}分</span>}
                     {t.height_cm > 0 && <span>{t.height_cm}cm</span>}
                     {t.cup && <span>{t.cup}</span>}
+                    {(() => { const amt = t.salary_amount || 0; if (amt === 0) return null; const brColor = amt >= 1500 ? "#d4a843" : amt >= 1000 ? "#8b5cf6" : amt >= 500 ? "#4a7c59" : T.textMuted; const icon = amt >= 1500 ? "👑" : amt >= 1000 ? "💎" : "⭐"; return <span style={{ color: brColor }}>{icon}+{amt.toLocaleString()}円</span>; })()}
                   </div>
                   <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
@@ -493,13 +504,13 @@ const generatePassword = () => {
               <div className="flex items-center gap-3 mb-4">
                 {!detailTarget.photo_url && <div className="w-16 h-16 rounded-full flex items-center justify-center text-[22px] text-white font-medium" style={{ backgroundColor: colors[therapists.indexOf(detailTarget) % colors.length] }}>{detailTarget.name?.charAt(0)}</div>}
                 <div>
-                  <div className="flex items-center gap-2"><h2 className="text-[20px] font-medium">{detailTarget.name}</h2><span className="px-2 py-0.5 rounded-md text-[10px] font-medium" style={{ backgroundColor: (statusMap[detailTarget.status] || statusMap.active).bg, color: (statusMap[detailTarget.status] || statusMap.active).text }}>{(statusMap[detailTarget.status] || statusMap.active).label}</span></div>
+                  <div className="flex items-center gap-2"><h2 className="text-[20px] font-medium">{detailTarget.name}</h2>{isNewcomer(detailTarget) && <span className="px-2 py-0.5 rounded-md text-[10px] font-medium" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6" }}>NEW</span>}<span className="px-2 py-0.5 rounded-md text-[10px] font-medium" style={{ backgroundColor: (statusMap[detailTarget.status] || statusMap.active).bg, color: (statusMap[detailTarget.status] || statusMap.active).text }}>{(statusMap[detailTarget.status] || statusMap.active).label}</span></div>
                   <p className="text-[12px]" style={{ color: T.textSub }}>{detailTarget.phone || "電話番号なし"}</p>
                   {detailTarget.email && <div className="flex items-center gap-2 mt-0.5"><p className="text-[11px]" style={{ color: T.textSub }}>✉️ {detailTarget.email}</p>{detailTarget.email_verified ? <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅確認済み</span> : <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未確認</span>}</div>}
                 </div>
               </div>
               <div className="space-y-3">
-                {getSalaryLabel(detailTarget) && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>給料ランク</span><span className="font-medium" style={{ color: "#c3a782" }}>{getSalaryLabel(detailTarget)}</span></div>}
+                {(() => { const amt = detailTarget.salary_amount || 0; const brColor = amt >= 1500 ? "#d4a843" : amt >= 1000 ? "#8b5cf6" : amt >= 500 ? "#4a7c59" : T.textMuted; const icon = amt >= 1500 ? "👑" : amt >= 1000 ? "💎" : amt >= 500 ? "⭐" : ""; const brLabel = getSalaryLabel(detailTarget) || "通常"; return <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>バックレート</span><span className="font-medium" style={{ color: brColor }}>{icon} {brLabel}</span></div>; })()}
                 {detailTarget.age > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>年齢</span><span>{detailTarget.age}歳</span></div>}
                 {detailTarget.interval_minutes > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>インターバル</span><span>{detailTarget.interval_minutes}分</span></div>}
                 {detailTarget.transport_fee > 0 && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>交通費（実費精算分）</span><span>¥{detailTarget.transport_fee.toLocaleString()}</span></div>}
@@ -525,6 +536,7 @@ const generatePassword = () => {
             <h2 className="text-[16px] font-medium mb-1">セラピスト登録</h2>
             <p className="text-[11px] mb-5" style={{ color: T.textFaint }}>新しいセラピストを登録します</p>
             <div className="space-y-4">
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🆕 入店日</label><input type="date" value={addEntryDate} onChange={(e) => setAddEntryDate(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="セラピスト名" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="090-xxxx-xxxx" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
@@ -578,6 +590,7 @@ const generatePassword = () => {
 
             {editTab === "basic" && (
             <div className="space-y-4">
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🆕 入店日</label><input type="date" value={editEntryDate} onChange={(e) => setEditEntryDate(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />{editEntryDate && (() => { const d = Math.floor((Date.now() - new Date(editEntryDate).getTime()) / 86400000); return <p className="text-[10px] mt-1" style={{ color: "#8b5cf6" }}>入店から{d}日（{Math.floor(d/30)}ヶ月）</p>; })()}</div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
@@ -596,6 +609,12 @@ const generatePassword = () => {
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>給料タイプ</label><select value={editSalaryType} onChange={(e) => setEditSalaryType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">〇〇円UP</option><option value="percent">〇%UP</option></select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>金額/率</label><input type="text" inputMode="numeric" value={editSalaryAmount} onChange={(e) => setEditSalaryAmount(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
+              {(() => { const amt = parseInt(editSalaryAmount) || 0; const brColor = amt >= 1500 ? "#d4a843" : amt >= 1000 ? "#8b5cf6" : amt >= 500 ? "#4a7c59" : T.textMuted; const brLabel = amt > 0 ? (editSalaryType === "percent" ? `${amt}%UP` : `+${amt.toLocaleString()}円UP`) : "通常（バックUPなし）"; return (
+                <div className="rounded-xl p-3 flex items-center gap-3" style={{ backgroundColor: brColor + "12", border: `1px solid ${brColor}33` }}>
+                  <span className="text-[18px]">{amt >= 1500 ? "👑" : amt >= 1000 ? "💎" : amt >= 500 ? "⭐" : "📋"}</span>
+                  <div><p className="text-[12px] font-medium" style={{ color: brColor }}>現在のバックレート: {brLabel}</p><p className="text-[9px]" style={{ color: T.textMuted }}>バックレート自動計算により毎月更新されます</p></div>
+                </div>
+              ); })()}
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>年齢</label><input type="text" inputMode="numeric" value={editAge} onChange={(e) => setEditAge(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>インターバル</label><select value={editInterval} onChange={(e) => setEditInterval(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{INTERVALS.map((m) => <option key={m} value={m}>{m}分</option>)}</select></div>

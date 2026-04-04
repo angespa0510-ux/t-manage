@@ -108,6 +108,14 @@ export default function Dashboard() {
   const [merging, setMerging] = useState(false);
   const [mergeMsg, setMergeMsg] = useState("");
 
+  // Monthly back rate
+  type MonthlyResult = { therapist_id: number; name: string; sessions: number; nom_sessions: number; nom_rate: number; absences: number; lates: number; early_leaves: number; work_days: number; back_increase: number; prev_increase: number; salary_type: string };
+  const [monthlyResults, setMonthlyResults] = useState<MonthlyResult[]>([]);
+  const [showMonthlyModal, setShowMonthlyModal] = useState(false);
+  const [monthlyTarget, setMonthlyTarget] = useState("");
+  const [monthlyCalculated, setMonthlyCalculated] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
   // Detail / History
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
   const [custPoints, setCustPoints] = useState<{id:number;amount:number;type:string;description:string;expires_at:string;created_at:string}[]>([]);
@@ -385,6 +393,69 @@ export default function Dashboard() {
       setTimeout(() => { setMergeSource(null); setMergeMsg(""); setMergeTargetId(0); setMergeSearch(""); }, 1200);
     } catch { setMergeMsg("統合に失敗しました"); }
     setMerging(false);
+  };
+
+  // Monthly back rate auto-calculation
+  useEffect(() => {
+    (async () => {
+      const now = new Date();
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const ym = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`;
+      const { data: existing } = await supabase.from("therapist_monthly_back").select("id").eq("year_month", ym).limit(1);
+      if (existing && existing.length > 0) { setMonthlyCalculated(true); return; }
+      // Check if rules exist
+      const { data: rules } = await supabase.from("back_rate_rules").select("*").eq("is_active", true).order("back_increase", { ascending: false });
+      if (!rules || rules.length === 0) return;
+      const { data: therapists } = await supabase.from("therapists").select("id,name,salary_type,salary_amount").eq("status", "active");
+      if (!therapists || therapists.length === 0) return;
+      // Get prev month date range
+      const firstDay = `${ym}-01`;
+      const lastDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).toISOString().split("T")[0];
+      // Get reservations
+      const { data: res } = await supabase.from("reservations").select("therapist_id,nomination").eq("status", "completed").gte("date", firstDay).lte("date", lastDay);
+      // Get absences
+      const { data: absents } = await supabase.from("absent_records").select("therapist_id").gte("date", firstDay).lte("date", lastDay);
+      // Get attendance (late/early_leave)
+      const { data: assigns } = await supabase.from("room_assignments").select("therapist_id,attendance").gte("date", firstDay).lte("date", lastDay);
+      // Get shifts for work days
+      const { data: shifts } = await supabase.from("shifts").select("therapist_id,date").eq("status", "approved").gte("date", firstDay).lte("date", lastDay);
+      const results: MonthlyResult[] = [];
+      for (const t of therapists) {
+        const tRes = (res || []).filter(r => r.therapist_id === t.id);
+        const sessions = tRes.length;
+        const nomSessions = tRes.filter(r => r.nomination === "本指名").length;
+        const nomRate = sessions > 0 ? Math.round(nomSessions / sessions * 1000) / 10 : 0;
+        const abs = (absents || []).filter(a => a.therapist_id === t.id).length;
+        const tAssigns = (assigns || []).filter(a => a.therapist_id === t.id);
+        const lates = tAssigns.filter(a => a.attendance?.includes("late")).length;
+        const earlyLeaves = tAssigns.filter(a => a.attendance?.includes("early_leave")).length;
+        const workDays = new Set((shifts || []).filter(s => s.therapist_id === t.id).map(s => s.date)).size;
+        // Find best matching rule
+        let backIncrease = 0; let salaryType = "fixed";
+        for (const rule of rules) { if (sessions >= rule.min_sessions && nomRate >= rule.min_nomination_rate) { backIncrease = rule.back_increase; salaryType = rule.salary_type; break; } }
+        results.push({ therapist_id: t.id, name: t.name, sessions, nom_sessions: nomSessions, nom_rate: nomRate, absences: abs, lates, early_leaves: earlyLeaves, work_days: workDays, back_increase: backIncrease, prev_increase: t.salary_amount || 0, salary_type: salaryType });
+        // Save to DB
+        await supabase.from("therapist_monthly_back").insert({ therapist_id: t.id, year_month: ym, total_sessions: sessions, nomination_sessions: nomSessions, nomination_rate: nomRate, back_increase: backIncrease });
+        // Update therapist salary
+        await supabase.from("therapists").update({ salary_amount: backIncrease, salary_type: salaryType }).eq("id", t.id);
+      }
+      setMonthlyResults(results); setMonthlyTarget(ym); setShowMonthlyModal(true); setMonthlyCalculated(true);
+    })();
+  }, []);
+
+  // LINE copy helper
+  const copyLineMsg = (r: MonthlyResult) => {
+    const ym = monthlyTarget; const [y, m] = ym.split("-");
+    const nextMonth = new Date(parseInt(y), parseInt(m), 1);
+    const nextLabel = `${nextMonth.getFullYear()}年${nextMonth.getMonth() + 1}月`;
+    const change = r.back_increase > r.prev_increase ? "up" : r.back_increase < r.prev_increase ? "down" : "same";
+    const backLabel = r.salary_type === "percent" ? `${r.back_increase}%UP` : `+${r.back_increase.toLocaleString()}円UP`;
+    let footer = "";
+    if (change === "up") footer = `${nextLabel}のバックが ${backLabel} となりました🎉\n素晴らしい実績です！引き続きよろしくお願いします！`;
+    else if (change === "same") footer = `${nextLabel}のバックは現状と同じ内容で継続です！\n来月もよろしくお願いします💪`;
+    else footer = r.back_increase > 0 ? `${nextLabel}のバックは ${backLabel} となります。\n来月もよろしくお願いします💪` : `${nextLabel}のバックは基本レートとなります。\n来月もよろしくお願いします💪`;
+    const msg = `${r.name}さん、お疲れ様です！\n${parseInt(m)}月の実績報告です📊\n\n出勤回数: ${r.work_days}日\n接客本数: ${r.sessions}本\n本指名率: ${r.nom_rate}%\n当日欠勤: ${r.absences}回\n遅刻: ${r.lates}回\n早退: ${r.early_leaves}回\n\n${footer}`;
+    navigator.clipboard.writeText(msg); setCopiedId(r.therapist_id); setTimeout(() => setCopiedId(null), 2000);
   };
 
   // Detail
@@ -1143,6 +1214,47 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {/* Monthly Back Rate Results Modal */}
+      {showMonthlyModal && monthlyResults.length > 0 && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowMonthlyModal(false)}>
+          <div className="rounded-2xl border w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <div><h2 className="text-[16px] font-medium">📊 月次バックレート計算結果</h2><p className="text-[11px] mt-1" style={{ color: T.textMuted }}>{monthlyTarget}月分 → 翌月に反映済み</p></div>
+              <button onClick={() => setShowMonthlyModal(false)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              {monthlyResults.map((r) => {
+                const change = r.back_increase > r.prev_increase ? "up" : r.back_increase < r.prev_increase ? "down" : "same";
+                return (
+                  <div key={r.therapist_id} className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-medium">{r.name}</span>
+                        {change === "up" && <span className="px-2 py-0.5 rounded-full text-[9px] font-medium" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>UP</span>}
+                        {change === "down" && <span className="px-2 py-0.5 rounded-full text-[9px] font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>DOWN</span>}
+                        {change === "same" && <span className="px-2 py-0.5 rounded-full text-[9px] font-medium" style={{ backgroundColor: "#88878018", color: "#888780" }}>維持</span>}
+                      </div>
+                      <button onClick={() => copyLineMsg(r)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer flex items-center gap-1" style={{ backgroundColor: "#06C75518", color: "#06C755" }}>
+                        {copiedId === r.therapist_id ? "✓ コピー済み" : "LINE用コピー"}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-[11px]" style={{ color: T.textSub }}>
+                      <span>出勤: {r.work_days}日</span><span>接客: {r.sessions}本</span><span>本指名率: {r.nom_rate}%</span>
+                      <span>当欠: {r.absences}回</span><span>遅刻: {r.lates}回</span><span>早退: {r.early_leaves}回</span>
+                    </div>
+                    <p className="text-[12px] mt-2 font-medium" style={{ color: change === "up" ? "#4a7c59" : change === "down" ? "#c45555" : T.textSub }}>
+                      {r.back_increase > 0 ? `${r.salary_type === "percent" ? r.back_increase + "%" : r.back_increase.toLocaleString() + "円"}UP` : "基本レート"}
+                      {change !== "same" && ` （前月: ${r.prev_increase > 0 ? r.prev_increase.toLocaleString() + "円UP" : "基本"}）`}
+                    </p>
+                  </div>
+                );
+              })}
+              <button onClick={() => { monthlyResults.forEach(r => copyLineMsg(r)); }} className="w-full py-3 rounded-xl text-[12px] font-medium cursor-pointer" style={{ backgroundColor: "#06C75518", color: "#06C755" }}>全員分を順番にコピー</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );

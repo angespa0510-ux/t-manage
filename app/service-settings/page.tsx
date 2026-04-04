@@ -22,8 +22,9 @@ type BonusRule = {
   start_time: string | null; end_time: string | null; weekdays: number[] | null;
 };
 type RankMultiplier = { id: number; rank_name: string; multiplier: number; min_visits_in_period: number; period_months: number; min_total_visits: number };
+type BackRateRule = { id: number; min_sessions: number; min_nomination_rate: number; back_increase: number; salary_type: string; is_active: boolean; sort_order: number };
 
-type Tab = "nomination" | "discount" | "extension" | "option" | "point";
+type Tab = "nomination" | "discount" | "extension" | "option" | "point" | "backrate";
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -72,6 +73,23 @@ export default function ServiceSettings() {
   // Point sub-section
   const [ptSection, setPtSection] = useState<"basic" | "bonus" | "rank">("basic");
 
+  // Back rate states
+  const [brRules, setBrRules] = useState<BackRateRule[]>([]);
+  const [brAddSessions, setBrAddSessions] = useState("25");
+  const [brAddRate, setBrAddRate] = useState("30");
+  const [brAddIncrease, setBrAddIncrease] = useState("500");
+  const [brAddType, setBrAddType] = useState("fixed");
+  const [brSaving, setBrSaving] = useState(false);
+  const [brMsg, setBrMsg] = useState("");
+  const [newcomerMonths, setNewcomerMonths] = useState("2");
+  type BrResult = { therapist_id: number; name: string; sessions: number; nom_sessions: number; nom_rate: number; absences: number; lates: number; early_leaves: number; work_days: number; back_increase: number; salary_type: string };
+  const [brLastMonth, setBrLastMonth] = useState<BrResult[]>([]);
+  const [brCurrentMonth, setBrCurrentMonth] = useState<BrResult[]>([]);
+  const [brLastYM, setBrLastYM] = useState("");
+  const [brCurrentYM, setBrCurrentYM] = useState("");
+  const [brLoading, setBrLoading] = useState(false);
+  const [brCopiedId, setBrCopiedId] = useState<number | null>(null);
+
   // Add states
   const [addName, setAddName] = useState("");
   const [addPrice, setAddPrice] = useState("");
@@ -108,9 +126,65 @@ export default function ServiceSettings() {
     }
     const { data: br } = await supabase.from("point_bonus_rules").select("*").order("id"); if (br) setBonusRules(br);
     const { data: rm } = await supabase.from("rank_point_multipliers").select("*").order("id"); if (rm) setRankMultipliers(rm);
+    // Back rate rules
+    const { data: brr } = await supabase.from("back_rate_rules").select("*").order("sort_order"); if (brr) setBrRules(brr);
+    const { data: ss } = await supabase.from("store_settings").select("*").eq("key", "newcomer_duration_months").maybeSingle(); if (ss) setNewcomerMonths(ss.value);
   }, []);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
+
+  // Back rate data fetch
+  const fetchBrData = useCallback(async () => {
+    setBrLoading(true);
+    const now = new Date();
+    const { data: rules } = await supabase.from("back_rate_rules").select("*").eq("is_active", true).order("back_increase", { ascending: false });
+    const { data: therapists } = await supabase.from("therapists").select("id,name").eq("status", "active");
+    if (!therapists) { setBrLoading(false); return; }
+
+    const calcMonth = async (year: number, month: number): Promise<BrResult[]> => {
+      const ym = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const firstDay = `${ym}-01`;
+      const lastDay = new Date(year, month + 1, 0).toISOString().split("T")[0];
+      const { data: res } = await supabase.from("reservations").select("therapist_id,nomination").eq("status", "completed").gte("date", firstDay).lte("date", lastDay);
+      const { data: absents } = await supabase.from("absent_records").select("therapist_id").gte("date", firstDay).lte("date", lastDay);
+      const { data: assigns } = await supabase.from("room_assignments").select("therapist_id,attendance").gte("date", firstDay).lte("date", lastDay);
+      const { data: shifts } = await supabase.from("shifts").select("therapist_id,date").eq("status", "approved").gte("date", firstDay).lte("date", lastDay);
+      return therapists.map(t => {
+        const tRes = (res || []).filter(r => r.therapist_id === t.id);
+        const sessions = tRes.length;
+        const nomSessions = tRes.filter(r => r.nomination === "本指名").length;
+        const nomRate = sessions > 0 ? Math.round(nomSessions / sessions * 1000) / 10 : 0;
+        const abs = (absents || []).filter(a => a.therapist_id === t.id).length;
+        const tA = (assigns || []).filter(a => a.therapist_id === t.id);
+        const lates = tA.filter(a => a.attendance?.includes("late")).length;
+        const earlyLeaves = tA.filter(a => a.attendance?.includes("early_leave")).length;
+        const workDays = new Set((shifts || []).filter(s => s.therapist_id === t.id).map(s => s.date)).size;
+        let backIncrease = 0; let salaryType = "fixed";
+        if (rules) for (const rule of rules) { if (sessions >= rule.min_sessions && nomRate >= rule.min_nomination_rate) { backIncrease = rule.back_increase; salaryType = rule.salary_type; break; } }
+        return { therapist_id: t.id, name: t.name, sessions, nom_sessions: nomSessions, nom_rate: nomRate, absences: abs, lates, early_leaves: earlyLeaves, work_days: workDays, back_increase: backIncrease, salary_type: salaryType };
+      });
+    };
+
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevYM = `${prev.getFullYear()}年${prev.getMonth() + 1}月`;
+    const curYM = `${now.getFullYear()}年${now.getMonth() + 1}月`;
+    setBrLastYM(prevYM); setBrCurrentYM(curYM);
+    const lastResults = await calcMonth(prev.getFullYear(), prev.getMonth());
+    setBrLastMonth(lastResults);
+    const curResults = await calcMonth(now.getFullYear(), now.getMonth());
+    setBrCurrentMonth(curResults);
+    setBrLoading(false);
+  }, []);
+
+  useEffect(() => { if (tab === "backrate") fetchBrData(); }, [tab, fetchBrData]);
+
+  const copyBrLine = (r: BrResult, ym: string) => {
+    const change = r.back_increase > 0;
+    const backLabel = r.salary_type === "percent" ? `${r.back_increase}%UP` : `+${r.back_increase.toLocaleString()}円UP`;
+    const footer = change ? `バックが ${backLabel} となりました🎉\n素晴らしい実績です！引き続きよろしくお願いします！` : `バックは基本レートとなります。\n来月もよろしくお願いします💪`;
+    const msg = `${r.name}さん、お疲れ様です！\n${ym}の実績報告です📊\n\n出勤回数: ${r.work_days}日\n接客本数: ${r.sessions}本\n本指名率: ${r.nom_rate}%\n当日欠勤: ${r.absences}回\n遅刻: ${r.lates}回\n早退: ${r.early_leaves}回\n\n${footer}`;
+    navigator.clipboard.writeText(msg); setBrCopiedId(r.therapist_id); setTimeout(() => setBrCopiedId(null), 2000);
+  };
 
   const resetAdd = () => { setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("30"); setAddAmount(""); setAddDiscountType("fixed"); setMsg(""); };
   const resetEdit = () => { setEditId(null); setEditName(""); setEditPrice(""); setEditBack(""); setEditDuration(""); setEditAmount(""); setEditDiscountType("fixed"); };
@@ -254,6 +328,7 @@ export default function ServiceSettings() {
     { key: "option", label: "オプション", color: "#7ab88f", count: options.length },
     { key: "discount", label: "割引", color: "#c49885", count: discounts.length },
     { key: "point", label: "ポイント", color: PT_COLOR, count: bonusRules.filter(r => r.is_active).length },
+    { key: "backrate", label: "バックレート", color: "#8b5cf6", count: brRules.filter(r => r.is_active).length },
   ];
 
   const currentTab = tabs.find((t) => t.key === tab)!;
@@ -839,6 +914,110 @@ export default function ServiceSettings() {
                   </table>
                 )
               )}
+            </div>
+          )}
+
+          {/* ═══ バックレートタブ ═══ */}
+          {tab === "backrate" && (
+            <div className="animate-[fadeIn_0.3s] space-y-6">
+              {/* 新人期間設定 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <h3 className="text-[14px] font-medium mb-4">🆕 新人マーク期間</h3>
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px]" style={{ color: T.textSub }}>入店から</span>
+                  <select value={newcomerMonths} onChange={async (e) => { setNewcomerMonths(e.target.value); await supabase.from("store_settings").upsert({ key: "newcomer_duration_months", value: e.target.value }, { onConflict: "key" }); }} className="px-3 py-2 rounded-xl text-[13px] outline-none cursor-pointer" style={inputStyle}>
+                    <option value="1">1ヶ月</option><option value="2">2ヶ月</option><option value="3">3ヶ月</option><option value="6">6ヶ月</option>
+                  </select>
+                  <span className="text-[12px]" style={{ color: T.textSub }}>間は新人マーク表示</span>
+                </div>
+              </div>
+
+              {/* ルール一覧 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <h3 className="text-[14px] font-medium mb-1">📊 バックレート自動計算ルール</h3>
+                <p className="text-[11px] mb-5" style={{ color: T.textFaint }}>条件を満たす中で最も高いルールが適用されます</p>
+                {brRules.length > 0 && (
+                  <div className="space-y-2 mb-5">
+                    {brRules.map((r) => (
+                      <div key={r.id} className="rounded-xl p-4 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, opacity: r.is_active ? 1 : 0.5 }}>
+                        <p className="text-[13px] font-medium">接客 {r.min_sessions}本以上 × 本指名率 {r.min_nomination_rate}%以上 → <span style={{ color: "#8b5cf6" }}>+{r.salary_type === "percent" ? `${r.back_increase}%` : `${r.back_increase.toLocaleString()}円`}UP</span></p>
+                        <div className="flex items-center gap-2">
+                          <button onClick={async () => { await supabase.from("back_rate_rules").update({ is_active: !r.is_active }).eq("id", r.id); fetchData(); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: r.is_active ? "#4a7c59" : "#888", backgroundColor: r.is_active ? "#4a7c5918" : "#88888818" }}>{r.is_active ? "ON" : "OFF"}</button>
+                          <button onClick={async () => { if (confirm("削除しますか？")) { await supabase.from("back_rate_rules").delete().eq("id", r.id); fetchData(); } }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="rounded-xl border p-4" style={{ borderColor: T.border, backgroundColor: T.cardAlt }}>
+                  <p className="text-[11px] font-medium mb-3" style={{ color: "#8b5cf6" }}>➕ ルール追加</p>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div><label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>最低接客本数</label><input type="number" value={brAddSessions} onChange={e => setBrAddSessions(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} /></div>
+                    <div><label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>本指名率（%以上）</label><input type="number" value={brAddRate} onChange={e => setBrAddRate(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} /></div>
+                    <div><label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>バックUP額</label><input type="number" value={brAddIncrease} onChange={e => setBrAddIncrease(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} /></div>
+                    <div><label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>タイプ</label><select value={brAddType} onChange={e => setBrAddType(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }}><option value="fixed">〇〇円UP</option><option value="percent">〇〇%UP</option></select></div>
+                  </div>
+                  {brMsg && <p className="text-[11px] mb-2" style={{ color: brMsg.includes("追加") ? "#4a7c59" : "#c45555" }}>{brMsg}</p>}
+                  <button disabled={brSaving} onClick={async () => { setBrSaving(true); setBrMsg(""); const { error } = await supabase.from("back_rate_rules").insert({ min_sessions: parseInt(brAddSessions) || 25, min_nomination_rate: parseInt(brAddRate) || 30, back_increase: parseInt(brAddIncrease) || 500, salary_type: brAddType, sort_order: brRules.length }); setBrSaving(false); if (error) setBrMsg("追加失敗"); else { setBrMsg("追加しました！"); setBrAddSessions("25"); setBrAddRate("30"); setBrAddIncrease("500"); fetchData(); setTimeout(() => setBrMsg(""), 1500); } }} className="px-5 py-2 text-[11px] rounded-xl cursor-pointer text-white disabled:opacity-50" style={{ backgroundColor: "#8b5cf6" }}>{brSaving ? "..." : "追加"}</button>
+                </div>
+              </div>
+
+              {/* 先月の結果 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[14px] font-medium">📋 {brLastYM || "先月"}の確定結果</h3>
+                  <button onClick={fetchBrData} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: "#8b5cf6", backgroundColor: "#8b5cf618" }}>{brLoading ? "読込中..." : "🔄 更新"}</button>
+                </div>
+                {brLastMonth.length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>データなし</p> : (
+                  <div className="space-y-2">
+                    {brLastMonth.map(r => {
+                      const brLabel = r.back_increase > 0 ? (r.salary_type === "percent" ? `${r.back_increase}%UP` : `+${r.back_increase.toLocaleString()}円UP`) : "通常";
+                      const brColor = r.back_increase >= 1500 ? "#d4a843" : r.back_increase >= 1000 ? "#8b5cf6" : r.back_increase >= 500 ? "#4a7c59" : T.textMuted;
+                      return (
+                        <div key={r.therapist_id} className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: T.cardAlt }}>
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <span className="text-[13px] font-medium truncate">{r.name}</span>
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-medium flex-shrink-0" style={{ backgroundColor: brColor + "18", color: brColor }}>{brLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] flex-shrink-0" style={{ color: T.textSub }}>
+                            <span>{r.sessions}本</span><span>指名{r.nom_rate}%</span><span>出勤{r.work_days}日</span>
+                            <span>当欠{r.absences}</span><span>遅刻{r.lates}</span><span>早退{r.early_leaves}</span>
+                            <button onClick={() => copyBrLine(r, brLastYM)} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ backgroundColor: "#06C75518", color: "#06C755" }}>{brCopiedId === r.therapist_id ? "✓" : "LINE"}</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 今月の現状 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[14px] font-medium">📈 {brCurrentYM || "今月"}の現状（リアルタイム）</h3>
+                  <button onClick={fetchBrData} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: "#8b5cf6", backgroundColor: "#8b5cf618" }}>{brLoading ? "読込中..." : "🔄 更新"}</button>
+                </div>
+                {brCurrentMonth.length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>データなし</p> : (
+                  <div className="space-y-2">
+                    {brCurrentMonth.map(r => {
+                      const brLabel = r.back_increase > 0 ? (r.salary_type === "percent" ? `${r.back_increase}%UP` : `+${r.back_increase.toLocaleString()}円UP`) : "通常";
+                      const brColor = r.back_increase >= 1500 ? "#d4a843" : r.back_increase >= 1000 ? "#8b5cf6" : r.back_increase >= 500 ? "#4a7c59" : T.textMuted;
+                      return (
+                        <div key={r.therapist_id} className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: T.cardAlt }}>
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <span className="text-[13px] font-medium truncate">{r.name}</span>
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-medium flex-shrink-0" style={{ backgroundColor: brColor + "18", color: brColor }}>{brLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] flex-shrink-0" style={{ color: T.textSub }}>
+                            <span>{r.sessions}本</span><span>指名{r.nom_rate}%</span><span>出勤{r.work_days}日</span>
+                            <span>当欠{r.absences}</span><span>遅刻{r.lates}</span><span>早退{r.early_leaves}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
