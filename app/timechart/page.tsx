@@ -157,6 +157,12 @@ export default function TimeChart() {
   const [pendingShiftReqs, setPendingShiftReqs] = useState<ShiftReq[]>([]);
   const [showShiftNotif, setShowShiftNotif] = useState(false);
 
+  // Reservation notification
+  type NotifyInfo = { custName: string; custPhone: string; custEmail: string; hasLine: boolean; isMember: boolean; date: string; startTime: string; endTime: string; course: string; therapistName: string; total: number; nomination: string; discountName: string; extensionName: string; storeName: string; buildingName: string };
+  const [notifyInfo, setNotifyInfo] = useState<NotifyInfo | null>(null);
+  const [notifySender, setNotifySender] = useState(() => typeof window !== "undefined" ? localStorage.getItem("notify_sender") || "" : "");
+  const [notifyTab, setNotifyTab] = useState<"staff"|"customer">("customer");
+
   const selectedCourse = courses.find((c) => c.id === newCourseId);
   const editSelectedCourse = courses.find((c) => c.id === editCourseId);
 
@@ -274,7 +280,20 @@ export default function TimeChart() {
     }
     setSaving(false);
     if (error) { toast.show("登録失敗: " + error.message, "error"); }
-    else { toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewStaffName(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600); }
+    else {
+      const thName = therapists.find(t => t.id === newTherapistId)?.name || "";
+      const { data: custInfo } = await supabase.from("customers").select("phone,login_email,self_name").eq("name", newCustName.trim()).maybeSingle();
+      const hasLine = /\sL$/i.test(newCustName.trim()) || /\sL\s/i.test(newCustName.trim());
+      const isMember = !!(custInfo?.login_email);
+      // Get store/building from room assignment
+      const ra = roomAssigns.find(a => a.therapist_id === newTherapistId);
+      const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
+      const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
+      const st = rm ? stores.find(s => s.id === rm.store_id) : null;
+      const courseWithExt = (selectedCourse?.name || "") + (newExtension ? `＋${newExtension}` : "");
+      setNotifyInfo({ custName: newCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: newDate || selectedDate, startTime: newStart, endTime: newEnd, course: courseWithExt, therapistName: thName, total: coursePrice + newNomFee + optTotal + newExtPrice - discTotal, nomination: newNomination || "指名なし", discountName: newDiscounts.map(d => d.name).join(",") || "なし", extensionName: newExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
+      toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewStaffName(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
+    }
   };
 
   const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); };
@@ -1194,6 +1213,84 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
           </div>
         </div>
       )}
+
+      {/* Reservation Notification Popup — Full Spec */}
+      {notifyInfo && (() => {
+        const ni = notifyInfo;
+        const d = new Date(ni.date + "T00:00:00"); const days = ["日","月","火","水","木","金","土"];
+        const dateStr = `${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}（${days[d.getDay()]}）`;
+        const dateFull = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+        const cleanName = ni.custName.replace(/\s*L$/i, "").replace(/\s+\d+～\d+歳$/, "");
+        // URL判定: 今日/明日→あり、明後日以降→なし
+        const now = new Date(); const h = now.getHours();
+        const today = h < 5 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diff = Math.floor((d.getTime() - today.getTime()) / 86400000);
+        const showUrl = diff <= 1;
+        // 場所URL切替
+        const locUrl = ni.storeName.includes("豊橋") ? "https://quiet-banana-895.notion.site/2f4db1122fba80fb931afe6989118990" : ni.buildingName.includes("マイコート") ? "https://quiet-banana-895.notion.site/2f4db1122fba8020b500c46883464fd7?pvs=73" : "https://quiet-banana-895.notion.site/fd809514263e4351af42b67cbfbd06ef";
+        // セラピスト向けメッセージ
+        const staffMsg = `お疲れ様です！\n\nお時間 : ${dateFull} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\n\nお客様 : ${cleanName}\n\nコース : ${ni.course}\n\n割引 : ${ni.discountName}\n\n指名 : ${ni.nomination}\n\n店舗名 : ${ni.storeName || "チョップ"}\n\n金額 : ${ni.total.toLocaleString()}円\n\nよろしくお願いします。${notifySender ? `\n\n送信者 : ${notifySender}` : ""}`;
+        // お客様向けメッセージ
+        const nomLine = ni.nomination && ni.nomination !== "フリー" && ni.nomination !== "指名なし" ? `\n指名 : ${ni.nomination}` : "";
+        const discLine = ni.discountName && ni.discountName !== "なし" ? `\n割引 : ${ni.discountName}` : "";
+        const thLine = ni.nomination !== "フリー" ? `\n${ni.therapistName}セラピスト` : "";
+        const custMsgUrl = `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します。\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n場所等はリンクURLからご確認ください\n${locUrl}\n\n※リンクが開けない場合はWEBで「シークレットモード」で開いていただくか\n「Yahoo」の検索ページでURLを張り付けて検索をお願いします。\n\n当店より、ご来店時のお願いでございます。\n当店は近隣に居住されている方もいらっしゃいます。\nつきましては、施術中はお静かにお過ごしいただけますよう、ご理解とご協力をお願い申し上げます。\n\n皆様に心地よい時間をお過ごしいただけるよう努めてまいります。\n当日のご来店を心よりお待ちしております。`;
+        const custMsgNoUrl = `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n当日のルーム等詳細につきましては\n前日の夜、または当日の11時半までにご連絡致しますので\nご確認よろしくお願い致します🙇‍♂️`;
+        const custMsg = showUrl ? custMsgUrl : custMsgNoUrl;
+        return (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setNotifyInfo(null)}>
+          <div className="rounded-2xl border w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <div>
+                <h2 className="text-[15px] font-medium">📩 予約確認通知</h2>
+                <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{cleanName} 様 | {dateStr} {ni.startTime?.slice(0,5)}〜 | {showUrl ? "URL付き" : "URLなし（明後日以降）"}</p>
+              </div>
+              <button onClick={() => setNotifyInfo(null)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
+            </div>
+            <div className="px-6 py-4">
+              {/* Tab */}
+              <div className="flex gap-2 mb-4">
+                <button onClick={() => setNotifyTab("customer")} className="flex-1 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: notifyTab === "customer" ? "#c3a78222" : T.cardAlt, color: notifyTab === "customer" ? "#c3a782" : T.textMuted, fontWeight: notifyTab === "customer" ? 600 : 400 }}>👤 お客様向け</button>
+                <button onClick={() => setNotifyTab("staff")} className="flex-1 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: notifyTab === "staff" ? "#85a8c422" : T.cardAlt, color: notifyTab === "staff" ? "#85a8c4" : T.textMuted, fontWeight: notifyTab === "staff" ? 600 : 400 }}>💼 セラピスト向け</button>
+              </div>
+
+              {/* 通知方法バッジ */}
+              <div className="rounded-xl p-3 mb-3 text-[11px]" style={{ backgroundColor: ni.hasLine ? "#06C75512" : ni.isMember ? "#3b82f612" : "#f59e0b12", border: `1px solid ${ni.hasLine ? "#06C75533" : ni.isMember ? "#3b82f633" : "#f59e0b33"}` }}>
+                <span style={{ color: ni.hasLine ? "#06C755" : ni.isMember ? "#3b82f6" : "#f59e0b" }}>
+                  {ni.hasLine ? "💬 LINE登録済み" : ni.isMember ? "✉️ マイページ会員（メール）" : "📱 SMS対象"}
+                  {ni.custPhone && !ni.hasLine ? ` — ${ni.custPhone}` : ""}
+                </span>
+              </div>
+
+              {/* メッセージプレビュー */}
+              <div className="rounded-xl p-4 mb-4 text-[11px] whitespace-pre-wrap leading-relaxed max-h-[250px] overflow-y-auto" style={{ backgroundColor: T.cardAlt, color: T.textSub, fontFamily: "var(--font-mono, monospace)" }}>
+                {notifyTab === "customer" ? custMsg : staffMsg}
+              </div>
+
+              {/* 送信者名（セラピスト向け） */}
+              {notifyTab === "staff" && (
+                <div className="mb-3">
+                  <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>送信者名</label>
+                  <input type="text" value={notifySender} onChange={e => { setNotifySender(e.target.value); localStorage.setItem("notify_sender", e.target.value); }} placeholder="田中" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                </div>
+              )}
+
+              {/* 送信ボタン */}
+              <div className="space-y-2">
+                {notifyTab === "customer" ? (<>
+                  {ni.hasLine && <button onClick={() => { navigator.clipboard.writeText(custMsg); toast.show("LINE用メッセージをコピーしました！", "success"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#06C75518", color: "#06C755", border: "1px solid #06C75544" }}>💬 LINE用テキストをコピー</button>}
+                  {ni.isMember && ni.custEmail && <button onClick={() => { const s = encodeURIComponent("【アンジュスパ】ご予約確認"); const b = encodeURIComponent(custMsg); window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${ni.custEmail}&su=${s}&body=${b}`, "_blank"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>✉️ Gmailで送信</button>}
+                  {!ni.hasLine && !ni.isMember && <button onClick={() => { navigator.clipboard.writeText(custMsg); toast.show(`SMS用コピー完了（${ni.custPhone}）`, "success"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b44" }}>📱 SMS用コピー（{ni.custPhone}）</button>}
+                  <button onClick={() => { navigator.clipboard.writeText(custMsg); toast.show("テキストをコピーしました！", "success"); }} className="w-full py-2 rounded-xl text-[11px] cursor-pointer" style={{ color: T.textMuted, backgroundColor: T.cardAlt }}>📋 テキストだけコピー</button>
+                </>) : (<>
+                  <button onClick={() => { navigator.clipboard.writeText(staffMsg); toast.show("セラピスト向けメッセージをコピーしました！", "success"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>💬 セラピストLINE用コピー</button>
+                </>)}
+                <button onClick={() => setNotifyInfo(null)} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted }}>閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>);
+      })()}
 
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
     </div>
