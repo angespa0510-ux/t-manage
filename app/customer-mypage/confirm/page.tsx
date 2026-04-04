@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../../lib/supabase";
 
 type Customer = { id: number; name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number };

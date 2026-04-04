@@ -349,7 +349,7 @@ export default function Dashboard() {
   };
 
   // Edit
-  const startEdit = (c: Customer) => { setEditingCustomer(c); setEditName(c.name || ""); setEditPhone(c.phone || ""); setEditPhone2(c.phone2 || ""); setEditPhone3(c.phone3 || ""); setEditEmail(c.email || ""); setEditNotes(c.notes || ""); setEditRank(c.rank || "normal"); setEditBirthday(c.birthday || ""); setEditMsg(""); };
+  const startEdit = (c: Customer) => { setEditingCustomer(c); setEditName(c.name || ""); setEditPhone(c.phone || ""); setEditPhone2(c.phone2 || ""); setEditPhone3(c.phone3 || ""); setEditEmail(c.email || c.login_email || ""); setEditNotes(c.notes || ""); setEditRank(c.rank || "normal"); setEditBirthday(c.birthday || ""); setEditMsg(""); };
   const handleUpdate = async () => {
     if (!editingCustomer || !editName.trim()) { setEditMsg("名前を入力してください"); return; }
     setEditSaving(true); setEditMsg("");
@@ -622,7 +622,7 @@ export default function Dashboard() {
                         return (
                           <tr key={c.id} className="transition-colors cursor-pointer" style={{ borderBottom: `1px solid ${T.cardAlt}` }} onClick={() => openDetail(c)}>
                             <td className="py-3 px-4"><RankBadge rank={c.rank || "normal"} /></td>
-                            <td className="py-3 px-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{c.name?.charAt(0)}</div><div><span className="font-medium">{c.name}</span>{c.self_name && c.self_name !== c.name && <span className="block text-[10px]" style={{ color: T.textMuted }}>👤 {c.self_name}</span>}</div></div></td>
+                            <td className="py-3 px-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{c.name?.charAt(0)}</div><div><div className="flex items-center gap-1.5"><span className="font-medium">{c.name}</span>{c.login_email && <span className="text-[8px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#3b82f612", color: "#3b82f6", border: "1px solid #3b82f633" }}>📱会員</span>}</div>{c.self_name && c.self_name !== c.name && <span className="block text-[10px]" style={{ color: T.textMuted }}>👤 {c.self_name}</span>}</div></div></td>
                             <td className="py-3 px-4" style={{ color: T.textSub }}>
                               {phones.length === 0 ? "—" : phones.map((p, i) => (<span key={i} className="block text-[11px]">{p}</span>))}
                             </td>
@@ -910,6 +910,7 @@ export default function Dashboard() {
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号②</label><input type="tel" value={editPhone2} onChange={(e) => setEditPhone2(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号③</label><input type="tel" value={editPhone3} onChange={(e) => setEditPhone3(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メールアドレス</label><input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+              {editingCustomer?.login_email && <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📱 マイページ登録メール（本人登録）</label><p className="px-4 py-3 rounded-xl text-[13px]" style={{ backgroundColor: "#3b82f608", color: "#3b82f6", border: "1px solid #3b82f622" }}>{editingCustomer.login_email}</p></div>}
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎂 誕生日</label><input type="date" value={editBirthday} onChange={(e) => setEditBirthday(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>お客様ランク</label><RankSelector value={editRank} onChange={setEditRank} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><textarea rows={3} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none resize-none" style={inputStyle} /></div>
