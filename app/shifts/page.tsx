@@ -148,6 +148,7 @@ export default function ShiftManagement() {
         await supabase.from("shifts").update({ store_id: req.store_id || null, start_time: req.start_time, end_time: req.end_time, status: "confirmed" }).eq("id", existing[0].id);
       } else {
         await supabase.from("shifts").insert({ therapist_id: req.therapist_id, store_id: req.store_id || null, date: req.date, start_time: req.start_time, end_time: req.end_time, status: "confirmed" });
+      }
       await notifyFavoriteCustomers(req.therapist_id, req.date, req.start_time, req.end_time);
     }
     fetchData();
