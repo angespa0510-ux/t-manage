@@ -86,6 +86,32 @@ export default function ShiftManagement() {
 
   const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "—";
 
+  // お気に入り通知
+  const notifyFavoriteCustomers = async (therapistId: number, date: string, startTime: string, endTime: string) => {
+    try {
+      const thName = getTherapistName(therapistId);
+      const d = new Date(date + "T00:00:00");
+      const days = ["日","月","火","水","木","金","土"];
+      const dateStr = `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
+      // このセラピストをお気に入りにしている顧客を取得
+      const { data: favs } = await supabase.from("customer_favorites").select("customer_id").eq("type", "therapist").eq("item_id", therapistId);
+      if (!favs || favs.length === 0) return;
+      // 同じ日付・セラピストで既に通知済みかチェック
+      for (const fav of favs) {
+        const notifKey = `${thName}さん ${dateStr} 出勤`;
+        const { data: exist } = await supabase.from("customer_notifications").select("id").eq("target_customer_id", fav.customer_id).like("title", "%出勤のお知らせ%").like("body", `%${thName}%${dateStr}%`).maybeSingle();
+        if (!exist) {
+          await supabase.from("customer_notifications").insert({
+            title: "❤️ お気に入りセラピスト出勤のお知らせ",
+            body: `${thName}さんが${dateStr} ${startTime}〜${endTime}に出勤します！ご予約はお早めに♪`,
+            type: "info",
+            target_customer_id: fav.customer_id,
+          });
+        }
+      }
+    } catch (e) { console.error("お気に入り通知エラー:", e); }
+  };
+
   // シフト希望 承認
   const approveRequest = async (req: ShiftRequest) => {
     setProcessingReqId(req.id);
@@ -97,6 +123,7 @@ export default function ShiftManagement() {
     } else {
       await supabase.from("shifts").insert({ therapist_id: req.therapist_id, store_id: req.store_id || null, date: req.date, start_time: req.start_time, end_time: req.end_time, status: "confirmed" });
     }
+    await notifyFavoriteCustomers(req.therapist_id, req.date, req.start_time, req.end_time);
     setProcessingReqId(null);
     fetchData();
   };
@@ -121,7 +148,7 @@ export default function ShiftManagement() {
         await supabase.from("shifts").update({ store_id: req.store_id || null, start_time: req.start_time, end_time: req.end_time, status: "confirmed" }).eq("id", existing[0].id);
       } else {
         await supabase.from("shifts").insert({ therapist_id: req.therapist_id, store_id: req.store_id || null, date: req.date, start_time: req.start_time, end_time: req.end_time, status: "confirmed" });
-      }
+      await notifyFavoriteCustomers(req.therapist_id, req.date, req.start_time, req.end_time);
     }
     fetchData();
   };
