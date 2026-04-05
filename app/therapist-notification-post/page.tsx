@@ -8,33 +8,31 @@ import { NavMenu } from "../../lib/nav-menu";
 
 type Notification = {
   id: number; title: string; body: string; type: string;
-  image_url: string | null; target_customer_id: number | null;
-  created_at: string;
+  target_therapist_id: number | null; created_at: string;
 };
-type Customer = { id: number; name: string; phone: string; rank: string };
+type Therapist = { id: number; name: string; status: string };
 
-export default function NotificationPost() {
+export default function TherapistNotificationPost() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [therapists, setTherapists] = useState<Therapist[]>([]);
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [type, setType] = useState("info");
-  const [targetMode, setTargetMode] = useState<"all" | "rank" | "individual">("all");
-  const [targetRank, setTargetRank] = useState("normal");
-  const [targetCustomerId, setTargetCustomerId] = useState(0);
-  const [custSearch, setCustSearch] = useState("");
+  const [targetMode, setTargetMode] = useState<"all" | "individual">("all");
+  const [targetTherapistId, setTargetTherapistId] = useState(0);
+  const [thSearch, setThSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
   const fetchData = useCallback(async () => {
-    const { data: n } = await supabase.from("customer_notifications").select("*").order("created_at", { ascending: false }).limit(50);
+    const { data: n } = await supabase.from("therapist_notifications").select("*").order("created_at", { ascending: false }).limit(50);
     if (n) setNotifications(n);
-    const { data: c } = await supabase.from("customers").select("id,name,phone,rank").order("name");
-    if (c) setCustomers(c);
+    const { data: t } = await supabase.from("therapists").select("id,name,status").order("sort_order", { ascending: true });
+    if (t) setTherapists(t);
   }, []);
 
   useEffect(() => {
@@ -50,45 +48,39 @@ export default function NotificationPost() {
     setSaving(true); setMsg("");
 
     if (targetMode === "all") {
-      const { error } = await supabase.from("customer_notifications").insert({
+      const { error } = await supabase.from("therapist_notifications").insert({
         title: title.trim(), body: body.trim(), type,
-        target_customer_id: null, image_url: null,
+        target_therapist_id: null,
       });
       if (error) { setMsg("投稿失敗: " + error.message); setSaving(false); return; }
-    } else if (targetMode === "rank") {
-      const filtered = customers.filter(c => targetRank === "all_ranks" || c.rank === targetRank);
-      for (const c of filtered) {
-        await supabase.from("customer_notifications").insert({
-          title: title.trim(), body: body.trim(), type,
-          target_customer_id: c.id, image_url: null,
-        });
-      }
-    } else if (targetMode === "individual") {
-      if (!targetCustomerId) { setMsg("お客様を選択してください"); setSaving(false); return; }
-      const { error } = await supabase.from("customer_notifications").insert({
+    } else {
+      if (!targetTherapistId) { setMsg("セラピストを選択してください"); setSaving(false); return; }
+      const { error } = await supabase.from("therapist_notifications").insert({
         title: title.trim(), body: body.trim(), type,
-        target_customer_id: targetCustomerId, image_url: null,
+        target_therapist_id: targetTherapistId,
       });
       if (error) { setMsg("投稿失敗: " + error.message); setSaving(false); return; }
     }
 
     setSaving(false);
     setMsg("お知らせを投稿しました！");
-    setTitle(""); setBody(""); setTargetCustomerId(0); setCustSearch("");
+    setTitle(""); setBody(""); setTargetTherapistId(0); setThSearch("");
     fetchData();
     setTimeout(() => setMsg(""), 3000);
   };
 
   const deleteNotification = async (id: number) => {
     if (!confirm("このお知らせを削除しますか？")) return;
-    await supabase.from("customer_notifications").delete().eq("id", id);
+    await supabase.from("therapist_notifications").delete().eq("id", id);
     fetchData();
   };
 
-  const typeLabel = (t: string) => t === "info" ? "📢 お知らせ" : t === "new_therapist" ? "🌟 新人紹介" : t === "campaign" ? "🎉 キャンペーン" : t;
-  const typeColor = (t: string) => t === "info" ? "#85a8c4" : t === "new_therapist" ? "#c3a782" : "#7ab88f";
+  const typeLabel = (t: string) => t === "info" ? "📢 お知らせ" : t === "schedule" ? "📅 シフト連絡" : t === "important" ? "⚠️ 重要" : t;
+  const typeColor = (t: string) => t === "info" ? "#85a8c4" : t === "schedule" ? "#c3a782" : "#c45555";
 
-  const filteredCusts = custSearch ? customers.filter(c => c.name.includes(custSearch) || (c.phone && c.phone.includes(custSearch))) : customers.slice(0, 20);
+  const filteredTh = thSearch
+    ? therapists.filter(t => t.name.includes(thSearch))
+    : therapists.filter(t => t.status === "active");
 
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` };
 
@@ -101,7 +93,7 @@ export default function NotificationPost() {
           <button onClick={() => router.push("/dashboard")} className="p-2 rounded-lg cursor-pointer" style={{ color: T.textSub }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <h1 className="text-[14px] font-medium">🔔 会員お知らせ投稿</h1>
+          <h1 className="text-[14px] font-medium">📢 セラピストお知らせ投稿</h1>
         </div>
         <button onClick={toggle} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>
           {dark ? "☀️ ライト" : "🌙 ダーク"}
@@ -113,14 +105,14 @@ export default function NotificationPost() {
 
           {/* 投稿フォーム */}
           <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <p className="text-[13px] font-medium mb-4">📝 新しいお知らせを投稿</p>
+            <p className="text-[13px] font-medium mb-4">📝 セラピストへのお知らせを投稿</p>
 
             <div className="space-y-4">
               {/* 種別 */}
               <div>
                 <label className="block text-[10px] mb-1.5" style={{ color: T.textSub }}>種別</label>
                 <div className="flex gap-2">
-                  {([["info", "📢 お知らせ"], ["new_therapist", "🌟 新人紹介"], ["campaign", "🎉 キャンペーン"]] as const).map(([val, label]) => (
+                  {([["info", "📢 お知らせ"], ["schedule", "📅 シフト連絡"], ["important", "⚠️ 重要"]] as const).map(([val, label]) => (
                     <button key={val} onClick={() => setType(val)} className="px-3 py-2 rounded-xl text-[11px] cursor-pointer"
                       style={{ backgroundColor: type === val ? typeColor(val) + "18" : T.cardAlt, color: type === val ? typeColor(val) : T.textMuted, border: `1px solid ${type === val ? typeColor(val) + "44" : T.border}`, fontWeight: type === val ? 600 : 400 }}>
                       {label}
@@ -133,7 +125,7 @@ export default function NotificationPost() {
               <div>
                 <label className="block text-[10px] mb-1.5" style={{ color: T.textSub }}>配信対象</label>
                 <div className="flex gap-2 mb-2">
-                  {([["all", "📣 全員"], ["rank", "📈 ランク別"], ["individual", "👤 個別"]] as [typeof targetMode, string][]).map(([val, label]) => (
+                  {([["all", "📣 全セラピスト"], ["individual", "👤 個別"]] as [typeof targetMode, string][]).map(([val, label]) => (
                     <button key={val} onClick={() => setTargetMode(val)} className="px-3 py-2 rounded-xl text-[11px] cursor-pointer"
                       style={{ backgroundColor: targetMode === val ? "#c3a78218" : T.cardAlt, color: targetMode === val ? "#c3a782" : T.textMuted, border: `1px solid ${targetMode === val ? "#c3a78244" : T.border}`, fontWeight: targetMode === val ? 600 : 400 }}>
                       {label}
@@ -141,27 +133,17 @@ export default function NotificationPost() {
                   ))}
                 </div>
 
-                {targetMode === "rank" && (
-                  <select value={targetRank} onChange={e => setTargetRank(e.target.value)} className="px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
-                    <option value="all_ranks">全ランク（1件ずつ個別送信）</option>
-                    <option value="normal">👤 一般</option>
-                    <option value="silver">🥈 シルバー</option>
-                    <option value="gold">🥇 ゴールド</option>
-                    <option value="platinum">💎 プラチナ</option>
-                  </select>
-                )}
-
                 {targetMode === "individual" && (
                   <div>
-                    <input type="text" value={custSearch} onChange={e => setCustSearch(e.target.value)} placeholder="🔍 名前・電話番号で検索"
+                    <input type="text" value={thSearch} onChange={e => setThSearch(e.target.value)} placeholder="🔍 名前で検索"
                       className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none mb-2" style={inputStyle} />
                     <div className="max-h-[150px] overflow-y-auto rounded-xl border" style={{ borderColor: T.border }}>
-                      {filteredCusts.map(c => (
-                        <button key={c.id} onClick={() => { setTargetCustomerId(c.id); setCustSearch(c.name); }}
+                      {filteredTh.map(t => (
+                        <button key={t.id} onClick={() => { setTargetTherapistId(t.id); setThSearch(t.name); }}
                           className="w-full px-3 py-2 text-left text-[12px] cursor-pointer flex items-center justify-between"
-                          style={{ backgroundColor: targetCustomerId === c.id ? "#c3a78212" : "transparent", borderBottom: `1px solid ${T.border}` }}>
-                          <span>{c.name}</span>
-                          <span className="text-[10px]" style={{ color: T.textMuted }}>{c.phone || ""}</span>
+                          style={{ backgroundColor: targetTherapistId === t.id ? "#c3a78212" : "transparent", borderBottom: `1px solid ${T.border}` }}>
+                          <span>💆 {t.name}</span>
+                          <span className="text-[10px]" style={{ color: t.status === "active" ? "#7ab88f" : T.textFaint }}>{t.status === "active" ? "稼働中" : "休止中"}</span>
                         </button>
                       ))}
                     </div>
@@ -172,7 +154,7 @@ export default function NotificationPost() {
               {/* タイトル */}
               <div>
                 <label className="block text-[10px] mb-1.5" style={{ color: T.textSub }}>タイトル <span style={{ color: "#c45555" }}>*</span></label>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="例: 年末年始営業のお知らせ"
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="例: 来週のシフト変更について"
                   className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
               </div>
 
@@ -188,11 +170,11 @@ export default function NotificationPost() {
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px dashed ${T.border}` }}>
                   <p className="text-[9px] mb-2" style={{ color: T.textFaint }}>プレビュー</p>
                   <div className="flex items-start gap-3">
-                    <span className="text-[14px]">{type === "info" ? "📢" : type === "new_therapist" ? "🌟" : "🎉"}</span>
+                    <span className="text-[14px]">{type === "info" ? "📢" : type === "schedule" ? "📅" : "⚠️"}</span>
                     <div>
                       <p className="text-[12px] font-medium">{title || "タイトル"}</p>
-                      <p className="text-[11px] mt-1" style={{ color: T.textSub }}>{body || "本文"}</p>
-                      <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>配信先: {targetMode === "all" ? "全員" : targetMode === "rank" ? `${targetRank === "all_ranks" ? "全ランク" : targetRank}会員` : custSearch || "未選択"}</p>
+                      <p className="text-[11px] mt-1 whitespace-pre-wrap" style={{ color: T.textSub }}>{body || "本文"}</p>
+                      <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>配信先: {targetMode === "all" ? "全セラピスト" : thSearch || "未選択"}</p>
                     </div>
                   </div>
                 </div>
@@ -223,8 +205,8 @@ export default function NotificationPost() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: typeColor(n.type) + "18", color: typeColor(n.type) }}>{typeLabel(n.type)}</span>
-                          {n.target_customer_id ? (
-                            <span className="text-[9px]" style={{ color: T.textFaint }}>👤 {customers.find(c => c.id === n.target_customer_id)?.name || `ID:${n.target_customer_id}`}</span>
+                          {n.target_therapist_id ? (
+                            <span className="text-[9px]" style={{ color: T.textFaint }}>👤 {therapists.find(t => t.id === n.target_therapist_id)?.name || `ID:${n.target_therapist_id}`}</span>
                           ) : (
                             <span className="text-[9px]" style={{ color: T.textFaint }}>📣 全員</span>
                           )}

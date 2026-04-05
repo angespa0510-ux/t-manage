@@ -24,24 +24,24 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "📑", label: "税務報告",  path: "/tax-dashboard",  category: "売上" },
 
   // ── 顧客 ──
-  { icon: "👥", label: "顧客一覧",    path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },
-  { icon: "📝", label: "顧客登録",    path: "DASHBOARD_PAGE:顧客登録",    category: "顧客" },
-  { icon: "🎁", label: "ポイント管理", path: "DASHBOARD_PAGE:ポイント管理", category: "顧客" },
+  { icon: "👥", label: "顧客一覧",       path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },
+  { icon: "📝", label: "顧客登録",       path: "DASHBOARD_PAGE:顧客登録",    category: "顧客" },
+  { icon: "🎁", label: "ポイント管理",    path: "DASHBOARD_PAGE:ポイント管理", category: "顧客" },
+  { icon: "🔔", label: "会員お知らせ投稿", path: "/notification-post",         category: "顧客" },
+  { icon: "📱", label: "お客様マイページ", path: "/customer-mypage",           category: "顧客" },
 
   // ── セラピスト・スタッフ ──
-  { icon: "⏰", label: "セラピスト勤怠", path: "/shifts",      category: "セラピスト・スタッフ" },
-  { icon: "💆", label: "セラピスト登録", path: "/therapists",  category: "セラピスト・スタッフ" },
-  { icon: "👥", label: "スタッフ設定",   path: "/staff",       category: "セラピスト・スタッフ" },
+  { icon: "⏰", label: "セラピスト勤怠",       path: "/shifts",                       category: "セラピスト・スタッフ" },
+  { icon: "💆", label: "セラピスト登録",       path: "/therapists",                   category: "セラピスト・スタッフ" },
+  { icon: "👥", label: "スタッフ設定",         path: "/staff",                        category: "セラピスト・スタッフ" },
+  { icon: "📢", label: "セラピストお知らせ投稿", path: "/therapist-notification-post",  category: "セラピスト・スタッフ" },
+  { icon: "👤", label: "セラピストマイページ",  path: "/mypage",                       category: "セラピスト・スタッフ" },
 
   // ── 登録・設定 ──
   { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
   { icon: "🔑", label: "利用場所登録",  path: "/rooms",             category: "登録・設定" },
   { icon: "⚙️", label: "サービス設定",  path: "/service-settings",  category: "登録・設定" },
-  { icon: "🔔", label: "お知らせ投稿",  path: "/notification-post", category: "登録・設定" },
   { icon: "🛠️", label: "システム設定",  path: "/system-setup",      category: "登録・設定" },
-
-  // ── マイページ ──
-  { icon: "👤", label: "マイページ", path: "/mypage", category: "マイページ" },
 ];
 
 // ── サイドバー本体 ─────────────────────────────────
