@@ -58,7 +58,7 @@
 
       // お客様向けLINEボタン（「LINE用テキストをコピー」だが「セラピスト」を含まない）
       if (text.includes('LINE用テキストをコピー') && !text.includes('セラピスト')) {
-        addAutoButton(btn, 'line_customer', '🚀 LINE自動入力', '#06C755');
+        addAutoButton(btn, 'line_customer', '🚀 お客様LINE自動入力', '#06C755');
       }
 
       // セラピスト向けLINEボタン
