@@ -31,46 +31,70 @@
   // ============================================================
   //  通知ポップアップ監視
   // ============================================================
-  // ============================================================
-  //  通知ポップアップ監視（デバウンス付き）
-  //  Reactのタブ切り替え時に複数回発火するのを防ぐ
+  //  通知ポップアップ監視（デバウンス + 再入防止）
   // ============================================================
   let debounceTimer = null;
+  let isEnhancing = false;
+
   const observer = new MutationObserver(() => {
+    if (isEnhancing) return; // 自分のDOM変更は無視
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(enhanceNotifyPopup, 200);
+    debounceTimer = setTimeout(enhanceNotifyPopup, 300);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   function enhanceNotifyPopup() {
-    // ポップアップが存在するか確認
     const popup = document.querySelector('[data-tm-notify="true"]');
     if (!popup) return;
 
-    // ① 既存の自動入力ボタンを全削除（タブ切り替え時のリセット）
-    document.querySelectorAll('[data-tm-auto]').forEach(btn => btn.remove());
-
-    // ② 現在表示中のコピーボタンを探して、対応する自動入力ボタンを追加
+    // 現在のコピーボタンを確認
     const buttons = popup.querySelectorAll('button');
+    let needsCustomer = false;
+    let needsTherapist = false;
+    let needsSms = false;
 
     buttons.forEach((btn) => {
       const text = btn.textContent || '';
+      if (text.includes('LINE用テキストをコピー') && !text.includes('セラピスト')) needsCustomer = true;
+      if (text.includes('セラピストLINE用コピー')) needsTherapist = true;
+      if (text.includes('SMS用コピー')) needsSms = true;
+    });
 
-      // お客様向けLINEボタン（「LINE用テキストをコピー」だが「セラピスト」を含まない）
+    // 既に正しい自動ボタンが存在するかチェック
+    const existingAutos = document.querySelectorAll('[data-tm-auto]');
+    const existingTypes = new Set();
+    existingAutos.forEach(btn => existingTypes.add(btn.getAttribute('data-tm-auto')));
+
+    const correctAlready =
+      (needsCustomer === existingTypes.has('line_customer')) &&
+      (needsTherapist === existingTypes.has('line_therapist')) &&
+      (needsSms === existingTypes.has('sms')) &&
+      existingTypes.size === (needsCustomer ? 1 : 0) + (needsTherapist ? 1 : 0) + (needsSms ? 1 : 0);
+
+    if (correctAlready) return; // 変更不要
+
+    // DOM変更開始 — Observerを一時停止
+    isEnhancing = true;
+
+    // 古いボタンを削除
+    existingAutos.forEach(btn => btn.remove());
+
+    // 新しいボタンを追加
+    buttons.forEach((btn) => {
+      const text = btn.textContent || '';
       if (text.includes('LINE用テキストをコピー') && !text.includes('セラピスト')) {
         addAutoButton(btn, 'line_customer', '🚀 お客様LINE自動入力', '#06C755');
       }
-
-      // セラピスト向けLINEボタン
       if (text.includes('セラピストLINE用コピー')) {
         addAutoButton(btn, 'line_therapist', '🚀 セラピストLINE自動入力', '#85a8c4');
       }
-
-      // SMS送信ボタン
       if (text.includes('SMS用コピー')) {
         addAutoButton(btn, 'sms', '🚀 SMS自動入力', '#f59e0b');
       }
     });
+
+    // DOM変更完了 — 少し待ってからObserverを再開
+    setTimeout(() => { isEnhancing = false; }, 200);
   }
 
   // ============================================================
@@ -110,8 +134,8 @@
           showToast('お客様名が取得できませんでした', 'error');
           return;
         }
-        showToast(`🔍 ${custName} をLINEで検索します...`, 'success');
-        chrome.runtime.sendMessage({
+        showToast(`🔍 ${custName} をお客様LINEで検索します...`, 'success');
+        safeSendMessage({
           type: 'SEARCH_LINE_CUSTOMER',
           name: custName,
           template: msgText
@@ -123,8 +147,8 @@
           showToast('セラピスト名が取得できませんでした', 'error');
           return;
         }
-        showToast(`🔍 ${therapistName} をLINEで検索します...`, 'success');
-        chrome.runtime.sendMessage({
+        showToast(`🔍 ${therapistName} をセラピストLINEで検索します...`, 'success');
+        safeSendMessage({
           type: 'SEARCH_LINE_THERAPIST',
           name: therapistName,
           template: msgText
@@ -137,7 +161,7 @@
           return;
         }
         showToast(`📱 ${phone} にSMSを送ります...`, 'success');
-        chrome.runtime.sendMessage({
+        safeSendMessage({
           type: 'OPEN_SMS',
           phone: phone,
           template: msgText
@@ -146,6 +170,30 @@
     });
 
     refBtn.parentNode.insertBefore(autoBtn, refBtn.nextSibling);
+  }
+
+  // ============================================================
+  //  メッセージ送信（Service Workerスリープ対応のリトライ付き）
+  // ============================================================
+  function safeSendMessage(msg, retryCount = 0) {
+    try {
+      chrome.runtime.sendMessage(msg, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('[T-MANAGE] sendMessage error:', chrome.runtime.lastError.message);
+          if (retryCount < 2) {
+            // Service Workerがスリープ中の可能性 → 少し待ってリトライ
+            setTimeout(() => safeSendMessage(msg, retryCount + 1), 500);
+          } else {
+            showToast('⚠️ 拡張機能との通信に失敗しました。ページをリロードしてください。', 'error');
+          }
+        }
+      });
+    } catch (e) {
+      console.error('[T-MANAGE] sendMessage exception:', e);
+      if (retryCount < 2) {
+        setTimeout(() => safeSendMessage(msg, retryCount + 1), 500);
+      }
+    }
   }
 
   // ============================================================
