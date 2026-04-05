@@ -170,6 +170,13 @@ export default function TimeChart() {
   const [ntLocMycourt, setNtLocMycourt] = useState("https://quiet-banana-895.notion.site/2f4db1122fba8020b500c46883464fd7?pvs=73");
   const [ntLocOasis, setNtLocOasis] = useState("https://quiet-banana-895.notion.site/fd809514263e4351af42b67cbfbd06ef");
 
+  // Bulk notification
+  const [showBulkNotify, setShowBulkNotify] = useState(false);
+  type BulkResInfo = { id: number; customer_name: string; start_time: string; end_time: string; course: string; nomination: string; total_price: number; discount_name: string; extension_name: string };
+  type BulkTherapistData = { therapistId: number; therapistName: string; reservations: BulkResInfo[]; message: string };
+  const [bulkData, setBulkData] = useState<BulkTherapistData[]>([]);
+  const [bulkCopied, setBulkCopied] = useState<Record<number, boolean>>({});
+
   const selectedCourse = courses.find((c) => c.id === newCourseId);
   const editSelectedCourse = courses.find((c) => c.id === editCourseId);
 
@@ -436,6 +443,65 @@ export default function TimeChart() {
 
   const getCourseByName = (name: string) => courses.find((c) => c.name === name);
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+  // ===== 一括通知（セラピスト別まとめ送信）=====
+  const openBulkNotify = async () => {
+    // 当日の全予約を取得（フルデータ）
+    const { data: allRes } = await supabase.from("reservations").select("*").eq("date", selectedDate).order("start_time");
+    if (!allRes || allRes.length === 0) { toast.show("本日の予約がありません", "info"); return; }
+
+    // 顧客マスタ取得（お客様リンク用）
+    const { data: custData } = await supabase.from("customers").select("name, phone, login_email");
+    const custMap: Record<string, { phone: string; email: string }> = {};
+    if (custData) custData.forEach(c => { custMap[c.name] = { phone: c.phone || "", email: c.login_email || "" }; });
+
+    const d = new Date(selectedDate + "T00:00:00"); const days = ["日","月","火","水","木","金","土"];
+    const dateFull = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+    const senderLine = notifySender ? `\n\n送信者 : ${notifySender}` : "";
+
+    // セラピスト別にグループ化
+    const grouped: Record<number, BulkResInfo[]> = {};
+    for (const r of allRes) {
+      if (!grouped[r.therapist_id]) grouped[r.therapist_id] = [];
+      grouped[r.therapist_id].push({
+        id: r.id, customer_name: r.customer_name, start_time: r.start_time, end_time: r.end_time,
+        course: r.course, nomination: r.nomination || "フリー", total_price: r.total_price || 0,
+        discount_name: r.discount_name || "", extension_name: r.extension_name || "",
+      });
+    }
+
+    const result: BulkTherapistData[] = [];
+    for (const [tidStr, rsvs] of Object.entries(grouped)) {
+      const tid = parseInt(tidStr);
+      const th = therapists.find(t => t.id === tid);
+      if (!th) continue;
+
+      // メッセージ生成
+      let msg = `お疲れ様です！\n\n${dateFull} の予約一覧です。\n`;
+      rsvs.forEach((r, i) => {
+        const cleanName = r.customer_name.replace(/\s*L$/i, "").replace(/\s+\d+～\d+歳$/, "").trim();
+        const nomLine = r.nomination && r.nomination !== "フリー" && r.nomination !== "指名なし" ? `\n指名 : ${r.nomination}` : "";
+        const discLine = r.discount_name ? `\n割引 : ${r.discount_name}` : "";
+        const extLine = r.extension_name ? ` + ${r.extension_name}` : "";
+        const custLink = `https://t-manage.vercel.app/mypage/customer?name=${encodeURIComponent(cleanName)}`;
+        msg += `\n━━━━━━━━━━━━━━━\n`;
+        msg += `${i + 1}⃣  ${r.start_time?.slice(0,5)}〜${r.end_time?.slice(0,5)}\n`;
+        msg += `お客様 : ${cleanName}\n`;
+        msg += `コース : ${r.course}${extLine}`;
+        msg += nomLine;
+        msg += discLine;
+        msg += `\n金額 : ¥${(r.total_price || 0).toLocaleString()}`;
+        msg += `\nお客様情報 : ${custLink}`;
+      });
+      msg += `\n━━━━━━━━━━━━━━━\n\n合計 ${rsvs.length}件\nよろしくお願いします。${senderLine}`;
+
+      result.push({ therapistId: tid, therapistName: th.name, reservations: rsvs, message: msg });
+    }
+
+    setBulkData(result);
+    setBulkCopied({});
+    setShowBulkNotify(true);
+  };
+
   const prevDay = () => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().split("T")[0]); };
   const nextDay = () => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split("T")[0]); };
   const dateDisplay = (() => { const d = new Date(selectedDate + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${days[d.getDay()]}）`; })();
@@ -458,6 +524,7 @@ export default function TimeChart() {
           <button onClick={() => setShowShiftNotif(!showShiftNotif)} className="relative px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: pendingShiftReqs.length > 0 ? "#f59e0b44" : T.border, color: pendingShiftReqs.length > 0 ? "#f59e0b" : T.textSub }}>
             📝 出勤希望{pendingShiftReqs.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: "#f59e0b" }}>{new Set(pendingShiftReqs.map(r => r.therapist_id)).size}</span>}
           </button>
+          <button onClick={openBulkNotify} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#3d6b9f44", color: "#3d6b9f" }}>📩 一括通知</button>
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
           <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
@@ -1345,6 +1412,99 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
           </div>
         </div>);
       })()}
+
+      {/* ===== 一括通知モーダル ===== */}
+      {showBulkNotify && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowBulkNotify(false)}>
+          <div className="rounded-2xl border w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-6 py-4 flex items-center justify-between sticky top-0 z-10" style={{ backgroundColor: T.card, borderBottom: `1px solid ${T.border}` }}>
+              <div>
+                <h2 className="text-[15px] font-medium">📩 一括通知（セラピスト別）</h2>
+                <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{dateDisplay} ・ {bulkData.length}名のセラピスト ・ {bulkData.reduce((s, d) => s + d.reservations.length, 0)}件の予約</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* 送信者名 */}
+                <select value={notifySender} onChange={e => { setNotifySender(e.target.value); localStorage.setItem("notify_sender", e.target.value); openBulkNotify(); }}
+                  className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }}>
+                  <option value="">送信者なし</option>
+                  {staffMembers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+                <button onClick={() => setShowBulkNotify(false)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              {bulkData.length === 0 ? (
+                <p className="text-[13px] text-center py-12" style={{ color: T.textFaint }}>本日の予約がありません</p>
+              ) : bulkData.map((td) => (
+                <div key={td.therapistId} className="rounded-xl border" style={{ borderColor: bulkCopied[td.therapistId] ? "#4a7c5944" : T.border }}>
+                  {/* セラピスト名ヘッダー */}
+                  <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: bulkCopied[td.therapistId] ? "#4a7c5908" : T.cardAlt, borderRadius: "12px 12px 0 0" }}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[14px] font-medium" style={{ color: T.text }}>{td.therapistName}</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>{td.reservations.length}件</span>
+                      {bulkCopied[td.therapistId] && <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>✅ コピー済み</span>}
+                    </div>
+                    <button onClick={() => {
+                      navigator.clipboard.writeText(td.message);
+                      setBulkCopied(prev => ({ ...prev, [td.therapistId]: true }));
+                      toast.show(`${td.therapistName}さんの通知をコピーしました！`, "success");
+                    }} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer" style={{
+                      backgroundColor: bulkCopied[td.therapistId] ? "#4a7c5918" : "#85a8c418",
+                      color: bulkCopied[td.therapistId] ? "#4a7c59" : "#85a8c4",
+                      border: `1px solid ${bulkCopied[td.therapistId] ? "#4a7c5944" : "#85a8c444"}`
+                    }}>
+                      {bulkCopied[td.therapistId] ? "✅ 済" : "💬 コピー"}
+                    </button>
+                  </div>
+
+                  {/* 予約サマリー（コンパクト表示） */}
+                  <div className="px-4 py-2" style={{ borderTop: `1px solid ${T.border}` }}>
+                    {td.reservations.map((r, i) => (
+                      <div key={r.id} className="flex items-center gap-3 py-1.5 text-[11px]" style={{ borderBottom: i < td.reservations.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                        <span style={{ color: T.textMuted, minWidth: 90 }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}</span>
+                        <span style={{ color: T.text, flex: 1 }}>{r.customer_name.replace(/\s*L$/i, "")}</span>
+                        <span style={{ color: T.textSub }}>{r.course}</span>
+                        <span style={{ color: T.textMuted }}>¥{(r.total_price || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* メッセージプレビュー（折りたたみ） */}
+                  <details className="px-4 pb-3">
+                    <summary className="text-[10px] cursor-pointer py-1" style={{ color: T.textMuted }}>📄 メッセージプレビュー</summary>
+                    <div className="rounded-lg p-3 mt-1 text-[10px] whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto" style={{ backgroundColor: T.cardAlt, color: T.textSub, fontFamily: "var(--font-mono, monospace)" }}>
+                      {td.message}
+                    </div>
+                  </details>
+                </div>
+              ))}
+
+              {/* 全員コピーボタン */}
+              {bulkData.length > 0 && (
+                <div className="pt-2 space-y-2">
+                  <button onClick={() => {
+                    const allCopied = Object.keys(bulkCopied).length === bulkData.length;
+                    if (allCopied) { toast.show("全員分コピー済みです", "info"); return; }
+                    const remaining = bulkData.filter(d => !bulkCopied[d.therapistId]);
+                    if (remaining.length > 0) {
+                      navigator.clipboard.writeText(remaining[0].message);
+                      setBulkCopied(prev => ({ ...prev, [remaining[0].therapistId]: true }));
+                      toast.show(`${remaining[0].therapistName}さんの通知をコピー（残り${remaining.length - 1}名）`, "success");
+                    }
+                  }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{
+                    backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444"
+                  }}>
+                    💬 次の未送信をコピー（{bulkData.filter(d => !bulkCopied[d.therapistId]).length}名残り）
+                  </button>
+                  <button onClick={() => setShowBulkNotify(false)} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted }}>閉じる</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
     </div>
