@@ -61,14 +61,14 @@ if (window._tmanageSmsV1) {
             // 少し待ってから実行（ページ完全読み込み）
             setTimeout(() => {
               startSmsFlow(data.pending_target, data.pending_message);
-            }, 2000);
+            }, 4000);
           }
         });
       } else if (attempts < 30) {
         setTimeout(tryCheck, 500);
       }
     }
-    setTimeout(tryCheck, 1500);
+    setTimeout(tryCheck, 3000);
   }
 
   checkPendingOnLoad();
@@ -119,12 +119,12 @@ if (window._tmanageSmsV1) {
     if (startBtn) {
       console.log('[T-MANAGE SMS] STEP1: チャット開始ボタンをクリック');
       startBtn.click();
-      setTimeout(() => step2_typePhone(phone, template), 1500);
+      setTimeout(() => step2_typePhone(phone, template), 4000);
     } else {
       // ボタンが見つからない場合、URLで直接遷移
       console.log('[T-MANAGE SMS] STEP1: ボタン見つからず → URL遷移');
       location.href = 'https://messages.google.com/web/conversations/new';
-      setTimeout(() => step2_typePhone(phone, template), 2500);
+      setTimeout(() => step2_typePhone(phone, template), 4000);
     }
   }
 
@@ -141,7 +141,7 @@ if (window._tmanageSmsV1) {
     if (!input) {
       if (retryCount < 15) {
         console.log(`[T-MANAGE SMS] STEP2: 宛先入力欄待ち (${retryCount}/15)`);
-        setTimeout(() => step2_typePhone(phone, template, retryCount + 1), 500);
+        setTimeout(() => step2_typePhone(phone, template, retryCount + 1), 800);
       } else {
         showIndicator('⚠️ 宛先入力欄が見つかりません。手動で電話番号を入力してください。', 'warning');
         window._tmanageSmsRunning = false;
@@ -156,7 +156,7 @@ if (window._tmanageSmsV1) {
     input.value = '';
     input.dispatchEvent(new Event('input', { bubbles: true }));
 
-    // 1文字ずつ入力（80ms間隔）
+    // 1文字ずつ入力（120ms間隔 — 安定性重視）
     const chars = phone.split('');
     let i = 0;
 
@@ -165,12 +165,12 @@ if (window._tmanageSmsV1) {
         input.focus();
         document.execCommand('insertText', false, chars[i]);
         i++;
-        setTimeout(typeNext, 80);
+        setTimeout(typeNext, 120);
       } else {
         // 入力完了 → 検索結果を待つ（4秒）
-        console.log('[T-MANAGE SMS] STEP2: 電話番号入力完了 → 4秒待機');
+        console.log('[T-MANAGE SMS] STEP2: 電話番号入力完了 → 5秒待機');
         showIndicator(`📱 ${formatPhone(phone)} の検索結果を待っています...`, 'info');
-        setTimeout(() => step3_selectAndEnter(phone, template), 4000);
+        setTimeout(() => step3_selectAndEnter(phone, template), 5000);
       }
     }
     typeNext();
@@ -200,14 +200,14 @@ if (window._tmanageSmsV1) {
           // Enter確定
           input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
           input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
-          setTimeout(() => step4_insertTemplate(template, 0), 3000);
-        }, 1200);
+          setTimeout(() => step4_insertTemplate(template, 0), 4000);
+        }, 2000);
       } else {
         // 候補なし → Enterで直接開始
         console.log('[T-MANAGE SMS] STEP3: 候補なし → Enter直接');
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
-        setTimeout(() => step4_insertTemplate(template, 0), 3000);
+        setTimeout(() => step4_insertTemplate(template, 0), 4000);
       }
     } else {
       showIndicator('⚠️ 入力欄を見失いました。手動で操作してください。', 'warning');
@@ -229,7 +229,7 @@ if (window._tmanageSmsV1) {
 
     if (!textarea) {
       if (retryCount < 30) {
-        setTimeout(() => step4_insertTemplate(template, retryCount + 1), 400);
+        setTimeout(() => step4_insertTemplate(template, retryCount + 1), 600);
       } else {
         showIndicator('⚠️ メッセージ入力欄が見つかりません。テキストはクリップボードにコピー済みです。Ctrl+Vで貼り付けてください。', 'warning');
         window._tmanageSmsRunning = false;
