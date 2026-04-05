@@ -30,12 +30,14 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "🔔", label: "会員お知らせ投稿", path: "/notification-post",         category: "顧客" },
   { icon: "📱", label: "お客様マイページ", path: "/customer-mypage",           category: "顧客" },
 
-  // ── セラピスト・スタッフ ──
-  { icon: "⏰", label: "セラピスト勤怠",       path: "/shifts",                       category: "セラピスト・スタッフ" },
-  { icon: "💆", label: "セラピスト登録",       path: "/therapists",                   category: "セラピスト・スタッフ" },
-  { icon: "👥", label: "スタッフ設定",         path: "/staff",                        category: "セラピスト・スタッフ" },
-  { icon: "📢", label: "セラピストお知らせ投稿", path: "/therapist-notification-post",  category: "セラピスト・スタッフ" },
-  { icon: "👤", label: "セラピストマイページ",  path: "/mypage",                       category: "セラピスト・スタッフ" },
+  // ── セラピスト ──
+  { icon: "⏰", label: "セラピスト勤怠",       path: "/shifts",                       category: "セラピスト" },
+  { icon: "💆", label: "セラピスト登録",       path: "/therapists",                   category: "セラピスト" },
+  { icon: "📢", label: "セラピストお知らせ投稿", path: "/therapist-notification-post",  category: "セラピスト" },
+  { icon: "👤", label: "セラピストマイページ",  path: "/mypage",                       category: "セラピスト" },
+
+  // ── スタッフ ──
+  { icon: "👥", label: "スタッフ設定",  path: "/staff",  category: "スタッフ" },
 
   // ── 登録・設定 ──
   { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
