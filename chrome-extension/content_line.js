@@ -111,7 +111,7 @@
     searchInput.select();
     document.execCommand('delete');
 
-    // 1文字ずつ入力（60ms間隔）
+    // 1文字ずつ入力（120ms間隔 — 安定性重視）
     const chars = name.split('');
     let i = 0;
 
@@ -120,13 +120,13 @@
         searchInput.focus();
         document.execCommand('insertText', false, chars[i]);
         i++;
-        setTimeout(typeNext, 60);
+        setTimeout(typeNext, 120);
       } else {
-        // 入力完了 → 検索結果表示を待つ（1500ms）
+        // 入力完了 → 検索結果表示を待つ（2500ms — LINEの検索は重い場合あり）
         showIndicator(`🔍 「${name}」の検索結果を待っています...`, 'info');
         setTimeout(() => {
           requestMainWorldExecution(name, template, tabId);
-        }, 1500);
+        }, 2500);
       }
     }
     typeNext();

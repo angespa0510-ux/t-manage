@@ -152,7 +152,7 @@ async function handleSearchLine(accountType, name, template, sendResponse) {
         files: ['content_line.js']
       });
       // 少し待ってから再度PING
-      await sleep(500);
+      await sleep(800);
     }
 
     // TYPE_IN_LINE_SEARCH を送信
@@ -220,7 +220,7 @@ function mainWorldOperation(searchName, template) {
 
       if (items.length === 0) {
         if (retryCount < 15) {
-          setTimeout(() => tryStep1(retryCount + 1), 500);
+          setTimeout(() => tryStep1(retryCount + 1), 800);
         } else {
           fireEvent('tmanage_error', 'チャット一覧が取得できません');
           resolve({ error: 'no_items' });
@@ -322,13 +322,13 @@ function mainWorldOperation(searchName, template) {
           // 読み込み完了 → テキスト入力
           tryInsertText(12);
         } else if (pollCount++ < 30) {
-          setTimeout(pollChat, 200); // 200ms × 30 = 最大6秒
+          setTimeout(pollChat, 400); // 400ms × 30 = 最大12秒
         } else {
           fireEvent('tmanage_error', 'チャット画面の読み込みタイムアウト');
           resolve({ error: 'poll_timeout' });
         }
       };
-      setTimeout(pollChat, 300);
+      setTimeout(pollChat, 500);
     }
 
     // --- テキスト入力（Shadow DOM突破） ---
@@ -338,7 +338,7 @@ function mainWorldOperation(searchName, template) {
 
       if (!inner) {
         if (retryCount > 0) {
-          setTimeout(() => tryInsertText(retryCount - 1), 400);
+          setTimeout(() => tryInsertText(retryCount - 1), 600);
         } else {
           fireEvent('tmanage_error', 'テキスト入力欄が見つかりません');
           // クリップボードにコピー（フォールバック）
