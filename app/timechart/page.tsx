@@ -238,6 +238,30 @@ export default function TimeChart() {
   
   useEffect(() => { const p = new URLSearchParams(window.location.search).get("date"); if (p) setSelectedDate(p); }, []);
 
+  // CTI着信からの自動遷移
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ctiCustomer = params.get("cti_customer");
+    const ctiPhone = params.get("cti_phone");
+    if (!ctiCustomer && !ctiPhone) return;
+    // データ読み込み後に実行するため少し待つ
+    const timer = setTimeout(() => {
+      if (ctiCustomer) {
+        // 既存顧客 → オーダー登録を直接開く
+        setNewCustName(ctiCustomer);
+        setShowNewRes(true);
+      } else if (ctiPhone) {
+        // 新規顧客 → 新規登録フォームを電話番号入りで開く
+        setNcPhone(ctiPhone);
+        setNcName("");
+        setShowNewCust(true);
+      }
+      // URLパラメータをクリア（リロード時の再実行防止）
+      window.history.replaceState({}, "", window.location.pathname);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const shiftTherapistIds = new Set(shifts.map((s) => s.therapist_id));
   const sortByBuildingAndTime = (list: Therapist[]) => list.sort((a, b) => {
     const raA = roomAssigns.find(r => r.therapist_id === a.id); const raB = roomAssigns.find(r => r.therapist_id === b.id);

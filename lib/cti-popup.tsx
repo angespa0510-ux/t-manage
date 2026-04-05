@@ -287,11 +287,17 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                         </div>
                       )}
 
-                      {/* 顧客管理リンク */}
-                      <button onClick={() => { window.open("/dashboard", "_blank"); }} style={{
-                        width: "100%", padding: "8px 0", borderRadius: 10, border: `1px solid ${T.border}`,
-                        background: T.cardAlt, color: T.text, fontSize: 12, cursor: "pointer"
-                      }}>📋 顧客管理を開く</button>
+                      {/* アクションボタン */}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => { window.open(`/timechart?cti_customer=${encodeURIComponent(p.customer!.name)}`, "_blank"); dismissPopup(p.call.id); }} style={{
+                          flex: 1, padding: "8px 0", borderRadius: 10, border: "none",
+                          background: "linear-gradient(135deg, #c3a782, #b09672)", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
+                        }}>📋 オーダー登録</button>
+                        <button onClick={() => { window.open("/dashboard", "_blank"); }} style={{
+                          flex: 1, padding: "8px 0", borderRadius: 10, border: `1px solid ${T.border}`,
+                          background: T.cardAlt, color: T.text, fontSize: 12, cursor: "pointer"
+                        }}>👥 顧客管理</button>
+                      </div>
                     </>
                   )}
 
@@ -308,10 +314,10 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                     <div style={{ textAlign: "center", padding: "12px 0" }}>
                       <div style={{ fontSize: 15, color: T.text, fontWeight: 600, marginBottom: 4 }}>👤 新規のお客様</div>
                       <div style={{ fontSize: 12, color: T.textSub, marginBottom: 12 }}>この電話番号は未登録です</div>
-                      <button onClick={() => { window.open("/dashboard", "_blank"); }} style={{
+                      <button onClick={() => { window.open(`/timechart?cti_phone=${encodeURIComponent(p.call.phone)}`, "_blank"); dismissPopup(p.call.id); }} style={{
                         padding: "8px 20px", borderRadius: 10, border: "none",
-                        background: "#c3a782", color: "#fff", fontSize: 12, cursor: "pointer"
-                      }}>➕ 顧客登録する</button>
+                        background: "linear-gradient(135deg, #c3a782, #b09672)", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
+                      }}>📋 オーダー登録（新規顧客）</button>
                     </div>
                   )}
                 </div>
