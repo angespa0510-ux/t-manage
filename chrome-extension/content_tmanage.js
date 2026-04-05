@@ -89,6 +89,8 @@
       const therapistName = popup?.getAttribute('data-tm-therapist') || '';
       const phone = (popup?.getAttribute('data-tm-phone') || '').replace(/\D/g, '');
 
+      console.log('[T-MANAGE] ボタン種別:', type, '| お客様名:', custName, '| セラピスト名:', therapistName, '| 電話:', phone);
+
       if (type === 'line_customer') {
         if (!custName) {
           showToast('お客様名が取得できませんでした', 'error');

@@ -86,40 +86,66 @@ async function handleSearchLine(accountType, name, template, sendResponse) {
       return;
     }
 
-    // 各タブのアカウント名を取得して識別
-    let targetTab = null;
-    for (const tab of tabs) {
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: () => {
-            const el = document.querySelector('div.account-name');
-            return el ? el.innerText.trim() : '';
-          }
-        });
-        const accountName = results?.[0]?.result || '';
-        const isTherapist = accountName.includes('業務');
+    // 保存されたURLからアカウントIDを取得して、タブURLと照合
+    const customerUrl = await getLineUrl('customer');
+    const therapistUrl = await getLineUrl('therapist');
 
-        if (accountType === 'therapist' && isTherapist) {
+    // URLからアカウントID部分を抽出（例: U94044bde...）
+    const getAccountId = (url) => {
+      if (!url) return '';
+      const m = url.match(/chat\.line\.biz\/(U[a-f0-9]+)/i);
+      return m ? m[1] : '';
+    };
+
+    const customerAccountId = getAccountId(customerUrl);
+    const therapistAccountId = getAccountId(therapistUrl);
+    const targetAccountId = accountType === 'therapist' ? therapistAccountId : customerAccountId;
+
+    let targetTab = null;
+
+    if (targetAccountId) {
+      // 方法1: URLのアカウントIDで照合（最も確実）
+      for (const tab of tabs) {
+        if (tab.url && tab.url.includes(targetAccountId)) {
           targetTab = tab;
           break;
         }
-        if (accountType === 'customer' && !isTherapist) {
-          targetTab = tab;
-          break;
-        }
-      } catch (e) {
-        console.log('[T-MANAGE] アカウント名取得失敗:', tab.id, e.message);
       }
     }
 
-    // 見つからなかった場合: 設定URLで新規タブを開く
+    // 方法2: URLで見つからなければ、アカウント名で照合（フォールバック）
     if (!targetTab) {
-      const url = await getLineUrl(accountType);
+      for (const tab of tabs) {
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              const el = document.querySelector('div.account-name');
+              return el ? el.innerText.trim() : '';
+            }
+          });
+          const accountName = results?.[0]?.result || '';
+          const isTherapist = accountName.includes('業務') || accountName.includes('スタッフ');
+
+          if (accountType === 'therapist' && isTherapist) {
+            targetTab = tab;
+            break;
+          }
+          if (accountType === 'customer' && !isTherapist) {
+            targetTab = tab;
+            break;
+          }
+        } catch (e) {
+          console.log('[T-MANAGE] アカウント名取得失敗:', tab.id, e.message);
+        }
+      }
+    }
+
+    // 見つからなかった場合: 正しいURLで新規タブを開く
+    if (!targetTab) {
+      const url = accountType === 'therapist' ? therapistUrl : customerUrl;
       if (url) {
         const newTab = await chrome.tabs.create({ url });
-        // 新規タブが読み込まれたらcontent scriptが自動実行される
-        // storage経由で保留データを渡す
         await chrome.storage.local.set({
           pending_message: template,
           pending_target: name,
@@ -127,9 +153,10 @@ async function handleSearchLine(accountType, name, template, sendResponse) {
           pending_account: accountType
         });
         sendResponse({ ok: true, status: 'opened_correct_account' });
+        return; // 新規タブなのでここで終了（content scriptが自動で処理）
       } else {
-        // URL未設定 → 既存タブの1つ目を使う（フォールバック）
-        targetTab = tabs[0];
+        sendResponse({ ok: false, error: 'LINE URLが未設定です。システム設定で設定してください。' });
+        return;
       }
     }
 
