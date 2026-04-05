@@ -81,7 +81,7 @@ export default function SystemSetup() {
                 {[
                   { icon: "💻", name: "PC（Windows）", desc: "Android Studioをインストール", required: true },
                   { icon: "📱", name: "Androidスマホ", desc: "お店で着信を受けるスマホ", required: true },
-                  { icon: "🔌", name: "USBケーブル", desc: "PCとスマホを接続", required: true },
+                  { icon: "☁️", name: "Googleドライブ", desc: "APKファイルの転送に使用", required: true },
                   { icon: "🌐", name: "PCのブラウザ", desc: "T-MANAGEを開いた状態", required: true },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-3 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
@@ -163,72 +163,98 @@ export default function SystemSetup() {
               </div>
             </div>
 
-            {/* STEP 3: スマホ設定 */}
+            {/* STEP 3: APKビルド（PC側） */}
             <div className="rounded-2xl p-6" style={cardStyle}>
               <div className="flex items-center gap-3 mb-5">
                 <div style={stepNumStyle("#f59e0b")}>3</div>
                 <div>
-                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>スマホの準備（USBデバッグ有効化）</h3>
-                  <p className="text-[11px]" style={{ color: T.textMuted }}>Androidスマホで1回だけ行う設定</p>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>APKファイルを作成（PC側の操作）</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>スマホに入れるアプリファイルを作る</p>
                 </div>
               </div>
               <div className="space-y-3 pl-11">
-                <div className="p-3 rounded-xl" style={{ backgroundColor: "#f59e0b08", border: "1px solid #f59e0b22" }}>
-                  <p className="text-[12px] font-medium" style={{ color: "#f59e0b" }}>⚠ 開発者モードを有効にする必要があります</p>
-                </div>
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> スマホの <span style={{ fontWeight: 600 }}>設定</span> → <span style={{ fontWeight: 600 }}>デバイス情報</span> → 「<span style={{ fontWeight: 600 }}>ビルド番号</span>」を<span style={{ color: "#f59e0b", fontWeight: 600 }}>7回連続タップ</span>
-                  </p>
-                  <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>→ 「開発者モードになりました」と表示されればOK</p>
-                </div>
-                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> <span style={{ fontWeight: 600 }}>設定</span> → <span style={{ fontWeight: 600 }}>開発者向けオプション</span> → 「<span style={{ fontWeight: 600 }}>USBデバッグ</span>」を <span style={{ color: "#4a7c59", fontWeight: 600 }}>ON</span>
+                    <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> Android Studio の上部メニューから <span style={{ fontWeight: 600 }}>Build</span> → <span style={{ fontWeight: 600 }}>Build Bundle(s) / APK(s)</span> → <span style={{ fontWeight: 600 }}>Build APK(s)</span>
                   </p>
                 </div>
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> USBケーブルでPCとスマホを接続
+                    <span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> ビルドが完了すると右下に「APK(s) generated successfully」と表示される
                   </p>
+                  <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>→ 「locate」をクリックするとAPKファイルの場所が開きます</p>
                 </div>
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> スマホに「USBデバッグを許可しますか？」→ <span style={{ color: "#4a7c59", fontWeight: 600 }}>許可</span>
+                    <span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> APKファイルの場所：
+                  </p>
+                  <code className="text-[11px] mt-1 block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
+                    android-cti\app\build\outputs\apk\debug\app-debug.apk
+                  </code>
+                </div>
+                <div className="p-4 rounded-xl" style={{ backgroundColor: "#4a7c5908", border: "1px solid #4a7c5922" }}>
+                  <p className="text-[12px]" style={{ color: "#4a7c59" }}>
+                    ✅ この <code style={{ backgroundColor: T.bg, padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>app-debug.apk</code> がスマホに入れるファイルです！
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* STEP 4: ビルド＆インストール */}
+            {/* STEP 4: Googleドライブ経由でインストール */}
             <div className="rounded-2xl p-6" style={cardStyle}>
               <div className="flex items-center gap-3 mb-5">
                 <div style={stepNumStyle("#4a7c59")}>4</div>
                 <div>
-                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>アプリをビルド＆インストール</h3>
-                  <p className="text-[11px]" style={{ color: T.textMuted }}>Android Studioからスマホに直接インストール</p>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>スマホにインストール（ケーブル不要！）</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>Googleドライブ経由でワイヤレスインストール</p>
                 </div>
               </div>
               <div className="space-y-3 pl-11">
-                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> Android Studio の上部にスマホ名が表示されていることを確認
-                  </p>
+                <div className="p-4 rounded-xl" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f22" }}>
+                  <p className="text-[13px] font-medium" style={{ color: "#3d6b9f" }}>💻 PC側</p>
+                  <div className="mt-2 space-y-2">
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[12px]" style={{ color: T.textSub }}>
+                        <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" style={{ color: "#3d6b9f" }}>Googleドライブ</a>を開く
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[12px]" style={{ color: T.textSub }}>
+                        <span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> STEP 3で作った <code style={{ backgroundColor: T.bg, padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>app-debug.apk</code> をドラッグ＆ドロップでアップロード
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> <span style={{ fontWeight: 600, color: "#4a7c59" }}>▶（実行ボタン）</span>をクリック
-                  </p>
-                  <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>→ 自動でビルド → スマホにインストール → アプリが起動します</p>
-                </div>
-                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 権限の許可ダイアログが出たら、<span style={{ color: "#4a7c59", fontWeight: 600 }}>全て許可</span>してください
-                  </p>
-                  <div className="mt-2 space-y-1 text-[11px]" style={{ color: T.textMuted }}>
-                    <p>✅ 電話の発信と管理</p>
-                    <p>✅ 通話履歴の読み取り</p>
-                    <p>✅ 通知の表示</p>
+
+                <div className="p-4 rounded-xl" style={{ backgroundColor: "#f59e0b08", border: "1px solid #f59e0b22" }}>
+                  <p className="text-[13px] font-medium" style={{ color: "#f59e0b" }}>📱 スマホ側</p>
+                  <div className="mt-2 space-y-2">
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[12px]" style={{ color: T.textSub }}>
+                        <span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> スマホでGoogleドライブアプリを開く
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[12px]" style={{ color: T.textSub }}>
+                        <span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> アップロードした <code style={{ backgroundColor: T.bg, padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>app-debug.apk</code> をタップ
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[12px]" style={{ color: T.textSub }}>
+                        <span style={{ color: "#c3a782", fontWeight: 600 }}>⑤</span> 「この提供元のアプリを許可しますか？」→ <span style={{ color: "#4a7c59", fontWeight: 600 }}>許可</span> → <span style={{ color: "#4a7c59", fontWeight: 600 }}>インストール</span>
+                      </p>
+                      <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>※ 初回のみ「不明なアプリ」の許可が必要です</p>
+                    </div>
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[12px]" style={{ color: T.textSub }}>
+                        <span style={{ color: "#c3a782", fontWeight: 600 }}>⑥</span> アプリを起動 → 権限を<span style={{ color: "#4a7c59", fontWeight: 600 }}>全て許可</span>
+                      </p>
+                      <div className="mt-2 space-y-1 text-[11px]" style={{ color: T.textMuted }}>
+                        <p>✅ 電話の発信と管理</p>
+                        <p>✅ 通話履歴の読み取り</p>
+                        <p>✅ 通知の表示</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -284,10 +310,11 @@ export default function SystemSetup() {
               <h3 className="text-[14px] font-medium mb-4" style={{ color: T.text }}>❓ よくある質問</h3>
               <div className="space-y-3">
                 {[
-                  { q: "スマホがAndroid Studioに認識されない", a: "USBケーブルを挿し直してください。「USBデバッグ」がONになっているか確認してください。充電専用ケーブルだと認識されないことがあります。" },
+                  { q: "APKファイルがインストールできない", a: "スマホの「設定」→「アプリ」→「特別なアプリアクセス」→「不明なアプリのインストール」で、Googleドライブからのインストールを許可してください。" },
                   { q: "着信してもPCに表示されない", a: "① スマホでCTIアプリが「監視中」になっているか確認\n② PCでT-MANAGEがブラウザで開かれているか確認\n③ 別のスマホから電話をかけてテストしてみてください" },
                   { q: "スマホを再起動したら動かなくなった", a: "CTIアプリを開いて「サービス開始」を再度タップしてください。" },
                   { q: "知らない番号の時はどうなる？", a: "「新規のお客様」と表示され、そのまま顧客登録ができるボタンが出ます。" },
+                  { q: "ケーブルで直接インストールもできる？", a: "はい。スマホの「開発者向けオプション」→「USBデバッグ」をONにして、USBケーブルで接続すれば、Android Studioから直接インストールもできます。" },
                 ].map((faq, i) => (
                   <details key={i} className="rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                     <summary className="px-4 py-3 text-[12px] cursor-pointer" style={{ color: T.text }}>{faq.q}</summary>
