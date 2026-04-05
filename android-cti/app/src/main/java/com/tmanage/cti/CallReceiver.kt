@@ -13,8 +13,12 @@ import java.net.URL
 
 class CallReceiver : BroadcastReceiver() {
 
-    private var lastState = TelephonyManager.CALL_STATE_IDLE
-    private var incomingNumber: String? = null
+    companion object {
+        // 重複送信防止: 最後に送信した番号と時刻
+        private var lastSentPhone: String = ""
+        private var lastSentTime: Long = 0
+        private const val DEDUP_INTERVAL_MS = 30000 // 30秒以内の同じ番号は無視
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != TelephonyManager.ACTION_PHONE_STATE_CHANGED) return
@@ -22,22 +26,19 @@ class CallReceiver : BroadcastReceiver() {
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE) ?: return
         val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
 
-        when (state) {
-            TelephonyManager.EXTRA_STATE_RINGING -> {
-                // 着信中 → 番号を記録
-                if (number != null) {
-                    incomingNumber = normalizePhone(number)
-                    sendToSupabase(context, incomingNumber!!)
-                }
-                lastState = TelephonyManager.CALL_STATE_RINGING
+        if (state == TelephonyManager.EXTRA_STATE_RINGING && number != null) {
+            val normalized = normalizePhone(number)
+
+            // 重複チェック: 同じ番号が30秒以内に来たら無視
+            val now = System.currentTimeMillis()
+            if (normalized == lastSentPhone && (now - lastSentTime) < DEDUP_INTERVAL_MS) {
+                MainActivity.logCallback?.invoke("⏭ 重複スキップ: $normalized")
+                return
             }
-            TelephonyManager.EXTRA_STATE_IDLE -> {
-                lastState = TelephonyManager.CALL_STATE_IDLE
-                incomingNumber = null
-            }
-            TelephonyManager.EXTRA_STATE_OFFHOOK -> {
-                lastState = TelephonyManager.CALL_STATE_OFFHOOK
-            }
+
+            lastSentPhone = normalized
+            lastSentTime = now
+            sendToSupabase(context, normalized)
         }
     }
 

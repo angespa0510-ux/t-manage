@@ -120,17 +120,24 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Supabase Realtime 購読
+  const lastCallRef = useRef<{ phone: string; time: number }>({ phone: "", time: 0 });
   useEffect(() => {
     const channel = supabase
       .channel("cti-calls-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "cti_calls" },
         async (payload) => {
           const call = payload.new as CtiCall;
+          const phone = normPhone(call.phone);
+          const now = Date.now();
+
+          // 同じ番号が30秒以内に来たら無視
+          if (phone === lastCallRef.current.phone && (now - lastCallRef.current.time) < 30000) return;
+          lastCallRef.current = { phone, time: now };
+
           playSound();
           const data = await fetchCustomerInfo(call);
-          setPopups(prev => [data, ...prev].slice(0, 5)); // 最大5件保持
+          setPopups(prev => [data, ...prev].slice(0, 5));
 
-          // 30秒後に自動で処理済みに
           setTimeout(() => {
             supabase.from("cti_calls").update({ handled: true }).eq("id", call.id).then();
           }, 30000);
