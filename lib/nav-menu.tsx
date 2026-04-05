@@ -4,33 +4,47 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 
-const NAV_ITEMS = [
-  { label: "HOME", path: "/dashboard" },
-  { label: "タイムチャート", path: "/timechart" },
-  { label: "部屋割り管理", path: "/room-assignments" },
-  { label: "セラピスト勤怠", path: "/shifts" },
-  { label: "売上分析", path: "/analytics" },
-  { label: "経費管理", path: "/expenses" },
-  { label: "税務報告", path: "/tax-dashboard" },
-  { label: "営業締め", path: "DASHBOARD_PAGE:営業締め" },
-  { label: "スタッフ設定", path: "/staff" },
-  { label: "顧客一覧", path: "DASHBOARD_PAGE:顧客一覧" },
-  { label: "顧客登録", path: "DASHBOARD_PAGE:顧客登録" },
-  { label: "ポイント管理", path: "DASHBOARD_PAGE:ポイント管理" },
-  { label: "セラピスト登録", path: "/therapists" },
-  { label: "コース登録", path: "/courses" },
-  { label: "利用場所登録", path: "/rooms" },
-  { label: "サービス設定", path: "/service-settings" },
-  { label: "お知らせ投稿", path: "/notification-post" },
-  { label: "システム設定", path: "/system-setup" },
-  { label: "マイページ", path: "/mypage" },
+// ── メニュー定義 ──────────────────────────────────
+// 並べ替えはここだけ変更すればOK
+// path が "DASHBOARD_PAGE:xxx" → ダッシュボード内タブ切替
+// category が変わる境目にセパレーターを自動表示
+
+type NavItem = { icon: string; label: string; path: string; category: string };
+
+const NAV_ITEMS: NavItem[] = [
+  // ── 日常業務（毎日使うもの）──
+  { icon: "🏠", label: "HOME",        path: "/dashboard",              category: "日常業務" },
+  { icon: "📅", label: "タイムチャート", path: "/timechart",              category: "日常業務" },
+  { icon: "🏢", label: "部屋割り管理",  path: "/room-assignments",       category: "日常業務" },
+  { icon: "💰", label: "経費管理",      path: "/expenses",               category: "日常業務" },
+  { icon: "🔒", label: "営業締め",      path: "DASHBOARD_PAGE:営業締め",  category: "日常業務" },
+
+  // ── 売上 ──
+  { icon: "📊", label: "売上分析",  path: "/analytics",      category: "売上" },
+  { icon: "📑", label: "税務報告",  path: "/tax-dashboard",  category: "売上" },
+
+  // ── 顧客 ──
+  { icon: "👥", label: "顧客一覧",    path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },
+  { icon: "📝", label: "顧客登録",    path: "DASHBOARD_PAGE:顧客登録",    category: "顧客" },
+  { icon: "🎁", label: "ポイント管理", path: "DASHBOARD_PAGE:ポイント管理", category: "顧客" },
+
+  // ── セラピスト・スタッフ ──
+  { icon: "⏰", label: "セラピスト勤怠", path: "/shifts",      category: "セラピスト・スタッフ" },
+  { icon: "💆", label: "セラピスト登録", path: "/therapists",  category: "セラピスト・スタッフ" },
+  { icon: "👥", label: "スタッフ設定",   path: "/staff",       category: "セラピスト・スタッフ" },
+
+  // ── 登録・設定 ──
+  { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
+  { icon: "🔑", label: "利用場所登録",  path: "/rooms",             category: "登録・設定" },
+  { icon: "⚙️", label: "サービス設定",  path: "/service-settings",  category: "登録・設定" },
+  { icon: "🔔", label: "お知らせ投稿",  path: "/notification-post", category: "登録・設定" },
+  { icon: "🛠️", label: "システム設定",  path: "/system-setup",      category: "登録・設定" },
+
+  // ── マイページ ──
+  { icon: "👤", label: "マイページ", path: "/mypage", category: "マイページ" },
 ];
 
-const ICONS: Record<string, string> = {
-  "HOME": "🏠", "タイムチャート": "📅", "部屋割り管理": "🏢", "セラピスト勤怠": "⏰",
-  "売上分析": "📊", "顧客一覧": "👥", "顧客登録": "📝", "セラピスト登録": "💆",
-  "コース登録": "📋", "利用場所登録": "🔑", "サービス設定": "⚙️", "経費管理": "💰", "税務報告": "📑", "スタッフ設定": "👥","マイページ": "👤", "お知らせ投稿": "🔔", "ポイント管理": "🎁", "システム設定": "🛠️",
-};
+// ── サイドバー本体 ─────────────────────────────────
 
 function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -38,7 +52,7 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
   useEffect(() => { setMounted(true); }, []);
   if (!mounted || !open) return null;
 
-  const handleClick = (item: typeof NAV_ITEMS[0]) => {
+  const handleClick = (item: NavItem) => {
     if (item.path.startsWith("DASHBOARD_PAGE:")) {
       const page = item.path.split(":")[1];
       if (window.location.pathname === "/dashboard") {
@@ -52,10 +66,18 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
     onClose();
   };
 
+  // カテゴリ境目を判定して見出しを表示
+  let lastCategory = "";
+
   return createPortal(
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999 }}>
+      {/* オーバーレイ */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onClick={onClose} />
+
+      {/* サイドバー */}
       <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 260, backgroundColor: "#1a1a2e", display: "flex", flexDirection: "column", boxShadow: "4px 0 20px rgba(0,0,0,0.3)" }}>
+
+        {/* ヘッダー */}
         <div style={{ height: 64, display: "flex", alignItems: "center", padding: "0 20px", borderBottom: "1px solid rgba(255,255,255,0.04)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
             <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #c3a782, #a8895e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -68,20 +90,45 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
           </div>
           <button onClick={onClose} style={{ color: "rgba(255,255,255,0.3)", cursor: "pointer", padding: 4, fontSize: 18, background: "none", border: "none", lineHeight: 1 }}>✕</button>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 12px" }}>
-          {NAV_ITEMS.map((item) => (
-            <button key={item.label} onClick={() => handleClick(item)}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", fontSize: 13, borderRadius: 8, cursor: "pointer", color: "rgba(255,255,255,0.6)", background: "none", border: "none", textAlign: "left", marginBottom: 2 }}>
-              <span style={{ fontSize: 16, width: 24, textAlign: "center" }}>{ICONS[item.label] || "📄"}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
+
+        {/* メニュー一覧 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px 16px" }}>
+          {NAV_ITEMS.map((item) => {
+            const showCategory = item.category !== lastCategory;
+            lastCategory = item.category;
+            return (
+              <div key={item.label}>
+                {showCategory && (
+                  <p style={{
+                    fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.25)",
+                    letterSpacing: 1.5, margin: "14px 0 4px 12px",
+                  }}>
+                    {item.category}
+                  </p>
+                )}
+                <button
+                  onClick={() => handleClick(item)}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 12,
+                    padding: "10px 12px", fontSize: 13, borderRadius: 8, cursor: "pointer",
+                    color: "rgba(255,255,255,0.6)", background: "none", border: "none",
+                    textAlign: "left", marginBottom: 2,
+                  }}
+                >
+                  <span style={{ fontSize: 16, width: 24, textAlign: "center" }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>,
     document.body
   );
 }
+
+// ── ハンバーガーボタン（エクスポート） ──────────────
 
 export function NavMenu({ T }: { T: Record<string, string>; dark?: boolean }) {
   const [open, setOpen] = useState(false);
