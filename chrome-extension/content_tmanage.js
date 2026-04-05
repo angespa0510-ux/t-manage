@@ -31,41 +31,55 @@
   // ============================================================
   //  通知ポップアップ監視
   // ============================================================
-  const observer = new MutationObserver(() => { enhanceNotifyPopup(); });
+  // ============================================================
+  //  通知ポップアップ監視（デバウンス付き）
+  //  Reactのタブ切り替え時に複数回発火するのを防ぐ
+  // ============================================================
+  let debounceTimer = null;
+  const observer = new MutationObserver(() => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(enhanceNotifyPopup, 200);
+  });
   observer.observe(document.body, { childList: true, subtree: true });
 
   function enhanceNotifyPopup() {
-    const buttons = document.querySelectorAll('button');
+    // ポップアップが存在するか確認
+    const popup = document.querySelector('[data-tm-notify="true"]');
+    if (!popup) return;
+
+    // ① 既存の自動入力ボタンを全削除（タブ切り替え時のリセット）
+    document.querySelectorAll('[data-tm-auto]').forEach(btn => btn.remove());
+
+    // ② 現在表示中のコピーボタンを探して、対応する自動入力ボタンを追加
+    const buttons = popup.querySelectorAll('button');
 
     buttons.forEach((btn) => {
       const text = btn.textContent || '';
 
-      // お客様向けLINEボタン
-      if (text.includes('LINE用テキストをコピー') && !btn.dataset.tmEnhanced) {
-        btn.dataset.tmEnhanced = 'true';
+      // お客様向けLINEボタン（「LINE用テキストをコピー」だが「セラピスト」を含まない）
+      if (text.includes('LINE用テキストをコピー') && !text.includes('セラピスト')) {
         addAutoButton(btn, 'line_customer', '🚀 LINE自動入力', '#06C755');
       }
 
       // セラピスト向けLINEボタン
-      if (text.includes('セラピストLINE用コピー') && !btn.dataset.tmEnhanced) {
-        btn.dataset.tmEnhanced = 'true';
+      if (text.includes('セラピストLINE用コピー')) {
         addAutoButton(btn, 'line_therapist', '🚀 セラピストLINE自動入力', '#85a8c4');
       }
 
       // SMS送信ボタン
-      if (text.includes('SMS用コピー') && !btn.dataset.tmEnhanced) {
-        btn.dataset.tmEnhanced = 'true';
+      if (text.includes('SMS用コピー')) {
         addAutoButton(btn, 'sms', '🚀 SMS自動入力', '#f59e0b');
       }
     });
   }
 
   // ============================================================
-  //  自動入力ボタンを追加
+  //  自動入力ボタンを追加（data-tm-auto属性付き）
   // ============================================================
   function addAutoButton(refBtn, type, label, color) {
     const autoBtn = document.createElement('button');
     autoBtn.textContent = label;
+    autoBtn.setAttribute('data-tm-auto', type); // 識別用属性
     autoBtn.style.cssText = `
       width: 100%; padding: 12px; border-radius: 12px; font-size: 13px;
       font-weight: 500; cursor: pointer; margin-top: 6px;
