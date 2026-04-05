@@ -211,9 +211,9 @@ export default function TimeChart() {
     const { data: pts } = await supabase.from("point_settings").select("earn_per_yen,earn_points,expiry_months,rainy_day_active,rainy_day_multiplier").limit(1).single(); if (pts) setPtSettings(pts);
     // Notification templates from DB
     const { data: nts } = await supabase.from("notification_templates").select("template_key,body"); if (nts) setNtTemplates(nts);
-    const ntKeys = ["notify_url_days", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis", "notify_sender_default"];
+    const ntKeys = ["notify_url_days", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis", "notify_sender_default", "line_url_customer", "line_url_staff"];
     const { data: ntSets } = await supabase.from("store_settings").select("key,value").in("key", ntKeys);
-    if (ntSets) { for (const s of ntSets) { if (s.key === "notify_url_days") setNtUrlDays(parseInt(s.value) || 1); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); else if (s.key === "notify_sender_default" && s.value && !notifySender) setNotifySender(s.value); } }
+    if (ntSets) { for (const s of ntSets) { if (s.key === "notify_url_days") setNtUrlDays(parseInt(s.value) || 1); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); else if (s.key === "notify_sender_default" && s.value && !notifySender) setNotifySender(s.value); else if (s.key === "line_url_customer") document.body.dataset.lineUrlCustomer = s.value; else if (s.key === "line_url_staff") document.body.dataset.lineUrlStaff = s.value; } }
   }, [selectedDate]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);

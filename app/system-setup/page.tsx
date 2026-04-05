@@ -13,7 +13,33 @@ export default function SystemSetup() {
   const { dark, toggle, T } = useTheme();
   const [tab, setTab] = useState<Tab>("cti");
 
-  useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); }, [router]);
+  // LINE URL設定
+  const [lineUrlCustomer, setLineUrlCustomer] = useState("");
+  const [lineUrlStaff, setLineUrlStaff] = useState("");
+  const [lineSaving, setLineSaving] = useState(false);
+  const [lineMsg, setLineMsg] = useState("");
+
+  useEffect(() => {
+    const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); };
+    check();
+    // LINE URL読み込み
+    const loadSettings = async () => {
+      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff"]);
+      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); } }
+    };
+    loadSettings();
+  }, [router]);
+
+  const saveLineUrls = async () => {
+    setLineSaving(true); setLineMsg("");
+    for (const [key, value] of [["line_url_customer", lineUrlCustomer], ["line_url_staff", lineUrlStaff]]) {
+      const { data: existing } = await supabase.from("store_settings").select("id").eq("key", key).maybeSingle();
+      if (existing) { await supabase.from("store_settings").update({ value }).eq("key", key); }
+      else { await supabase.from("store_settings").insert({ key, value }); }
+    }
+    setLineSaving(false); setLineMsg("保存しました！");
+    setTimeout(() => setLineMsg(""), 3000);
+  };
 
   const cardStyle = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 16 };
   const stepNumStyle = (color: string) => ({
@@ -374,6 +400,27 @@ export default function SystemSetup() {
                   </p>
                   <p className="text-[10px] mt-2" style={{ color: T.textMuted }}>messages.google.com</p>
                 </div>
+              </div>
+            </div>
+
+            {/* STEP 0: LINE URL設定 */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <h3 className="text-[14px] font-medium mb-3" style={{ color: T.text }}>🔗 LINE Business Chat URL設定</h3>
+              <p className="text-[11px] mb-4" style={{ color: T.textSub }}>LINE Business Chatの管理画面URLを設定してください。自動入力ボタン押下時にこのURLが開きます。</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>💬 お客様用LINE URL</label>
+                  <input type="text" value={lineUrlCustomer} onChange={e => setLineUrlCustomer(e.target.value)} placeholder="https://chat.line.biz/U..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>💼 セラピスト用LINE URL</label>
+                  <input type="text" value={lineUrlStaff} onChange={e => setLineUrlStaff(e.target.value)} placeholder="https://chat.line.biz/U..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={saveLineUrls} disabled={lineSaving} className="px-5 py-2.5 text-[12px] rounded-xl cursor-pointer text-white font-medium disabled:opacity-50" style={{ background: "linear-gradient(135deg, #c3a782, #b09672)" }}>{lineSaving ? "保存中..." : "💾 保存"}</button>
+                  {lineMsg && <span className="text-[11px]" style={{ color: "#4a7c59" }}>✅ {lineMsg}</span>}
+                </div>
+                <p className="text-[9px]" style={{ color: T.textFaint }}>※ LINE Business Chat → 管理画面のURLをそのままコピーして貼り付けてください</p>
               </div>
             </div>
 
