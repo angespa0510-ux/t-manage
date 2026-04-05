@@ -4,20 +4,50 @@
 (function () {
   "use strict";
 
-  // T-MANAGEの通知ポップアップを監視
-  const observer = new MutationObserver(() => {
-    enhanceNotifyPopup();
-  });
+  const observer = new MutationObserver(() => { enhanceNotifyPopup(); });
   observer.observe(document.body, { childList: true, subtree: true });
 
+  // 通知ポップアップから顧客名を取得
+  function getCustomerName() {
+    // ポップアップヘッダーから「○○ 様 | ...」のテキストを探す
+    const els = document.querySelectorAll("[style*='color']");
+    for (const el of els) {
+      const t = el.textContent || "";
+      const m = t.match(/^(.+?)\s*様\s*\|/);
+      if (m) return m[1].replace(/\s*L$/i, "").trim();
+    }
+    // フォールバック: h2の次のpから取得
+    const h2s = document.querySelectorAll("h2");
+    for (const h2 of h2s) {
+      if (h2.textContent.includes("予約確認通知")) {
+        const p = h2.closest("div")?.querySelector("p");
+        if (p) {
+          const m = (p.textContent || "").match(/^(.+?)\s*様/);
+          if (m) return m[1].replace(/\s*L$/i, "").trim();
+        }
+      }
+    }
+    return "";
+  }
+
+  // 電話番号を取得（SMSバッジから）
+  function getPhoneFromBadge() {
+    const els = document.querySelectorAll("span");
+    for (const el of els) {
+      const t = el.textContent || "";
+      const m = t.match(/— ([\d\-]+)/);
+      if (m) return m[1].replace(/\D/g, "");
+    }
+    return "";
+  }
+
   function enhanceNotifyPopup() {
-    // 通知ボタンを探す（LINE用テキストをコピー / SMS用コピー）
     const buttons = document.querySelectorAll("button");
 
     buttons.forEach((btn) => {
       const text = btn.textContent || "";
 
-      // LINE用コピーボタンの隣に「LINE自動入力」ボタンを追加
+      // LINE用コピーボタン → LINE自動入力追加
       if (text.includes("LINE用テキストをコピー") && !btn.dataset.tmEnhanced) {
         btn.dataset.tmEnhanced = "true";
         addAutoButton(btn, "line_customer", "🚀 LINE自動入力", "#06C755");
@@ -28,12 +58,11 @@
         addAutoButton(btn, "line_staff", "🚀 セラピストLINE自動入力", "#85a8c4");
       }
 
-      // SMS用コピーボタンの隣に「SMS自動入力」ボタンを追加
+      // SMS用コピーボタン → SMS自動入力追加
       if (text.includes("SMS用コピー") && !btn.dataset.tmEnhanced) {
         btn.dataset.tmEnhanced = "true";
-        // 電話番号を抽出
         const phoneMatch = text.match(/[\d\-]+/);
-        const phone = phoneMatch ? phoneMatch[0].replace(/\D/g, "") : "";
+        const phone = phoneMatch ? phoneMatch[0].replace(/\D/g, "") : getPhoneFromBadge();
         addAutoButton(btn, "sms", "🚀 SMS自動入力", "#f59e0b", phone);
       }
     });
@@ -52,21 +81,20 @@
     autoBtn.onmouseout = () => autoBtn.style.opacity = "1";
 
     autoBtn.addEventListener("click", () => {
-      // メッセージテキストを取得（プレビューエリアから）
+      // メッセージテキストを取得
       const previewEl = document.querySelector('[style*="font-family"][style*="monospace"]');
       const msgText = previewEl ? previewEl.textContent : "";
+      if (!msgText) { showToast("メッセージが取得できませんでした", "error"); return; }
 
-      if (!msgText) {
-        showToast("メッセージが取得できませんでした", "error");
-        return;
-      }
+      // 顧客名を取得
+      const custName = getCustomerName();
 
       if (type === "line_customer" || type === "line_staff") {
-        const account = type === "line_staff" ? "staff" : "customer";
         chrome.runtime.sendMessage({
           action: "open_line",
           text: msgText,
-          account: account
+          target: custName,
+          account: type === "line_staff" ? "staff" : "customer"
         }, (res) => {
           if (res && res.ok) showToast("LINEを開いています...", "success");
         });
