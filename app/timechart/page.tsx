@@ -744,11 +744,17 @@ export default function TimeChart() {
           <div className="rounded-2xl border p-6 w-full max-w-sm" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-[16px] font-medium mb-4">新規お客様登録</h2>
             <div className="space-y-3">
-              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>お名前 *</label><input type="text" value={ncName} onChange={(e) => setNcName(e.target.value)} placeholder="お客様名" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text }} /></div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>お名前</label><input type="text" value={ncName} onChange={(e) => setNcName(e.target.value)} placeholder="あとで入力してもOK" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text }} /></div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={ncPhone} onChange={(e) => setNcPhone(e.target.value)} placeholder="090-xxxx-xxxx" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text }} /></div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={async () => { if (!ncName.trim()) return; const { error } = await supabase.from("customers").insert({ name: ncName.trim(), phone: ncPhone.trim() }); if (!error) { setNewCustName(ncName.trim()); setShowNewCust(false); setShowNewRes(true); } }} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">登録してオーダーへ</button>
-                <button onClick={() => { setShowNewCust(false); setShowCustSearch(true); }} className="px-5 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>戻る</button>
+              <div className="flex flex-col gap-2 pt-2">
+                {ncName.trim() ? (
+                  <button onClick={async () => { const { error } = await supabase.from("customers").insert({ name: ncName.trim(), phone: ncPhone.trim() }); if (!error) { setNewCustName(ncName.trim()); setShowNewCust(false); setShowNewRes(true); } }} className="w-full py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer font-medium">登録してオーダーへ</button>
+                ) : ncPhone.trim() ? (
+                  <button onClick={async () => { const tempName = ncPhone.trim(); const { error } = await supabase.from("customers").insert({ name: tempName, phone: ncPhone.trim() }); if (!error) { setNewCustName(tempName); setShowNewCust(false); setShowNewRes(true); } }} className="w-full py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer font-medium">📞 電話番号のみでオーダーへ</button>
+                ) : (
+                  <button disabled className="w-full py-2.5 text-[12px] rounded-xl opacity-40" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>名前または電話番号を入力してください</button>
+                )}
+                <button onClick={() => { setShowNewCust(false); setShowCustSearch(true); }} className="w-full py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>戻る</button>
               </div>
             </div>
           </div>
