@@ -395,7 +395,7 @@ function mainWorldOperation(searchName, template) {
 }
 
 // ============================================================
-//  SMS: Google Messages タブ管理
+//  SMS: クリップボードにコピー + Google Messages を開く
 // ============================================================
 async function handleOpenSms(phone, template, sendResponse) {
   try {
@@ -408,21 +408,45 @@ async function handleOpenSms(phone, template, sendResponse) {
 
     const tabs = await chrome.tabs.query({ url: 'https://messages.google.com/*' });
     if (tabs.length > 0) {
+      // 既存タブをアクティブに
       await chrome.tabs.update(tabs[0].id, { active: true });
       if (tabs[0].windowId) {
         await chrome.windows.update(tabs[0].windowId, { focused: true });
       }
+
+      // content_sms.js にPINGして生存確認
+      const alive = await pingContentScript(tabs[0].id);
+      if (!alive) {
+        // 再インジェクト
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tabs[0].id },
+            files: ['content_sms.js']
+          });
+        } catch (e) {
+          console.log('[T-MANAGE] content_sms.js re-inject failed:', e.message);
+        }
+        await sleep(500);
+      }
+
       // content_sms.jsにメッセージ送信
       chrome.tabs.sendMessage(tabs[0].id, {
         type: 'FILL_SMS',
         phone: phone,
         template: template
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log('[T-MANAGE] FILL_SMS送信失敗:', chrome.runtime.lastError.message);
+        }
       });
     } else {
+      // Google Messagesタブが無い → 新規タブで開く
       await chrome.tabs.create({ url: 'https://messages.google.com/web/conversations' });
+      // content_sms.js が読み込まれたら storage の pending データを処理する
     }
     sendResponse({ ok: true });
   } catch (err) {
+    console.error('[T-MANAGE] handleOpenSms error:', err);
     sendResponse({ ok: false, error: err.message });
   }
 }

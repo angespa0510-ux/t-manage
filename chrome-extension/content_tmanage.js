@@ -160,7 +160,9 @@
           showToast('電話番号が取得できませんでした', 'error');
           return;
         }
-        showToast(`📱 ${phone} にSMSを送ります...`, 'success');
+        // 先にクリップボードにコピー（自動入力が失敗してもペーストできる）
+        navigator.clipboard.writeText(msgText).catch(() => {});
+        showToast(`📱 ${phone} にSMS送信 — テキストもコピー済み`, 'success');
         safeSendMessage({
           type: 'OPEN_SMS',
           phone: phone,
