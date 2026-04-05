@@ -373,7 +373,9 @@ export default function SystemSetup() {
                 <div className="flex items-center gap-4 text-[12px]" style={{ color: T.textSub }}>
                   <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>📩 通知コピー</span>
                   <span style={{ color: T.textMuted }}>→</span>
-                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#06C75518", color: "#06C755" }}>💬 LINE自動入力</span>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#06C75518", color: "#06C755" }}>🚀 お客様LINE自動入力</span>
+                  <span style={{ color: T.textMuted }}>or</span>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>🚀 セラピストLINE自動入力</span>
                   <span style={{ color: T.textMuted }}>or</span>
                   <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f" }}>📱 SMS自動入力</span>
                 </div>
@@ -387,8 +389,8 @@ export default function SystemSetup() {
                 <div className="p-4 rounded-xl" style={{ backgroundColor: "#06C75508", border: "1px solid #06C75522" }}>
                   <div className="text-[14px] mb-1">💬 LINE Business Chat</div>
                   <p className="text-[11px]" style={{ color: T.textSub }}>
-                    お客様LINE / スタッフLINE<br/>
-                    アカウントを自動判別して入力
+                    お客様LINE / セラピストLINE<br/>
+                    設定URLで自動判別して入力
                   </p>
                   <p className="text-[10px] mt-2" style={{ color: T.textMuted }}>chat.line.biz</p>
                 </div>
@@ -481,10 +483,10 @@ export default function SystemSetup() {
                 <div className="p-4 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[13px] font-medium mb-2" style={{ color: T.text }}>LINE送信の場合</p>
                   <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
-                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> T-MANAGEの通知ポップアップで「💬 LINE用テキストをコピー」</p>
-                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> LINE Business Chat のタブを開く</p>
-                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 通知に表示される「🚀 自動入力」ボタンをクリック</p>
-                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> メッセージが自動で入力される → 送信！</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> T-MANAGEの通知ポップアップを表示</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> 「🚀 お客様LINE自動入力」または「🚀 セラピストLINE自動入力」をクリック</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 正しいLINEタブが自動で開き、名前を検索 → チャットを開く</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> メッセージが自動で入力される → 内容確認して送信！</p>
                   </div>
                 </div>
                 <div className="p-4 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
@@ -498,30 +500,33 @@ export default function SystemSetup() {
               </div>
             </div>
 
-            {/* LINE業務アカウント情報 */}
+            {/* LINEアカウント自動判別 */}
             <div className="rounded-2xl p-6" style={cardStyle}>
               <div className="flex items-center gap-3 mb-5">
                 <div style={stepNumStyle("#06C755")}>i</div>
                 <div>
-                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>LINE業務アカウント情報</h3>
-                  <p className="text-[11px]" style={{ color: T.textMuted }}>自動判別の仕組み</p>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>LINEアカウント自動判別</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>URLで確実に識別</p>
                 </div>
               </div>
               <div className="space-y-3 pl-11">
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[12px]" style={{ color: T.textSub }}>
-                    拡張機能はLINEのアカウント名に「<span style={{ fontWeight: 600 }}>業務</span>」が含まれるかどうかで自動判別します。
+                    上記で設定した<span style={{ fontWeight: 600 }}>URLのアカウントID</span>（U...の部分）で、お客様用とセラピスト用を自動判別します。
                   </p>
                   <div className="mt-3 space-y-2">
                     <div className="flex items-center gap-3 text-[11px]">
-                      <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>「業務」を含む</span>
-                      <span style={{ color: T.textMuted }}>→ スタッフ向けメッセージ用</span>
+                      <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>お客様用URL</span>
+                      <span style={{ color: T.textMuted }}>→ お客様向けメッセージ用LINEタブを開く</span>
                     </div>
                     <div className="flex items-center gap-3 text-[11px]">
-                      <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>「業務」を含まない</span>
-                      <span style={{ color: T.textMuted }}>→ お客様向けメッセージ用</span>
+                      <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>セラピスト用URL</span>
+                      <span style={{ color: T.textMuted }}>→ セラピスト向けメッセージ用LINEタブを開く</span>
                     </div>
                   </div>
+                  <p className="text-[10px] mt-3" style={{ color: T.textMuted }}>
+                    ※ アカウント名に関係なくURLで判別するため、別店舗のLINEアカウントでもURLを設定するだけで使えます
+                  </p>
                 </div>
               </div>
             </div>
