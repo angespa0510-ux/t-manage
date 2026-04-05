@@ -1,215 +1,319 @@
-// Google Messages (messages.google.com) Content Script
+// Google Messages (messages.google.com) Content Script v2.0
 // SMS送信の自動入力
+//
+// 役割:
+//   ① 電話番号で会話を検索
+//   ② メッセージ入力欄にテキストを自動入力
+//   ③ 新規会話の作成（電話番号入力）
 
 (function () {
-  "use strict";
+  'use strict';
 
-  let checkCount = 0;
-  const maxChecks = 30;
+  // ============================================================
+  //  CSS アニメーション
+  // ============================================================
+  const style = document.createElement('style');
+  style.textContent = `@keyframes tmSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`;
+  document.head.appendChild(style);
 
-  function checkPendingMessage() {
-    chrome.runtime.sendMessage({ action: "get_pending" }, (data) => {
-      if (chrome.runtime.lastError) return;
-      if (data && data.pending_type === "sms" && data.pending_message) {
-        trySearchAndFill(data.pending_message, data.pending_target);
-      }
-    });
-  }
-
-  function waitAndCheck() {
-    checkCount++;
-    if (checkCount > maxChecks) return;
-
-    // Google Messagesのメインコンテンツが読み込まれたかチェック
-    const main = document.querySelector("mws-conversations-list, mw-conversation-container, [role='main']");
-    if (main) {
-      checkPendingMessage();
-    } else {
-      setTimeout(waitAndCheck, 500);
+  // ============================================================
+  //  メッセージ受信ハンドラ
+  // ============================================================
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'FILL_SMS' || msg.action === 'fill_sms') {
+      const phone = msg.phone || msg.pending_target || '';
+      const template = msg.template || msg.text || '';
+      handleSmsInput(phone, template);
+      sendResponse({ ok: true });
     }
+    if (msg.type === 'PING') {
+      sendResponse({ type: 'PONG', alive: true });
+    }
+  });
+
+  // ============================================================
+  //  起動時: 保留メッセージ確認
+  // ============================================================
+  function checkPendingOnLoad() {
+    let attempts = 0;
+
+    function tryCheck() {
+      attempts++;
+      // Google Messagesが読み込まれたか確認
+      const main = document.querySelector('mws-conversations-list, mw-conversation-container, [role="main"]');
+      if (main) {
+        chrome.runtime.sendMessage({ action: 'get_pending' }, (data) => {
+          if (chrome.runtime.lastError) return;
+          if (data && data.pending_type === 'sms' && data.pending_message) {
+            handleSmsInput(data.pending_target || '', data.pending_message);
+          }
+        });
+      } else if (attempts < 30) {
+        setTimeout(tryCheck, 500);
+      }
+    }
+    setTimeout(tryCheck, 1000);
   }
 
-  // 電話番号で連絡先を検索
-  function trySearchAndFill(text, phone) {
+  checkPendingOnLoad();
+
+  // ============================================================
+  //  SMS入力処理
+  // ============================================================
+  function handleSmsInput(phone, template) {
     if (!phone) {
-      showIndicator("⚠️ 電話番号が指定されていません", "warning");
+      showIndicator('⚠️ 電話番号が指定されていません', 'warning');
       return;
     }
 
-    // 検索入力欄を探す
-    const searchInput = findSearchInput();
-    if (searchInput) {
-      showIndicator(`📱 ${phone} を検索中...`, "info");
-      setNativeValue(searchInput, phone);
-      searchInput.focus();
+    showIndicator(`📱 ${formatPhone(phone)} を検索中...`, 'info');
 
-      // 検索結果が表示されるまで待つ
+    // 方法1: 「新しい会話」ボタンを探してクリック → 電話番号入力
+    tryStartNewConversation(phone, template);
+  }
+
+  // ============================================================
+  //  新しい会話を開始して電話番号を入力
+  // ============================================================
+  function tryStartNewConversation(phone, template) {
+    // Google Messagesの「新しい会話」ボタンを探す
+    const newChatBtn = document.querySelector('[data-e2e-new-conversation]')
+      || document.querySelector('a[href*="new"]')
+      || findButtonByText('新しい会話')
+      || findButtonByText('Start chat')
+      || findButtonByText('New conversation');
+
+    if (newChatBtn) {
+      newChatBtn.click();
+      // 電話番号入力欄が表示されるまで待つ
+      setTimeout(() => typePhoneNumber(phone, template), 800);
+    } else {
+      // 既存の会話リストから電話番号で検索
+      searchInConversationList(phone, template);
+    }
+  }
+
+  // ボタンをテキストで検索
+  function findButtonByText(text) {
+    const buttons = document.querySelectorAll('button, a, [role="button"]');
+    for (const btn of buttons) {
+      if ((btn.textContent || '').includes(text)) return btn;
+    }
+    return null;
+  }
+
+  // 電話番号を入力
+  function typePhoneNumber(phone, template) {
+    // 宛先入力欄を探す
+    const phoneInput = document.querySelector('input[type="tel"]')
+      || document.querySelector('input[placeholder*="番号"]')
+      || document.querySelector('input[placeholder*="number"]')
+      || document.querySelector('input[placeholder*="名前"]')
+      || document.querySelector('input[placeholder*="name"]')
+      || document.querySelector('[contenteditable="true"]');
+
+    if (phoneInput) {
+      phoneInput.focus();
+      if (phoneInput.tagName === 'INPUT' || phoneInput.tagName === 'TEXTAREA') {
+        setNativeValue(phoneInput, phone);
+      } else {
+        phoneInput.textContent = phone;
+        phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      // 検索結果を待って選択
       setTimeout(() => {
-        const result = findSearchResult(phone);
-        if (result) {
-          result.click();
-          // チャット画面が開くのを待ってからメッセージ入力
-          setTimeout(() => fillMessageInput(text), 1500);
-        } else {
-          // 新規メッセージとして作成
-          showIndicator(`📱 連絡先が見つかりません。新規メッセージで ${phone} に送信してください。`, "warning");
-          fillMessageInput(text);
-        }
+        selectPhoneResult(phone, template);
       }, 1500);
     } else {
-      // 検索欄が見つからない → 直接メッセージ入力を試みる
-      fillMessageInput(text);
+      showIndicator('⚠️ 電話番号入力欄が見つかりません', 'warning');
+      // フォールバック: テキストのみクリップボードにコピー
+      copyToClipboard(template);
     }
   }
 
-  // 検索入力欄を探す
-  function findSearchInput() {
-    const selectors = [
-      'input[placeholder*="検索"]',
-      'input[placeholder*="Search"]',
-      'input[placeholder*="名前"]',
-      'input[aria-label*="検索"]',
-      'input[aria-label*="Search"]',
-      'mws-search-input input',
-      '[data-e2e-search-input] input'
-    ];
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el) return el;
-    }
-    return null;
-  }
+  // 検索結果から電話番号を選択
+  function selectPhoneResult(phone, template) {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const results = document.querySelectorAll('[role="listitem"], [role="option"], mws-contact-list-item');
 
-  // 検索結果から該当する連絡先を見つける
-  function findSearchResult(phone) {
-    // 電話番号の各フォーマットで検索
-    const cleanPhone = phone.replace(/\D/g, "");
-    const results = document.querySelectorAll("[role='listitem'], mws-conversation-list-item, [class*='conversation']");
+    let found = false;
     for (const r of results) {
-      const txt = r.textContent || "";
-      if (txt.includes(cleanPhone) || txt.includes(formatPhone(cleanPhone))) {
-        return r;
+      const txt = (r.textContent || '').replace(/\D/g, '');
+      if (txt.includes(cleanPhone)) {
+        r.click();
+        found = true;
+        break;
       }
     }
-    return null;
-  }
 
-  // 電話番号をフォーマット
-  function formatPhone(phone) {
-    if (phone.length === 11) {
-      return `${phone.slice(0, 3)}-${phone.slice(3, 7)}-${phone.slice(7)}`;
+    if (!found) {
+      // 電話番号テキストでエンターキーを送信
+      const activeInput = document.activeElement;
+      if (activeInput) {
+        activeInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      }
     }
-    return phone;
+
+    // メッセージ入力
+    setTimeout(() => fillMessageInput(template, 0), 1500);
   }
 
-  // メッセージ入力欄にテキストをセット
-  function fillMessageInput(text) {
-    const textarea = findMessageInput();
-    if (!textarea) {
-      // 少し待ってリトライ
+  // 既存の会話リストから検索
+  function searchInConversationList(phone, template) {
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    // 検索入力欄を探す
+    const searchInput = document.querySelector('input[placeholder*="検索"]')
+      || document.querySelector('input[placeholder*="Search"]')
+      || document.querySelector('input[aria-label*="検索"]');
+
+    if (searchInput) {
+      searchInput.focus();
+      setNativeValue(searchInput, phone);
+
       setTimeout(() => {
-        const ta2 = findMessageInput();
-        if (ta2) {
-          doFill(ta2, text);
-        } else {
-          showIndicator("⚠️ メッセージ入力欄が見つかりません。会話を開いてください。", "warning");
-          // クリップボードにコピーしておく
-          navigator.clipboard.writeText(text).then(() => {
-            showIndicator("📋 テキストをクリップボードにコピーしました。貼り付けてください。", "info");
-          });
+        // 検索結果から選択
+        const items = document.querySelectorAll('[role="listitem"], mws-conversation-list-item');
+        for (const item of items) {
+          const txt = (item.textContent || '').replace(/\D/g, '');
+          if (txt.includes(cleanPhone)) {
+            item.click();
+            setTimeout(() => fillMessageInput(template, 0), 1500);
+            return;
+          }
         }
-      }, 1000);
+        // 見つからない → 新規会話を試みる
+        showIndicator(`📱 ${formatPhone(phone)} の会話が見つかりません。テキストをコピーしました。`, 'warning');
+        copyToClipboard(template);
+      }, 1500);
+    } else {
+      showIndicator('⚠️ 検索欄が見つかりません', 'warning');
+      copyToClipboard(template);
+    }
+  }
+
+  // ============================================================
+  //  メッセージ入力欄にテキストをセット
+  // ============================================================
+  function fillMessageInput(template, retryCount) {
+    const textarea = findMessageInput();
+
+    if (!textarea) {
+      if (retryCount < 10) {
+        setTimeout(() => fillMessageInput(template, retryCount + 1), 500);
+      } else {
+        showIndicator('⚠️ メッセージ入力欄が見つかりません。テキストをコピーしました。', 'warning');
+        copyToClipboard(template);
+      }
       return;
     }
-    doFill(textarea, text);
-  }
 
-  function doFill(textarea, text) {
-    if (textarea.tagName === "TEXTAREA" || textarea.tagName === "INPUT") {
-      setNativeValue(textarea, text);
-    } else if (textarea.getAttribute("contenteditable") === "true" || textarea.getAttribute("role") === "textbox") {
-      textarea.focus();
-      textarea.innerHTML = "";
-      const lines = text.split("\n");
+    textarea.focus();
+
+    if (textarea.tagName === 'TEXTAREA' || textarea.tagName === 'INPUT') {
+      setNativeValue(textarea, template);
+    } else if (textarea.getAttribute('contenteditable') === 'true' || textarea.getAttribute('role') === 'textbox') {
+      textarea.innerHTML = '';
+      const lines = template.split('\n');
       lines.forEach((line, i) => {
         textarea.appendChild(document.createTextNode(line));
-        if (i < lines.length - 1) textarea.appendChild(document.createElement("br"));
+        if (i < lines.length - 1) textarea.appendChild(document.createElement('br'));
       });
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    showIndicator("✅ メッセージを入力しました！内容を確認して送信してください。", "success");
-    chrome.runtime.sendMessage({ action: "clear_pending" });
+    showIndicator('✅ メッセージを入力しました！内容を確認して送信してください。', 'success');
+    chrome.runtime.sendMessage({ action: 'clear_pending' });
   }
 
   // メッセージ入力欄を探す
   function findMessageInput() {
     const selectors = [
-      'textarea[placeholder*="メッセージ"]',
-      'textarea[placeholder*="テキスト"]',
-      'textarea[placeholder*="Text message"]',
-      '[contenteditable="true"][role="textbox"]',
       'mws-autosize-textarea textarea',
+      'textarea[placeholder*="メッセージ"]',
+      'textarea[placeholder*="Text message"]',
+      'textarea[placeholder*="テキスト"]',
+      '[contenteditable="true"][role="textbox"]',
       '.input-box textarea',
-      '[aria-label*="message"] textarea',
-      '[aria-label*="メッセージ"]'
+      'textarea'
     ];
     for (const sel of selectors) {
       const el = document.querySelector(sel);
-      if (el) return el;
+      if (el && isVisible(el)) return el;
     }
     return null;
   }
 
-  // React製の入力欄にネイティブに値をセット
+  // ============================================================
+  //  ユーティリティ
+  // ============================================================
   function setNativeValue(el, value) {
-    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement : HTMLInputElement;
-    const nativeSetter = Object.getOwnPropertyDescriptor(proto.prototype, "value")?.set;
+    const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement : HTMLInputElement;
+    const nativeSetter = Object.getOwnPropertyDescriptor(proto.prototype, 'value')?.set;
     if (nativeSetter) {
       nativeSetter.call(el, value);
     } else {
       el.value = value;
     }
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // インジケーター表示
+  function isVisible(el) {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function formatPhone(phone) {
+    const clean = phone.replace(/\D/g, '');
+    if (clean.length === 11) {
+      return `${clean.slice(0, 3)}-${clean.slice(3, 7)}-${clean.slice(7)}`;
+    }
+    return phone;
+  }
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      showIndicator('📋 テキストをクリップボードにコピーしました。貼り付けてください。', 'info');
+    }).catch(() => {});
+  }
+
+  // ============================================================
+  //  インジケーター表示
+  // ============================================================
   function showIndicator(msg, type) {
-    const existing = document.getElementById("tm-indicator");
+    const existing = document.getElementById('tm-indicator');
     if (existing) existing.remove();
 
-    const div = document.createElement("div");
-    div.id = "tm-indicator";
-    const bgColor = type === "success" ? "#22c55e" : type === "warning" ? "#f59e0b" : type === "info" ? "#3b82f6" : "#ef4444";
+    const div = document.createElement('div');
+    div.id = 'tm-indicator';
+    const colors = {
+      success: '#22c55e',
+      warning: '#f59e0b',
+      info: '#3b82f6',
+      error: '#ef4444'
+    };
     div.style.cssText = `
       position: fixed; top: 10px; right: 10px; z-index: 99999;
       padding: 12px 20px; border-radius: 12px; font-size: 13px;
-      background-color: ${bgColor}; color: white; max-width: 350px;
+      background-color: ${colors[type] || colors.info}; color: white; max-width: 350px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      animation: slideIn 0.3s ease-out;
+      animation: tmSlideIn 0.3s ease-out;
     `;
-    div.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><span>${msg}</span><button id="tm-close" style="background:none;border:none;color:white;cursor:pointer;font-size:16px;padding:0 4px">✕</button></div>`;
+    div.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <span>${msg}</span>
+        <button id="tm-close" style="background:none;border:none;color:white;cursor:pointer;font-size:16px;padding:0 4px">✕</button>
+      </div>
+    `;
     document.body.appendChild(div);
+    div.querySelector('#tm-close')?.addEventListener('click', () => div.remove());
 
-    div.querySelector("#tm-close").addEventListener("click", () => div.remove());
-    if (type === "success" || type === "info") setTimeout(() => div.remove(), 5000);
+    if (type === 'success' || type === 'info') setTimeout(() => div.remove(), 5000);
+    if (type === 'warning') setTimeout(() => div.remove(), 10000);
   }
 
-  // バックグラウンドからのメッセージを受信
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.action === "fill_sms") {
-      trySearchAndFill(msg.text, msg.phone);
-      sendResponse({ ok: true });
-    }
-  });
-
-  // CSS アニメーション追加
-  const style = document.createElement("style");
-  style.textContent = `@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`;
-  document.head.appendChild(style);
-
-  // 初回チェック
-  setTimeout(waitAndCheck, 1000);
+  console.log('[T-MANAGE] content_sms.js v2.0 loaded');
 })();

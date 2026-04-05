@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "T-MANAGE 通知アシスタント",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "T-MANAGEの予約通知をLINE/SMSに自動入力するアシスタント",
   "permissions": [
     "storage",
-    "clipboardRead",
+    "clipboardWrite",
     "tabs",
-    "activeTab"
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
     "https://t-manage.vercel.app/*",
