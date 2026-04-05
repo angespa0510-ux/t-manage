@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "../lib/theme";
 import { ToastProvider } from "../lib/toast";
 import { StaffSessionProvider } from "../lib/staff-session";
+import { CtiPopupProvider } from "../lib/cti-popup";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" style={{ margin: 0 }}>
-        <ThemeProvider><ToastProvider><StaffSessionProvider>{children}</StaffSessionProvider></ToastProvider></ThemeProvider>
+        <ThemeProvider><ToastProvider><StaffSessionProvider><CtiPopupProvider>{children}</CtiPopupProvider></StaffSessionProvider></ToastProvider></ThemeProvider>
       </body>
     </html>
   );
