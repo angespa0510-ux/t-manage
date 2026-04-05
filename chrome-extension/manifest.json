@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "T-MANAGE 通知アシスタント",
+  "version": "1.0.0",
+  "description": "T-MANAGEの予約通知をLINE/SMSに自動入力するアシスタント",
+  "permissions": [
+    "storage",
+    "clipboardRead",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://t-manage.vercel.app/*",
+    "https://chat.line.biz/*",
+    "https://messages.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://t-manage.vercel.app/*"],
+      "js": ["content_tmanage.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://chat.line.biz/*"],
+      "js": ["content_line.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://messages.google.com/*"],
+      "js": ["content_sms.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

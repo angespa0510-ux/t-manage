@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 320px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #1a1a2e; color: #e0e0e0; }
+    .header { padding: 16px; background: linear-gradient(135deg, #e8849a, #d4687e); color: white; }
+    .header h1 { font-size: 14px; font-weight: 600; }
+    .header p { font-size: 10px; opacity: 0.85; margin-top: 2px; }
+    .section { padding: 12px 16px; border-bottom: 1px solid #2a2a40; }
+    .section h2 { font-size: 11px; font-weight: 600; margin-bottom: 8px; color: #e8849a; }
+    .status { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: #2a2a40; margin-bottom: 6px; font-size: 11px; }
+    .status .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot.green { background: #22c55e; }
+    .dot.yellow { background: #f59e0b; }
+    .dot.red { background: #ef4444; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 11px; cursor: pointer; margin-top: 6px; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-line { background: #06C755; color: white; }
+    .btn-sms { background: #f59e0b; color: white; }
+    .btn-clear { background: #333; color: #999; }
+    .pending { padding: 8px 12px; border-radius: 8px; background: #1e3a5f; border: 1px solid #3b82f644; font-size: 10px; color: #93c5fd; margin-top: 8px; max-height: 80px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .info { padding: 12px 16px; font-size: 9px; color: #666; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📩 T-MANAGE 通知アシスタント</h1>
+    <p>LINE / SMS 自動入力ツール</p>
+  </div>
+
+  <div class="section">
+    <h2>📡 接続状態</h2>
+    <div class="status" id="status-tmanage"><div class="dot" id="dot-tmanage"></div><span>T-MANAGE</span></div>
+    <div class="status" id="status-line"><div class="dot" id="dot-line"></div><span>LINE Business</span></div>
+    <div class="status" id="status-sms"><div class="dot" id="dot-sms"></div><span>Google Messages</span></div>
+  </div>
+
+  <div class="section" id="pending-section" style="display:none">
+    <h2>📋 保留メッセージ</h2>
+    <div id="pending-info"></div>
+    <div class="pending" id="pending-text"></div>
+    <button class="btn btn-clear" id="btn-clear">🗑 保留メッセージをクリア</button>
+  </div>
+
+  <div class="section">
+    <h2>🚀 クイックアクション</h2>
+    <button class="btn btn-line" id="btn-open-line">💬 LINE Business を開く</button>
+    <button class="btn btn-sms" id="btn-open-sms" style="margin-top:6px">📱 Google Messages を開く</button>
+  </div>
+
+  <div class="info">
+    T-MANAGEの通知ポップアップから<br>「🚀 自動入力」ボタンで使えます
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
