@@ -1164,9 +1164,10 @@ function SetupGuide({ T, cardStyle, sectionTitle }: {
     },
     {
       title: "ウォッチャーを起動！",
-      desc: "これで自動監視が始まります。T-MANAGEのWeb画面でキューに追加すると、自動で処理が開始されます。",
-      cmd: "npm run watch",
-      cmdNote: "停止するには Ctrl + C",
+      desc: "デスクトップにショートカットを作っておけば、ダブルクリックだけで監視を開始できます。",
+      cmd: "start-watcher.bat",
+      cmdNote: "🚀 かんたん起動（以下のどちらかの方法）",
+      batSetup: true,
     },
   ];
 
@@ -1201,6 +1202,23 @@ function SetupGuide({ T, cardStyle, sectionTitle }: {
               <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, backgroundColor: "rgba(133,168,196,0.15)", color: "#85a8c4" }}>GeminiのWebUIを使用</span>
               <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, backgroundColor: "rgba(195,167,130,0.15)", color: "#c3a782" }}>1日2回まで</span>
             </div>
+          </div>
+
+          {/* かんたん起動ボックス */}
+          <div style={{
+            padding: 14, borderRadius: 10,
+            background: "linear-gradient(135deg, rgba(195,167,130,0.12), rgba(122,184,143,0.12))",
+            border: "1px solid rgba(195,167,130,0.3)",
+          }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: T.text, margin: "0 0 8px" }}>
+              ⚡ セットアップ済みの方はここだけ！
+            </p>
+            <p style={{ fontSize: 12, color: T.textSub, margin: "0 0 4px", lineHeight: 1.6 }}>
+              デスクトップの <strong>start-watcher</strong> ショートカットをダブルクリック → 監視開始
+            </p>
+            <p style={{ fontSize: 11, color: T.textMuted, margin: 0 }}>
+              黒い画面が出て「🔍 新しいリクエストを確認中...」と表示されれば準備完了です。
+            </p>
           </div>
 
           {/* ステップ */}
@@ -1250,6 +1268,38 @@ function SetupGuide({ T, cardStyle, sectionTitle }: {
                       padding: "6px 10px", backgroundColor: "rgba(196,85,85,0.08)",
                       borderRadius: 6, lineHeight: 1.5,
                     }}>{step.important}</p>
+                  )}
+
+                  {(step as Record<string, unknown>).batSetup && (
+                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ padding: 12, backgroundColor: "rgba(122,184,143,0.08)", borderRadius: 8, border: "1px solid rgba(122,184,143,0.2)" }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: "#7ab88f", margin: "0 0 6px" }}>
+                          方法① ダブルクリック起動（おすすめ）
+                        </p>
+                        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.8 }}>
+                          <p style={{ margin: "0 0 4px" }}>1. エクスプローラーで以下のファイルを開く：</p>
+                          <div style={{ ...codeBlock, fontSize: 10, padding: "6px 10px", marginBottom: 6 }}>
+                            C:\Users\user\Desktop\t-manage\video-automation\start-watcher.bat
+                          </div>
+                          <p style={{ margin: "0 0 4px" }}>2. 右クリック →「ショートカットの作成」→ デスクトップに移動</p>
+                          <p style={{ margin: 0 }}>3. 次回からはデスクトップのショートカットをダブルクリックするだけ！</p>
+                        </div>
+                      </div>
+                      <div style={{ padding: 12, backgroundColor: T.cardAlt, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: T.textSub, margin: "0 0 6px" }}>
+                          方法② コマンドで起動
+                        </p>
+                        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.8 }}>
+                          <div style={{ ...codeBlock, fontSize: 10, padding: "6px 10px" }}>
+                            <button onClick={() => copyCmd("cd C:\\Users\\user\\Desktop\\t-manage\\video-automation\nnpm run watch", 99)} style={copyBtn}>
+                              {copiedStep === 99 ? "✅ コピー済" : "📋 コピー"}
+                            </button>
+                            cd C:\Users\user\Desktop\t-manage\video-automation{"\n"}npm run watch
+                          </div>
+                          <p style={{ margin: "6px 0 0", fontSize: 10, color: T.textMuted }}>停止するには Ctrl + C</p>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
