@@ -2,11 +2,11 @@
 // ── Supabaseポーリング型ウォッチャー ──
 // 日次制限（2回/日）を管理し、キューから順番に処理
 
+require("dotenv").config();  // ← 最初に読み込む！
+
 const { createClient } = require("@supabase/supabase-js");
 const config = require("./config");
 const { processRequest } = require("./processor");
-
-require("dotenv").config();
 
 const supabase = createClient(
   config.supabase.url,
