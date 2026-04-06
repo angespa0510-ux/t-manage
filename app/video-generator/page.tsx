@@ -1215,7 +1215,7 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                                 <div style={{ display: "flex", gap: 2 }}>
                                   {[1, 2, 3, 4, 5].map(star => (
                                     <button key={star}
-                                      onClick={() => saveRating(log.id, cat.key, star)}
+                                      onClick={() => saveRating(log.id, cat.key, star === currentVal ? 0 : star)}
                                       style={{
                                         background: "none", border: "none", cursor: "pointer",
                                         fontSize: 20, padding: "0 1px", lineHeight: 1,
