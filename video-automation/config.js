@@ -12,8 +12,9 @@ module.exports = {
   // ── Gemini ──
   gemini: {
     url: "https://gemini.google.com/app",
-    // Chrome プロファイルパス（Geminiにログイン済みのプロファイル）
-    // 例: C:\Users\user\AppData\Local\Google\Chrome\User Data
+    // Playwright専用プロファイルパス（初回起動時にGeminiにログインが必要）
+    playwrightProfilePath: process.env.PLAYWRIGHT_PROFILE_PATH || "",
+    // 旧: Chrome プロファイルパス（非推奨）
     chromeProfilePath: process.env.CHROME_PROFILE_PATH || "",
     profileName: process.env.CHROME_PROFILE_NAME || "Default",
   },

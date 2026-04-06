@@ -23,17 +23,31 @@ async function processRequest(job, supabase) {
 
     // ── ブラウザ起動 ──
     console.log("🌐 ブラウザを起動中...");
+
+    // Playwright専用プロファイル（Chromeのデフォルトとは別）
+    const profileDir = config.gemini.playwrightProfilePath
+      || path.join(require("os").homedir(), ".playwright-gemini-profile");
+
+    // プロファイルディレクトリが無ければ作成
+    if (!fs.existsSync(profileDir)) {
+      fs.mkdirSync(profileDir, { recursive: true });
+      console.log(`  📁 Playwright専用プロファイルを作成: ${profileDir}`);
+      console.log("  ⚠️ 初回起動: ブラウザが開いたらGeminiにログインしてください");
+      console.log("  ⚠️ ログイン後、ウォッチャーを Ctrl+C で止めて再起動してください");
+    }
+
     browser = await chromium.launchPersistentContext(
-      config.gemini.chromeProfilePath || undefined,
+      profileDir,
       {
-        headless: dbSettings.headless || config.playwright.headless,
+        headless: false,  // Gemini操作は常にheadless: false
         slowMo: config.playwright.slowMo,
         args: [
           "--no-sandbox",
           "--disable-blink-features=AutomationControlled",
         ],
         viewport: { width: 1280, height: 900 },
-        channel: "chrome",  // システムのChromeを使用
+        channel: "chrome",
+        timeout: 60000,
       }
     );
 
