@@ -924,7 +924,7 @@ export default function VideoGenerator() {
               <p style={{ fontSize: 13, fontWeight: 600, color: T.text }}>生成履歴</p>
               <div className="flex items-center gap-3">
                 {(() => {
-                  const ratedCount = logs.filter(l => l.rating_motion > 0 && l.result === "success").length;
+                  const ratedCount = logs.filter(l => ((l.rating_motion || l.rating_consistency || l.rating_quality || l.rating_safety) > 0) && l.result === "success").length;
                   return (
                     <span style={{
                       fontSize: 11, padding: "3px 10px", borderRadius: 10,
@@ -1017,7 +1017,7 @@ export default function VideoGenerator() {
 
               {/* ── エクスポート＆AI改善提案 ── */}
               {(() => {
-                const ratedLogs = logs.filter(l => l.rating_motion > 0 && l.result === "success");
+                const ratedLogs = logs.filter(l => ((l.rating_motion || l.rating_consistency || l.rating_quality || l.rating_safety) > 0) && l.result === "success");
                 if (ratedLogs.length === 0) return null;
 
                 const avgM = (ratedLogs.reduce((s, l) => s + l.rating_motion, 0) / ratedLogs.length).toFixed(1);
@@ -1110,7 +1110,7 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
               {logs.map(log => {
                 const sc = statusConfig[log.result] || statusConfig.queued;
                 const isExpanded = expandedRating === log.id;
-                const hasRating = log.rating_motion > 0;
+                const hasRating = (log.rating_motion || log.rating_consistency || log.rating_quality || log.rating_safety) > 0;
                 const avgRating = hasRating
                   ? ((log.rating_motion + log.rating_consistency + log.rating_quality + log.rating_safety) / 4).toFixed(1)
                   : null;
