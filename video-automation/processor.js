@@ -419,25 +419,30 @@ async function clickSendButton(page) {
 /** Geminiのレスポンスを待機 */
 async function waitForGeminiResponse(page, timeout) {
   const startTime = Date.now();
-  let lastLog = Date.now();
+  const MIN_WAIT = 60000;  // 最低60秒は待つ（早期判定を防ぐ）
+
+  console.log("  ⏳ 最低60秒待機してからチェック開始...");
 
   while (Date.now() - startTime < timeout) {
-    await page.waitForTimeout(10000);  // 10秒ごとにチェック
+    await page.waitForTimeout(10000);
 
-    // 経過時間ログ（30秒ごと）
-    if (Date.now() - lastLog > 30000) {
-      const elapsed = Math.round((Date.now() - startTime) / 1000);
-      console.log(`  ⏳ ${elapsed}秒経過... まだ生成中`);
-      lastLog = Date.now();
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+    // 最低待機時間が経過するまではチェックしない
+    if (Date.now() - startTime < MIN_WAIT) {
+      if (elapsed % 30 === 0) console.log(`  ⏳ ${elapsed}秒経過... 待機中`);
+      continue;
     }
 
-    // Geminiのレスポンスエリアのテキストを取得
+    // 経過ログ（30秒ごと）
+    if (elapsed % 30 === 0) console.log(`  ⏳ ${elapsed}秒経過... チェック中`);
+
+    // セーフティフィルター検出（レスポンスエリア内のみ）
     const responseTexts = await page.$$eval(
       'message-content, .response-container, .model-response, [data-message-author-role="model"]',
       els => els.map(el => el.textContent || "").join(" ")
     ).catch(() => "");
 
-    // セーフティフィルター検出（レスポンスエリア内のみ）
     const safetyPhrases = [
       "生成できません",
       "生成することはできません",
@@ -445,7 +450,6 @@ async function waitForGeminiResponse(page, timeout) {
       "ポリシーに違反",
       "I can't generate",
       "I'm not able to generate",
-      "violates our policies",
     ];
     for (const phrase of safetyPhrases) {
       if (responseTexts.includes(phrase)) {
@@ -453,31 +457,40 @@ async function waitForGeminiResponse(page, timeout) {
       }
     }
 
-    // 画像生成完了を検出
-    // Geminiが生成した画像は通常 img タグで表示される
-    const newImages = await page.$$('img[src*="blob:"], img[src*="lh3.googleusercontent"], img[src*="generated"], canvas');
+    // 「この回答を停止しました」検出 → 再送信が必要
+    const pageText = await page.textContent("body").catch(() => "");
+    if (pageText && pageText.includes("この回答を停止しました")) {
+      console.log("  ⚠️ 回答が停止されました");
+      return "timeout";  // リトライさせる
+    }
+
+    // 停止ボタンがまだある = まだ生成中 → 待ち続ける
+    const stopBtn = await page.$('[aria-label*="停止"], [aria-label*="Stop"], button:has-text("停止")');
+    if (stopBtn) {
+      continue;  // まだ生成中
+    }
+
+    // 停止ボタンが消えた = 生成完了の可能性
+    // 画像が表示されたかチェック
+    const newImages = await page.$$('img[src*="blob:"], img[src*="lh3.googleusercontent"], canvas');
     if (newImages.length > 0) {
-      // 画像が表示されてから少し待つ（完全に読み込まれるまで）
       await page.waitForTimeout(5000);
+      console.log("  🖼️ 画像を検出！");
       return "success";
     }
 
-    // レスポンスが完了したかの別の指標（ストリーミングが止まった）
-    // 送信ボタンが再度有効になったかチェック
-    const sendBtn = await page.$('[aria-label*="送信"]:not([disabled]), [aria-label*="Send"]:not([disabled])');
-    const stopBtn = await page.$('[aria-label*="停止"], [aria-label*="Stop"]');
-    
-    // 停止ボタンがなく、送信ボタンがある = レスポンス完了
-    if (sendBtn && !stopBtn && (Date.now() - startTime > 20000)) {
-      // テキストレスポンスとして完了した可能性（画像なし）
-      console.log("  📝 テキストレスポンスとして完了（画像なし）");
-      // 画像がないならもう少し待ってみる（Geminiが追加生成するかも）
-      await page.waitForTimeout(5000);
-      const imgs = await page.$$('img[src*="blob:"], img[src*="lh3.googleusercontent"]');
-      if (imgs.length > 0) return "success";
-      // 画像がなくてもレスポンスはあった → 次のステップ（動画生成）に進める可能性
+    // 画像はないがレスポンスは完了している
+    // もう少し待って最終チェック
+    await page.waitForTimeout(10000);
+    const imgs2 = await page.$$('img[src*="blob:"], img[src*="lh3.googleusercontent"], canvas');
+    if (imgs2.length > 0) {
+      console.log("  🖼️ 画像を検出！");
       return "success";
     }
+
+    // テキストだけのレスポンスで完了
+    console.log("  📝 テキストレスポンスで完了（画像なし）");
+    return "success";
   }
 
   return "timeout";
