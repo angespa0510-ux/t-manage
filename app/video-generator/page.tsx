@@ -906,6 +906,20 @@ export default function VideoGenerator() {
                           opacity: log.liked ? 1 : 0.3, transition: "all 0.2s",
                         }}
                       >{log.liked ? "👍" : "👍"}</button>
+                      <button onClick={async () => {
+                        if (!confirm(`「${log.therapist_name}」の履歴を削除しますか？`)) return;
+                        await supabase.from("video_generation_logs").delete().eq("id", log.id);
+                        fetchLogs();
+                        toast.show("削除しました");
+                      }}
+                        style={{
+                          background: "none", border: "none", cursor: "pointer",
+                          fontSize: 16, padding: 4, alignSelf: "center",
+                          color: T.textMuted, opacity: 0.4, transition: "all 0.2s",
+                        }}
+                        onMouseOver={e => (e.currentTarget.style.opacity = "1")}
+                        onMouseOut={e => (e.currentTarget.style.opacity = "0.4")}
+                      >🗑️</button>
                     </div>
                   </div>
                 );
