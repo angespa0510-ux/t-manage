@@ -198,7 +198,41 @@ async function processRequest(job, supabase) {
     // ── STEP 7: 動画ダウンロード ──
     console.log("📥 動画をダウンロード中...");
     const rawVideoPath = path.join(config.output.desktopPath, `_vg_raw_${job.id}.mp4`);
-    await downloadVideoFromGemini(page, rawVideoPath);
+
+    try {
+      await downloadVideoFromGemini(page, rawVideoPath);
+    } catch (dlErr) {
+      console.error(`  ❌ 動画ダウンロード失敗: ${dlErr.message}`);
+
+      // スクリーンショットを保存（デバッグ用）
+      try {
+        const ssPath = path.join(config.output.desktopPath, `_vg_debug_${job.id}.png`);
+        await page.screenshot({ path: ssPath, fullPage: true });
+        console.log(`  📸 デバッグ用スクリーンショット保存: ${ssPath}`);
+      } catch { /* ignore */ }
+
+      await supabase.from("video_generation_logs").update({
+        result: "failed",
+        retry_count: retryCount + 1,
+        prompt_used: imagePrompt,
+        error_message: `動画ダウンロード失敗: ${dlErr.message}`,
+      }).eq("id", job.id);
+
+      await sendNotification("failed", job, dbSettings);
+      cleanupTempFiles(localImages);
+      return;
+    }
+
+    // ── 最終ファイル検証（念のためダブルチェック） ──
+    if (!fs.existsSync(rawVideoPath)) {
+      console.error("  ❌ ダウンロードファイルが存在しません");
+      await supabase.from("video_generation_logs").update({
+        result: "failed",
+        error_message: "ダウンロードファイルが保存されていません",
+      }).eq("id", job.id);
+      cleanupTempFiles(localImages);
+      return;
+    }
 
     // ── STEP 8: ffmpegでウォーターマーク除去 ──
     const cropPx = dbSettings.watermarkCropPx || config.ffmpeg.watermarkCropPx;
@@ -551,71 +585,305 @@ async function switchToThinkingMode(page) {
   }
 }
 
-/** 動画生成の完了を待機 */
+/** 動画生成の完了を待機（VEO動画は1〜3分かかる） */
 async function waitForVideoGeneration(page, timeout) {
   const startTime = Date.now();
+  const MIN_WAIT = 90000;  // 最低90秒は待つ（VEO生成には時間がかかる）
+
+  // ── 開始前: 現在ページ上にある画像・動画の数を記録（誤検出防止） ──
+  const existingVideos = await page.$$("video").then(els => els.length).catch(() => 0);
+  const existingImages = await page.$$('img[src*="blob:"], img[src*="lh3.googleusercontent"]')
+    .then(els => els.length).catch(() => 0);
+  console.log(`  📊 開始時点: video=${existingVideos}, img=${existingImages}`);
+
+  console.log("  ⏳ 最低90秒待機してからチェック開始...");
 
   while (Date.now() - startTime < timeout) {
     await page.waitForTimeout(10000);  // 10秒ごとにチェック
 
-    // 動画プレーヤーの出現を検出
-    const videoEl = await page.$("video, [data-video-id]");
-    if (videoEl) {
-      await page.waitForTimeout(3000);  // 動画の読み込み完了を待つ
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+    // ── 最低待機時間が経過するまではチェックしない ──
+    if (Date.now() - startTime < MIN_WAIT) {
+      if (elapsed % 30 === 0) console.log(`  ⏳ ${elapsed}秒経過... 待機中`);
+      continue;
+    }
+
+    // 経過ログ（30秒ごと）
+    if (elapsed % 30 === 0) console.log(`  ⏳ ${elapsed}秒経過... チェック中`);
+
+    // ── セーフティフィルター & エラー検出 ──
+    const responseTexts = await page.$$eval(
+      'message-content, .response-container, .model-response, [data-message-author-role="model"]',
+      els => els.map(el => el.textContent || "").join(" ")
+    ).catch(() => "");
+
+    const errorPhrases = [
+      "生成できません", "生成することはできません",
+      "このリクエストには対応できません", "ポリシーに違反",
+      "I can't generate", "I'm not able to generate",
+      "動画を生成できません", "この動画は",
+    ];
+    for (const phrase of errorPhrases) {
+      if (responseTexts.includes(phrase)) {
+        console.log(`  ⚠️ エラー検出: "${phrase}"`);
+        return "failed";
+      }
+    }
+
+    // ── 停止ボタンがまだある = まだ生成中 → 待ち続ける ──
+    const stopBtn = await page.$('[aria-label*="停止"], [aria-label*="Stop"], button:has-text("停止")');
+    if (stopBtn) {
+      continue;  // まだ生成中
+    }
+
+    // ── 新しい <video> 要素の出現を検出 ──
+    const currentVideos = await page.$$("video").then(els => els.length).catch(() => 0);
+    if (currentVideos > existingVideos) {
+      console.log(`  🎥 新しいvideo要素を検出！ (${existingVideos} → ${currentVideos})`);
+
+      // 動画のsrcが設定されるまで少し待つ
+      await page.waitForTimeout(5000);
+
+      // video要素にsrcがあるか確認
+      const videoInfo = await page.$$eval("video", videos => {
+        const last = videos[videos.length - 1];
+        if (!last) return null;
+        const src = last.src || last.querySelector("source")?.src || "";
+        return {
+          src: src,
+          duration: last.duration || 0,
+          readyState: last.readyState || 0,
+        };
+      }).catch(() => null);
+
+      if (videoInfo) {
+        console.log(`  📹 動画情報: src=${videoInfo.src ? "あり" : "なし"}, ` +
+          `duration=${videoInfo.duration}, readyState=${videoInfo.readyState}`);
+      }
+
+      // srcがまだない場合はもう少し待つ
+      if (!videoInfo?.src) {
+        console.log("  ⏳ 動画srcの読み込みを待機中...");
+        await page.waitForTimeout(10000);
+      }
+
       return "success";
     }
 
-    // エラー検出
-    const pageText = await page.textContent("body");
-    if (pageText && (pageText.includes("生成できません") || pageText.includes("エラー"))) {
+    // ── [data-video-id] 等の代替検出 ──
+    const altVideoEl = await page.$('[data-video-id], [data-video-src]');
+    if (altVideoEl) {
+      console.log("  🎥 動画要素（data属性）を検出！");
+      await page.waitForTimeout(5000);
+      return "success";
+    }
+
+    // ── 回答停止の検出 ──
+    const pageText = await page.textContent("body").catch(() => "");
+    if (pageText && pageText.includes("この回答を停止しました")) {
+      console.log("  ⚠️ 回答が停止されました");
       return "failed";
     }
   }
 
+  console.log(`  ⏰ タイムアウト (${Math.round(timeout / 1000)}秒)`);
   return "timeout";
 }
 
-/** Geminiから動画をダウンロード */
+/** Geminiから動画をダウンロード（改善版） */
 async function downloadVideoFromGemini(page, savePath) {
-  // ダウンロードイベントを監視
-  const downloadPromise = page.waitForEvent("download", { timeout: 30000 });
+  // ── 方法1: <video>要素のsrcから直接ダウンロード（最も確実） ──
+  console.log("  🔍 動画要素のsrcを取得中...");
 
-  // ダウンロードボタンを探してクリック
-  const dlSelectors = [
-    '[aria-label*="ダウンロード"], [aria-label*="Download"]',
-    'button:has(svg path[d*="M19 9h-4V3H9v6H5l7 7"])',  // ダウンロードアイコン
-    '[data-tooltip*="ダウンロード"]',
-  ];
+  const videoSrc = await page.$$eval("video", videos => {
+    // 最後の（最新の）video要素を取得
+    const video = videos[videos.length - 1];
+    if (!video) return null;
 
-  let clicked = false;
-  for (const sel of dlSelectors) {
-    const btn = await page.$(sel);
-    if (btn) {
-      await btn.click();
-      clicked = true;
-      break;
+    // video.src または <source>のsrcを取得
+    let src = video.src || "";
+    if (!src) {
+      const source = video.querySelector("source");
+      if (source) src = source.src || "";
     }
-  }
+    return src || null;
+  }).catch(() => null);
 
-  if (!clicked) {
-    // 動画要素を右クリック → 保存
-    const video = await page.$("video");
-    if (video) {
-      const src = await video.getAttribute("src");
-      if (src) {
-        const response = await page.request.get(src);
+  if (videoSrc) {
+    console.log(`  📹 動画src取得: ${videoSrc.slice(0, 80)}...`);
+
+    try {
+      if (videoSrc.startsWith("blob:")) {
+        // blob URLの場合: ページコンテキスト内でfetchしてArrayBufferに変換
+        console.log("  📥 blob URLから動画をダウンロード中...");
+        const base64Data = await page.evaluate(async (blobUrl) => {
+          const response = await fetch(blobUrl);
+          const blob = await response.blob();
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(",")[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }, videoSrc);
+
+        const buffer = Buffer.from(base64Data, "base64");
+        fs.writeFileSync(savePath, buffer);
+        console.log(`  📥 blob経由ダウンロード完了: ${path.basename(savePath)} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
+      } else {
+        // 通常URLの場合: Playwrightのrequestで取得
+        const response = await page.request.get(videoSrc);
         const buffer = await response.body();
         fs.writeFileSync(savePath, buffer);
-        console.log("  📥 video src から直接ダウンロード");
-        return;
+        console.log(`  📥 URL直接ダウンロード完了: ${path.basename(savePath)} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
       }
+
+      // ── ダウンロード後の検証 ──
+      const isValid = await validateVideoFile(savePath);
+      if (isValid) return;
+
+      console.log("  ⚠️ src経由でダウンロードしたファイルが動画ではありません → 方法2へ");
+    } catch (err) {
+      console.log(`  ⚠️ src経由ダウンロードエラー: ${err.message} → 方法2へ`);
     }
-    throw new Error("ダウンロードボタンが見つかりません");
   }
 
-  const download = await downloadPromise;
-  await download.saveAs(savePath);
-  console.log(`  📥 ダウンロード完了: ${path.basename(savePath)}`);
+  // ── 方法2: 動画要素のダウンロードボタンをクリック ──
+  console.log("  🔍 動画のダウンロードボタンを検索中...");
+
+  // まず動画要素の近くにあるダウンロードボタンを探す
+  const dlBtn = await page.evaluate(() => {
+    const videos = document.querySelectorAll("video");
+    if (videos.length === 0) return null;
+
+    const lastVideo = videos[videos.length - 1];
+    // video要素の親要素を辿ってダウンロードボタンを探す
+    let container = lastVideo.parentElement;
+    for (let i = 0; i < 6; i++) {
+      if (!container) break;
+      const btns = container.querySelectorAll("button");
+      for (const btn of btns) {
+        const label = btn.getAttribute("aria-label") || "";
+        const tooltip = btn.getAttribute("data-tooltip") || "";
+        const text = btn.textContent || "";
+        if (label.includes("ダウンロード") || label.includes("Download") ||
+            tooltip.includes("ダウンロード") || tooltip.includes("Download") ||
+            text.includes("download")) {
+          // ボタンにIDがなければユニーク属性を付ける
+          btn.setAttribute("data-tm-dl-target", "true");
+          return true;
+        }
+      }
+      container = container.parentElement;
+    }
+    return null;
+  }).catch(() => null);
+
+  if (dlBtn) {
+    try {
+      const downloadPromise = page.waitForEvent("download", { timeout: 30000 });
+      await page.click('[data-tm-dl-target="true"]');
+      const download = await downloadPromise;
+
+      // ダウンロードのMIMEタイプを確認
+      const suggestedName = download.suggestedFilename();
+      console.log(`  📥 ダウンロード開始: ${suggestedName}`);
+
+      await download.saveAs(savePath);
+      console.log(`  📥 ダウンロードボタン経由完了: ${path.basename(savePath)}`);
+
+      const isValid = await validateVideoFile(savePath);
+      if (isValid) return;
+
+      console.log("  ⚠️ ダウンロードボタン経由のファイルが動画ではありません → 方法3へ");
+    } catch (err) {
+      console.log(`  ⚠️ ダウンロードボタンエラー: ${err.message} → 方法3へ`);
+    }
+  }
+
+  // ── 方法3: ページ内の全ダウンロードボタンから動画っぽいものを探す ──
+  console.log("  🔍 フォールバック: 全ダウンロードボタンを検索...");
+  const dlSelectors = [
+    '[aria-label*="ダウンロード"]',
+    '[aria-label*="Download"]',
+    '[data-tooltip*="ダウンロード"]',
+    '[data-tooltip*="Download"]',
+  ];
+
+  for (const sel of dlSelectors) {
+    const btns = await page.$$(sel);
+    // 最後のボタンが動画用の可能性が高い（動画は最後に生成される）
+    const btn = btns[btns.length - 1];
+    if (!btn) continue;
+
+    try {
+      const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
+      await btn.click();
+      const download = await downloadPromise;
+      const suggestedName = download.suggestedFilename();
+      console.log(`  📥 フォールバックDL: ${suggestedName}`);
+
+      await download.saveAs(savePath);
+
+      const isValid = await validateVideoFile(savePath);
+      if (isValid) return;
+
+      console.log(`  ⚠️ ${suggestedName} は動画ではありません → 次のボタンへ`);
+    } catch { /* next */ }
+  }
+
+  throw new Error("動画のダウンロードに失敗しました（すべての方法を試行済み）");
+}
+
+/** ダウンロードしたファイルが本当に動画かを検証 */
+async function validateVideoFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      console.log("  ❌ ファイルが存在しません");
+      return false;
+    }
+
+    const stats = fs.statSync(filePath);
+    const sizeMB = stats.size / 1024 / 1024;
+
+    // ── サイズチェック: 動画は通常500KB以上 ──
+    if (stats.size < 500 * 1024) {
+      console.log(`  ❌ ファイルサイズが小さすぎます: ${(stats.size / 1024).toFixed(0)}KB（動画は通常500KB以上）`);
+      return false;
+    }
+
+    // ── マジックバイトチェック ──
+    const fd = fs.openSync(filePath, "r");
+    const header = Buffer.alloc(12);
+    fs.readSync(fd, header, 0, 12, 0);
+    fs.closeSync(fd);
+
+    // MP4: ftyp signature at offset 4
+    const isMp4 = header.slice(4, 8).toString("ascii") === "ftyp";
+    // WebM: 0x1A45DFA3
+    const isWebm = header[0] === 0x1A && header[1] === 0x45 && header[2] === 0xDF && header[3] === 0xA3;
+
+    if (!isMp4 && !isWebm) {
+      // ファイルの先頭を16進数で表示（デバッグ用）
+      console.log(`  ❌ 動画フォーマットではありません: ${header.toString("hex").slice(0, 24)}`);
+      console.log(`     ファイルサイズ: ${sizeMB.toFixed(1)}MB`);
+
+      // JPEG/PNG判定
+      if (header[0] === 0xFF && header[1] === 0xD8) {
+        console.log("  ℹ️ これはJPEG画像です");
+      } else if (header[0] === 0x89 && header.slice(1, 4).toString("ascii") === "PNG") {
+        console.log("  ℹ️ これはPNG画像です");
+      }
+      return false;
+    }
+
+    console.log(`  ✅ 動画ファイル検証OK: ${isMp4 ? "MP4" : "WebM"}, ${sizeMB.toFixed(1)}MB`);
+    return true;
+  } catch (err) {
+    console.log(`  ⚠️ ファイル検証エラー: ${err.message}`);
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════════
