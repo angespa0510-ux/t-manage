@@ -349,6 +349,7 @@ async function processRequest(job, supabase) {
       retry_count: retryCount,
       prompt_used: imagePrompt,
       video_filename: finalFilename,
+      original_image_url: job.image_url || "",
       gdrive_path: dbSettings.autoSaveGdrive
         ? `G:\\マイドライブ\\${dbSettings.gdriveFolder || "AI動画生成"}`
         : null,

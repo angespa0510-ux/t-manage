@@ -18,6 +18,8 @@ type VideoLog = {
   image_url: string; motion_category: string; prompt_used: string;
   result: string; retry_count: number; liked: boolean;
   video_filename: string; gdrive_path: string;
+  rating_motion: number; rating_consistency: number; rating_quality: number; rating_safety: number;
+  rating_comment: string; original_image_url: string;
 };
 type MotionCategory = { id: string; label: string; emoji: string; description: string };
 
@@ -456,10 +458,14 @@ export default function VideoGenerator() {
     setLoadingLogs(false);
   }, []);
 
-  /* ─── いいね切替 ─── */
-  const toggleLike = async (log: VideoLog) => {
-    await supabase.from("video_generation_logs").update({ liked: !log.liked }).eq("id", log.id);
-    fetchLogs();
+  /* ─── 評価保存 ─── */
+  const [expandedRating, setExpandedRating] = useState<number | null>(null);
+  const saveRating = async (logId: number, field: string, value: number | string) => {
+    await supabase.from("video_generation_logs").update({
+      [field]: value,
+      liked: field.startsWith("rating_") && typeof value === "number" ? value >= 4 : undefined,
+    }).eq("id", logId);
+    setLogs(prev => prev.map(l => l.id === logId ? { ...l, [field]: value } : l));
   };
 
   /* ─── タブ切替時 ─── */
@@ -916,7 +922,22 @@ export default function VideoGenerator() {
           <div className="flex flex-col gap-3">
             <div className="flex justify-between items-center mb-2">
               <p style={{ fontSize: 13, fontWeight: 600, color: T.text }}>生成履歴</p>
-              <button onClick={fetchLogs} style={btnSub}>🔄 更新</button>
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const ratedCount = logs.filter(l => l.rating_motion > 0 && l.result === "success").length;
+                  return (
+                    <span style={{
+                      fontSize: 11, padding: "3px 10px", borderRadius: 10,
+                      backgroundColor: ratedCount >= 10 ? "rgba(122,184,143,0.15)" : "rgba(195,167,130,0.15)",
+                      color: ratedCount >= 10 ? "#7ab88f" : "#c3a782",
+                    }}>
+                      ⭐ 評価済み {ratedCount}/10
+                      {ratedCount >= 10 && " ✅ エクスポート可能"}
+                    </span>
+                  );
+                })()}
+                <button onClick={fetchLogs} style={btnSub}>🔄 更新</button>
+              </div>
             </div>
 
             {loadingLogs ? (
@@ -929,8 +950,15 @@ export default function VideoGenerator() {
             ) : (
               logs.map(log => {
                 const sc = statusConfig[log.result] || statusConfig.queued;
+                const isExpanded = expandedRating === log.id;
+                const hasRating = log.rating_motion > 0;
+                const avgRating = hasRating
+                  ? ((log.rating_motion + log.rating_consistency + log.rating_quality + log.rating_safety) / 4).toFixed(1)
+                  : null;
+
                 return (
-                  <div key={log.id} style={{ ...cardStyle, padding: 14 }}>
+                  <div key={log.id} style={{ ...cardStyle, padding: 14, borderLeft: hasRating ? "3px solid rgba(195,167,130,0.5)" : undefined }}>
+                    {/* ── 上段: サムネ + 基本情報 ── */}
                     <div className="flex gap-3">
                       <div style={{ width: 70, height: 70, borderRadius: 8, overflow: "hidden", flexShrink: 0, backgroundColor: T.cardAlt }}>
                         {log.image_url ? (
@@ -949,38 +977,115 @@ export default function VideoGenerator() {
                             <span className={sc.spin ? "vg-spin" : ""} style={{ marginRight: 3 }}>{sc.icon}</span>
                             {sc.label}
                           </span>
+                          {avgRating && (
+                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, backgroundColor: "rgba(195,167,130,0.15)", color: "#c3a782" }}>
+                              ⭐ {avgRating}
+                            </span>
+                          )}
                         </div>
                         <p style={{ fontSize: 11, color: T.textSub, margin: 0 }}>🎭 {log.motion_category}</p>
                         {log.video_filename && (
                           <p style={{ fontSize: 11, color: T.textSub, margin: 0 }}>📁 {log.video_filename}</p>
+                        )}
+                        {hasRating && !isExpanded && (
+                          <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                            {[
+                              { label: "M", val: log.rating_motion },
+                              { label: "C", val: log.rating_consistency },
+                              { label: "Q", val: log.rating_quality },
+                              { label: "S", val: log.rating_safety },
+                            ].map(r => (
+                              <span key={r.label} style={{ fontSize: 10, color: T.textMuted }}>
+                                {r.label}: {"★".repeat(r.val)}{"☆".repeat(5 - r.val)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {log.rating_comment && !isExpanded && (
+                          <p style={{ fontSize: 10, color: T.textMuted, margin: "2px 0 0", fontStyle: "italic" }}>💬 {log.rating_comment}</p>
                         )}
                         <p style={{ fontSize: 10, color: T.textMuted, margin: "4px 0 0" }}>
                           {new Date(log.created_at).toLocaleString("ja-JP")}
                           {log.retry_count > 0 && ` (リトライ: ${log.retry_count}回)`}
                         </p>
                       </div>
-                      <button onClick={() => toggleLike(log)}
-                        style={{
-                          background: "none", border: "none", cursor: "pointer",
-                          fontSize: 24, padding: 4, alignSelf: "center",
-                          opacity: log.liked ? 1 : 0.3, transition: "all 0.2s",
+                      <div className="flex flex-col gap-1" style={{ alignSelf: "center" }}>
+                        {log.result === "success" && (
+                          <button onClick={() => setExpandedRating(isExpanded ? null : log.id)}
+                            style={{
+                              background: "none", border: "none", cursor: "pointer",
+                              fontSize: 18, padding: 4, opacity: hasRating ? 1 : 0.4, transition: "all 0.2s",
+                            }}
+                            title="評価する"
+                          >{hasRating ? "⭐" : "☆"}</button>
+                        )}
+                        <button onClick={async () => {
+                          if (!confirm(`「${log.therapist_name}」の履歴を削除しますか？`)) return;
+                          await supabase.from("video_generation_logs").delete().eq("id", log.id);
+                          fetchLogs();
+                          toast.show("削除しました");
                         }}
-                      >{log.liked ? "👍" : "👍"}</button>
-                      <button onClick={async () => {
-                        if (!confirm(`「${log.therapist_name}」の履歴を削除しますか？`)) return;
-                        await supabase.from("video_generation_logs").delete().eq("id", log.id);
-                        fetchLogs();
-                        toast.show("削除しました");
-                      }}
-                        style={{
-                          background: "none", border: "none", cursor: "pointer",
-                          fontSize: 16, padding: 4, alignSelf: "center",
-                          color: T.textMuted, opacity: 0.4, transition: "all 0.2s",
-                        }}
-                        onMouseOver={e => (e.currentTarget.style.opacity = "1")}
-                        onMouseOut={e => (e.currentTarget.style.opacity = "0.4")}
-                      >🗑️</button>
+                          style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            fontSize: 14, padding: 4,
+                            color: T.textMuted, opacity: 0.3, transition: "all 0.2s",
+                          }}
+                          onMouseOver={e => (e.currentTarget.style.opacity = "1")}
+                          onMouseOut={e => (e.currentTarget.style.opacity = "0.3")}
+                        >🗑️</button>
+                      </div>
                     </div>
+
+                    {/* ── 展開: 評価パネル ── */}
+                    {isExpanded && (
+                      <div style={{
+                        marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`,
+                      }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          {[
+                            { key: "rating_motion", label: "🎬 Motion（動き）", desc: "滑らかさ・余韻・自然さ" },
+                            { key: "rating_consistency", label: "🔒 Consistency（一貫性）", desc: "顔・衣装・背景の維持" },
+                            { key: "rating_quality", label: "✨ Quality（品質）", desc: "解像度・テクスチャ・照明" },
+                            { key: "rating_safety", label: "🛡️ Safety（安全性）", desc: "ガイドライン遵守" },
+                          ].map(cat => {
+                            const currentVal = (log as Record<string, unknown>)[cat.key] as number || 0;
+                            return (
+                              <div key={cat.key} style={{ padding: 10, backgroundColor: T.cardAlt, borderRadius: 8 }}>
+                                <p style={{ fontSize: 11, fontWeight: 600, color: T.text, margin: "0 0 2px" }}>{cat.label}</p>
+                                <p style={{ fontSize: 9, color: T.textMuted, margin: "0 0 6px" }}>{cat.desc}</p>
+                                <div style={{ display: "flex", gap: 2 }}>
+                                  {[1, 2, 3, 4, 5].map(star => (
+                                    <button key={star}
+                                      onClick={() => saveRating(log.id, cat.key, star)}
+                                      style={{
+                                        background: "none", border: "none", cursor: "pointer",
+                                        fontSize: 20, padding: "0 1px", lineHeight: 1,
+                                        color: star <= currentVal ? "#c3a782" : "#555",
+                                        transition: "color 0.15s",
+                                      }}
+                                    >{star <= currentVal ? "★" : "☆"}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* コメント欄 */}
+                        <div style={{ marginTop: 10 }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: T.text, margin: "0 0 4px" }}>💬 コメント（キーワード形式推奨）</p>
+                          <p style={{ fontSize: 9, color: T.textMuted, margin: "0 0 6px" }}>例: 「M高・余韻完璧」「C崩れ・顔変化」「Q最高・4Kリアル」</p>
+                          <div className="flex gap-2">
+                            <input
+                              defaultValue={log.rating_comment || ""}
+                              placeholder="評価コメントを入力..."
+                              onBlur={e => saveRating(log.id, "rating_comment", e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              style={{ ...inputStyle, flex: 1, fontSize: 11 }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })
