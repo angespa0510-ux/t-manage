@@ -822,6 +822,9 @@ export default function VideoGenerator() {
                 style={{ ...btnSub, marginTop: 4, fontSize: 10 }}>🔄 デフォルトに戻す</button>
             </div>
 
+            {/* ── ローカルPCセットアップガイド ── */}
+            <SetupGuide T={T} cardStyle={cardStyle} sectionTitle={sectionTitle} />
+
             <div style={{ textAlign: "center", paddingBottom: 40 }}>
               <button onClick={saveSettings} disabled={!settingsDirty}
                 style={{ ...btnPrimary, padding: "14px 60px", opacity: settingsDirty ? 1 : 0.5 }}>
@@ -831,6 +834,228 @@ export default function VideoGenerator() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════ */
+/* SetupGuide コンポーネント                          */
+/* ═══════════════════════════════════════════════════ */
+function SetupGuide({ T, cardStyle, sectionTitle }: {
+  T: Record<string, string>;
+  cardStyle: React.CSSProperties;
+  sectionTitle: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const [copiedStep, setCopiedStep] = useState<number | null>(null);
+
+  const copyCmd = (text: string, step: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedStep(step);
+    setTimeout(() => setCopiedStep(null), 2000);
+  };
+
+  const codeBlock: React.CSSProperties = {
+    backgroundColor: "#1a1a2e", color: "#e0e0e0", padding: "10px 14px",
+    borderRadius: 8, fontSize: 11, fontFamily: "monospace", lineHeight: 1.7,
+    overflowX: "auto", position: "relative", whiteSpace: "pre-wrap", wordBreak: "break-all",
+  };
+  const copyBtn: React.CSSProperties = {
+    position: "absolute", top: 6, right: 6, fontSize: 10, padding: "3px 8px",
+    borderRadius: 4, cursor: "pointer", border: "1px solid rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255,255,255,0.08)", color: "#ccc",
+  };
+  const stepNum: React.CSSProperties = {
+    width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+    background: "linear-gradient(135deg, #c3a782, #a8895e)", color: "white",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 13, fontWeight: 700,
+  };
+  const stepCard: React.CSSProperties = {
+    padding: 14, backgroundColor: T.cardAlt, borderRadius: 10,
+    border: `1px solid ${T.border}`,
+  };
+
+  const STEPS = [
+    {
+      title: "Node.js をインストール",
+      desc: "まだ入っていない場合のみ。v18以上が必要です。",
+      link: "https://nodejs.org/",
+      linkLabel: "nodejs.org からダウンロード",
+      cmd: "node -v",
+      cmdNote: "確認コマンド（v18以上が表示されればOK）",
+    },
+    {
+      title: "ffmpeg をインストール",
+      desc: "ウォーターマーク除去に使います。",
+      link: "https://www.gyan.dev/ffmpeg/builds/",
+      linkLabel: "ffmpeg をダウンロード（essentials推奨）",
+      cmd: "ffmpeg -version",
+      cmdNote: "解凍後、中の bin フォルダを環境変数PATHに追加してから確認",
+    },
+    {
+      title: "リポジトリを取得（初回のみ）",
+      desc: "デスクトップで作業する場合の例：",
+      cmd: "cd C:\\Users\\user\\Desktop\\t-manage\ngit pull origin main",
+      cmdNote: "既にクローン済みなら pull だけでOK",
+    },
+    {
+      title: "video-automation フォルダに移動してセットアップ",
+      desc: "依存パッケージとPlaywrightブラウザをインストールします。",
+      cmd: "cd video-automation\nnpm install\nnpx playwright install chromium",
+      cmdNote: "初回は数分かかります",
+    },
+    {
+      title: ".env ファイルを作成",
+      desc: ".env.example をコピーして .env を作り、各値を設定します。",
+      cmd: 'copy .env.example .env\nnotepad .env',
+      cmdNote: "メモ帳が開くので以下を編集：",
+      envItems: [
+        { key: "SUPABASE_ANON_KEY", hint: "Supabase → Settings → API → anon key" },
+        { key: "CHROME_PROFILE_PATH", hint: "例: C:\\Users\\user\\AppData\\Local\\Google\\Chrome\\User Data" },
+        { key: "DESKTOP_PATH", hint: "例: C:\\Users\\user\\Desktop" },
+        { key: "GDRIVE_PATH", hint: "例: G:\\マイドライブ\\AI動画生成" },
+        { key: "GMAIL_USER", hint: "例: ange.spa0510@gmail.com" },
+        { key: "GMAIL_APP_PASS", hint: "Googleアカウント → セキュリティ → アプリパスワード" },
+        { key: "NOTIFY_EMAIL", hint: "通知先メールアドレス" },
+      ],
+    },
+    {
+      title: "Gemini にログイン確認",
+      desc: "Chromeで https://gemini.google.com/app を開き、ログイン済みの状態にしてください。Playwrightはこのプロファイルを使ってGeminiを操作します。",
+      important: "⚠️ ウォッチャー起動前にChromeは閉じてください（プロファイルのロック防止）",
+    },
+    {
+      title: "ウォッチャーを起動！",
+      desc: "これで自動監視が始まります。T-MANAGEのWeb画面でキューに追加すると、自動で処理が開始されます。",
+      cmd: "npm run watch",
+      cmdNote: "停止するには Ctrl + C",
+    },
+  ];
+
+  return (
+    <div style={{ ...cardStyle, padding: 16, overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          ...sectionTitle, cursor: "pointer", width: "100%",
+          background: "none", border: "none", textAlign: "left", padding: 0,
+          marginBottom: open ? 16 : 0,
+        }}
+      >
+        🖥️ ローカルPCセットアップガイド
+        <span style={{
+          marginLeft: "auto", fontSize: 18, color: T.textSub,
+          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform 0.2s", display: "inline-block",
+        }}>▾</span>
+      </button>
+
+      {open && (
+        <div className="flex flex-col gap-3">
+          {/* 概要 */}
+          <div style={{ padding: 12, backgroundColor: T.accentBg, borderRadius: 8, border: `1px solid ${T.border}` }}>
+            <p style={{ fontSize: 12, color: T.text, margin: 0, lineHeight: 1.7 }}>
+              動画生成はローカルPCの<strong>Playwright</strong>がGeminiのWebUIを自動操作して行います。
+              T-MANAGEの画面でキューに追加 → ローカルのウォッチャーが検出 → 自動で動画生成 → Googleドライブに保存、という流れです。
+            </p>
+            <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, backgroundColor: "rgba(122,184,143,0.15)", color: "#7ab88f" }}>API料金ゼロ</span>
+              <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, backgroundColor: "rgba(133,168,196,0.15)", color: "#85a8c4" }}>GeminiのWebUIを使用</span>
+              <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, backgroundColor: "rgba(195,167,130,0.15)", color: "#c3a782" }}>1日2回まで</span>
+            </div>
+          </div>
+
+          {/* ステップ */}
+          {STEPS.map((step, idx) => (
+            <div key={idx} style={stepCard}>
+              <div className="flex items-start gap-3">
+                <div style={stepNum}>{idx + 1}</div>
+                <div className="flex-1 min-w-0">
+                  <p style={{ fontSize: 13, fontWeight: 600, color: T.text, margin: "0 0 4px" }}>{step.title}</p>
+                  <p style={{ fontSize: 11, color: T.textSub, margin: "0 0 8px", lineHeight: 1.5 }}>{step.desc}</p>
+
+                  {step.link && (
+                    <a href={step.link} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 11, color: T.accent, textDecoration: "underline", display: "inline-block", marginBottom: 8 }}>
+                      🔗 {step.linkLabel}
+                    </a>
+                  )}
+
+                  {step.cmd && (
+                    <div style={{ position: "relative" }}>
+                      {step.cmdNote && (
+                        <p style={{ fontSize: 10, color: T.textMuted, margin: "0 0 4px" }}>{step.cmdNote}</p>
+                      )}
+                      <div style={codeBlock}>
+                        <button onClick={() => copyCmd(step.cmd!, idx)} style={copyBtn}>
+                          {copiedStep === idx ? "✅ コピー済" : "📋 コピー"}
+                        </button>
+                        {step.cmd}
+                      </div>
+                    </div>
+                  )}
+
+                  {step.envItems && (
+                    <div style={{ marginTop: 8 }} className="flex flex-col gap-1">
+                      {step.envItems.map(env => (
+                        <div key={env.key} style={{ padding: "6px 10px", backgroundColor: "#1a1a2e", borderRadius: 6 }}>
+                          <span style={{ fontSize: 11, color: "#c3a782", fontFamily: "monospace", fontWeight: 600 }}>{env.key}</span>
+                          <span style={{ fontSize: 10, color: "#999", marginLeft: 8 }}>{env.hint}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {step.important && (
+                    <p style={{
+                      fontSize: 11, color: "#c45555", margin: "8px 0 0",
+                      padding: "6px 10px", backgroundColor: "rgba(196,85,85,0.08)",
+                      borderRadius: 6, lineHeight: 1.5,
+                    }}>{step.important}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* アーキテクチャ図 */}
+          <div style={{ ...stepCard, textAlign: "center" }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: T.text, margin: "0 0 12px" }}>🔄 動作フロー</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+              {[
+                { icon: "👆", text: "スタッフがT-MANAGEでセラピスト選択 → キューに追加" },
+                { icon: "⬇️", text: "" },
+                { icon: "📡", text: "Supabaseにリクエスト保存（result: queued）" },
+                { icon: "⬇️", text: "" },
+                { icon: "🖥️", text: "ローカルPC watcher.js がポーリングで検出" },
+                { icon: "⬇️", text: "" },
+                { icon: "🤖", text: "Playwright → Gemini で画像生成 → VEO動画生成" },
+                { icon: "⬇️", text: "" },
+                { icon: "✂️", text: "ffmpeg ウォーターマーク除去 → リネーム" },
+                { icon: "⬇️", text: "" },
+                { icon: "📁", text: "デスクトップ + Googleドライブに保存" },
+                { icon: "⬇️", text: "" },
+                { icon: "📧", text: "完了メール通知 → Supabase result: success に更新" },
+                { icon: "⬇️", text: "" },
+                { icon: "✅", text: "T-MANAGEの画面に「完了」が反映" },
+              ].map((row, i) => (
+                row.text === "" ? (
+                  <span key={i} style={{ fontSize: 10, color: T.textMuted }}>⬇️</span>
+                ) : (
+                  <div key={i} style={{
+                    padding: "6px 16px", borderRadius: 8, fontSize: 11, color: T.text,
+                    backgroundColor: T.cardAlt, border: `1px solid ${T.border}`,
+                    maxWidth: 400, width: "100%",
+                  }}>
+                    <span style={{ marginRight: 6 }}>{row.icon}</span>{row.text}
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
