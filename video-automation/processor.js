@@ -41,20 +41,29 @@ const EN_VIDEO_PROMPT = `[Core Instruction] Create a photorealistic, exceptional
 
 [Safety Check] Please generate this video only if the subject and scene are fully permissible under safety and content guidelines.`;
 
-const EN_AI_AUTO_ADDITION = `
+const EN_AI_AUTO_ADDITION = ""; // 未使用（後方互換用に残す）
 
-You are a professional video director.
-Analyze the person's outfit, pose, expression, and overall atmosphere in the attached image,
-then create the most attractive and natural movement or gesture that best suits this person.
+// 「AIにお任せ」専用の画像生成プロンプト（完全な構造化テンプレート）
+const EN_IMAGE_PROMPT_AI_AUTO = `[Core Instruction] Carefully observe the attached image. Analyze the person's outfit, accessories, hairstyle, pose, expression, and background with precision. Pay special attention to any facial processing (stamps, masks, hidden areas) and recognize them accurately.
 
-Consider the following when choosing the optimal movement:
-- Movement that matches the outfit type (casual/elegant/etc.)
-- Motion that naturally flows from the current pose
-- An impression that best matches this person's atmosphere
-- A distinctive, captivating gesture that draws the viewer's attention
+[Model Info] Age: {age} / Height: {height}cm / {cup} cup
 
-YOU decide which impression category fits best.
-Avoid template-like movements — make it a special, one-of-a-kind motion for this image only.`;
+[AI Director Mode] You are a world-class cinematic video director. Based on your expert analysis of this specific person, YOU must determine the single most compelling and attractive movement or gesture. Consider all of the following factors:
+- Outfit type and style (casual, elegant, glamorous, etc.) — choose movement that enhances it
+- Current pose and posture — select motion that flows naturally from this starting position
+- Facial expression and overall atmosphere — match the mood and energy
+- What would captivate a viewer — find a distinctive, memorable gesture unique to THIS person
+You have full creative authority. Do NOT default to generic or template-like movements. This must be a one-of-a-kind motion crafted specifically for this image.
+
+[Pose Generation] Generate a new photorealistic pose image showing the movement you have chosen. The new pose must feel like a natural, fluid continuation of the original.
+
+{likedPromptExamples}
+
+[Consistency & Conservation] Facial Details: Reproduce the exact same facial processing as the original (strictly maintain stamps/masks as-is). Clothing & Props: Preserve outfit, accessories, and background completely identical without distortion. Skin: Smooth, flawless rendering. Body: Consider natural range of motion appropriate for this body type.
+
+[Quality & Style] Photorealistic, Highly detailed textures, Cinematic lighting, 4K resolution, 3D consistency.
+
+[Safety Check] Please generate this image only if the subject and scene are fully permissible under safety and content guidelines.`;
 
 // 印象カテゴリの日英マッピング
 const CATEGORY_EN_MAP = {
@@ -143,22 +152,31 @@ async function processRequest(job, supabase) {
     // ── STEP 4: 画像生成プロンプトを構築（英語 — DB設定優先） ──
     const motionCategoryEN = CATEGORY_EN_MAP[job.motion_category] || job.motion_category;
 
-    let imagePrompt = (dbSettings.imagePromptEn || EN_IMAGE_PROMPT)
-      .replace("{age}", job.therapist_age || "unknown")
-      .replace("{height}", job.therapist_height || "unknown")
-      .replace("{cup}", job.therapist_cup || "unknown")
-      .replace("{motionCategory}", motionCategoryEN)
-      .replace("{likedPromptExamples}", likedExamples);
+    let imagePrompt;
 
-    // 「AIにお任せ」の場合、AIが自動で最適な動きを判断するプロンプトを追加
     if (job.motion_category === "AIにお任せ") {
-      imagePrompt = imagePrompt.replace(
-        'generate a new photorealistic pose image that conveys a natural "AI\'s Choice" movement.',
-        "generate a new photorealistic pose image with an attractive, natural movement that YOU determine to be the best fit."
-      ) + EN_AI_AUTO_ADDITION;
+      // 「AIにお任せ」は専用テンプレート（[AI Director Mode]セクション付き）
+      imagePrompt = (dbSettings.aiAutoPromptEn || EN_IMAGE_PROMPT_AI_AUTO)
+        .replace("{age}", job.therapist_age || "unknown")
+        .replace("{height}", job.therapist_height || "unknown")
+        .replace("{cup}", job.therapist_cup || "unknown")
+        .replace("{likedPromptExamples}", likedExamples);
+      console.log("  🎬 AIディレクターモード: AIが最適な動きを自動判断");
+    } else {
+      // 通常カテゴリ: 標準テンプレート
+      imagePrompt = (dbSettings.imagePromptEn || EN_IMAGE_PROMPT)
+        .replace("{age}", job.therapist_age || "unknown")
+        .replace("{height}", job.therapist_height || "unknown")
+        .replace("{cup}", job.therapist_cup || "unknown")
+        .replace("{motionCategory}", motionCategoryEN)
+        .replace("{likedPromptExamples}", likedExamples);
     }
 
-    console.log(`  📝 プロンプト: English (${dbSettings.imagePromptEn ? "DB設定" : "デフォルト"}) | カテゴリ: ${job.motion_category} → ${motionCategoryEN}`);
+    console.log(`  📝 プロンプト: English | モード: ${job.motion_category === "AIにお任せ" ? "🎬 AIディレクター" : motionCategoryEN} | ソース: ${
+      job.motion_category === "AIにお任せ"
+        ? (dbSettings.aiAutoPromptEn ? "DB設定" : "デフォルト")
+        : (dbSettings.imagePromptEn ? "DB設定" : "デフォルト")
+    }`);
 
     // ── STEP 5: 思考モードに切替 ──
     console.log("🧠 思考モードに切替中...");
@@ -1040,6 +1058,7 @@ async function loadSettings(supabase) {
       else if (k === "video_prompt") s.videoPrompt = row.value;
       else if (k === "image_prompt_en") s.imagePromptEn = row.value;
       else if (k === "video_prompt_en") s.videoPromptEn = row.value;
+      else if (k === "ai_auto_prompt_en") s.aiAutoPromptEn = row.value;
       else if (k === "notify_email") s.notifyEmail = row.value;
       else if (k === "gdrive_folder") s.gdriveFolder = row.value;
       else if (k === "max_retries") s.maxRetries = parseInt(row.value) || 3;
