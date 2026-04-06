@@ -1020,38 +1020,46 @@ export default function VideoGenerator() {
                 const ratedLogs = logs.filter(l => ((l.rating_motion || l.rating_consistency || l.rating_quality || l.rating_safety) > 0) && l.result === "success");
                 if (ratedLogs.length === 0) return null;
 
-                const avgM = (ratedLogs.reduce((s, l) => s + l.rating_motion, 0) / ratedLogs.length).toFixed(1);
-                const avgC = (ratedLogs.reduce((s, l) => s + l.rating_consistency, 0) / ratedLogs.length).toFixed(1);
-                const avgQ = (ratedLogs.reduce((s, l) => s + l.rating_quality, 0) / ratedLogs.length).toFixed(1);
-                const avgS = (ratedLogs.reduce((s, l) => s + l.rating_safety, 0) / ratedLogs.length).toFixed(1);
+                // 0=未評価を除外して平均を計算
+                const calcAvg = (field: keyof VideoLog) => {
+                  const vals = ratedLogs.map(l => l[field] as number).filter(v => v > 0);
+                  return vals.length > 0 ? (vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1) : "—";
+                };
+                const avgM = calcAvg("rating_motion");
+                const avgC = calcAvg("rating_consistency");
+                const avgQ = calcAvg("rating_quality");
+                const avgS = calcAvg("rating_safety");
 
-                // AI改善提案を生成
+                // AI改善提案を生成（未評価「—」は提案しない）
                 const proposals: string[] = [];
-                if (Number(avgM) < 3.5) proposals.push("⚠️ Motion平均が低い → プロンプトに (slow motion:1.5), (cinematic ease-in:1.3) の重み強化を推奨");
-                if (Number(avgM) >= 4.5) proposals.push("✅ Motion優秀 → 現在の動き関連パラメータを固定値として保存");
-                if (Number(avgC) < 3.5) proposals.push("⚠️ Consistency平均が低い → [Consistency] セクションの指示を強化。Denoising Strengthを下げる提案");
-                if (Number(avgC) >= 4.5) proposals.push("✅ Consistency優秀 → 現在のGuidance Scale/一貫性指示を固定");
-                if (Number(avgQ) < 3.5) proposals.push("⚠️ Quality平均が低い → 4K, Photorealistic, Cinematic lighting の重みを1.3倍に強化");
-                if (Number(avgQ) >= 4.5) proposals.push("✅ Quality優秀 → テクスチャ・照明のプロンプト設定を固定");
-                if (Number(avgS) < 3.5) proposals.push("⚠️ Safety平均が低い → [Safety Check] セクションを先頭に移動し強調");
-                if (Number(avgS) >= 4.5) proposals.push("✅ Safety優秀 → 安全プロンプト文言を現状維持");
+                if (avgM !== "—" && Number(avgM) < 3.5) proposals.push("⚠️ Motion平均が低い → プロンプトに (slow motion:1.5), (cinematic ease-in:1.3) の重み強化を推奨");
+                if (avgM !== "—" && Number(avgM) >= 4.5) proposals.push("✅ Motion優秀 → 現在の動き関連パラメータを固定値として保存");
+                if (avgC !== "—" && Number(avgC) < 3.5) proposals.push("⚠️ Consistency平均が低い → [Consistency] セクションの指示を強化。Denoising Strengthを下げる提案");
+                if (avgC !== "—" && Number(avgC) >= 4.5) proposals.push("✅ Consistency優秀 → 現在のGuidance Scale/一貫性指示を固定");
+                if (avgQ !== "—" && Number(avgQ) < 3.5) proposals.push("⚠️ Quality平均が低い → 4K, Photorealistic, Cinematic lighting の重みを1.3倍に強化");
+                if (avgQ !== "—" && Number(avgQ) >= 4.5) proposals.push("✅ Quality優秀 → テクスチャ・照明のプロンプト設定を固定");
+                if (avgS !== "—" && Number(avgS) < 3.5) proposals.push("⚠️ Safety平均が低い → [Safety Check] セクションを先頭に移動し強調");
+                if (avgS !== "—" && Number(avgS) >= 4.5) proposals.push("✅ Safety優秀 → 安全プロンプト文言を現状維持");
+
+                // 個別ログの★表示（0=未評価）
+                const starStr = (v: number) => v > 0 ? "★".repeat(v) + "☆".repeat(5 - v) : "未評価";
 
                 // エクスポートテキスト生成
                 const exportText = `# AI動画生成 評価レポート (${new Date().toLocaleDateString("ja-JP")})
 ## 評価件数: ${ratedLogs.length}件
 
-## 平均スコア
-- Motion（動き）: ${avgM}/5
-- Consistency（一貫性）: ${avgC}/5
-- Quality（品質）: ${avgQ}/5
-- Safety（安全性）: ${avgS}/5
+## 平均スコア（※0は未評価のため計算から除外）
+- Motion（動き）: ${avgM === "—" ? "未評価" : avgM + "/5"}
+- Consistency（一貫性）: ${avgC === "—" ? "未評価" : avgC + "/5"}
+- Quality（品質）: ${avgQ === "—" ? "未評価" : avgQ + "/5"}
+- Safety（安全性）: ${avgS === "—" ? "未評価" : avgS + "/5"}
 
 ## AI改善提案
-${proposals.map(p => `${p}`).join("\n")}
+${proposals.length > 0 ? proposals.join("\n") : "評価データが不足しています。各カテゴリに評価を追加してください。"}
 
 ## 個別評価データ
 ${ratedLogs.map((l, i) => `### ${i + 1}. ${l.therapist_name}（${l.motion_category}）
-- M:${"★".repeat(l.rating_motion)}${"☆".repeat(5 - l.rating_motion)} C:${"★".repeat(l.rating_consistency)}${"☆".repeat(5 - l.rating_consistency)} Q:${"★".repeat(l.rating_quality)}${"☆".repeat(5 - l.rating_quality)} S:${"★".repeat(l.rating_safety)}${"☆".repeat(5 - l.rating_safety)}
+- M:${starStr(l.rating_motion)} C:${starStr(l.rating_consistency)} Q:${starStr(l.rating_quality)} S:${starStr(l.rating_safety)}
 - コメント: ${l.rating_comment || "なし"}
 - プロンプト: ${l.prompt_used?.slice(0, 300) || "N/A"}...
 - 元画像: ${l.original_image_url || l.image_url || "N/A"}
@@ -1090,7 +1098,7 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                       ].map(s => (
                         <div key={s.label} style={{ textAlign: "center", padding: 8, backgroundColor: T.cardAlt, borderRadius: 8 }}>
                           <p style={{ fontSize: 10, color: T.textSub, margin: "0 0 2px" }}>{s.label}</p>
-                          <p style={{ fontSize: 18, fontWeight: 700, color: Number(s.avg) >= 4 ? s.color : T.textMuted, margin: 0 }}>{s.avg}</p>
+                          <p style={{ fontSize: 18, fontWeight: 700, color: s.avg !== "—" && Number(s.avg) >= 4 ? s.color : T.textMuted, margin: 0 }}>{s.avg === "—" ? "—" : s.avg}</p>
                         </div>
                       ))}
                     </div>
@@ -1112,7 +1120,10 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                 const isExpanded = expandedRating === log.id;
                 const hasRating = (log.rating_motion || log.rating_consistency || log.rating_quality || log.rating_safety) > 0;
                 const avgRating = hasRating
-                  ? ((log.rating_motion + log.rating_consistency + log.rating_quality + log.rating_safety) / 4).toFixed(1)
+                  ? (() => {
+                    const vals = [log.rating_motion, log.rating_consistency, log.rating_quality, log.rating_safety].filter(v => v > 0);
+                    return (vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1);
+                  })()
                   : null;
 
                 return (
@@ -1155,7 +1166,7 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                               { label: "S", val: log.rating_safety },
                             ].map(r => (
                               <span key={r.label} style={{ fontSize: 10, color: T.textMuted }}>
-                                {r.label}: {"★".repeat(r.val)}{"☆".repeat(5 - r.val)}
+                                {r.label}: {r.val > 0 ? "★".repeat(r.val) + "☆".repeat(5 - r.val) : "—"}
                               </span>
                             ))}
                           </div>
