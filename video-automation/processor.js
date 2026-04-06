@@ -15,36 +15,31 @@ const { sendNotification } = require("./mailer");
 // ※ 設定画面(日本語)はユーザー参照用。Geminiには英語で送信
 // ═══════════════════════════════════════════
 
-const EN_IMAGE_PROMPT = `Carefully observe the attached image.
-Analyze the person's outfit, accessories, hairstyle, pose, and background.
-Pay special attention to any facial processing (stamps, masks, hidden areas) and recognize them accurately.
+const EN_IMAGE_PROMPT = `[Core Instruction] Carefully observe the attached image. Analyze the person's outfit, accessories, hairstyle, pose, and background. Pay special attention to any facial processing (stamps, masks, hidden areas) and recognize them accurately.
 
-[Model Info]
-Age: {age} / Height: {height}cm / {cup} cup
+[Model Info] Age: {age} / Height: {height}cm / {cup} cup
 
-Based on the body type info above and the image,
-generate a new pose image that conveys a natural "{motionCategoryEN}" movement.
+[Pose Generation] Based on the body type info above and the image, generate a new photorealistic pose image that conveys a natural "{motionCategory}" movement.
 
 {likedPromptExamples}
 
-Strict requirements:
-- Reproduce the exact same facial processing as the original (keep stamps/masks as-is)
-- Keep outfit, accessories, and background completely identical
-- Smooth, flawless skin
-- Consider natural range of motion appropriate for this body type
-- Avoid generic template poses — create a unique, personalized movement for this specific person
-- Movement should be naturally reachable from the current pose
+[Consistency & Conservation] Facial Details: Reproduce the exact same facial processing as the original (strictly maintain stamps/masks as-is). Clothing & Props: Preserve outfit, accessories, and background completely identical without distortion. Skin: Smooth, flawless rendering. Body: Consider natural range of motion appropriate for this body type.
 
-Before generating, please double-check if this meets the safety guidelines.
-If it's borderline, let's discuss first.`;
+[Quality & Style] Photorealistic, Highly detailed textures, Cinematic lighting, 4K resolution.
 
-const EN_VIDEO_PROMPT = `Create a video showing a slow, natural transition from the original pose to the generated pose.
-The movement should be unhurried, smooth, and lingering.
-Only the body should move — maintain the same facial processing as the original image.
-Keep the background natural and preserve all outfit details.
+[Creativity] Avoid generic template poses — create a unique, personalized movement for this specific person. Movement should be naturally reachable from the current pose.
 
-Before generating, please double-check if this meets the safety guidelines.
-If it's borderline, let's discuss first.`;
+[Safety Check] Please generate this image only if the subject and scene are fully permissible under safety and content guidelines.`;
+
+const EN_VIDEO_PROMPT = `[Core Instruction] Create a photorealistic, exceptionally smooth, cinematic slow-motion video showing a natural transition from the original uploaded image's pose to the generated image's pose.
+
+[Motion & Timing] The movement must be extremely slow, gradual, and fluid, with no sudden or jerky shifts. Integrate graceful, cinematic ease-in and ease-out at the beginning and end of the motion to create a sense of lingering presence and elegance. The pacing must feel unhurried and high-end.
+
+[Consistency & Conservation] Facial Details: Strictly maintain the exact facial features, expression, and hair style from the original image throughout the entire video. Any facial processing (stamps, masks, hidden areas) must remain exactly as-is. Clothing & Props: Preserve every detail, texture, and pattern of the attire and any accessories without alteration. Do not allow the details to distort or hallucinate. Background: Keep the background static and identical to the original scene.
+
+[Quality & Style] 4K resolution, High-definition rendering, Photorealistic, Cinematic lighting, Highly detailed textures, 3D consistency.
+
+[Safety Check] Please generate this video only if the subject and scene are fully permissible under safety and content guidelines.`;
 
 const EN_AI_AUTO_ADDITION = `
 
@@ -145,25 +140,25 @@ async function processRequest(job, supabase) {
         likedLogs.map((l, i) => `参考${i + 1}: ${l.prompt_used.slice(0, 200)}...`).join("\n");
     }
 
-    // ── STEP 4: 画像生成プロンプトを構築（英語） ──
+    // ── STEP 4: 画像生成プロンプトを構築（英語 — DB設定優先） ──
     const motionCategoryEN = CATEGORY_EN_MAP[job.motion_category] || job.motion_category;
 
-    let imagePrompt = EN_IMAGE_PROMPT
+    let imagePrompt = (dbSettings.imagePromptEn || EN_IMAGE_PROMPT)
       .replace("{age}", job.therapist_age || "unknown")
       .replace("{height}", job.therapist_height || "unknown")
       .replace("{cup}", job.therapist_cup || "unknown")
-      .replace("{motionCategoryEN}", motionCategoryEN)
+      .replace("{motionCategory}", motionCategoryEN)
       .replace("{likedPromptExamples}", likedExamples);
 
     // 「AIにお任せ」の場合、AIが自動で最適な動きを判断するプロンプトを追加
     if (job.motion_category === "AIにお任せ") {
       imagePrompt = imagePrompt.replace(
-        'generate a new pose image that conveys a natural "AI\'s Choice" movement.',
-        "generate a new pose image with an attractive, natural movement that YOU determine to be the best fit."
+        'generate a new photorealistic pose image that conveys a natural "AI\'s Choice" movement.',
+        "generate a new photorealistic pose image with an attractive, natural movement that YOU determine to be the best fit."
       ) + EN_AI_AUTO_ADDITION;
     }
 
-    console.log(`  📝 プロンプト言語: English | カテゴリ: ${job.motion_category} → ${motionCategoryEN}`);
+    console.log(`  📝 プロンプト: English (${dbSettings.imagePromptEn ? "DB設定" : "デフォルト"}) | カテゴリ: ${job.motion_category} → ${motionCategoryEN}`);
 
     // ── STEP 5: 思考モードに切替 ──
     console.log("🧠 思考モードに切替中...");
@@ -237,9 +232,9 @@ async function processRequest(job, supabase) {
       return;
     }
 
-    // ── STEP 6: 動画生成プロンプト送信（英語） ──
+    // ── STEP 6: 動画生成プロンプト送信（英語 — DB設定優先） ──
     console.log("\n🎥 動画生成プロンプトを送信中...");
-    const videoPrompt = EN_VIDEO_PROMPT;
+    const videoPrompt = dbSettings.videoPromptEn || EN_VIDEO_PROMPT;
     await typePromptInGemini(page, videoPrompt);
     await clickSendButton(page);
 
@@ -1043,6 +1038,8 @@ async function loadSettings(supabase) {
       const k = row.key.replace("vg_", "");
       if (k === "image_prompt") s.imagePrompt = row.value;
       else if (k === "video_prompt") s.videoPrompt = row.value;
+      else if (k === "image_prompt_en") s.imagePromptEn = row.value;
+      else if (k === "video_prompt_en") s.videoPromptEn = row.value;
       else if (k === "notify_email") s.notifyEmail = row.value;
       else if (k === "gdrive_folder") s.gdriveFolder = row.value;
       else if (k === "max_retries") s.maxRetries = parseInt(row.value) || 3;

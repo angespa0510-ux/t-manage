@@ -34,41 +34,48 @@ const DEFAULT_MOTIONS: MotionCategory[] = [
 const DAILY_LIMIT = 2;
 
 /* ─── デフォルトプロンプト ─── */
-const DEFAULT_IMAGE_PROMPT = `添付画像を注意深く観察してください。
+const DEFAULT_IMAGE_PROMPT = `【核心指示】添付画像を注意深く観察してください。
 人物の衣装、装飾、髪型、ポーズ、背景を把握し、
-特に顔周りの処理（スタンプ、マスク、非表示部分など）を
-正確に認識してください。
+特に顔周りの処理（スタンプ、マスク、非表示部分など）を正確に認識してください。
 
-【モデル情報】
-年齢: {age}歳 / 身長: {height}cm / {cup}カップ
+【モデル情報】年齢: {age}歳 / 身長: {height}cm / {cup}カップ
 
-上記の体型情報と画像から、
+【ポーズ生成】上記の体型情報と画像から、
 「{motionCategory}」を感じる自然な動きを加えた
-新しいポーズ画像を生成してください。
+フォトリアルな新しいポーズ画像を生成してください。
 
 {likedPromptExamples}
 
-以下を厳守：
-- 顔周りの処理は元画像と完全に同じ状態を再現
-  （スタンプやマスクがあればそのまま維持）
-- 衣装・装飾・背景は完全に同一を維持
-- 肌は滑らかに
-- 体型に合った自然な可動域と動きの幅を考慮
-- テンプレート的な定型ポーズは避け、
-  この人物だけの個性ある動きにしてください
-- 動きは現在のポーズから自然に到達できる範囲で
+【一貫性の維持】
+顔: 顔周りの処理は元画像と完全に同じ状態を厳格に再現（スタンプ・マスクはそのまま維持）。
+衣装: 衣装・装飾・背景は完全に同一を維持。歪みや変形は厳禁。
+肌: 滑らかでフォトリアルな描写。
+体型: 体型に合った自然な可動域と動きの幅を考慮。
 
-Before generating, please double-check if this meets the safety guidelines.
-If it's borderline, let's discuss first.`;
+【品質】フォトリアル、高精細テクスチャ、シネマティック照明、4K解像度。
 
-const DEFAULT_VIDEO_PROMPT = `元の画像のポーズから、生成した画像のポーズへ、
-ゆっくりと自然に動く動画にしてください。
-動きは急がず、滑らかに、余韻を持たせて。
-体の動きだけで、顔周りの処理は元画像と同じ状態を維持。
-背景も自然に。衣装のディテールも崩さないでください。
+【創造性】テンプレート的な定型ポーズは避け、この人物だけの個性ある動きにしてください。
+動きは現在のポーズから自然に到達できる範囲で。
 
-Before generating, please double-check if this meets the safety guidelines.
-If it's borderline, let's discuss first.`;
+【安全確認】安全・コンテンツガイドラインに準拠する場合のみ生成してください。`;
+
+const DEFAULT_VIDEO_PROMPT = `【核心指示】元の画像のポーズから生成された画像のポーズへ、
+フォトリアルで極めて滑らかなシネマティックスローモーション動画を生成してください。
+
+【動きとタイミング】動きは極めて遅く、段階的かつ滑らかに。
+急な変化やぎこちない動きは厳禁。動きの始まりと終わりにシネマティックな
+イーズイン・イーズアウトを入れ、余韻と優雅さを演出。
+テンポは急がず、ハイエンドな印象に。
+
+【一貫性の維持】
+顔: 元画像の顔の特徴・表情・髪型を動画全体で厳格に維持。
+顔の加工（スタンプ・マスク等）はそのまま保持。
+衣装: 衣服やアクセサリーの細部・質感・柄を一切変えない。
+背景: 元のシーンと同一の静止した背景を維持。
+
+【品質】4K解像度、フォトリアル、シネマティック照明、高精細テクスチャ。
+
+【安全確認】安全・コンテンツガイドラインに準拠する場合のみ生成してください。`;
 
 const AI_AUTO_PROMPT_ADDITION = `
 
@@ -85,6 +92,33 @@ const AI_AUTO_PROMPT_ADDITION = `
 
 「どの印象カテゴリにするか」もAIが判断してください。
 テンプレート的な動きは避け、この画像だけの特別な動きにしてください。`;
+
+// ── 英語プロンプトテンプレート（Gemini送信用） ──
+const DEFAULT_IMAGE_PROMPT_EN = `[Core Instruction] Carefully observe the attached image. Analyze the person's outfit, accessories, hairstyle, pose, and background. Pay special attention to any facial processing (stamps, masks, hidden areas) and recognize them accurately.
+
+[Model Info] Age: {age} / Height: {height}cm / {cup} cup
+
+[Pose Generation] Based on the body type info above and the image, generate a new photorealistic pose image that conveys a natural "{motionCategory}" movement.
+
+{likedPromptExamples}
+
+[Consistency & Conservation] Facial Details: Reproduce the exact same facial processing as the original (strictly maintain stamps/masks as-is). Clothing & Props: Preserve outfit, accessories, and background completely identical without distortion. Skin: Smooth, flawless rendering. Body: Consider natural range of motion appropriate for this body type.
+
+[Quality & Style] Photorealistic, Highly detailed textures, Cinematic lighting, 4K resolution.
+
+[Creativity] Avoid generic template poses — create a unique, personalized movement for this specific person. Movement should be naturally reachable from the current pose.
+
+[Safety Check] Please generate this image only if the subject and scene are fully permissible under safety and content guidelines.`;
+
+const DEFAULT_VIDEO_PROMPT_EN = `[Core Instruction] Create a photorealistic, exceptionally smooth, cinematic slow-motion video showing a natural transition from the original uploaded image's pose to the generated image's pose.
+
+[Motion & Timing] The movement must be extremely slow, gradual, and fluid, with no sudden or jerky shifts. Integrate graceful, cinematic ease-in and ease-out at the beginning and end of the motion to create a sense of lingering presence and elegance. The pacing must feel unhurried and high-end.
+
+[Consistency & Conservation] Facial Details: Strictly maintain the exact facial features, expression, and hair style from the original image throughout the entire video. Any facial processing (stamps, masks, hidden areas) must remain exactly as-is. Clothing & Props: Preserve every detail, texture, and pattern of the attire and any accessories without alteration. Do not allow the details to distort or hallucinate. Background: Keep the background static and identical to the original scene.
+
+[Quality & Style] 4K resolution, High-definition rendering, Photorealistic, Cinematic lighting, Highly detailed textures, 3D consistency.
+
+[Safety Check] Please generate this video only if the subject and scene are fully permissible under safety and content guidelines.`;
 
 /* ═══════════════════════════════════════════════════ */
 export default function VideoGenerator() {
@@ -134,6 +168,8 @@ export default function VideoGenerator() {
   const [settings, setSettings] = useState({
     imagePrompt: DEFAULT_IMAGE_PROMPT,
     videoPrompt: DEFAULT_VIDEO_PROMPT,
+    imagePromptEn: DEFAULT_IMAGE_PROMPT_EN,
+    videoPromptEn: DEFAULT_VIDEO_PROMPT_EN,
     motionCategories: DEFAULT_MOTIONS,
     notifyEmail: "",
     gdriveFolder: "AI動画生成",
@@ -346,6 +382,8 @@ export default function VideoGenerator() {
         const k = row.key.replace("vg_", "");
         if (k === "image_prompt") s.imagePrompt = row.value;
         else if (k === "video_prompt") s.videoPrompt = row.value;
+        else if (k === "image_prompt_en") s.imagePromptEn = row.value;
+        else if (k === "video_prompt_en") s.videoPromptEn = row.value;
         else if (k === "notify_email") s.notifyEmail = row.value;
         else if (k === "gdrive_folder") s.gdriveFolder = row.value;
         else if (k === "max_retries") s.maxRetries = parseInt(row.value) || 3;
@@ -367,6 +405,8 @@ export default function VideoGenerator() {
     const pairs: { key: string; value: string }[] = [
       { key: "vg_image_prompt", value: settings.imagePrompt },
       { key: "vg_video_prompt", value: settings.videoPrompt },
+      { key: "vg_image_prompt_en", value: settings.imagePromptEn },
+      { key: "vg_video_prompt_en", value: settings.videoPromptEn },
       { key: "vg_notify_email", value: settings.notifyEmail },
       { key: "vg_gdrive_folder", value: settings.gdriveFolder },
       { key: "vg_max_retries", value: String(settings.maxRetries) },
@@ -1034,29 +1074,53 @@ export default function VideoGenerator() {
 
             {/* プロンプトテンプレート */}
             <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}>
-                🌐 <strong>英語プロンプト自動適用中</strong><br />
-                Geminiへの送信時は、品質向上のため最適化された英語プロンプトが自動的に使用されます。<br />
-                下記の日本語プロンプトは参考用です。
+              <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12, lineHeight: 1.6 }}>
+                🌐 <strong>英語プロンプトでGeminiに送信</strong><br />
+                品質向上のため、Geminiには英語プロンプトが送信されます。日本語は参考用です。
               </div>
-              <div style={sectionTitle}>📝 画像生成プロンプト（参考用・日本語）</div>
-              <textarea value={settings.imagePrompt}
-                onChange={e => { setSettings(s => ({ ...s, imagePrompt: e.target.value })); setSettingsDirty(true); }}
-                style={{ ...inputStyle, minHeight: 200, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical" }} />
+
+              {/* ── 画像生成プロンプト ── */}
+              <div style={sectionTitle}>📸 画像生成プロンプト</div>
+
+              <p style={{ fontSize: 11, fontWeight: 600, color: "#7ab88f", margin: "8px 0 4px" }}>🌐 English（Geminiに送信される）</p>
+              <textarea value={settings.imagePromptEn}
+                onChange={e => { setSettings(s => ({ ...s, imagePromptEn: e.target.value })); setSettingsDirty(true); }}
+                style={{ ...inputStyle, minHeight: 220, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical", borderColor: "rgba(122,184,143,0.4)" }} />
               <p style={{ fontSize: 10, color: T.textMuted, marginTop: 4 }}>
-                変数: {"{age}"} {"{height}"} {"{cup}"} {"{motionCategory}"} {"{likedPromptExamples}"}
+                Variables: {"{age}"} {"{height}"} {"{cup}"} {"{motionCategory}"} {"{likedPromptExamples}"}
               </p>
-              <button onClick={() => { setSettings(s => ({ ...s, imagePrompt: DEFAULT_IMAGE_PROMPT })); setSettingsDirty(true); }}
-                style={{ ...btnSub, marginTop: 4, fontSize: 10 }}>🔄 デフォルトに戻す</button>
+              <button onClick={() => { setSettings(s => ({ ...s, imagePromptEn: DEFAULT_IMAGE_PROMPT_EN })); setSettingsDirty(true); }}
+                style={{ ...btnSub, marginTop: 4, fontSize: 10 }}>🔄 英語デフォルトに戻す</button>
+
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ fontSize: 11, color: T.textSub, cursor: "pointer" }}>🇯🇵 日本語（参考用）</summary>
+                <textarea value={settings.imagePrompt}
+                  onChange={e => { setSettings(s => ({ ...s, imagePrompt: e.target.value })); setSettingsDirty(true); }}
+                  style={{ ...inputStyle, minHeight: 180, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical", marginTop: 8, opacity: 0.7 }} />
+                <button onClick={() => { setSettings(s => ({ ...s, imagePrompt: DEFAULT_IMAGE_PROMPT })); setSettingsDirty(true); }}
+                  style={{ ...btnSub, marginTop: 4, fontSize: 10 }}>🔄 日本語デフォルトに戻す</button>
+              </details>
             </div>
 
+            {/* ── 動画生成プロンプト ── */}
             <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={sectionTitle}>🎥 動画生成プロンプト（参考用・日本語）</div>
-              <textarea value={settings.videoPrompt}
-                onChange={e => { setSettings(s => ({ ...s, videoPrompt: e.target.value })); setSettingsDirty(true); }}
-                style={{ ...inputStyle, minHeight: 120, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical" }} />
-              <button onClick={() => { setSettings(s => ({ ...s, videoPrompt: DEFAULT_VIDEO_PROMPT })); setSettingsDirty(true); }}
-                style={{ ...btnSub, marginTop: 4, fontSize: 10 }}>🔄 デフォルトに戻す</button>
+              <div style={sectionTitle}>🎥 動画生成プロンプト</div>
+
+              <p style={{ fontSize: 11, fontWeight: 600, color: "#7ab88f", margin: "8px 0 4px" }}>🌐 English（Geminiに送信される）</p>
+              <textarea value={settings.videoPromptEn}
+                onChange={e => { setSettings(s => ({ ...s, videoPromptEn: e.target.value })); setSettingsDirty(true); }}
+                style={{ ...inputStyle, minHeight: 140, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical", borderColor: "rgba(122,184,143,0.4)" }} />
+              <button onClick={() => { setSettings(s => ({ ...s, videoPromptEn: DEFAULT_VIDEO_PROMPT_EN })); setSettingsDirty(true); }}
+                style={{ ...btnSub, marginTop: 4, fontSize: 10 }}>🔄 英語デフォルトに戻す</button>
+
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ fontSize: 11, color: T.textSub, cursor: "pointer" }}>🇯🇵 日本語（参考用）</summary>
+                <textarea value={settings.videoPrompt}
+                  onChange={e => { setSettings(s => ({ ...s, videoPrompt: e.target.value })); setSettingsDirty(true); }}
+                  style={{ ...inputStyle, minHeight: 100, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical", marginTop: 8, opacity: 0.7 }} />
+                <button onClick={() => { setSettings(s => ({ ...s, videoPrompt: DEFAULT_VIDEO_PROMPT })); setSettingsDirty(true); }}
+                  style={{ ...btnSub, marginTop: 4, fontSize: 10 }}>🔄 日本語デフォルトに戻す</button>
+              </details>
             </div>
 
             {/* ── ローカルPCセットアップガイド ── */}
@@ -1270,7 +1334,7 @@ function SetupGuide({ T, cardStyle, sectionTitle }: {
                     }}>{step.important}</p>
                   )}
 
-                  {(step as Record<string, unknown>).batSetup && (
+                  {!!(step as { batSetup?: boolean }).batSetup && (
                     <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                       <div style={{ padding: 12, backgroundColor: "rgba(122,184,143,0.08)", borderRadius: 8, border: "1px solid rgba(122,184,143,0.2)" }}>
                         <p style={{ fontSize: 12, fontWeight: 600, color: "#7ab88f", margin: "0 0 6px" }}>
