@@ -539,11 +539,6 @@ export default function VideoGenerator() {
                         <p style={{ fontSize: 8, color: T.textSub, margin: 0, lineHeight: 1.3 }}>
                           {[th.age && `${th.age}歳`, th.height && `${th.height}cm`, th.cup && `${th.cup}cup`].filter(Boolean).join(" ")}
                         </p>
-                        <span style={{
-                          fontSize: 8, color: th.status.includes("出勤中") ? "#7ab88f" : T.textMuted,
-                        }}>
-                          {th.status.includes("出勤中") ? "●出勤中" : "○お休み"}
-                        </span>
                       </button>
                     );
                   })}
