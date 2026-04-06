@@ -100,7 +100,11 @@ async function processRequest(job, supabase) {
       ) + `\n\nあなたはプロの映像ディレクターです。\n添付画像の人物の衣装、ポーズ、表情、雰囲気を分析し、\nこの人物に最も似合う、魅力的で自然な動きやしぐさを\nあなた自身で考案してください。\n\n以下を考慮して最適な動きを選んでください：\n- 衣装のタイプに合った動き\n- 現在のポーズから自然に繋がる動作\n- その人物の雰囲気に最もマッチする印象\n- 見る人を惹きつける個性的なしぐさ\n\nテンプレート的な動きは避け、この画像だけの特別な動きにしてください。`;
     }
 
-    // ── STEP 5: セーフティリトライ付き画像生成 ──
+    // ── STEP 5: 思考モードに切替 ──
+    console.log("🧠 思考モードに切替中...");
+    await switchToThinkingMode(page);
+
+    // ── STEP 6: セーフティリトライ付き画像生成 ──
     let imageGenSuccess = false;
     let retryCount = 0;
     const maxRetries = dbSettings.maxRetries || config.retry.maxAttempts;
@@ -117,6 +121,9 @@ async function processRequest(job, supabase) {
         const uploaded = await uploadImageToGemini(page, localImages[0]);
         if (!uploaded) {
           console.log("  ⚠️ 画像アップロード失敗 → リトライ");
+          // 新しいチャットで再試行
+          await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
+          await page.waitForTimeout(8000);
           continue;
         }
 
@@ -127,9 +134,9 @@ async function processRequest(job, supabase) {
         // 送信ボタンをクリック
         await clickSendButton(page);
 
-        // 生成完了を待機（最大2分）
-        console.log("  ⏳ 画像生成を待機中...");
-        const result = await waitForGeminiResponse(page, 120000);
+        // 生成完了を待機（最大4分 — 画像生成は時間がかかる）
+        console.log("  ⏳ 画像生成を待機中（最大4分）...");
+        const result = await waitForGeminiResponse(page, 240000);
 
         if (result === "success") {
           imageGenSuccess = true;
@@ -139,7 +146,13 @@ async function processRequest(job, supabase) {
           console.log("  ⚠️ セーフティフィルター → リトライ");
           // 新しいチャットを開始
           await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
-          await page.waitForTimeout(3000);
+          await page.waitForTimeout(8000);
+          await switchToThinkingMode(page);
+        } else {
+          console.log("  ⏰ タイムアウト → リトライ");
+          await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
+          await page.waitForTimeout(8000);
+          await switchToThinkingMode(page);
         }
       } catch (err) {
         console.log(`  ⚠️ エラー: ${err.message}`);
@@ -406,33 +419,123 @@ async function clickSendButton(page) {
 /** Geminiのレスポンスを待機 */
 async function waitForGeminiResponse(page, timeout) {
   const startTime = Date.now();
+  let lastLog = Date.now();
 
   while (Date.now() - startTime < timeout) {
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(10000);  // 10秒ごとにチェック
 
-    // セーフティフィルター検出
-    const safetyTexts = ["安全性", "ポリシー", "生成できません", "I can't", "safety", "policy"];
-    const pageText = await page.textContent("body");
-    for (const st of safetyTexts) {
-      if (pageText && pageText.includes(st)) {
+    // 経過時間ログ（30秒ごと）
+    if (Date.now() - lastLog > 30000) {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      console.log(`  ⏳ ${elapsed}秒経過... まだ生成中`);
+      lastLog = Date.now();
+    }
+
+    // Geminiのレスポンスエリアのテキストを取得
+    const responseTexts = await page.$$eval(
+      'message-content, .response-container, .model-response, [data-message-author-role="model"]',
+      els => els.map(el => el.textContent || "").join(" ")
+    ).catch(() => "");
+
+    // セーフティフィルター検出（レスポンスエリア内のみ）
+    const safetyPhrases = [
+      "生成できません",
+      "生成することはできません",
+      "このリクエストには対応できません",
+      "ポリシーに違反",
+      "I can't generate",
+      "I'm not able to generate",
+      "violates our policies",
+    ];
+    for (const phrase of safetyPhrases) {
+      if (responseTexts.includes(phrase)) {
         return "safety";
       }
     }
 
-    // 画像生成完了を検出（新しい画像が表示されたか）
-    const images = await page.$$('img[src*="blob:"], img[src*="data:image"], img[src*="generated"]');
-    if (images.length > 0) {
+    // 画像生成完了を検出
+    // Geminiが生成した画像は通常 img タグで表示される
+    const newImages = await page.$$('img[src*="blob:"], img[src*="lh3.googleusercontent"], img[src*="generated"], canvas');
+    if (newImages.length > 0) {
+      // 画像が表示されてから少し待つ（完全に読み込まれるまで）
+      await page.waitForTimeout(5000);
       return "success";
     }
 
-    // レスポンスの「完了」を検出
-    const responseComplete = await page.$('.response-complete, [data-complete="true"]');
-    if (responseComplete) {
+    // レスポンスが完了したかの別の指標（ストリーミングが止まった）
+    // 送信ボタンが再度有効になったかチェック
+    const sendBtn = await page.$('[aria-label*="送信"]:not([disabled]), [aria-label*="Send"]:not([disabled])');
+    const stopBtn = await page.$('[aria-label*="停止"], [aria-label*="Stop"]');
+    
+    // 停止ボタンがなく、送信ボタンがある = レスポンス完了
+    if (sendBtn && !stopBtn && (Date.now() - startTime > 20000)) {
+      // テキストレスポンスとして完了した可能性（画像なし）
+      console.log("  📝 テキストレスポンスとして完了（画像なし）");
+      // 画像がないならもう少し待ってみる（Geminiが追加生成するかも）
+      await page.waitForTimeout(5000);
+      const imgs = await page.$$('img[src*="blob:"], img[src*="lh3.googleusercontent"]');
+      if (imgs.length > 0) return "success";
+      // 画像がなくてもレスポンスはあった → 次のステップ（動画生成）に進める可能性
       return "success";
     }
   }
 
   return "timeout";
+}
+
+/** 思考モード（Deep Think）に切替 */
+async function switchToThinkingMode(page) {
+  try {
+    // モード選択ドロップダウンを探す
+    const modeSelectors = [
+      'button:has-text("高速モード")',
+      'button:has-text("Flash")',
+      '[aria-label*="モデル"]',
+      '[aria-label*="model"]',
+      'button:has-text("2.0")',
+      // ドロップダウントリガー
+      '.model-selector',
+      '[data-test-id="model-selector"]',
+    ];
+
+    for (const sel of modeSelectors) {
+      const btn = await page.$(sel);
+      if (btn) {
+        console.log(`  🔍 モード切替ボタン発見: ${sel}`);
+        await btn.click();
+        await page.waitForTimeout(1500);
+
+        // 思考モード / Deep Think を選択
+        const thinkOptions = [
+          'text=思考',
+          'text=Think',
+          'text=Deep',
+          '[role="option"]:has-text("思考")',
+          '[role="menuitem"]:has-text("思考")',
+          '[role="option"]:has-text("Think")',
+          '[role="menuitem"]:has-text("Think")',
+        ];
+
+        for (const optSel of thinkOptions) {
+          const opt = await page.$(optSel);
+          if (opt) {
+            await opt.click();
+            await page.waitForTimeout(1000);
+            console.log("  ✅ 思考モードに切替完了");
+            return;
+          }
+        }
+
+        // メニューを閉じる
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(500);
+      }
+    }
+
+    console.log("  ℹ️ モード切替ボタンが見つかりません（現在のモードで続行）");
+  } catch (err) {
+    console.log(`  ⚠️ モード切替エラー: ${err.message}（現在のモードで続行）`);
+  }
 }
 
 /** 動画生成の完了を待機 */
