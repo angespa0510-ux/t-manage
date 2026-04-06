@@ -533,53 +533,115 @@ async function waitForGeminiResponse(page, timeout) {
 /** 思考モード（Deep Think）に切替 */
 async function switchToThinkingMode(page) {
   try {
-    // モード選択ドロップダウンを探す
+    // ── まず現在のモード表示を確認 ──
+    const currentModeText = await page.evaluate(() => {
+      // モデル選択UIのテキストを探す（ドロップダウン/ボタンなど）
+      const candidates = document.querySelectorAll(
+        'button, [role="combobox"], [role="listbox"], .model-selector, [class*="model"]'
+      );
+      const results = [];
+      for (const el of candidates) {
+        const text = el.textContent?.trim() || "";
+        if (text.length > 0 && text.length < 50 &&
+            (text.includes("Flash") || text.includes("Pro") || text.includes("思考") ||
+             text.includes("Think") || text.includes("2.0") || text.includes("2.5") ||
+             text.includes("モデル") || text.includes("mode") || text.includes("高速"))) {
+          results.push({ text, tag: el.tagName, ariaLabel: el.getAttribute("aria-label") || "" });
+        }
+      }
+      return results;
+    }).catch(() => []);
+
+    if (currentModeText.length > 0) {
+      console.log("  📋 現在のモード関連UI:");
+      currentModeText.forEach(m => console.log(`    ${m.tag} label="${m.ariaLabel}" text="${m.text}"`));
+    }
+
+    // ── すでに思考モードなら何もしない ──
+    const alreadyThinking = currentModeText.some(m =>
+      m.text.includes("思考") || m.text.includes("Think") || m.text.includes("Deep")
+    );
+    if (alreadyThinking) {
+      console.log("  ✅ すでに思考モードです");
+      return;
+    }
+
+    // ── モード切替ドロップダウンを探してクリック ──
     const modeSelectors = [
       'button:has-text("高速モード")',
       'button:has-text("Flash")',
+      'button:has-text("2.0 Flash")',
+      'button:has-text("2.5 Flash")',
+      'button:has-text("Gemini")',
       '[aria-label*="モデル"]',
       '[aria-label*="model"]',
+      '[aria-label*="Model"]',
       'button:has-text("2.0")',
-      // ドロップダウントリガー
+      'button:has-text("2.5")',
       '.model-selector',
       '[data-test-id="model-selector"]',
+      // ドロップダウントリガー（モデル名を含むボタン）
+      'button:has-text("Pro")',
     ];
 
     for (const sel of modeSelectors) {
       const btn = await page.$(sel);
       if (btn) {
-        console.log(`  🔍 モード切替ボタン発見: ${sel}`);
+        const btnText = await btn.textContent().catch(() => "");
+        console.log(`  🔍 モード切替ボタン発見: ${sel} → "${btnText.trim().slice(0, 40)}"`);
         await btn.click();
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(2000);
 
-        // 思考モード / Deep Think を選択
+        // ── ドロップダウンメニュー内のオプションをデバッグ表示 ──
+        const menuItems = await page.$$eval(
+          '[role="option"], [role="menuitem"], [role="menuitemradio"], li, .option',
+          els => els.map(el => ({
+            text: el.textContent?.trim().slice(0, 60) || "",
+            role: el.getAttribute("role") || "",
+          })).filter(e => e.text.length > 0 && e.text.length < 60)
+        ).catch(() => []);
+
+        if (menuItems.length > 0) {
+          console.log("  📋 ドロップダウン内の選択肢:");
+          menuItems.forEach(m => console.log(`    [${m.role}] "${m.text}"`));
+        }
+
+        // ── 思考モード / Deep Think を選択 ──
         const thinkOptions = [
           'text=思考',
           'text=Think',
-          'text=Deep',
+          'text=Deep Think',
+          'text=Deep Research',
           '[role="option"]:has-text("思考")',
           '[role="menuitem"]:has-text("思考")',
+          '[role="menuitemradio"]:has-text("思考")',
           '[role="option"]:has-text("Think")',
           '[role="menuitem"]:has-text("Think")',
+          '[role="menuitemradio"]:has-text("Think")',
+          // テキスト部分一致
+          ':text("思考モード")',
         ];
 
         for (const optSel of thinkOptions) {
           const opt = await page.$(optSel);
           if (opt) {
+            const optText = await opt.textContent().catch(() => "");
             await opt.click();
-            await page.waitForTimeout(1000);
-            console.log("  ✅ 思考モードに切替完了");
+            await page.waitForTimeout(1500);
+            console.log(`  ✅ 思考モードに切替完了: "${optText.trim().slice(0, 40)}"`);
             return;
           }
         }
 
-        // メニューを閉じる
+        // 思考モードが見つからない場合 → メニューを閉じる
+        console.log("  ⚠️ 思考モードの選択肢が見つかりません");
         await page.keyboard.press("Escape");
         await page.waitForTimeout(500);
       }
     }
 
     console.log("  ℹ️ モード切替ボタンが見つかりません（現在のモードで続行）");
+    console.log("  💡 ヒント: Geminiを手動で開いて思考モードに切替後、watcher再起動も可");
   } catch (err) {
     console.log(`  ⚠️ モード切替エラー: ${err.message}（現在のモードで続行）`);
   }
