@@ -1107,7 +1107,7 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                   </div>
                 );
               })()}
-              logs.map(log => {
+              {logs.map(log => {
                 const sc = statusConfig[log.result] || statusConfig.queued;
                 const isExpanded = expandedRating === log.id;
                 const hasRating = log.rating_motion > 0;
@@ -1267,7 +1267,7 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                     )}
                   </div>
                 );
-              })
+              })}
             </>)}
           </div>
         )}
