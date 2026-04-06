@@ -67,7 +67,8 @@ async function processRequest(job, supabase) {
     // ── STEP 2: Geminiにアクセス ──
     console.log("🤖 Geminiにアクセス中...");
     await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(8000);  // Gemini SPAの完全読み込みを待つ
+    console.log("  ✅ Geminiページ読み込み完了");
 
     // ── STEP 3: いいねログから参考プロンプトを取得 ──
     let likedExamples = "";
@@ -246,27 +247,100 @@ async function processRequest(job, supabase) {
 /** 画像をGeminiにアップロード */
 async function uploadImageToGemini(page, imagePath) {
   try {
-    // ファイル入力を探す（hidden input[type=file]）
-    const fileInput = await page.$('input[type="file"]');
-    if (fileInput) {
-      await fileInput.setInputFiles(imagePath);
-      await page.waitForTimeout(3000);
-      console.log("  📎 setInputFiles() で画像アップロード成功");
-      return true;
+    // ── 方法1: hidden input[type="file"] を探す（ページ全体から） ──
+    const fileInputs = await page.$$('input[type="file"]');
+    for (const fi of fileInputs) {
+      try {
+        await fi.setInputFiles(imagePath);
+        await page.waitForTimeout(3000);
+        console.log("  📎 hidden input[type=file] で画像アップロード成功");
+        return true;
+      } catch { /* この要素では無理 → 次を試す */ }
     }
 
-    // 添付ボタンをクリックしてファイルダイアログを開く
-    const attachBtn = await page.$('[aria-label*="添付"], [aria-label*="Attach"], [data-tooltip*="ファイル"]');
-    if (attachBtn) {
-      const [fileChooser] = await Promise.all([
-        page.waitForEvent("filechooser", { timeout: 5000 }),
-        attachBtn.click(),
-      ]);
-      await fileChooser.setFiles(imagePath);
-      await page.waitForTimeout(3000);
-      console.log("  📎 filechooser で画像アップロード成功");
-      return true;
+    // ── 方法2: 「+」ボタンをクリックしてメニューを開く ──
+    console.log("  🔍 添付ボタンを検索中...");
+    const plusSelectors = [
+      // Geminiの「+」アイコンボタン（入力欄の左側）
+      'button[aria-label*="添付"]',
+      'button[aria-label*="ファイル"]',
+      'button[aria-label*="Attach"]',
+      'button[aria-label*="Upload"]',
+      'button[aria-label*="Add"]',
+      '[data-tooltip*="添付"]',
+      '[data-tooltip*="ファイル"]',
+      // 「+」テキストを含むボタン
+      'button:has(span.material-symbols-outlined)',
+    ];
+
+    for (const sel of plusSelectors) {
+      const btn = await page.$(sel);
+      if (btn) {
+        console.log(`  🔍 添付ボタン発見: ${sel}`);
+        await btn.click();
+        await page.waitForTimeout(2000);
+
+        // メニューが開いたら「ファイルをアップロード」を探す
+        const uploadOption = await page.$('text=ファイルをアップロード') 
+          || await page.$('text=Upload file')
+          || await page.$('[role="menuitem"]:has-text("ファイル")')
+          || await page.$('[role="menuitem"]:has-text("アップロード")');
+
+        if (uploadOption) {
+          const [fileChooser] = await Promise.all([
+            page.waitForEvent("filechooser", { timeout: 10000 }),
+            uploadOption.click(),
+          ]);
+          await fileChooser.setFiles(imagePath);
+          await page.waitForTimeout(3000);
+          console.log("  📎 メニュー経由で画像アップロード成功");
+          return true;
+        }
+
+        // メニューではなく直接filechooserが開く場合
+        try {
+          const [fileChooser] = await Promise.all([
+            page.waitForEvent("filechooser", { timeout: 5000 }),
+          ]);
+          await fileChooser.setFiles(imagePath);
+          await page.waitForTimeout(3000);
+          console.log("  📎 直接filechooser で画像アップロード成功");
+          return true;
+        } catch { /* filechooserは開かなかった */ }
+
+        // Escでメニューを閉じる
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(500);
+      }
     }
+
+    // ── 方法3: ドラッグ&ドロップエリアに直接ファイルを設定 ──
+    // ページ上の全てのinput[type="file"]を再チェック（メニュー操作後に出現する場合）
+    const fileInputs2 = await page.$$('input[type="file"]');
+    if (fileInputs2.length > 0) {
+      for (const fi of fileInputs2) {
+        try {
+          await fi.setInputFiles(imagePath);
+          await page.waitForTimeout(3000);
+          console.log("  📎 再チェックのinput[type=file] で画像アップロード成功");
+          return true;
+        } catch { /* next */ }
+      }
+    }
+
+    // ── 方法4: テキスト入力欄にフォーカスしてからクリップボード貼り付け ──
+    // （一部のGemini UIではペーストで画像を受け付ける）
+
+    // ── デバッグ: ページ上の全ボタンをログ出力 ──
+    console.log("  🔍 ページ上のボタン一覧（デバッグ）:");
+    const buttons = await page.$$eval('button', btns => 
+      btns.slice(0, 15).map(b => ({
+        text: b.textContent?.trim().slice(0, 40),
+        ariaLabel: b.getAttribute('aria-label'),
+        className: b.className?.slice(0, 50),
+      }))
+    );
+    buttons.forEach((b, i) => console.log(`    [${i}] label="${b.ariaLabel}" text="${b.text}" class="${b.className}"`));
 
     console.log("  ⚠️ ファイルアップロード要素が見つかりません");
     return false;
