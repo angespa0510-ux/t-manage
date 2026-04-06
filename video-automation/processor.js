@@ -10,6 +10,67 @@ const { downloadImage } = require("./downloader");
 const { removeWatermark, renameAndCopy } = require("./ffmpeg-utils");
 const { sendNotification } = require("./mailer");
 
+// ═══════════════════════════════════════════
+// 英語プロンプトテンプレート
+// ※ 設定画面(日本語)はユーザー参照用。Geminiには英語で送信
+// ═══════════════════════════════════════════
+
+const EN_IMAGE_PROMPT = `Carefully observe the attached image.
+Analyze the person's outfit, accessories, hairstyle, pose, and background.
+Pay special attention to any facial processing (stamps, masks, hidden areas) and recognize them accurately.
+
+[Model Info]
+Age: {age} / Height: {height}cm / {cup} cup
+
+Based on the body type info above and the image,
+generate a new pose image that conveys a natural "{motionCategoryEN}" movement.
+
+{likedPromptExamples}
+
+Strict requirements:
+- Reproduce the exact same facial processing as the original (keep stamps/masks as-is)
+- Keep outfit, accessories, and background completely identical
+- Smooth, flawless skin
+- Consider natural range of motion appropriate for this body type
+- Avoid generic template poses — create a unique, personalized movement for this specific person
+- Movement should be naturally reachable from the current pose
+
+Before generating, please double-check if this meets the safety guidelines.
+If it's borderline, let's discuss first.`;
+
+const EN_VIDEO_PROMPT = `Create a video showing a slow, natural transition from the original pose to the generated pose.
+The movement should be unhurried, smooth, and lingering.
+Only the body should move — maintain the same facial processing as the original image.
+Keep the background natural and preserve all outfit details.
+
+Before generating, please double-check if this meets the safety guidelines.
+If it's borderline, let's discuss first.`;
+
+const EN_AI_AUTO_ADDITION = `
+
+You are a professional video director.
+Analyze the person's outfit, pose, expression, and overall atmosphere in the attached image,
+then create the most attractive and natural movement or gesture that best suits this person.
+
+Consider the following when choosing the optimal movement:
+- Movement that matches the outfit type (casual/elegant/etc.)
+- Motion that naturally flows from the current pose
+- An impression that best matches this person's atmosphere
+- A distinctive, captivating gesture that draws the viewer's attention
+
+YOU decide which impression category fits best.
+Avoid template-like movements — make it a special, one-of-a-kind motion for this image only.`;
+
+// 印象カテゴリの日英マッピング
+const CATEGORY_EN_MAP = {
+  "AIにお任せ": "AI's Choice",
+  "親しみやすさ": "Friendly & Approachable",
+  "リラックス感": "Relaxed & Calm",
+  "上品さ": "Elegant & Refined",
+  "華やかさ": "Glamorous & Vibrant",
+  "カスタム": "Custom",
+};
+
 /**
  * リクエスト処理のメインフロー
  */
@@ -84,21 +145,25 @@ async function processRequest(job, supabase) {
         likedLogs.map((l, i) => `参考${i + 1}: ${l.prompt_used.slice(0, 200)}...`).join("\n");
     }
 
-    // ── STEP 4: 画像生成プロンプトを構築 ──
-    let imagePrompt = (dbSettings.imagePrompt || config.defaultImagePrompt || "")
-      .replace("{age}", job.therapist_age || "不明")
-      .replace("{height}", job.therapist_height || "不明")
-      .replace("{cup}", job.therapist_cup || "不明")
-      .replace("{motionCategory}", job.motion_category)
+    // ── STEP 4: 画像生成プロンプトを構築（英語） ──
+    const motionCategoryEN = CATEGORY_EN_MAP[job.motion_category] || job.motion_category;
+
+    let imagePrompt = EN_IMAGE_PROMPT
+      .replace("{age}", job.therapist_age || "unknown")
+      .replace("{height}", job.therapist_height || "unknown")
+      .replace("{cup}", job.therapist_cup || "unknown")
+      .replace("{motionCategoryEN}", motionCategoryEN)
       .replace("{likedPromptExamples}", likedExamples);
 
     // 「AIにお任せ」の場合、AIが自動で最適な動きを判断するプロンプトを追加
     if (job.motion_category === "AIにお任せ") {
       imagePrompt = imagePrompt.replace(
-        "「AIにお任せ」を感じる自然な動きを加えた",
-        "あなたが最適だと判断する、魅力的で自然な動きを加えた"
-      ) + `\n\nあなたはプロの映像ディレクターです。\n添付画像の人物の衣装、ポーズ、表情、雰囲気を分析し、\nこの人物に最も似合う、魅力的で自然な動きやしぐさを\nあなた自身で考案してください。\n\n以下を考慮して最適な動きを選んでください：\n- 衣装のタイプに合った動き\n- 現在のポーズから自然に繋がる動作\n- その人物の雰囲気に最もマッチする印象\n- 見る人を惹きつける個性的なしぐさ\n\nテンプレート的な動きは避け、この画像だけの特別な動きにしてください。`;
+        'generate a new pose image that conveys a natural "AI\'s Choice" movement.',
+        "generate a new pose image with an attractive, natural movement that YOU determine to be the best fit."
+      ) + EN_AI_AUTO_ADDITION;
     }
+
+    console.log(`  📝 プロンプト言語: English | カテゴリ: ${job.motion_category} → ${motionCategoryEN}`);
 
     // ── STEP 5: 思考モードに切替 ──
     console.log("🧠 思考モードに切替中...");
@@ -172,9 +237,9 @@ async function processRequest(job, supabase) {
       return;
     }
 
-    // ── STEP 6: 動画生成プロンプト送信 ──
+    // ── STEP 6: 動画生成プロンプト送信（英語） ──
     console.log("\n🎥 動画生成プロンプトを送信中...");
-    const videoPrompt = dbSettings.videoPrompt || config.defaultVideoPrompt || "";
+    const videoPrompt = EN_VIDEO_PROMPT;
     await typePromptInGemini(page, videoPrompt);
     await clickSendButton(page);
 

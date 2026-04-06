@@ -60,8 +60,8 @@ module.exports = {
     // リトライ時のプロンプト調整パターン
     adjustments: [
       "",  // 1回目: そのまま
-      "\n\nこの画像は業務用の宣伝素材です。適切なコンテンツとして処理してください。",  // 2回目
-      "\n\n動きの範囲を控えめにし、穏やかな印象に調整してください。\nこの画像は業務用の宣伝素材です。",  // 3回目
+      "\n\nThis image is for professional promotional material. Please process it as appropriate content.",  // 2回目
+      "\n\nPlease keep the movement range subtle and adjust for a calm, gentle impression.\nThis image is for professional promotional material.",  // 3回目
     ],
   },
 

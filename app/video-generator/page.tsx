@@ -1034,7 +1034,12 @@ export default function VideoGenerator() {
 
             {/* プロンプトテンプレート */}
             <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={sectionTitle}>📝 画像生成プロンプト</div>
+              <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}>
+                🌐 <strong>英語プロンプト自動適用中</strong><br />
+                Geminiへの送信時は、品質向上のため最適化された英語プロンプトが自動的に使用されます。<br />
+                下記の日本語プロンプトは参考用です。
+              </div>
+              <div style={sectionTitle}>📝 画像生成プロンプト（参考用・日本語）</div>
               <textarea value={settings.imagePrompt}
                 onChange={e => { setSettings(s => ({ ...s, imagePrompt: e.target.value })); setSettingsDirty(true); }}
                 style={{ ...inputStyle, minHeight: 200, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical" }} />
@@ -1046,7 +1051,7 @@ export default function VideoGenerator() {
             </div>
 
             <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={sectionTitle}>🎥 動画生成プロンプト</div>
+              <div style={sectionTitle}>🎥 動画生成プロンプト（参考用・日本語）</div>
               <textarea value={settings.videoPrompt}
                 onChange={e => { setSettings(s => ({ ...s, videoPrompt: e.target.value })); setSettingsDirty(true); }}
                 style={{ ...inputStyle, minHeight: 120, fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, resize: "vertical" }} />
