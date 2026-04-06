@@ -245,12 +245,23 @@ async function processRequest(job, supabase) {
 
     // ── STEP 9: Googleドライブにコピー ──
     if (dbSettings.autoSaveGdrive) {
-      const gdriveDest = path.join(
-        config.output.gdrivePath || dbSettings.gdriveFolder,
-        finalFilename
-      );
-      await renameAndCopy(finalPath, gdriveDest);
-      console.log(`📁 GDriveにコピー: ${gdriveDest}`);
+      // GDriveパス: ベースパス(G:\マイドライブ) + フォルダ名(DB設定 or config)
+      const gdriveBasePath = process.env.GDRIVE_BASE_PATH || "G:\\マイドライブ";
+      const gdriveFolder = dbSettings.gdriveFolder || "AI動画生成";
+      const gdriveDest = path.join(gdriveBasePath, gdriveFolder, finalFilename);
+
+      try {
+        // フォルダが無ければ作成
+        const gdriveDir = path.join(gdriveBasePath, gdriveFolder);
+        if (!fs.existsSync(gdriveDir)) {
+          fs.mkdirSync(gdriveDir, { recursive: true });
+          console.log(`  📁 GDriveフォルダ作成: ${gdriveDir}`);
+        }
+        await renameAndCopy(finalPath, gdriveDest);
+        console.log(`📁 GDriveにコピー: ${gdriveDest}`);
+      } catch (gdriveErr) {
+        console.log(`  ⚠️ GDriveコピー失敗: ${gdriveErr.message}（デスクトップのファイルは正常）`);
+      }
     }
 
     // ── STEP 10: Supabase更新 ──
@@ -260,7 +271,9 @@ async function processRequest(job, supabase) {
       retry_count: retryCount,
       prompt_used: imagePrompt,
       video_filename: finalFilename,
-      gdrive_path: dbSettings.gdriveFolder || config.output.gdrivePath,
+      gdrive_path: dbSettings.autoSaveGdrive
+        ? `G:\\マイドライブ\\${dbSettings.gdriveFolder || "AI動画生成"}`
+        : null,
     }).eq("id", job.id);
 
     console.log(`\n🎉 完了！ ${finalFilename} (${elapsed}秒)`);

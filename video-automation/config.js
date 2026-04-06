@@ -31,7 +31,7 @@ module.exports = {
     // デスクトップパス
     desktopPath: process.env.DESKTOP_PATH || "C:\\Users\\user\\Desktop",
     // Google Drive の AI動画生成 フォルダパス
-    gdrivePath: process.env.GDRIVE_PATH || "C:\\Users\\user\\Google Drive\\AI動画生成",
+    gdrivePath: process.env.GDRIVE_PATH || "G:\\マイドライブ\\AI動画生成",
   },
 
   // ── ffmpeg ──
