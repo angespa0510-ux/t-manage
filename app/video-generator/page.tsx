@@ -10,7 +10,7 @@ import { useToast } from "../../lib/toast";
 /* ─── 型定義 ─── */
 type Therapist = {
   sid: string; name: string; age: string; height: string; cup: string;
-  imageUrl: string; profileUrl: string; status: string;
+  imageUrl: string; profileUrl: string; status: string; store: string;
 };
 type ProfileImage = { url: string; selected: boolean };
 type VideoLog = {
@@ -479,10 +479,11 @@ export default function VideoGenerator() {
                         {th.age && `${th.age}歳`} {th.height && `${th.height}cm`} {th.cup && `${th.cup}cup`}
                       </p>
                       <span style={{
-                        fontSize: 9, color: th.status === "出勤中" ? "#7ab88f" : T.textMuted,
+                        fontSize: 9, color: th.status.includes("出勤中") ? "#7ab88f" : T.textMuted,
                         display: "inline-block", marginTop: 2,
                       }}>
-                        {th.status === "出勤中" ? "● 出勤中" : "○ お休み"}
+                        {th.status.includes("出勤中") ? `● ${th.status}` : "○ お休み"}
+                        {th.store && <span style={{ display: "block", fontSize: 8, color: T.textMuted }}>{th.store}</span>}
                       </span>
                     </button>
                   ))}

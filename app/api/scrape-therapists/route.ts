@@ -9,53 +9,70 @@ export async function GET() {
     });
     const html = await res.text();
 
-    // HTMLパース（正規表現ベース — 軽量、外部ライブラリ不要）
     const therapists: {
       sid: string; name: string; age: string; height: string; cup: string;
-      imageUrl: string; profileUrl: string; status: string;
+      imageUrl: string; profileUrl: string; status: string; store: string;
     }[] = [];
 
-    // 各セラピストの <li> ブロックを抽出
-    // profile.php?sid=XXX のリンクを基準に個別エントリを検出
-    const linkPattern = /href="profile\.php\?sid=(\d+)"[^>]*>([\s\S]*?)(?=href="profile\.php\?sid=|\<\/ul|\<\/div\s*>\s*<\/div\s*>\s*$)/gi;
+    // <li> ブロック単位で分割（各セラピストが <li> 内に格納）
+    const liBlocks = html.split(/<li[^>]*>/i).slice(1);
 
-    // より確実なパターン: <a> タグ全体を探す
-    const entryPattern = /<a[^>]*href="profile\.php\?sid=(\d+)"[^>]*>([\s\S]*?)<\/a>/gi;
-    let match;
+    for (const block of liBlocks) {
+      // profile.php?sid=XXX を含むブロックのみ処理
+      const sidMatch = block.match(/profile\.php\?sid=(\d+)/);
+      if (!sidMatch) continue;
 
-    while ((match = entryPattern.exec(html)) !== null) {
-      const sid = match[1];
-      const block = match[2];
+      const sid = sidMatch[1];
 
-      // 名前: alt属性 or テキスト
-      const nameMatch = block.match(/alt="([^"]+)"/);
-      const name = nameMatch ? nameMatch[1] : "";
+      // 名前: <img alt="名前"> から取得（images_staff内の画像のalt）
+      const nameMatch = block.match(/<img[^>]*alt="([^"]+)"[^>]*src="[^"]*images_staff/i)
+        || block.match(/src="[^"]*images_staff[^"]*"[^>]*alt="([^"]+)"/i);
+      const nameMatch2 = block.match(/<img[^>]*alt="([^"]+)"/i);
+      const name = nameMatch ? nameMatch[1] : (nameMatch2 ? nameMatch2[1] : "");
 
-      // 画像URL
-      const imgMatch = block.match(/src="(images_staff\/[^"]+)"/);
-      const imageUrl = imgMatch ? `https://ange-spa.com/${imgMatch[1]}` : "";
+      // 画像URL: images_staff/SID/FILENAME
+      const imgMatch = block.match(/src="((?:https?:\/\/ange-spa\.com\/)?images_staff\/[^"]+)"/i);
+      let imageUrl = "";
+      if (imgMatch) {
+        imageUrl = imgMatch[1].startsWith("http")
+          ? imgMatch[1]
+          : `https://ange-spa.com/${imgMatch[1]}`;
+      }
 
-      // 年齢・身長・カップ（テキストから抽出）
+      // 年齢・身長・カップ（テキストノードから）
       const textContent = block.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-      const ageMatch = textContent.match(/(\d+)歳/);
-      const heightMatch = textContent.match(/(\d+)cm/);
-      const cupMatch = textContent.match(/([A-Z])cup/i);
+      const ageMatch = textContent.match(/(\d+)\s*歳/);
+      const heightMatch = textContent.match(/(\d{2,3})\s*cm/i);
+      const cupMatch = textContent.match(/([A-K])\s*cup/i);
 
       // 出勤状況
-      const isWorking = block.includes("出勤中") || block.includes("shukkin");
-      const status = isWorking ? "出勤中" : "お休み";
+      const isWorking = block.includes("出勤中");
 
-      if (name && sid) {
-        therapists.push({
-          sid,
-          name,
-          age: ageMatch ? ageMatch[1] : "",
-          height: heightMatch ? heightMatch[1] : "",
-          cup: cupMatch ? cupMatch[1].toUpperCase() : "",
-          imageUrl,
-          profileUrl: `https://ange-spa.com/profile.php?sid=${sid}`,
-          status,
-        });
+      // 出勤時間
+      const timeMatch = textContent.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2}|LAST)/);
+      const workTime = timeMatch ? `${timeMatch[1]}-${timeMatch[2]}` : "";
+
+      // 店舗
+      let store = "";
+      if (block.includes("icon_shop_03") || block.includes("三河安城")) store = "三河安城";
+      else if (block.includes("icon_shop_05") || block.includes("豊橋")) store = "豊橋";
+
+      const cleanName = name.replace(/[\s　]+/g, "").trim();
+
+      if (cleanName && sid) {
+        if (!therapists.some(t => t.sid === sid)) {
+          therapists.push({
+            sid,
+            name: cleanName,
+            age: ageMatch ? ageMatch[1] : "",
+            height: heightMatch ? heightMatch[1] : "",
+            cup: cupMatch ? cupMatch[1].toUpperCase() : "",
+            imageUrl,
+            profileUrl: `https://ange-spa.com/profile.php?sid=${sid}`,
+            status: isWorking ? `出勤中${workTime ? ` ${workTime}` : ""}` : "お休み",
+            store,
+          });
+        }
       }
     }
 
@@ -78,12 +95,11 @@ export async function POST(req: Request) {
     });
     const html = await res.text();
 
-    // プロフィールページの画像を抽出
     const images: string[] = [];
-    const imgPattern = /src="(images_staff\/[^"]+)"/gi;
+    const imgPattern = /src="((?:https?:\/\/ange-spa\.com\/)?images_staff\/[^"]+)"/gi;
     let m;
     while ((m = imgPattern.exec(html)) !== null) {
-      const url = `https://ange-spa.com/${m[1]}`;
+      const url = m[1].startsWith("http") ? m[1] : `https://ange-spa.com/${m[1]}`;
       if (!images.includes(url)) images.push(url);
     }
 
