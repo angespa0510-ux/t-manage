@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node index.js",
     "watch": "node watcher.js",
+    "login": "node login.js",
     "test-scrape": "node test-scrape.js",
     "install-browser": "npx playwright install chromium"
   },
