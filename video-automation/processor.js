@@ -66,7 +66,7 @@ async function processRequest(job, supabase) {
 
     // ── STEP 2: Geminiにアクセス ──
     console.log("🤖 Geminiにアクセス中...");
-    await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForTimeout(3000);
 
     // ── STEP 3: いいねログから参考プロンプトを取得 ──
@@ -137,7 +137,7 @@ async function processRequest(job, supabase) {
         } else if (result === "safety") {
           console.log("  ⚠️ セーフティフィルター → リトライ");
           // 新しいチャットを開始
-          await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "networkidle" });
+          await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
           await page.waitForTimeout(3000);
         }
       } catch (err) {
