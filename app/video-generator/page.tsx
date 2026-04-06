@@ -95,11 +95,27 @@ export default function VideoGenerator() {
   // ─── タブ ───
   const [activeTab, setActiveTab] = useState<"generate" | "history" | "settings">("generate");
 
-  // ─── セラピスト一覧 ───
+  // ─── 生成モード ───
+  const [genMode, setGenMode] = useState<"hp" | "upload">("hp");
+
+  // ─── セラピスト一覧（HP） ───
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [loadingHP, setLoadingHP] = useState(false);
   const [searchName, setSearchName] = useState("");
-  const [selectedSids, setSelectedSids] = useState<Set<string>>(new Set());
+
+  // ─── セラピスト画像展開 ───
+  const [expandedSid, setExpandedSid] = useState<string | null>(null);
+  const [profileImagesMap, setProfileImagesMap] = useState<Record<string, string[]>>({});
+  const [loadingProfile, setLoadingProfile] = useState<string | null>(null);
+
+  // ─── 選択済みエントリ（HP + アップロード共通） ───
+  type SelectedEntry = { sid: string; name: string; age: string; height: string; cup: string; imageUrl: string; isUpload?: boolean };
+  const [selectedEntries, setSelectedEntries] = useState<SelectedEntry[]>([]);
+
+  // ─── アップロードモード ───
+  const [uploadPreview, setUploadPreview] = useState<string>("");
+  const [uploadName, setUploadName] = useState("");
+  const [uploadNameSearch, setUploadNameSearch] = useState("");
 
   // ─── 動きの印象 ───
   const [selectedMotion, setSelectedMotion] = useState<string>("ai_auto");
@@ -126,6 +142,7 @@ export default function VideoGenerator() {
     geminiUrl: "https://gemini.google.com/app",
     playwrightHeadless: false,
     autoSaveGdrive: true,
+    randomAutoEnabled: false,
   });
   const [settingsDirty, setSettingsDirty] = useState(false);
 
@@ -197,40 +214,95 @@ export default function VideoGenerator() {
     setTodayCount(done?.length || 0);
   }, []);
 
-  /* ─── セラピスト選択トグル ─── */
-  const toggleTherapist = (sid: string) => {
-    setSelectedSids(prev => {
-      const next = new Set(prev);
-      if (next.has(sid)) {
-        next.delete(sid);
-      } else {
-        if (next.size >= 10) {
-          toast.show("最大10名まで選択できます", "error");
-          return prev;
-        }
-        next.add(sid);
+  /* ─── セラピストクリック → 画像展開 ─── */
+  const handleTherapistClick = async (th: Therapist) => {
+    if (expandedSid === th.sid) { setExpandedSid(null); return; }
+    setExpandedSid(th.sid);
+
+    // 既にプロフィール画像を取得済みならスキップ
+    if (profileImagesMap[th.sid]) return;
+
+    setLoadingProfile(th.sid);
+    try {
+      const res = await fetch("/api/scrape-therapists", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sid: th.sid }),
+      });
+      const data = await res.json();
+      if (data.images) {
+        setProfileImagesMap(prev => ({ ...prev, [th.sid]: data.images.slice(0, 5) }));
       }
-      return next;
-    });
+    } catch { /* ignore */ }
+    setLoadingProfile(null);
+  };
+
+  /* ─── 画像を選択してエントリ追加 ─── */
+  const selectImage = (th: Therapist, imageUrl: string) => {
+    if (selectedEntries.length >= 10) { toast.show("最大10件まで選択できます", "error"); return; }
+    // 同じセラピスト+同じ画像の重複チェック
+    if (selectedEntries.some(e => e.sid === th.sid && e.imageUrl === imageUrl)) {
+      toast.show("既に選択されています", "info"); return;
+    }
+    setSelectedEntries(prev => [...prev, {
+      sid: th.sid, name: th.name, age: th.age, height: th.height, cup: th.cup, imageUrl,
+    }]);
+    setExpandedSid(null);
+    toast.show(`${th.name} を追加しました`);
+  };
+
+  /* ─── エントリ削除 ─── */
+  const removeEntry = (idx: number) => {
+    setSelectedEntries(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  /* ─── アップロード処理 ─── */
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setUploadPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const addUploadEntry = () => {
+    if (!uploadPreview) { toast.show("画像を選択してください", "error"); return; }
+    const name = uploadName.trim();
+    if (!name) { toast.show("セラピスト名を入力してください", "error"); return; }
+    if (selectedEntries.length >= 10) { toast.show("最大10件まで選択できます", "error"); return; }
+
+    // セラピスト一覧からマッチするか探す
+    const matched = therapists.find(t => t.name === name);
+
+    setSelectedEntries(prev => [...prev, {
+      sid: matched?.sid || `upload_${Date.now()}`,
+      name,
+      age: matched?.age || "",
+      height: matched?.height || "",
+      cup: matched?.cup || "",
+      imageUrl: uploadPreview,
+      isUpload: true,
+    }]);
+    setUploadPreview("");
+    setUploadName("");
+    toast.show(`${name} を追加しました`);
   };
 
   /* ─── キューに追加 ─── */
   const addToQueue = async () => {
-    if (selectedSids.size === 0) { toast.show("セラピストを選択してください", "error"); return; }
+    if (selectedEntries.length === 0) { toast.show("セラピストを選択してください", "error"); return; }
 
     const motionLabel = selectedMotion === "custom"
       ? customMotionText || "カスタム"
       : (settings.motionCategories.find(m => m.id === selectedMotion)?.label || selectedMotion);
 
-    const selected = therapists.filter(th => selectedSids.has(th.sid));
-    const requests = selected.map(th => ({
-      therapist_name: th.name,
-      therapist_sid: th.sid,
-      therapist_age: th.age,
-      therapist_height: th.height,
-      therapist_cup: th.cup,
-      image_url: th.imageUrl,
-      all_image_urls: [th.imageUrl],
+    const requests = selectedEntries.map(e => ({
+      therapist_name: e.name,
+      therapist_sid: e.sid,
+      therapist_age: e.age,
+      therapist_height: e.height,
+      therapist_cup: e.cup,
+      image_url: e.imageUrl,
+      all_image_urls: [e.imageUrl],
       motion_category: motionLabel,
       prompt_used: "",
       result: "queued",
@@ -247,8 +319,8 @@ export default function VideoGenerator() {
       return;
     }
 
-    toast.show(`${selected.length}名をキューに追加しました`);
-    setSelectedSids(new Set());
+    toast.show(`${selectedEntries.length}件をキューに追加しました`);
+    setSelectedEntries([]);
     fetchQueue();
   };
 
@@ -281,6 +353,7 @@ export default function VideoGenerator() {
         else if (k === "gemini_url") s.geminiUrl = row.value;
         else if (k === "headless") s.playwrightHeadless = row.value === "true";
         else if (k === "auto_save_gdrive") s.autoSaveGdrive = row.value !== "false";
+        else if (k === "random_auto") s.randomAutoEnabled = row.value === "true";
         else if (k === "motion_categories") {
           try { s.motionCategories = JSON.parse(row.value); } catch { /* keep default */ }
         }
@@ -301,6 +374,7 @@ export default function VideoGenerator() {
       { key: "vg_gemini_url", value: settings.geminiUrl },
       { key: "vg_headless", value: String(settings.playwrightHeadless) },
       { key: "vg_auto_save_gdrive", value: String(settings.autoSaveGdrive) },
+      { key: "vg_random_auto", value: String(settings.randomAutoEnabled) },
       { key: "vg_motion_categories", value: JSON.stringify(settings.motionCategories) },
     ];
     for (const p of pairs) {
@@ -449,108 +523,251 @@ export default function VideoGenerator() {
           <div className="flex flex-col gap-4">
 
             {/* ── キュー状況バー ── */}
-            <div style={{ ...cardStyle, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ ...cardStyle, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
               <div className="flex items-center gap-3">
                 <span style={{ fontSize: 12, color: T.textSub }}>本日の制作</span>
-                <span style={{
-                  fontSize: 14, fontWeight: 700,
-                  color: todayCount >= DAILY_LIMIT ? "#c45555" : "#7ab88f",
-                }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: todayCount >= DAILY_LIMIT ? "#c45555" : "#7ab88f" }}>
                   {todayCount} / {DAILY_LIMIT}
                 </span>
                 {todayCount >= DAILY_LIMIT && (
                   <span style={{ fontSize: 10, color: "#c45555", backgroundColor: "rgba(196,85,85,0.1)", padding: "2px 8px", borderRadius: 6 }}>
-                    本日上限 → 翌日に持ち越し
+                    翌日に持ち越し
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <span style={{ fontSize: 11, color: T.textSub }}>待機中: {queue.filter(q => q.result === "queued").length}</span>
-                <span style={{ fontSize: 11, color: "#a78bc4" }}>
-                  制作中: {queue.filter(q => q.result === "processing").length}
-                </span>
+                <span style={{ fontSize: 11, color: T.textSub }}>待機: {queue.filter(q => q.result === "queued").length}</span>
+                <span style={{ fontSize: 11, color: "#a78bc4" }}>制作中: {queue.filter(q => q.result === "processing").length}</span>
               </div>
             </div>
 
-            {/* ── STEP 1: セラピスト選択 ── */}
-            <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={{ ...sectionTitle, marginBottom: 12 }}>
-                <span>①</span> セラピストを選ぶ
-                <span style={{ fontSize: 11, fontWeight: 400, color: T.textSub, marginLeft: "auto" }}>
-                  {selectedSids.size > 0 && `${selectedSids.size}名選択中`} (最大10名)
-                </span>
-              </div>
+            {/* ── モード切替 ── */}
+            <div className="flex gap-2">
+              {([{ key: "hp", label: "📋 HPから選択" }, { key: "upload", label: "📤 画像アップロード" }] as const).map(m => (
+                <button key={m.key} onClick={() => setGenMode(m.key)}
+                  style={{
+                    flex: 1, padding: "10px 0", fontSize: 12, fontWeight: genMode === m.key ? 600 : 400,
+                    borderRadius: 10, cursor: "pointer",
+                    border: genMode === m.key ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
+                    backgroundColor: genMode === m.key ? T.accentBg : T.cardAlt,
+                    color: genMode === m.key ? T.accent : T.textSub,
+                  }}
+                >{m.label}</button>
+              ))}
+            </div>
 
-              <div className="flex gap-2 mb-3">
-                <input
-                  placeholder="名前で検索..."
-                  value={searchName}
-                  onChange={e => setSearchName(e.target.value)}
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <button onClick={fetchTherapists} disabled={loadingHP} style={btnSub}>
-                  {loadingHP ? "取得中..." : "🔄 再取得"}
-                </button>
-                {selectedSids.size > 0 && (
-                  <button onClick={() => setSelectedSids(new Set())} style={{ ...btnSub, color: "#c45555" }}>
-                    選択解除
+            {/* ═══ HPから選択モード ═══ */}
+            {genMode === "hp" && (
+              <div style={{ ...cardStyle, padding: 16 }}>
+                <div style={{ ...sectionTitle, marginBottom: 12 }}>
+                  <span>①</span> セラピストを選んで画像を選択
+                  <span style={{ fontSize: 11, fontWeight: 400, color: T.textSub, marginLeft: "auto" }}>(最大10件)</span>
+                </div>
+
+                <div className="flex gap-2 mb-3">
+                  <input placeholder="名前で検索..." value={searchName} onChange={e => setSearchName(e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }} />
+                  <button onClick={fetchTherapists} disabled={loadingHP} style={btnSub}>
+                    {loadingHP ? "取得中..." : "🔄 再取得"}
                   </button>
+                </div>
+
+                {loadingHP && therapists.length === 0 ? (
+                  <p style={{ fontSize: 12, color: T.textSub, textAlign: "center", padding: 20 }}>HPからセラピストを取得中...</p>
+                ) : (
+                  <div style={{ maxHeight: 420, overflowY: "auto", padding: 2 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 6 }}>
+                      {filteredTherapists.map(th => {
+                        const isExpanded = expandedSid === th.sid;
+                        const hasSelected = selectedEntries.some(e => e.sid === th.sid);
+                        return (
+                          <button key={th.sid} onClick={() => handleTherapistClick(th)}
+                            style={{
+                              padding: 6, borderRadius: 10, cursor: "pointer", textAlign: "center",
+                              border: isExpanded ? `2px solid ${T.accent}` : hasSelected ? `2px solid #7ab88f` : `1px solid ${T.border}`,
+                              backgroundColor: isExpanded ? T.accentBg : T.cardAlt,
+                              transition: "all 0.15s", position: "relative",
+                            }}
+                          >
+                            {hasSelected && (
+                              <div style={{
+                                position: "absolute", top: 4, right: 4, width: 18, height: 18, borderRadius: "50%",
+                                backgroundColor: "#7ab88f", color: "white", fontSize: 10, fontWeight: 700,
+                                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1,
+                              }}>✓</div>
+                            )}
+                            {th.imageUrl && (
+                              <img src={th.imageUrl} alt={th.name}
+                                style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: 6, marginBottom: 3 }}
+                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            )}
+                            <p style={{ fontSize: 11, fontWeight: 600, color: T.text, margin: 0, lineHeight: 1.2 }}>{th.name}</p>
+                            <p style={{ fontSize: 8, color: T.textSub, margin: 0, lineHeight: 1.3 }}>
+                              {[th.age && `${th.age}歳`, th.height && `${th.height}cm`, th.cup && `${th.cup}cup`].filter(Boolean).join(" ")}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* ── 展開パネル（プロフィール画像） ── */}
+                    {expandedSid && (() => {
+                      const th = therapists.find(t => t.sid === expandedSid);
+                      if (!th) return null;
+                      const images = profileImagesMap[expandedSid] || [];
+                      return (
+                        <div style={{
+                          marginTop: 8, padding: 14, borderRadius: 10,
+                          backgroundColor: T.accentBg, border: `2px solid ${T.accent}`,
+                        }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{th.name}</span>
+                            <span style={{ fontSize: 11, color: T.textSub }}>— 画像をクリックして選択</span>
+                            <button onClick={() => setExpandedSid(null)}
+                              style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: T.textSub, fontSize: 16 }}>✕</button>
+                          </div>
+                          {loadingProfile === expandedSid ? (
+                            <p style={{ fontSize: 12, color: T.textSub, textAlign: "center", padding: 16 }}>画像を読み込み中...</p>
+                          ) : images.length === 0 ? (
+                            <div>
+                              <p style={{ fontSize: 11, color: T.textSub, marginBottom: 8 }}>プロフィール画像が見つかりませんでした。一覧画像を使用：</p>
+                              <button onClick={() => selectImage(th, th.imageUrl)}
+                                style={{ padding: 0, border: `2px solid ${T.border}`, borderRadius: 8, cursor: "pointer", overflow: "hidden", background: "none" }}>
+                                <img src={th.imageUrl} alt="" style={{ width: 100, height: 130, objectFit: "cover" }} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2" style={{ overflowX: "auto", paddingBottom: 4 }}>
+                              {images.map((imgUrl, i) => (
+                                <button key={i} onClick={() => selectImage(th, imgUrl)}
+                                  style={{
+                                    padding: 0, border: `2px solid ${T.border}`, borderRadius: 8,
+                                    cursor: "pointer", overflow: "hidden", flexShrink: 0, background: "none",
+                                    transition: "all 0.15s",
+                                  }}
+                                  onMouseOver={e => (e.currentTarget.style.borderColor = T.accent)}
+                                  onMouseOut={e => (e.currentTarget.style.borderColor = T.border)}
+                                >
+                                  <img src={imgUrl} alt={`${th.name} ${i + 1}`}
+                                    style={{ width: 100, height: 130, objectFit: "cover", display: "block" }}
+                                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 )}
               </div>
+            )}
 
-              {loadingHP && therapists.length === 0 ? (
-                <p style={{ fontSize: 12, color: T.textSub, textAlign: "center", padding: 20 }}>
-                  HPからセラピストを取得中...
-                </p>
-              ) : therapists.length === 0 ? (
-                <p style={{ fontSize: 12, color: T.textSub, textAlign: "center", padding: 20 }}>
-                  セラピストが見つかりませんでした
-                </p>
-              ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 6, maxHeight: 360, overflowY: "auto", padding: 2 }}>
-                  {filteredTherapists.map(th => {
-                    const isSelected = selectedSids.has(th.sid);
-                    return (
-                      <button key={th.sid} onClick={() => toggleTherapist(th.sid)}
-                        style={{
-                          padding: 6, borderRadius: 10, cursor: "pointer", textAlign: "center",
-                          border: isSelected ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
-                          backgroundColor: isSelected ? T.accentBg : T.cardAlt,
-                          transition: "all 0.15s", position: "relative",
-                        }}
-                      >
-                        {/* 選択番号バッジ */}
-                        {isSelected && (
-                          <div style={{
-                            position: "absolute", top: 4, left: 4, width: 20, height: 20, borderRadius: "50%",
-                            backgroundColor: T.accent, color: "white", fontSize: 10, fontWeight: 700,
-                            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1,
-                          }}>
-                            {[...selectedSids].indexOf(th.sid) + 1}
-                          </div>
-                        )}
-                        {th.imageUrl && (
-                          <img src={th.imageUrl} alt={th.name}
-                            style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: 6, marginBottom: 3 }}
-                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                          />
-                        )}
-                        <p style={{ fontSize: 11, fontWeight: 600, color: T.text, margin: 0, lineHeight: 1.2 }}>{th.name}</p>
-                        <p style={{ fontSize: 8, color: T.textSub, margin: 0, lineHeight: 1.3 }}>
-                          {[th.age && `${th.age}歳`, th.height && `${th.height}cm`, th.cup && `${th.cup}cup`].filter(Boolean).join(" ")}
-                        </p>
-                      </button>
-                    );
-                  })}
+            {/* ═══ アップロードモード ═══ */}
+            {genMode === "upload" && (
+              <div style={{ ...cardStyle, padding: 16 }}>
+                <div style={{ ...sectionTitle, marginBottom: 12 }}>
+                  <span>①</span> 画像をアップロード → セラピスト名を入力
                 </div>
-              )}
-            </div>
+
+                <div className="flex gap-4" style={{ flexWrap: "wrap" }}>
+                  {/* 画像プレビュー */}
+                  <div style={{ width: 140 }}>
+                    {uploadPreview ? (
+                      <div style={{ position: "relative" }}>
+                        <img src={uploadPreview} alt="プレビュー"
+                          style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: 10, border: `2px solid ${T.accent}` }} />
+                        <button onClick={() => setUploadPreview("")}
+                          style={{
+                            position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%",
+                            backgroundColor: "rgba(0,0,0,0.6)", color: "white", border: "none",
+                            cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>✕</button>
+                      </div>
+                    ) : (
+                      <label style={{
+                        width: "100%", aspectRatio: "3/4", borderRadius: 10, display: "flex",
+                        flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        border: `2px dashed ${T.border}`, cursor: "pointer", gap: 4,
+                        backgroundColor: T.cardAlt,
+                      }}>
+                        <span style={{ fontSize: 28 }}>📷</span>
+                        <span style={{ fontSize: 10, color: T.textSub }}>画像を選択</span>
+                        <input type="file" accept="image/*" onChange={handleFileUpload}
+                          style={{ display: "none" }} />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* セラピスト名入力 */}
+                  <div className="flex-1" style={{ minWidth: 200 }}>
+                    <label style={labelStyle}>セラピスト名</label>
+                    <input value={uploadName} onChange={e => { setUploadName(e.target.value); setUploadNameSearch(e.target.value); }}
+                      placeholder="名前を入力..." style={{ ...inputStyle, marginBottom: 8 }} />
+
+                    {/* セラピスト候補（入力に応じて表示） */}
+                    {uploadNameSearch && therapists.length > 0 && (
+                      <div style={{ maxHeight: 120, overflowY: "auto", borderRadius: 8, border: `1px solid ${T.border}` }}>
+                        {therapists
+                          .filter(t => t.name.includes(uploadNameSearch))
+                          .slice(0, 5)
+                          .map(t => (
+                            <button key={t.sid} onClick={() => { setUploadName(t.name); setUploadNameSearch(""); }}
+                              style={{
+                                width: "100%", padding: "6px 10px", fontSize: 12, cursor: "pointer",
+                                textAlign: "left", border: "none", borderBottom: `1px solid ${T.border}`,
+                                backgroundColor: T.cardAlt, color: T.text,
+                              }}>
+                              {t.name} <span style={{ fontSize: 10, color: T.textSub }}>{t.age}歳 {t.height}cm</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+
+                    <button onClick={addUploadEntry} disabled={!uploadPreview || !uploadName.trim()}
+                      style={{ ...btnPrimary, marginTop: 8, opacity: (!uploadPreview || !uploadName.trim()) ? 0.4 : 1 }}>
+                      ＋ 選択リストに追加
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ 選択リスト ═══ */}
+            {selectedEntries.length > 0 && (
+              <div style={{ ...cardStyle, padding: 16 }}>
+                <div style={{ ...sectionTitle, marginBottom: 8 }}>
+                  📋 選択リスト ({selectedEntries.length}/10)
+                  <button onClick={() => setSelectedEntries([])}
+                    style={{ ...btnSub, marginLeft: "auto", fontSize: 10, padding: "4px 10px", color: "#c45555" }}>全て削除</button>
+                </div>
+                <div className="flex gap-2" style={{ overflowX: "auto", paddingBottom: 4 }}>
+                  {selectedEntries.map((entry, idx) => (
+                    <div key={idx} style={{
+                      flexShrink: 0, width: 80, textAlign: "center", position: "relative",
+                      padding: 4, borderRadius: 8, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`,
+                    }}>
+                      <button onClick={() => removeEntry(idx)}
+                        style={{
+                          position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%",
+                          backgroundColor: "rgba(196,85,85,0.8)", color: "white", border: "none",
+                          cursor: "pointer", fontSize: 10, zIndex: 1,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>✕</button>
+                      <img src={entry.imageUrl} alt={entry.name}
+                        style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: 6, marginBottom: 2 }}
+                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      <p style={{ fontSize: 10, fontWeight: 600, color: T.text, margin: 0, lineHeight: 1.2 }}>{entry.name}</p>
+                      {entry.isUpload && <span style={{ fontSize: 8, color: T.accent }}>📤アップ</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── STEP 2: 動きの印象選択 ── */}
             <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={sectionTitle}>
-                <span>②</span> 動きの印象を選ぶ
-              </div>
+              <div style={sectionTitle}><span>②</span> 動きの印象を選ぶ</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 6 }}>
                 {settings.motionCategories.map(motion => (
                   <button key={motion.id} onClick={() => setSelectedMotion(motion.id)}
@@ -560,8 +777,7 @@ export default function VideoGenerator() {
                       border: selectedMotion === motion.id ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
                       backgroundColor: selectedMotion === motion.id ? T.accentBg : T.cardAlt,
                       transition: "all 0.15s",
-                    }}
-                  >
+                    }}>
                     <span style={{ fontSize: 20 }}>{motion.emoji}</span>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontSize: 12, fontWeight: 600, color: T.text, margin: 0 }}>{motion.label}</p>
@@ -573,19 +789,17 @@ export default function VideoGenerator() {
               {selectedMotion === "custom" && (
                 <textarea value={customMotionText} onChange={e => setCustomMotionText(e.target.value)}
                   placeholder="動きの指示を自由入力してください..."
-                  style={{ ...inputStyle, marginTop: 8, minHeight: 60, resize: "vertical" }}
-                />
+                  style={{ ...inputStyle, marginTop: 8, minHeight: 60, resize: "vertical" }} />
               )}
             </div>
 
             {/* ── キューに追加ボタン ── */}
-            <button onClick={addToQueue} disabled={selectedSids.size === 0}
+            <button onClick={addToQueue} disabled={selectedEntries.length === 0}
               style={{
                 ...btnPrimary, padding: "14px 0", fontSize: 15, width: "100%", borderRadius: 12,
-                opacity: selectedSids.size === 0 ? 0.4 : 1,
-              }}
-            >
-              🎬 {selectedSids.size > 0 ? `${selectedSids.size}名をキューに追加` : "セラピストを選択してください"}
+                opacity: selectedEntries.length === 0 ? 0.4 : 1,
+              }}>
+              🎬 {selectedEntries.length > 0 ? `${selectedEntries.length}件をキューに追加` : "セラピストを選択してください"}
             </button>
 
             {/* ── 制作キュー ── */}
@@ -595,7 +809,6 @@ export default function VideoGenerator() {
                   📋 制作キュー
                   <button onClick={fetchQueue} style={{ ...btnSub, marginLeft: "auto", fontSize: 10, padding: "4px 10px" }}>🔄</button>
                 </div>
-
                 <div className="flex flex-col gap-2">
                   {queue.map((item, idx) => {
                     const sc = statusConfig[item.result] || statusConfig.queued;
@@ -604,43 +817,30 @@ export default function VideoGenerator() {
                         style={{
                           display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
                           borderRadius: 10, backgroundColor: sc.bg, border: `1px solid ${T.border}`,
-                        }}
-                      >
-                        {/* 順番 */}
-                        <span style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, width: 20, textAlign: "center" }}>
-                          {idx + 1}
-                        </span>
-
-                        {/* サムネ */}
+                        }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, width: 20, textAlign: "center" }}>{idx + 1}</span>
                         <div style={{ width: 40, height: 40, borderRadius: 6, overflow: "hidden", flexShrink: 0, backgroundColor: T.cardAlt }}>
-                          {item.image_url ? (
+                          {item.image_url && !item.image_url.startsWith("data:") ? (
                             <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           ) : (
                             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>👤</div>
                           )}
                         </div>
-
-                        {/* 情報 */}
                         <div className="flex-1 min-w-0">
                           <p style={{ fontSize: 12, fontWeight: 600, color: T.text, margin: 0 }}>{item.therapist_name}</p>
                           <p style={{ fontSize: 10, color: T.textSub, margin: 0 }}>🎭 {item.motion_category}</p>
                         </div>
-
-                        {/* ステータス */}
                         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                           <span className={sc.spin ? "vg-spin" : ""} style={{ fontSize: sc.spin ? 18 : 14 }}>{sc.icon}</span>
                           <span style={{ fontSize: 11, fontWeight: 600, color: sc.color }}>{sc.label}</span>
                         </div>
-
-                        {/* キャンセルボタン */}
                         {(item.result === "queued" || item.result === "pending") && (
                           <button onClick={() => cancelQueueItem(item.id)}
                             style={{
-                              background: "none", border: `1px solid rgba(196,85,85,0.3)`,
+                              background: "none", border: "1px solid rgba(196,85,85,0.3)",
                               borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer",
                               color: "#c45555", flexShrink: 0,
-                            }}
-                          >取消</button>
+                            }}>取消</button>
                         )}
                       </div>
                     );
@@ -769,6 +969,29 @@ export default function VideoGenerator() {
                   style={{ accentColor: T.accent }} />
                 <span style={{ fontSize: 12, color: T.text }}>ヘッドレスモード（ブラウザ非表示）</span>
               </label>
+            </div>
+
+            {/* ランダム自動生成 */}
+            <div style={{ ...cardStyle, padding: 16 }}>
+              <div style={sectionTitle}>🎲 ランダム自動生成</div>
+              <p style={{ fontSize: 11, color: T.textSub, marginBottom: 12, lineHeight: 1.6 }}>
+                ONにすると、毎日自動で2件のランダム動画を生成します。
+                セラピスト・画像・印象カテゴリを自動で選び、キューに追加されます。
+              </p>
+              <label style={{ ...labelStyle, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, marginBottom: 0 }}>
+                <input type="checkbox" checked={settings.randomAutoEnabled}
+                  onChange={e => { setSettings(s => ({ ...s, randomAutoEnabled: e.target.checked })); setSettingsDirty(true); }}
+                  style={{ accentColor: T.accent, width: 18, height: 18 }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: settings.randomAutoEnabled ? "#7ab88f" : T.text }}>
+                  {settings.randomAutoEnabled ? "✅ ランダム自動生成 ON" : "ランダム自動生成 OFF"}
+                </span>
+              </label>
+              {settings.randomAutoEnabled && (
+                <div style={{ marginTop: 10, padding: 10, backgroundColor: T.cardAlt, borderRadius: 8, fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
+                  📌 ウォッチャー（npm run watch）が起動中の場合、毎日の制作枠（2件/日）が空いていれば自動でキューに追加されます。
+                  手動キューと合わせて1日最大2件です。
+                </div>
+              )}
             </div>
 
             {/* 印象カテゴリ管理 */}
