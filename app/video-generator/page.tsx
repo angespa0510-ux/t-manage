@@ -947,7 +947,166 @@ export default function VideoGenerator() {
                 <p style={{ fontSize: 36, marginBottom: 8 }}>🎬</p>
                 <p style={{ fontSize: 13, color: T.textSub }}>まだ生成履歴がありません</p>
               </div>
-            ) : (
+            ) : (<>
+              {/* ── 評価ガイド（折りたたみ） ── */}
+              <details style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+                <summary style={{
+                  padding: "10px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.text,
+                  listStyle: "none", display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  📖 評価ガイド（タップで開く）
+                  <span style={{ fontSize: 10, color: T.textMuted }}>スタッフ向け</span>
+                </summary>
+                <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    {
+                      emoji: "🎬", title: "Motion（動き）", color: "#c3a782",
+                      stars: [
+                        "★☆☆☆☆ カクカク・不自然・ワープ",
+                        "★★☆☆☆ 動くが硬い・急な変化あり",
+                        "★★★☆☆ 普通に動く・やや機械的",
+                        "★★★★☆ 滑らか・自然な流れ",
+                        "★★★★★ 完璧：シネマティック・余韻あり・物理法則通り",
+                      ],
+                      ai: "★5→動きの速度パラメータ固定。プロンプトの slow/fluid/ease-in に重み1.2〜1.5倍",
+                    },
+                    {
+                      emoji: "🔒", title: "Consistency（一貫性）", color: "#85a8c4",
+                      stars: [
+                        "★☆☆☆☆ 顔が別人・衣装が変わる",
+                        "★★☆☆☆ 顔の輪郭やスタンプがズレる",
+                        "★★★☆☆ ほぼ維持だが一瞬崩れる",
+                        "★★★★☆ 顔・衣装・背景ほぼ完璧",
+                        "★★★★★ 完璧：スタンプ含め全フレーム一致",
+                      ],
+                      ai: "★5→ノイズ除去強度を固定。Guidance Scale値を記録して次回の基準に",
+                    },
+                    {
+                      emoji: "✨", title: "Quality（品質）", color: "#7ab88f",
+                      stars: [
+                        "★☆☆☆☆ ぼやけ・低解像度・ノイズ多",
+                        "★★☆☆☆ 見れるがザラつき・テクスチャ粗い",
+                        "★★★☆☆ 普通の品質・特に問題なし",
+                        "★★★★☆ 高品質・肌と衣装のディテール良い",
+                        "★★★★★ 完璧：4Kリアル・シネマティック照明・質感最高",
+                      ],
+                      ai: "★5→テクスチャ解像度設定を固定。照明キーワードの重みを維持",
+                    },
+                    {
+                      emoji: "🛡️", title: "Safety（安全性）", color: "#c45555",
+                      stars: [
+                        "★☆☆☆☆ ガイドライン違反・生成拒否",
+                        "★★☆☆☆ ギリギリ・際どい表現あり",
+                        "★★★☆☆ 問題ないが攻めた印象",
+                        "★★★★☆ 安全で美しい",
+                        "★★★★★ 完璧：ガイドライン遵守しつつ最大限の美しさ",
+                      ],
+                      ai: "★5→安全プロンプトの文言を固定。制限内での最大出力設定を記録",
+                    },
+                  ].map(cat => (
+                    <div key={cat.title} style={{ padding: 10, backgroundColor: T.cardAlt, borderRadius: 8, borderLeft: `3px solid ${cat.color}` }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: T.text, margin: "0 0 6px" }}>{cat.emoji} {cat.title}</p>
+                      {cat.stars.map((s, i) => (
+                        <p key={i} style={{ fontSize: 10, color: i === 4 ? cat.color : T.textSub, margin: "1px 0", lineHeight: 1.5, fontWeight: i === 4 ? 600 : 400 }}>{s}</p>
+                      ))}
+                      <p style={{ fontSize: 9, color: "#c3a782", margin: "6px 0 0", fontStyle: "italic" }}>🤖 AI調整: {cat.ai}</p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* ── エクスポート＆AI改善提案 ── */}
+              {(() => {
+                const ratedLogs = logs.filter(l => l.rating_motion > 0 && l.result === "success");
+                if (ratedLogs.length === 0) return null;
+
+                const avgM = (ratedLogs.reduce((s, l) => s + l.rating_motion, 0) / ratedLogs.length).toFixed(1);
+                const avgC = (ratedLogs.reduce((s, l) => s + l.rating_consistency, 0) / ratedLogs.length).toFixed(1);
+                const avgQ = (ratedLogs.reduce((s, l) => s + l.rating_quality, 0) / ratedLogs.length).toFixed(1);
+                const avgS = (ratedLogs.reduce((s, l) => s + l.rating_safety, 0) / ratedLogs.length).toFixed(1);
+
+                // AI改善提案を生成
+                const proposals: string[] = [];
+                if (Number(avgM) < 3.5) proposals.push("⚠️ Motion平均が低い → プロンプトに (slow motion:1.5), (cinematic ease-in:1.3) の重み強化を推奨");
+                if (Number(avgM) >= 4.5) proposals.push("✅ Motion優秀 → 現在の動き関連パラメータを固定値として保存");
+                if (Number(avgC) < 3.5) proposals.push("⚠️ Consistency平均が低い → [Consistency] セクションの指示を強化。Denoising Strengthを下げる提案");
+                if (Number(avgC) >= 4.5) proposals.push("✅ Consistency優秀 → 現在のGuidance Scale/一貫性指示を固定");
+                if (Number(avgQ) < 3.5) proposals.push("⚠️ Quality平均が低い → 4K, Photorealistic, Cinematic lighting の重みを1.3倍に強化");
+                if (Number(avgQ) >= 4.5) proposals.push("✅ Quality優秀 → テクスチャ・照明のプロンプト設定を固定");
+                if (Number(avgS) < 3.5) proposals.push("⚠️ Safety平均が低い → [Safety Check] セクションを先頭に移動し強調");
+                if (Number(avgS) >= 4.5) proposals.push("✅ Safety優秀 → 安全プロンプト文言を現状維持");
+
+                // エクスポートテキスト生成
+                const exportText = `# AI動画生成 評価レポート (${new Date().toLocaleDateString("ja-JP")})
+## 評価件数: ${ratedLogs.length}件
+
+## 平均スコア
+- Motion（動き）: ${avgM}/5
+- Consistency（一貫性）: ${avgC}/5
+- Quality（品質）: ${avgQ}/5
+- Safety（安全性）: ${avgS}/5
+
+## AI改善提案
+${proposals.map(p => `${p}`).join("\n")}
+
+## 個別評価データ
+${ratedLogs.map((l, i) => `### ${i + 1}. ${l.therapist_name}（${l.motion_category}）
+- M:${"★".repeat(l.rating_motion)}${"☆".repeat(5 - l.rating_motion)} C:${"★".repeat(l.rating_consistency)}${"☆".repeat(5 - l.rating_consistency)} Q:${"★".repeat(l.rating_quality)}${"☆".repeat(5 - l.rating_quality)} S:${"★".repeat(l.rating_safety)}${"☆".repeat(5 - l.rating_safety)}
+- コメント: ${l.rating_comment || "なし"}
+- プロンプト: ${l.prompt_used?.slice(0, 300) || "N/A"}...
+- 元画像: ${l.original_image_url || l.image_url || "N/A"}
+- ファイル: ${l.video_filename || "N/A"}
+- 日時: ${new Date(l.created_at).toLocaleString("ja-JP")}`).join("\n\n")}
+
+## 現在の英語プロンプト（参考）
+### 画像生成プロンプト
+${settings.imagePromptEn?.slice(0, 500) || "N/A"}...
+
+### 動画生成プロンプト
+${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
+
+---
+このデータをClaudeに渡して、プロンプトの最適化を依頼してください。`;
+
+                return (
+                  <div style={{ ...cardStyle, padding: 14, background: "linear-gradient(135deg, rgba(195,167,130,0.06), rgba(122,184,143,0.06))", borderLeft: "3px solid rgba(195,167,130,0.5)" }}>
+                    <div className="flex justify-between items-center mb-2">
+                      <p style={{ fontSize: 13, fontWeight: 600, color: T.text }}>📊 評価サマリー（{ratedLogs.length}件）</p>
+                      <button onClick={() => {
+                        navigator.clipboard.writeText(exportText);
+                        toast.show("📋 レポートをコピーしました！Claudeに貼り付けてください");
+                      }} style={{ ...btnPrimary, padding: "6px 14px", fontSize: 11 }}>
+                        📋 Claudeに渡すレポートをコピー
+                      </button>
+                    </div>
+
+                    {/* 平均スコア */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+                      {[
+                        { label: "Motion", avg: avgM, color: "#c3a782" },
+                        { label: "Consistency", avg: avgC, color: "#85a8c4" },
+                        { label: "Quality", avg: avgQ, color: "#7ab88f" },
+                        { label: "Safety", avg: avgS, color: "#c45555" },
+                      ].map(s => (
+                        <div key={s.label} style={{ textAlign: "center", padding: 8, backgroundColor: T.cardAlt, borderRadius: 8 }}>
+                          <p style={{ fontSize: 10, color: T.textSub, margin: "0 0 2px" }}>{s.label}</p>
+                          <p style={{ fontSize: 18, fontWeight: 700, color: Number(s.avg) >= 4 ? s.color : T.textMuted, margin: 0 }}>{s.avg}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* AI改善提案 */}
+                    {proposals.length > 0 && (
+                      <div style={{ padding: 10, backgroundColor: T.cardAlt, borderRadius: 8 }}>
+                        <p style={{ fontSize: 11, fontWeight: 600, color: T.text, margin: "0 0 6px" }}>🤖 AI改善提案</p>
+                        {proposals.map((p, i) => (
+                          <p key={i} style={{ fontSize: 10, color: T.textSub, margin: "3px 0", lineHeight: 1.5 }}>{p}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               logs.map(log => {
                 const sc = statusConfig[log.result] || statusConfig.queued;
                 const isExpanded = expandedRating === log.id;
@@ -1084,12 +1243,32 @@ export default function VideoGenerator() {
                             />
                           </div>
                         </div>
+                        {/* リセットボタン */}
+                        {hasRating && (
+                          <div style={{ marginTop: 10, textAlign: "right" }}>
+                            <button onClick={async () => {
+                              if (!confirm("この動画の評価をリセットしますか？")) return;
+                              await supabase.from("video_generation_logs").update({
+                                rating_motion: 0, rating_consistency: 0, rating_quality: 0, rating_safety: 0,
+                                rating_comment: "", liked: false,
+                              }).eq("id", log.id);
+                              setLogs(prev => prev.map(l => l.id === log.id ? {
+                                ...l, rating_motion: 0, rating_consistency: 0, rating_quality: 0, rating_safety: 0,
+                                rating_comment: "", liked: false,
+                              } : l));
+                              toast.show("評価をリセットしました");
+                            }}
+                              style={{ ...btnSub, fontSize: 10, padding: "4px 12px", color: "#c45555" }}>
+                              🔄 評価リセット
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })
-            )}
+            </>)}
           </div>
         )}
 
