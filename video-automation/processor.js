@@ -70,12 +70,20 @@ async function processRequest(job, supabase) {
     }
 
     // ── STEP 4: 画像生成プロンプトを構築 ──
-    const imagePrompt = (dbSettings.imagePrompt || config.defaultImagePrompt || "")
+    let imagePrompt = (dbSettings.imagePrompt || config.defaultImagePrompt || "")
       .replace("{age}", job.therapist_age || "不明")
       .replace("{height}", job.therapist_height || "不明")
       .replace("{cup}", job.therapist_cup || "不明")
       .replace("{motionCategory}", job.motion_category)
       .replace("{likedPromptExamples}", likedExamples);
+
+    // 「AIにお任せ」の場合、AIが自動で最適な動きを判断するプロンプトを追加
+    if (job.motion_category === "AIにお任せ") {
+      imagePrompt = imagePrompt.replace(
+        "「AIにお任せ」を感じる自然な動きを加えた",
+        "あなたが最適だと判断する、魅力的で自然な動きを加えた"
+      ) + `\n\nあなたはプロの映像ディレクターです。\n添付画像の人物の衣装、ポーズ、表情、雰囲気を分析し、\nこの人物に最も似合う、魅力的で自然な動きやしぐさを\nあなた自身で考案してください。\n\n以下を考慮して最適な動きを選んでください：\n- 衣装のタイプに合った動き\n- 現在のポーズから自然に繋がる動作\n- その人物の雰囲気に最もマッチする印象\n- 見る人を惹きつける個性的なしぐさ\n\nテンプレート的な動きは避け、この画像だけの特別な動きにしてください。`;
+    }
 
     // ── STEP 5: セーフティリトライ付き画像生成 ──
     let imageGenSuccess = false;
