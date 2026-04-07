@@ -108,13 +108,9 @@ function ReservationConfirmInner() {
               </table>
             </div>
 
-            <div style={{ background: "#2a2a40", borderRadius: 14, padding: 16, fontSize: 11, color: "#999", lineHeight: 1.8 }}>
-              <p style={{ margin: 0 }}>
-                ※ 当日のルーム等詳細につきましては、前日の夜または当日の11時半までにご連絡いたします。
-              </p>
-              <p style={{ margin: "8px 0 0" }}>
-                ※ 当店は近隣に居住されている方もいらっしゃいます。施術中はお静かにお過ごしいただけますよう、ご理解とご協力をお願い申し上げます。
-              </p>
+            <div style={{ background: "#2a2a40", borderRadius: 14, padding: 16, fontSize: 12, color: "#bbb", lineHeight: 1.8, textAlign: "center" }}>
+              <p style={{ margin: 0 }}>ご確認ありがとうございます。</p>
+              <p style={{ margin: "4px 0 0" }}>詳細につきましては別途ご連絡いたします。</p>
             </div>
 
             <p style={{ textAlign: "center", fontSize: 11, color: "#666", marginTop: 16 }}>
