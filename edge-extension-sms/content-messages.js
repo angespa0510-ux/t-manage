@@ -21,7 +21,7 @@
     });
   }
 
-  // input にテキスト設定
+  // input にテキスト設定（STEP1: 宛先入力用）
   function setInputValue(el, text) {
     el.focus();
     if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
@@ -30,12 +30,79 @@
       else el.value = text;
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
-    } else if (el.contentEditable === "true") {
+      return;
+    }
+    el.focus();
+    el.textContent = text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  // STEP3: メッセージ入力（5段階戦略で確実に入力）
+  async function pasteMessage(el, text) {
+    el.focus();
+    await sleep(200);
+
+    // 戦略1: textContent
+    try {
+      log("paste try1: textContent");
+      el.textContent = text;
+      el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+      await sleep(300);
+      if (el.textContent.length > 10) { log("paste try1: ok"); return true; }
+    } catch (e) { log("paste try1 err: " + e.message); }
+
+    // 戦略2: innerHTML
+    try {
+      log("paste try2: innerHTML");
+      el.innerHTML = "";
       el.focus();
-      el.textContent = "";
+      el.innerHTML = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      await sleep(300);
+      if (el.textContent.length > 10) { log("paste try2: ok"); return true; }
+    } catch (e) { log("paste try2 err: " + e.message); }
+
+    // 戦略3: execCommand selectAll + insertText
+    try {
+      log("paste try3: execCommand");
+      el.innerHTML = "";
+      el.focus();
+      document.execCommand("selectAll", false, null);
       document.execCommand("insertText", false, text);
       el.dispatchEvent(new Event("input", { bubbles: true }));
-    }
+      await sleep(300);
+      if (el.textContent.length > 10) { log("paste try3: ok"); return true; }
+    } catch (e) { log("paste try3 err: " + e.message); }
+
+    // 戦略4: クリップボードペースト
+    try {
+      log("paste try4: clipboard");
+      await navigator.clipboard.writeText(text);
+      el.focus();
+      el.innerHTML = "";
+      document.execCommand("paste");
+      await sleep(300);
+      if (el.textContent.length > 10) { log("paste try4: ok"); return true; }
+    } catch (e) { log("paste try4 err: " + e.message); }
+
+    // 戦略5: InputEvent
+    try {
+      log("paste try5: InputEvent");
+      el.innerHTML = "";
+      el.focus();
+      el.dispatchEvent(new InputEvent("beforeinput", {
+        bubbles: true, cancelable: true, inputType: "insertText", data: text
+      }));
+      el.textContent = text;
+      el.dispatchEvent(new InputEvent("input", {
+        bubbles: true, inputType: "insertText", data: text
+      }));
+      await sleep(300);
+      if (el.textContent.length > 10) { log("paste try5: ok"); return true; }
+    } catch (e) { log("paste try5 err: " + e.message); }
+
+    log("paste: all tried, textContent.length=" + el.textContent.length);
+    return el.textContent.length > 0;
   }
 
   // 全力クリック: .click() + 合成イベント + PointerEvent + 祖先5階層
@@ -238,13 +305,18 @@
       }, 10000);
 
       log("STEP3: typing message");
-      setInputValue(msgInput, body);
-      msgInput.dispatchEvent(new InputEvent("input", {
-        bubbles: true, composed: true, data: body, inputType: "insertText"
-      }));
+      log(`STEP3: msgInput tag=${msgInput.tagName} contentEditable=${msgInput.contentEditable} aria-label=${msgInput.getAttribute("aria-label")}`);
+      const pasted = await pasteMessage(msgInput, body);
 
-      banner("✅ 自動入力完了！ 内容を確認して送信してください", "success");
-      log("Done!");
+      if (pasted) {
+        banner("✅ 自動入力完了！ 内容を確認して送信してください", "success");
+        log("Done!");
+      } else {
+        // テキスト入力失敗 → クリップボードにコピーして手動貼り付け案内
+        await navigator.clipboard.writeText(body);
+        banner("📋 テキスト表示に入りました — Ctrl+V で貼り付けてください", "info");
+        log("Text input failed, copied to clipboard");
+      }
       chrome.storage.local.remove(["sms_phone", "sms_body", "sms_timestamp"]);
 
     } catch (err) {
