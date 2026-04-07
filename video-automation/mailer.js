@@ -30,32 +30,49 @@ async function sendNotification(status, job, dbSettings = {}) {
   });
 
   let subject, body;
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,"0")}/${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  const driveUrl = dbSettings.gdriveFolderUrl || "https://drive.google.com/drive/my-drive";
+  const driveFolderName = dbSettings.gdriveFolder || "AI動画生成";
 
   if (status === "success") {
     subject = `✅ 動画生成完了 - ${job.therapist_name}`;
     body = [
       `動画生成が完了しました。`,
       ``,
-      `セラピスト: ${job.therapist_name}`,
-      `動きの印象: ${job.motion_category}`,
-      `ファイル名: ${job.video_filename || "(不明)"}`,
-      `保存先: デスクトップ / Googleドライブ「${dbSettings.gdriveFolder || "AI動画生成"}」`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `📅 生成日時: ${dateStr}`,
+      `💆 セラピスト: ${job.therapist_name}`,
+      `🎬 動きの印象: ${job.motion_category}`,
+      `📁 ファイル名: ${job.video_filename || "(不明)"}`,
+      `━━━━━━━━━━━━━━━━━━━━`,
       ``,
-      `T-MANAGE AI動画生成システム`,
+      `📂 Googleドライブで確認:`,
+      `${driveUrl}`,
+      `（フォルダ「${driveFolderName}」内）`,
+      ``,
+      `※ Googleドライブへのアップロード直後はファイルが反映されるまで`,
+      `  数分かかる場合があります。表示されない場合は少し時間をおいてから`,
+      `  再度ご確認ください。`,
+      ``,
+      `— T-MANAGE AI動画生成システム`,
     ].join("\n");
   } else {
     subject = `❌ 動画生成失敗 - ${job.therapist_name}`;
     body = [
       `動画生成に失敗しました。`,
       ``,
-      `セラピスト: ${job.therapist_name}`,
-      `動きの印象: ${job.motion_category}`,
-      `失敗理由: ${job.error_message || "セーフティフィルターで拒否 or タイムアウト"}`,
-      `リトライ回数: ${job.retry_count || 0}回`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `📅 日時: ${dateStr}`,
+      `💆 セラピスト: ${job.therapist_name}`,
+      `🎬 動きの印象: ${job.motion_category}`,
+      `❌ 失敗理由: ${job.error_message || "セーフティフィルターで拒否 or タイムアウト"}`,
+      `🔄 リトライ回数: ${job.retry_count || 0}回`,
+      `━━━━━━━━━━━━━━━━━━━━`,
       ``,
       `T-MANAGEの生成履歴ページで詳細を確認できます。`,
       ``,
-      `T-MANAGE AI動画生成システム`,
+      `— T-MANAGE AI動画生成システム`,
     ].join("\n");
   }
 

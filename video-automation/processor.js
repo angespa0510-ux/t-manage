@@ -1120,6 +1120,7 @@ async function loadSettings(supabase) {
       else if (k === "ai_auto_prompt_en") s.aiAutoPromptEn = row.value;
       else if (k === "notify_email") s.notifyEmail = row.value;
       else if (k === "gdrive_folder") s.gdriveFolder = row.value;
+      else if (k === "gdrive_folder_url") s.gdriveFolderUrl = row.value;
       else if (k === "max_retries") s.maxRetries = parseInt(row.value) || 3;
       else if (k === "watermark_crop_px") s.watermarkCropPx = parseInt(row.value) || 100;
       else if (k === "gemini_url") s.geminiUrl = row.value;
