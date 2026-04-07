@@ -89,6 +89,43 @@ export default function Dashboard() {
   const [custStats, setCustStats] = useState<Record<number, { visitCount: number; lastVisit: string; pointBalance: number }>>({});
   const [custMemoStats, setCustMemoStats] = useState<Record<string, { count: number; hasNg: boolean }>>({});
 
+  // NG登録
+  const [showNgRegister, setShowNgRegister] = useState(false);
+  const [ngCustSearch, setNgCustSearch] = useState("");
+  const [ngSelectedCust, setNgSelectedCust] = useState<Customer | null>(null);
+  const [ngTherapistId, setNgTherapistId] = useState(0);
+  const [ngReason, setNgReason] = useState("");
+  const [ngSaving, setNgSaving] = useState(false);
+  const [ngMsg, setNgMsg] = useState("");
+
+  const registerNg = async () => {
+    if (!ngSelectedCust || !ngTherapistId) { setNgMsg("お客様とセラピストを選択してください"); return; }
+    setNgSaving(true); setNgMsg("");
+    const { data: existing } = await supabase.from("therapist_customer_notes").select("id,is_ng").eq("customer_name", ngSelectedCust.name).eq("therapist_id", ngTherapistId).maybeSingle();
+    if (existing) {
+      await supabase.from("therapist_customer_notes").update({ is_ng: true, ng_reason: ngReason }).eq("id", existing.id);
+    } else {
+      await supabase.from("therapist_customer_notes").insert({ customer_name: ngSelectedCust.name, therapist_id: ngTherapistId, is_ng: true, ng_reason: ngReason, note: "", rating: 0 });
+    }
+    // 自動ランク判定
+    const { data: ngNotes } = await supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", ngSelectedCust.name).eq("is_ng", true);
+    const { data: activeTh } = await supabase.from("therapists").select("id").eq("status", "active");
+    const activeIds = new Set((activeTh || []).map(t => t.id));
+    const activeNgCount = (ngNotes || []).filter(n => activeIds.has(n.therapist_id)).length;
+    let newRank: string | null = null;
+    if (activeNgCount >= 5) newRank = "banned";
+    else if (activeNgCount >= 3) newRank = "caution";
+    if (newRank && ngSelectedCust) {
+      const { data: cust } = await supabase.from("customers").select("id,rank").eq("name", ngSelectedCust.name).maybeSingle();
+      if (cust && cust.rank !== "banned") { await supabase.from("customers").update({ rank: newRank }).eq("id", cust.id); }
+    }
+    setNgSaving(false);
+    const thName = therapists.find(t => t.id === ngTherapistId)?.name || "";
+    setNgMsg(`✅ ${ngSelectedCust.name} 様を ${thName} のNGに登録しました${newRank ? ` → ランク: ${newRank === "banned" ? "出禁" : "要注意"}に自動変更` : ""}`);
+    setNgTherapistId(0); setNgReason("");
+    fetchCustomers();
+  };
+
   // Register
   const [custName, setCustName] = useState(""); const [custPhone, setCustPhone] = useState(""); const [custPhone2, setCustPhone2] = useState(""); const [custPhone3, setCustPhone3] = useState("");
   const [custEmail, setCustEmail] = useState(""); const [custNotes, setCustNotes] = useState(""); const [custRank, setCustRank] = useState("normal"); const [custBirthday, setCustBirthday] = useState("");
@@ -629,7 +666,10 @@ export default function Dashboard() {
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
                   <div><h2 className="text-[15px] font-medium">顧客一覧</h2><p className="text-[11px] mt-0.5" style={{ color: T.textFaint }}>{customers.length}件の顧客情報</p></div>
-                  <button onClick={() => setActivePage("顧客登録")} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">+ 新規登録</button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowNgRegister(true)} className="px-4 py-2.5 text-[12px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
+                    <button onClick={() => setActivePage("顧客登録")} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">+ 新規登録</button>
+                  </div>
                 </div>
                 <div className="px-6 py-4" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
                   <div className="flex items-center gap-4 flex-wrap">
@@ -1319,6 +1359,70 @@ export default function Dashboard() {
                 );
               })}
               <button onClick={() => { monthlyResults.forEach(r => copyLineMsg(r)); }} className="w-full py-3 rounded-xl text-[12px] font-medium cursor-pointer" style={{ backgroundColor: "#06C75518", color: "#06C755" }}>全員分を順番にコピー</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NG登録モーダル */}
+      {showNgRegister && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => { setShowNgRegister(false); setNgSelectedCust(null); setNgCustSearch(""); setNgTherapistId(0); setNgReason(""); setNgMsg(""); }}>
+          <div className="rounded-2xl w-full max-w-md animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <h2 className="text-[16px] font-medium" style={{ color: "#c45555" }}>🚫 NG登録</h2>
+              <button onClick={() => { setShowNgRegister(false); setNgSelectedCust(null); setNgCustSearch(""); setNgTherapistId(0); setNgReason(""); setNgMsg(""); }} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {/* お客様選択 */}
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>お客様を検索・選択</label>
+                {ngSelectedCust ? (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ backgroundColor: "#c4555512", border: "1px solid #c4555544" }}>
+                    <span className="text-[13px] font-medium flex-1" style={{ color: "#c45555" }}>{ngSelectedCust.name}</span>
+                    <RankBadge rank={ngSelectedCust.rank || "normal"} />
+                    <button onClick={() => { setNgSelectedCust(null); setNgCustSearch(""); }} className="text-[11px] cursor-pointer" style={{ color: "#c45555", background: "none", border: "none" }}>✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <input type="text" placeholder="名前・電話番号で検索" value={ngCustSearch} onChange={e => setNgCustSearch(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                    {ngCustSearch.length >= 1 && (
+                      <div className="mt-1 max-h-[150px] overflow-y-auto rounded-xl border" style={{ borderColor: T.border }}>
+                        {customers.filter(c => c.name?.includes(ngCustSearch) || c.phone?.includes(ngCustSearch)).slice(0, 10).map(c => (
+                          <button key={c.id} onClick={() => { setNgSelectedCust(c); setNgCustSearch(""); }} className="w-full text-left px-3 py-2 text-[12px] cursor-pointer flex items-center gap-2" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt, color: T.text }}>
+                            <span>{c.name}</span>
+                            <RankBadge rank={c.rank || "normal"} />
+                            {c.phone && <span className="text-[10px]" style={{ color: T.textMuted }}>{c.phone}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* セラピスト選択 */}
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>NGにするセラピスト</label>
+                <select value={ngTherapistId} onChange={e => setNgTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                  <option value={0}>— セラピストを選択 —</option>
+                  {therapists.filter(t => t.status === "active").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+
+              {/* NG理由 */}
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>NG理由（任意）</label>
+                <textarea value={ngReason} onChange={e => setNgReason(e.target.value)} placeholder="理由を入力（任意）" rows={2} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} />
+              </div>
+
+              {ngMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: ngMsg.startsWith("✅") ? "#4a7c5918" : "#c4555518", color: ngMsg.startsWith("✅") ? "#4a7c59" : "#c45555" }}>{ngMsg}</div>}
+
+              <div className="flex gap-3">
+                <button onClick={registerNg} disabled={ngSaving || !ngSelectedCust || !ngTherapistId} className="px-6 py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ backgroundColor: "#c45555" }}>
+                  {ngSaving ? "登録中..." : "🚫 NG登録する"}
+                </button>
+                <button onClick={() => { setShowNgRegister(false); setNgSelectedCust(null); setNgCustSearch(""); setNgTherapistId(0); setNgReason(""); setNgMsg(""); }} className="px-6 py-3 border text-[13px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+              </div>
             </div>
           </div>
         </div>

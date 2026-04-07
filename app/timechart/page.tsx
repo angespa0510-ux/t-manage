@@ -103,6 +103,19 @@ export default function TimeChart() {
     return null;
   };
 
+  // NG警告ポップアップ
+  const [ngWarning, setNgWarning] = useState<{ therapistName: string; customerName: string; ngReason: string; custRank: string } | null>(null);
+  const checkNgWarning = async (custName: string, therapistId: number) => {
+    if (!custName || !therapistId) return;
+    const cleanName = custName.replace(/\s*L$/i, "").trim();
+    const { data } = await supabase.from("therapist_customer_notes").select("is_ng, ng_reason").eq("customer_name", cleanName).eq("therapist_id", therapistId).eq("is_ng", true).maybeSingle();
+    if (data) {
+      const thName = therapists.find(t => t.id === therapistId)?.name || "";
+      const { data: cust } = await supabase.from("customers").select("rank").eq("name", cleanName).maybeSingle();
+      setNgWarning({ therapistName: thName, customerName: cleanName, ngReason: data.ng_reason || "", custRank: cust?.rank || "normal" });
+    }
+  };
+
   const [showNewTherapist, setShowNewTherapist] = useState(false);
   const [showStatusList, setShowStatusList] = useState(false);
   const [statusListTab, setStatusListTab] = useState<"therapist"|"customer">("therapist");
@@ -387,7 +400,7 @@ export default function TimeChart() {
     }
   };
 
-  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCustomerStatus((r as any).customer_status || "unsent"); setEditTherapistStatus((r as any).therapist_status || "unsent"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); supabase.from("customers").select("phone,rank").eq("name", r.customer_name).maybeSingle().then(({ data }) => { setEditCustPhone(data?.phone || ""); setEditCustRank(data?.rank || "normal"); }); };
+  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCustomerStatus((r as any).customer_status || "unsent"); setEditTherapistStatus((r as any).therapist_status || "unsent"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); supabase.from("customers").select("phone,rank").eq("name", r.customer_name).maybeSingle().then(({ data }) => { setEditCustPhone(data?.phone || ""); setEditCustRank(data?.rank || "normal"); }); checkNgWarning(r.customer_name, r.therapist_id); };
   // ===== ポイント自動付与（completed時） =====
   const awardPoints = async (resId: number, customerName: string, totalPrice: number, resDate: string) => {
     try {
@@ -776,7 +789,7 @@ export default function TimeChart() {
             <input type="text" placeholder="名前・電話番号で検索" value={custSearchQ} onChange={(e) => setCustSearchQ(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[12px] outline-none mb-3" style={{ backgroundColor: T.cardAlt, color: T.text }} />
             <div className="space-y-1 max-h-[300px] overflow-y-auto mb-4">
               {custList.filter(c => { const q = custSearchQ.toLowerCase(); return !q || c.name?.toLowerCase().includes(q) || c.phone?.includes(q); }).map(c => (
-                <button key={c.id} onClick={async () => { setNewCustName(c.name); setNewCustPhone((c as any).phone || ""); setNewCustRank((c as any).rank || "normal"); setShowCustSearch(false); setShowNewRes(true); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); if (newTherapistId) { const { data: prevRes } = await supabase.from("reservations").select("id").eq("customer_name", c.name).eq("therapist_id", newTherapistId).limit(1); const { data: noms } = await supabase.from("nominations").select("*"); if (prevRes && prevRes.length > 0 && noms) { const honNom = noms.find((n: { name: string }) => n.name === "本指名"); if (honNom) { setNewNomination(honNom.name); setNewNomFee(honNom.price); } } } }} className="w-full text-left px-4 py-3 rounded-xl flex items-center justify-between cursor-pointer" style={{ backgroundColor: T.cardAlt }}>
+                <button key={c.id} onClick={async () => { setNewCustName(c.name); setNewCustPhone((c as any).phone || ""); setNewCustRank((c as any).rank || "normal"); setShowCustSearch(false); setShowNewRes(true); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); if (newTherapistId) { checkNgWarning(c.name, newTherapistId); const { data: prevRes } = await supabase.from("reservations").select("id").eq("customer_name", c.name).eq("therapist_id", newTherapistId).limit(1); const { data: noms } = await supabase.from("nominations").select("*"); if (prevRes && prevRes.length > 0 && noms) { const honNom = noms.find((n: { name: string }) => n.name === "本指名"); if (honNom) { setNewNomination(honNom.name); setNewNomFee(honNom.price); } } } }} className="w-full text-left px-4 py-3 rounded-xl flex items-center justify-between cursor-pointer" style={{ backgroundColor: T.cardAlt }}>
                   <div><p className="text-[13px] font-medium">{c.name}</p><p className="text-[10px]" style={{ color: T.textMuted }}>{c.phone || "電話番号なし"}</p></div>
                   <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: c.rank === "good" ? "#7ab88f18" : c.rank === "caution" ? "#f59e0b18" : c.rank === "banned" ? "#c4555518" : "#88878018", color: c.rank === "good" ? "#7ab88f" : c.rank === "caution" ? "#f59e0b" : c.rank === "banned" ? "#c45555" : "#888780" }}>{c.rank === "good" ? "優良" : c.rank === "caution" ? "要注意" : c.rank === "banned" ? "出禁" : "普通"}</span>
                 </button>
@@ -829,7 +842,7 @@ export default function TimeChart() {
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>お客様ランク</label><div className="flex gap-1.5">{Object.entries(CUST_RANKS).map(([key, val]) => (<button key={key} onClick={() => setNewCustRank(key)} className="px-3 py-1.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: newCustRank === key ? val.bg : T.cardAlt, color: newCustRank === key ? val.color : T.textMuted, border: `1px solid ${newCustRank === key ? val.color + "66" : T.border}`, fontWeight: newCustRank === key ? 700 : 400 }}>{val.label}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト <span style={{ color: "#c49885" }}>*</span></label><select value={newTherapistId} onChange={(e) => setNewTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト <span style={{ color: "#c49885" }}>*</span></label><select value={newTherapistId} onChange={(e) => { const tid = Number(e.target.value); setNewTherapistId(tid); if (tid && newCustName) checkNgWarning(newCustName, tid); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={newStaffName} onChange={(e) => { setNewStaffName(e.target.value); localStorage.setItem("last_staff_name", e.target.value); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={newCourseId} onChange={(e) => handleCourseChange(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, borderColor: !newCourseId ? "#c49885" : "transparent" }}><option value={0}>— コースを選択してください —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
@@ -944,7 +957,7 @@ export default function TimeChart() {
               </div>
               <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>お客様ランク</label><div className="flex gap-1.5">{Object.entries(CUST_RANKS).map(([key, val]) => (<button key={key} onClick={() => setEditCustRank(key)} className="px-3 py-1.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: editCustRank === key ? val.bg : T.cardAlt, color: editCustRank === key ? val.color : T.textMuted, border: `1px solid ${editCustRank === key ? val.color + "66" : T.border}`, fontWeight: editCustRank === key ? 700 : 400 }}>{val.label}</button>))}</div></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト</label><select value={editTherapistId} onChange={(e) => setEditTherapistId(Number(e.target.value))} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
+                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト</label><select value={editTherapistId} onChange={(e) => { const tid = Number(e.target.value); setEditTherapistId(tid); if (tid && editCustName) checkNgWarning(editCustName, tid); }} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
                 <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={editStaffName} onChange={(e) => setEditStaffName(e.target.value)} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
               </div>
               <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={editCourseId} onChange={(e) => handleCourseChange(Number(e.target.value), true)} className="w-full px-3 py-2 rounded-xl text-[11px] outline-none cursor-pointer" style={inputStyle}><option value={0}>— コースを選択 —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
@@ -1899,7 +1912,30 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
         dark={dark}
       />
 
-      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
+      {/* ===== NG警告ポップアップ（激しめ表示） ===== */}
+      {ngWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: "rgba(196,85,85,0.85)", animation: "ngFlash 0.5s ease-out" }} onClick={() => setNgWarning(null)}>
+          <div className="rounded-3xl w-full max-w-md mx-4 p-8 text-center animate-[ngBounce_0.4s_ease-out]" style={{ backgroundColor: "#1a0505", border: "4px solid #ff3333", boxShadow: "0 0 60px rgba(255,50,50,0.6), 0 0 120px rgba(255,50,50,0.3)" }} onClick={e => e.stopPropagation()}>
+            <div className="text-[60px] mb-3" style={{ animation: "ngShake 0.5s ease-in-out" }}>🚨</div>
+            <h2 className="text-[28px] font-black mb-2" style={{ color: "#ff3333", textShadow: "0 0 20px rgba(255,50,50,0.5)" }}>NG 警告</h2>
+            <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: "#2a0808", border: "2px solid #ff333366" }}>
+              <p className="text-[18px] font-bold mb-2" style={{ color: "#ff6666" }}>
+                {ngWarning.therapistName} は {ngWarning.customerName} 様を<br/>NGにしています！
+              </p>
+              {ngWarning.ngReason && <p className="text-[14px] mt-2" style={{ color: "#ff9999" }}>理由: {ngWarning.ngReason}</p>}
+              {ngWarning.custRank && ngWarning.custRank !== "normal" && (
+                <p className="text-[14px] mt-2 font-bold" style={{ color: ngWarning.custRank === "banned" ? "#ff3333" : "#ffaa00" }}>
+                  顧客ランク: {ngWarning.custRank === "banned" ? "⛔ 出禁" : ngWarning.custRank === "caution" ? "⚠️ 要注意" : ngWarning.custRank === "good" ? "善良" : "普通"}
+                </p>
+              )}
+            </div>
+            <p className="text-[13px] mb-5" style={{ color: "#ff9999" }}>このセラピストにこのお客様を割り当てないでください</p>
+            <button onClick={() => setNgWarning(null)} className="px-10 py-3 rounded-xl text-[16px] font-bold cursor-pointer" style={{ backgroundColor: "#ff3333", color: "white", border: "none", boxShadow: "0 4px 20px rgba(255,50,50,0.4)" }}>確認しました</button>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } } @keyframes ngFlash { 0% { opacity: 0; } 30% { opacity: 1; } 50% { opacity: 0.7; } 70% { opacity: 1; } 100% { opacity: 1; } } @keyframes ngBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } } @keyframes ngShake { 0%, 100% { transform: rotate(0deg); } 20% { transform: rotate(-15deg); } 40% { transform: rotate(15deg); } 60% { transform: rotate(-10deg); } 80% { transform: rotate(10deg); } }`}</style>
     </div>
   );
 }
