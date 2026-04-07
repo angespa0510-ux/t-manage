@@ -556,6 +556,120 @@ export default function SystemSetup() {
               </div>
             </div>
 
+            {/* ===== Edge SMS② 拡張機能 ===== */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#8b5cf6")}>3</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>📲 Edge SMS② 拡張機能（Googleメッセージ自動入力）</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>SMS②ボタンからGoogleメッセージへ自動入力</p>
+                </div>
+              </div>
+
+              {/* 概要 */}
+              <div className="pl-11 space-y-3">
+                <div className="p-4 rounded-xl" style={{ backgroundColor: "#8b5cf608", border: "1px solid #8b5cf622" }}>
+                  <p className="text-[12px]" style={{ color: T.textSub }}>
+                    タイムチャートの「<span style={{ color: "#8b5cf6", fontWeight: 600 }}>📲 SMS②Edge</span>」ボタンを押すと、
+                    Edgeが自動で起動 → Googleメッセージで電話番号検索 → メッセージ本文入力まで全自動で行います。
+                    送信ボタンを押すだけ！
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 text-[11px] flex-wrap" style={{ color: T.textMuted }}>
+                    <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6" }}>📲 SMS②Edge</span>
+                    <span>→</span>
+                    <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>🔍 電話番号検索</span>
+                    <span>→</span>
+                    <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>📝 メッセージ入力</span>
+                    <span>→</span>
+                    <span className="px-2 py-1 rounded-lg" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>📩 送信ボタンを押すだけ</span>
+                  </div>
+                </div>
+
+                {/* ダウンロード */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>📥 ファイルのダウンロード</p>
+                  <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> T-MANAGEのGitHubリポジトリからダウンロード：
+                    </p>
+                    <a href="https://github.com/angespa0510-ux/t-manage/tree/main/edge-extension-sms" target="_blank" rel="noopener noreferrer"
+                      className="block px-3 py-2 rounded-lg text-[11px]" style={{ backgroundColor: T.bg, color: "#8b5cf6", textDecoration: "underline" }}>
+                      📂 edge-extension-sms フォルダを開く（GitHub）
+                    </a>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>
+                      または、リポジトリ全体をZIPダウンロード → 解凍 → <code style={{ color: "#c3a782" }}>edge-extension-sms</code> フォルダを使用
+                    </p>
+                  </div>
+                </div>
+
+                {/* インストール手順 */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>⚙️ Edgeにインストール</p>
+                  <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> Edgeのアドレスバーに入力：
+                    </p>
+                    <code className="text-[11px] block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
+                      edge://extensions
+                    </code>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> 左下の「<span style={{ fontWeight: 600 }}>開発者モード</span>」を <span style={{ color: "#4a7c59", fontWeight: 600 }}>ON</span> にする
+                    </p>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 「<span style={{ fontWeight: 600 }}>展開して読み込み</span>」をクリック
+                    </p>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> ダウンロードした <code style={{ color: "#c3a782" }}>edge-extension-sms</code> フォルダを選択
+                    </p>
+                  </div>
+                </div>
+
+                {/* 確認 */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: "#4a7c5908", border: "1px solid #4a7c5922" }}>
+                  <p className="text-[12px]" style={{ color: "#4a7c59" }}>
+                    ✅ 「T-MANAGE SMS② 自動入力」が拡張機能一覧に表示されればOK！
+                  </p>
+                </div>
+
+                {/* 初回設定 */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>🔧 初回のみ：ダイアログ省略設定</p>
+                  <div className="space-y-1 text-[12px]" style={{ color: T.textSub }}>
+                    <p>
+                      初回のSMS②ボタン押下時に「Microsoft Edgeを開きますか？」ダイアログが表示されます。
+                    </p>
+                    <p>
+                      ✅ 「<span style={{ fontWeight: 600, color: T.text }}>t-manage.vercel.app でのこのタイプのリンクは常に関連付けられたアプリで開く</span>」にチェック → 「Microsoft Edgeを開く」
+                    </p>
+                    <p className="text-[10px]" style={{ color: T.textMuted }}>
+                      ※ 以降はダイアログなしで即Edge起動になります
+                    </p>
+                  </div>
+                </div>
+
+                {/* 使い方 */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>📲 使い方</p>
+                  <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> タイムチャートの通知ポップアップで「<span style={{ color: "#8b5cf6", fontWeight: 600 }}>📲 SMS②Edge</span>」をクリック</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> Edgeが起動 → Googleメッセージが自動で開く</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 電話番号検索 → 宛先選択 → メッセージ入力 が全自動</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> 内容を確認して<span style={{ fontWeight: 600 }}>送信ボタンを押すだけ！</span></p>
+                  </div>
+                </div>
+
+                {/* 更新方法 */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>🔄 拡張機能の更新方法</p>
+                  <div className="space-y-1 text-[12px]" style={{ color: T.textSub }}>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> GitHubから最新の <code style={{ color: "#c3a782" }}>edge-extension-sms</code> フォルダをダウンロード</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> 既存のフォルダを上書き</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> <code style={{ color: "#c3a782" }}>edge://extensions</code> → 拡張機能の 🔄 リロードボタンをクリック</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* トラブルシューティング */}
             <div className="rounded-2xl p-6" style={cardStyle}>
               <h3 className="text-[14px] font-medium mb-4" style={{ color: T.text }}>❓ よくある質問</h3>
@@ -564,7 +678,9 @@ export default function SystemSetup() {
                   { q: "自動入力ボタンが表示されない", a: "Chrome拡張が有効になっているか確認してください。chrome://extensions で「T-MANAGE 通知アシスタント」がONになっているか確認してください。" },
                   { q: "LINEに自動入力されない", a: "LINE Business Chat（chat.line.biz）がChromeのタブで開かれていることを確認してください。スマホアプリのLINEではなく、PC版のブラウザLINEが必要です。" },
                   { q: "Chromeを更新したら拡張が消えた", a: "デベロッパーモードで読み込んだ拡張はChromeの更新で無効になることがあります。chrome://extensions から再度読み込んでください。" },
-                  { q: "Edge でも使える？", a: "SMS送信はEdge、LINE送信はChromeと使い分けています。拡張機能自体はChrome用です。" },
+                  { q: "SMS②でGoogleメッセージが開かない", a: "Edge拡張が有効になっているか確認してください。edge://extensions で「T-MANAGE SMS② 自動入力」がONになっているか確認してください。" },
+                  { q: "SMS②で検索はされるがメッセージが入力されない", a: "edge://extensions で拡張機能の🔄リロードボタンを押してから再度試してください。Googleメッセージの画面が変わった場合はフォルダの更新が必要です。" },
+                  { q: "「Microsoft Edgeを開きますか？」が毎回出る", a: "ダイアログの「t-manage.vercel.app でのこのタイプのリンクは常に関連付けられたアプリで開く」にチェックを入れてから「Microsoft Edgeを開く」をクリックしてください。" },
                 ].map((faq, i) => (
                   <details key={i} className="rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                     <summary className="px-4 py-3 text-[12px] cursor-pointer" style={{ color: T.text }}>{faq.q}</summary>
