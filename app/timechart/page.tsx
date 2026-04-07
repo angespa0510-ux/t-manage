@@ -5,6 +5,7 @@ import { useToast } from "../../lib/toast";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme"; import { NavMenu } from "../../lib/nav-menu";
+import { SokuhoPanel } from "../../lib/sokuho-panel";
 
 type Therapist = { id: number; name: string; phone: string; status: string; has_withholding: boolean };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
@@ -183,6 +184,9 @@ export default function TimeChart() {
   type BulkTherapistData = { therapistId: number; therapistName: string; reservations: BulkResInfo[]; message: string };
   const [bulkData, setBulkData] = useState<BulkTherapistData[]>([]);
   const [bulkCopied, setBulkCopied] = useState<Record<number, boolean>>({});
+
+  // Sokuho (Real-time bulletin)
+  const [showSokuho, setShowSokuho] = useState(false);
 
   const selectedCourse = courses.find((c) => c.id === newCourseId);
   const editSelectedCourse = courses.find((c) => c.id === editCourseId);
@@ -558,6 +562,7 @@ export default function TimeChart() {
           </button>
           <button onClick={() => setShowStatusList(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📋 ステータス一覧</button>
           <button onClick={openBulkNotify} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#3d6b9f44", color: "#3d6b9f" }}>📩 一括通知</button>
+          <button onClick={() => setShowSokuho(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#ff6b9d44", color: "#ff6b9d" }}>📢 速報</button>
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
           <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
@@ -1746,6 +1751,23 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
           </div>
         </div>
       )}
+
+      {/* リアルタイム速報パネル */}
+      <SokuhoPanel
+        show={showSokuho}
+        onClose={() => setShowSokuho(false)}
+        therapists={therapists}
+        reservations={reservations}
+        shifts={shifts}
+        stores={stores}
+        buildings={buildings}
+        allRooms={allRooms}
+        roomAssigns={roomAssigns}
+        clockedOut={clockedOut}
+        selectedDate={selectedDate}
+        T={T}
+        dark={dark}
+      />
 
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
     </div>
