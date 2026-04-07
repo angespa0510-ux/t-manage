@@ -81,6 +81,8 @@ export default function TimeChart() {
   const [editMsg, setEditMsg] = useState("");
 
   const [showNewTherapist, setShowNewTherapist] = useState(false);
+  const [showStatusList, setShowStatusList] = useState(false);
+  const [statusListTab, setStatusListTab] = useState<"therapist"|"customer">("therapist");
   const [addShiftTherapistId, setAddShiftTherapistId] = useState(0);
   const [addShiftStart, setAddShiftStart] = useState("12:00");
   const [addShiftEnd, setAddShiftEnd] = useState("03:00");
@@ -553,6 +555,7 @@ export default function TimeChart() {
           <button onClick={() => setShowShiftNotif(!showShiftNotif)} className="relative px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: pendingShiftReqs.length > 0 ? "#f59e0b44" : T.border, color: pendingShiftReqs.length > 0 ? "#f59e0b" : T.textSub }}>
             📝 出勤希望{pendingShiftReqs.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: "#f59e0b" }}>{new Set(pendingShiftReqs.map(r => r.therapist_id)).size}</span>}
           </button>
+          <button onClick={() => setShowStatusList(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📋 ステータス一覧</button>
           <button onClick={openBulkNotify} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#3d6b9f44", color: "#3d6b9f" }}>📩 一括通知</button>
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
@@ -1479,6 +1482,92 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
                 </>)}
                 <button onClick={() => setNotifyInfo(null)} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted }}>閉じる</button>
               </div>
+            </div>
+          </div>
+        </div>);
+      })()}
+
+      {/* ===== ステータス一覧モーダル ===== */}
+      {showStatusList && (() => {
+        const custStatusLabel: Record<string,string> = { unsent:"未送信", web_reservation:"WEB予約", summary_unread:"概要未読", summary_read:"概要既読", detail_unread:"詳細未読", detail_read:"詳細既読", serving:"接客中", completed:"終了" };
+        const therStatusLabel: Record<string,string> = { unsent:"未送信", detail_sent:"送信済", serving:"接客中", completed:"終了" };
+        const custStatusColor: Record<string,string> = { unsent:"#888780", web_reservation:"#a855f7", summary_unread:"#3b82f6", summary_read:"#2563eb", detail_unread:"#4a7c59", detail_read:"#16a34a", serving:"#22c55e", completed:"#c3a782" };
+        const therStatusColor: Record<string,string> = { unsent:"#888780", detail_sent:"#4a7c59", serving:"#22c55e", completed:"#c3a782" };
+        const sortedRes = [...reservations].sort((a, b) => a.start_time.localeCompare(b.start_time));
+        const thGroups: Record<number, typeof reservations> = {};
+        sortedRes.forEach(r => { if (!thGroups[r.therapist_id]) thGroups[r.therapist_id] = []; thGroups[r.therapist_id].push(r); });
+        return (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowStatusList(false)}>
+          <div className="rounded-2xl border w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-3 flex items-center justify-between sticky top-0 z-10" style={{ backgroundColor: T.card, borderBottom: `1px solid ${T.border}` }}>
+              <div>
+                <h2 className="text-[15px] font-medium">📋 ステータス一覧</h2>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>{dateDisplay}　{reservations.length}件の予約</p>
+              </div>
+              <button onClick={() => setShowStatusList(false)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
+            </div>
+            <div className="flex" style={{ borderBottom: `1px solid ${T.border}` }}>
+              {(["therapist","customer"] as const).map(tab => (
+                <button key={tab} onClick={() => setStatusListTab(tab)} className="flex-1 py-2.5 text-[12px] cursor-pointer" style={{ background: "none", border: "none", borderBottom: statusListTab === tab ? "2px solid #c3a782" : "2px solid transparent", color: statusListTab === tab ? T.text : T.textMuted, fontWeight: statusListTab === tab ? 600 : 400 }}>
+                  {tab === "therapist" ? "💆 セラピストビュー" : "👤 お客様ビュー"}
+                </button>
+              ))}
+            </div>
+            <div>
+              {statusListTab === "therapist" ? (
+                Object.entries(thGroups).map(([thId, rList]) => {
+                  const th = therapists.find(t => t.id === Number(thId));
+                  return (<div key={thId}>
+                    <div className="px-4 py-2 text-[11px] font-medium" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>
+                      💆 {th?.name || "不明"}（{rList.length}件）
+                    </div>
+                    {rList.map(r => {
+                      const cs = (r as any).customer_status || "unsent";
+                      const ts = (r as any).therapist_status || "unsent";
+                      const cc = custStatusColor[cs] || "#888780";
+                      const tc = therStatusColor[ts] || "#888780";
+                      return (
+                        <div key={r.id} className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: `0.5px solid ${T.border}` }}>
+                          <span className="text-[12px] font-medium" style={{ minWidth: 85 }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-medium truncate" style={{ color: T.text }}>{r.customer_name}</p>
+                            <p className="text-[10px] truncate" style={{ color: T.textMuted }}>{r.course}</p>
+                          </div>
+                          <span className="text-[8px] px-2 py-0.5 rounded" style={{ backgroundColor: cc + "22", color: cc, whiteSpace: "nowrap" }}>客:{custStatusLabel[cs] || cs}</span>
+                          <span className="text-[8px] px-2 py-0.5 rounded" style={{ backgroundColor: tc + "22", color: tc, whiteSpace: "nowrap" }}>セ:{therStatusLabel[ts] || ts}</span>
+                          <button onClick={() => { setShowStatusList(false); openEdit(r); }} className="text-[9px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `0.5px solid ${T.border}` }}>詳細</button>
+                        </div>
+                      );
+                    })}
+                  </div>);
+                })
+              ) : (
+                sortedRes.map(r => {
+                  const cs = (r as any).customer_status || "unsent";
+                  const ts = (r as any).therapist_status || "unsent";
+                  const cc = custStatusColor[cs] || "#888780";
+                  const tc = therStatusColor[ts] || "#888780";
+                  const th = therapists.find(t => t.id === r.therapist_id);
+                  return (
+                    <div key={r.id} className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: `0.5px solid ${T.border}` }}>
+                      <span className="text-[12px] font-medium" style={{ minWidth: 85 }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium truncate" style={{ color: T.text }}>{r.customer_name}</p>
+                        <p className="text-[10px] truncate" style={{ color: T.textMuted }}>{th?.name || ""} / {r.course}</p>
+                      </div>
+                      <span className="text-[8px] px-2 py-0.5 rounded" style={{ backgroundColor: cc + "22", color: cc, whiteSpace: "nowrap" }}>客:{custStatusLabel[cs] || cs}</span>
+                      <span className="text-[8px] px-2 py-0.5 rounded" style={{ backgroundColor: tc + "22", color: tc, whiteSpace: "nowrap" }}>セ:{therStatusLabel[ts] || ts}</span>
+                      <button onClick={() => { setShowStatusList(false); openEdit(r); }} className="text-[9px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `0.5px solid ${T.border}` }}>詳細</button>
+                    </div>
+                  );
+                })
+              )}
+              {reservations.length === 0 && (
+                <div className="py-10 text-center">
+                  <p className="text-[28px] mb-2">📋</p>
+                  <p className="text-[12px]" style={{ color: T.textMuted }}>本日の予約はありません</p>
+                </div>
+              )}
             </div>
           </div>
         </div>);
