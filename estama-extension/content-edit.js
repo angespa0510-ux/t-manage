@@ -71,46 +71,56 @@
     }
 
     // ===== 6. 画像アップロード =====
-    showBanner('💅 フォーム入力完了 — 画像をアップロード中...');
+    showBanner('💅 フォーム入力完了 — 画像を設定中...');
 
     try {
       let response;
       if (post.imageUrls && post.imageUrls.length > 0) {
-        // T-MANAGEセラピスト画像を使用
         console.log('[エステ魂拡張] T-MANAGE画像URLs:', post.imageUrls.length, '枚');
         response = await new Promise((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: 'FETCH_IMAGE_URLS', urls: post.imageUrls },
-            resolve
-          );
+          chrome.runtime.sendMessage({ type: 'FETCH_IMAGE_URLS', urls: post.imageUrls }, resolve);
         });
       } else {
-        // フォールバック: ange-spa.comから取得
         response = await new Promise((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: 'FETCH_SCHEDULE_IMAGES', roomKey: post.room },
-            resolve
-          );
+          chrome.runtime.sendMessage({ type: 'FETCH_SCHEDULE_IMAGES', roomKey: post.room }, resolve);
         });
       }
 
       if (response && response.ok && response.images && response.images.length > 0) {
-        console.log('[エステ魂拡張] 画像取得:', response.images.length, '枚');
-        const csrf = getCsrf();
+        console.log('[エステ魂拡張] 画像取得成功:', response.images.length, '枚');
 
         for (let i = 0; i < Math.min(response.images.length, 3); i++) {
           const img = response.images[i];
-          const uploadId = `blog_icon_${i + 1}-imgupload`;
+          const fileInputId = `blog_icon_${i + 1}-imgupload_imgUploadField`;
+          const fileInput = document.getElementById(fileInputId);
+
+          if (!fileInput) {
+            console.warn('[エステ魂拡張] ファイル入力欄が見つかりません:', fileInputId);
+            continue;
+          }
+
           try {
-            await uploadImage(img.base64, uploadId, csrf);
-            console.log('[エステ魂拡張] 画像', i + 1, 'アップロード完了');
+            // base64 → File変換
+            const file = base64ToFile(img.base64, `therapist_${i + 1}.jpg`);
+
+            // DataTransfer でファイルをセット
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+
+            // changeイベントを発火（estama.jpのアップロードJSをトリガー）
+            fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+            console.log('[エステ魂拡張] 画像', i + 1, 'をファイル入力にセット');
+
+            // 次の画像まで少し待つ（サーバー処理のため）
+            await new Promise(r => setTimeout(r, 1500));
           } catch (e) {
-            console.warn('[エステ魂拡張] 画像', i + 1, 'アップロード失敗:', e);
+            console.warn('[エステ魂拡張] 画像', i + 1, 'セット失敗:', e);
           }
         }
         showBanner('✅ 入力＆画像アップロード完了 — 投稿ボタンを押してください！');
       } else {
-        console.log('[エステ魂拡張] 画像なし、テキストのみ');
+        console.log('[エステ魂拡張] 画像なしまたは取得失敗:', response);
         showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
       }
     } catch (e) {
@@ -157,71 +167,12 @@
     banner.textContent = text;
   }
 
-  // =============================================
-  // 画像アップロード (2段階: uptemp → cropping)
-  // =============================================
-
-  async function uploadImage(base64Data, uploadId, csrf) {
-    // base64 → Blob
+  function base64ToFile(base64Data, fileName) {
     const parts = base64Data.split(',');
     const mime = parts[0].match(/:(.*?);/)[1];
     const binary = atob(parts[1]);
     const arr = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-    const blob = new Blob([arr], { type: mime });
-    const file = new File([blob], 'therapist.jpg', { type: mime });
-
-    // Step 1: uptemp
-    const fd1 = new FormData();
-    fd1.append('img', file);
-    fd1.append('upload_id', uploadId);
-    fd1.append('text', 'test');
-    fd1.append('ctk', csrf);
-
-    const res1 = await fetch('/post/uptemp/', { method: 'POST', body: fd1 });
-    const json1 = await res1.json();
-    if (json1.status !== 'success') throw new Error('uptemp failed: ' + JSON.stringify(json1));
-
-    const tempUrl = json1.url;
-    const origW = json1.width;
-    const origH = json1.height;
-
-    // Step 2: cropping (正方形センタークロップ 400x400)
-    let imgW, imgH, x1, y1;
-    if (origW > origH) {
-      // 横長
-      imgH = 400;
-      imgW = Math.round(origW * 400 / origH);
-      x1 = Math.round((imgW - 400) / 2);
-      y1 = 0;
-    } else {
-      // 縦長
-      imgW = 400;
-      imgH = Math.round(origH * 400 / origW);
-      x1 = 0;
-      y1 = Math.round((imgH - 400) / 2);
-    }
-
-    const fd2 = new FormData();
-    fd2.append('imgUrl', tempUrl);
-    fd2.append('imgInitW', origW);
-    fd2.append('imgInitH', origH);
-    fd2.append('imgW', imgW);
-    fd2.append('imgH', imgH);
-    fd2.append('imgY1', y1);
-    fd2.append('imgX1', x1);
-    fd2.append('cropH', 400);
-    fd2.append('cropW', 400);
-    fd2.append('rotation', 0);
-    fd2.append('upload_id', uploadId);
-    fd2.append('text', 'test');
-    fd2.append('ctk', csrf);
-
-    const res2 = await fetch('/post/cropping/', { method: 'POST', body: fd2 });
-    const json2 = await res2.json();
-    if (json2.status !== 'success') throw new Error('cropping failed: ' + JSON.stringify(json2));
-
-    console.log('[エステ魂拡張] 画像クロップ完了:', json2.url);
-    return json2;
+    return new File([arr], fileName, { type: mime });
   }
 })();
