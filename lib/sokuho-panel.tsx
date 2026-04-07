@@ -409,12 +409,22 @@ export function SokuhoPanel({
   // ========================================
   const handlePostBluesky = async () => {
     if (!bskyId || !bskyPw) {
-      setPostResult({ type: "error", msg: "Bluesky IDとパスワードを設定してください" });
+      setPostResult({ type: "error", msg: "Bluesky IDとパスワードを設定してください（⚙️ボタン）" });
       return;
+    }
+    const text = generateText();
+    // Blueskyのグラフェム制限（300文字）チェック
+    const segmenter = typeof Intl !== "undefined" && Intl.Segmenter
+      ? new Intl.Segmenter("ja", { granularity: "grapheme" })
+      : null;
+    const graphemeCount = segmenter
+      ? [...segmenter.segment(text)].length
+      : text.length;
+    if (graphemeCount > 300) {
+      if (!confirm(`テキストが${graphemeCount}文字です（Bluesky上限300文字）。\n投稿するとエラーになる可能性があります。続行しますか？`)) return;
     }
     setPosting(true);
     setPostResult(null);
-    const text = generateText();
     const result = await postToBluesky(bskyId, bskyPw, text);
     if (result.success) {
       setPostResult({ type: "success", msg: "Blueskyに投稿しました！" });
@@ -668,22 +678,31 @@ export function SokuhoPanel({
           </div>
 
           {/* Text preview */}
-          <div>
-            <p className="text-[10px] mb-1.5" style={{ color: T.textFaint }}>
-              📋 投稿プレビュー
-            </p>
-            <div
-              className="rounded-xl p-4 text-[11px] whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto"
-              style={{
-                backgroundColor: T.cardAlt,
-                color: T.textSub,
-                fontFamily: "var(--font-mono, monospace)",
-                border: `1px solid ${T.border}`,
-              }}
-            >
-              {previewText}
-            </div>
-          </div>
+          {(() => {
+            const segmenter = typeof Intl !== "undefined" && Intl.Segmenter
+              ? new Intl.Segmenter("ja", { granularity: "grapheme" }) : null;
+            const charCount = segmenter ? [...segmenter.segment(previewText)].length : previewText.length;
+            const isOver = charCount > 300;
+            return (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px]" style={{ color: T.textFaint }}>📋 投稿プレビュー</p>
+                <span className="text-[10px]" style={{ color: isOver ? "#ef4444" : T.textFaint }}>
+                  {charCount}/300文字{isOver ? " ⚠️ Bluesky上限超過" : ""}
+                </span>
+              </div>
+              <div
+                className="rounded-xl p-4 text-[11px] whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto"
+                style={{
+                  backgroundColor: T.cardAlt, color: T.textSub,
+                  fontFamily: "var(--font-mono, monospace)",
+                  border: `1px solid ${isOver ? "#ef444444" : T.border}`,
+                }}
+              >
+                {previewText}
+              </div>
+            </div>);
+          })()}
 
           {/* Result message */}
           {postResult && (

@@ -800,6 +800,96 @@ export default function SystemSetup() {
             </div>
           </div>
         )}
+
+        {/* ===== リアルタイム速報 タブ ===== */}
+        {tab === "sokuho" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <h2 className="text-[16px] font-medium mb-3" style={{ color: T.text }}>📢 リアルタイム速報とは？</h2>
+              <p className="text-[13px] leading-relaxed" style={{ color: T.textSub }}>
+                タイムチャートの予約データから各セラピストの<span style={{ color: "#c3a782", fontWeight: 600 }}>次の案内可能時間を自動計算</span>し、
+                Blueskyやエステ魂に速報として投稿する機能です。
+              </p>
+              <div className="mt-4 p-4 rounded-xl text-[12px] space-y-2" style={{ backgroundColor: T.cardAlt }}>
+                <p style={{ color: T.text }}>🔄 <strong>自動計算</strong>: シフト・予約・インターバルから案内可能時間を算出</p>
+                <p style={{ color: T.text }}>🏠 <strong>ルーム別</strong>: 三河安城・豊橋を切り替えて投稿</p>
+                <p style={{ color: T.text }}>🦋 <strong>Bluesky</strong>: ワンクリックで投稿（URLリンク自動生成）</p>
+                <p style={{ color: T.text }}>💅 <strong>エステ魂</strong>: タイトル・本文の3ステップコピーフロー</p>
+                <p style={{ color: T.text }}>⠿ <strong>並び替え</strong>: ドラッグ＆ドロップでセラピストの掲載順を変更</p>
+                <p style={{ color: T.text }}>🌈 <strong>絵文字切替</strong>: 🌈 / 🟧 をタップで切り替え</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#ff6b9d")}>1</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>使い方</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>タイムチャートから起動</p>
+                </div>
+              </div>
+              <div className="space-y-3 pl-11 text-[12px]" style={{ color: T.textSub }}>
+                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> タイムチャートの「<span style={{ color: "#ff6b9d", fontWeight: 600 }}>📢 速報</span>」ボタンをクリック</p>
+                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> ルーム（三河安城 / 豊橋）を選択</p>
+                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> セラピストの並び順・絵文字を調整</p>
+                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> 投稿先を選択: 🦋 Bluesky / 💅 エステ魂 / 📋 テキストコピー</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#3b82f6")}>2</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>Bluesky認証設定</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>Bluesky投稿に必要</p>
+                </div>
+              </div>
+              <div className="space-y-4 pl-11">
+                <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: T.cardAlt }}>
+                  <div>
+                    <label className="block text-[11px] mb-1" style={{ color: T.textMuted }}>Bluesky ID（ハンドル）</label>
+                    <input type="text" value={bskyId} onChange={e => setBskyId(e.target.value)} placeholder="your-handle.bsky.social"
+                      className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid ${T.border}` }} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1" style={{ color: T.textMuted }}>パスワード（App Password推奨）</label>
+                    <input type="password" value={bskyPw} onChange={e => setBskyPw(e.target.value)} placeholder="xxxx-xxxx-xxxx-xxxx"
+                      className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid ${T.border}` }} />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={saveBskySettings} disabled={bskySaving}
+                      className="px-5 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer disabled:opacity-50"
+                      style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>
+                      {bskySaving ? "保存中..." : "💾 保存"}
+                    </button>
+                    {bskyMsg && <span className="text-[11px]" style={{ color: "#22c55e" }}>✅ {bskyMsg}</span>}
+                  </div>
+                </div>
+                <div className="text-[11px] space-y-1" style={{ color: T.textMuted }}>
+                  <p>💡 App Passwordの作成: <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer" style={{ color: "#3b82f6", textDecoration: "underline" }}>bsky.app/settings/app-passwords</a></p>
+                  <p>⚠️ セキュリティのため、メインパスワードではなくApp Passwordを使用してください</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <h3 className="text-[14px] font-medium mb-4" style={{ color: T.text }}>❓ よくある質問</h3>
+              <div className="space-y-4">
+                {[
+                  { q: "速報パネルにセラピストが表示されない", a: "セラピストにシフトとルーム割り当てが設定されていることを確認してください。退勤済みかつ完売のセラピストは自動的に除外されます。" },
+                  { q: "案内時間が実際と異なる", a: "セラピスト設定の「施術間インターバル」を確認してください。未設定の場合は15分がデフォルトです。" },
+                  { q: "Bluesky投稿でエラーが出る", a: "App Passwordが正しいか確認してください。メインパスワードではなくApp Passwordの使用が必要です。" },
+                  { q: "エステ魂への投稿で画像を付けたい", a: "画像はエステ魂のフォームから手動で追加してください。タイトルと本文はコピーフローで入力できます。" },
+                ].map((faq, i) => (
+                  <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[12px] font-medium mb-1" style={{ color: T.text }}>Q. {faq.q}</p>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>A. {faq.a}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
