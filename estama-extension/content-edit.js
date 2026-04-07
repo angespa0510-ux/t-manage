@@ -1,6 +1,6 @@
 // =============================================
-// T-MANAGE エステ魂自動投稿 — content-edit.js v3
-// API直接アップロード方式（クロップダイアログをバイパス）
+// T-MANAGE エステ魂自動投稿 — content-edit.js v4
+// API直接アップロード + DOM操作でフォームに画像登録
 // =============================================
 
 (function () {
@@ -8,34 +8,24 @@
 
   chrome.storage.local.get('estamaPost', async (data) => {
     const post = data.estamaPost;
-    if (!post || !post.title || !post.content) {
-      console.log('[エステ魂拡張] 投稿データなし、スキップ');
-      return;
-    }
+    if (!post || !post.title || !post.content) return;
     if (Date.now() - post.timestamp > 10 * 60 * 1000) {
-      console.log('[エステ魂拡張] 古いデータ、スキップ');
       chrome.storage.local.remove('estamaPost');
       return;
     }
 
-    console.log('[エステ魂拡張] フォーム自動入力開始');
     await waitForElement('#PostTitle', 5000);
 
-    // ===== 1. カテゴリ: ご案内状況 =====
+    // フォーム入力
     clickRadio('input[name="main[category_id]"][value="11"]');
-    // ===== 2. タイトル =====
-    setInputValue('PostTitle', post.title);
-    // ===== 3. 本文 =====
-    setInputValue('PostContent', post.content);
-    // ===== 4. ボタン: 公式HP =====
+    setVal('PostTitle', post.title);
+    setVal('PostContent', post.content);
     clickRadio('input[name="main[blog_type]"][value="3"]');
-    // ===== 5. 投稿: すぐ公開 =====
     clickRadio('input[name="future[post]"][value="0"]');
-
     console.log('[エステ魂拡張] フォーム入力完了');
 
-    // ===== 6. 画像アップロード（API直接方式）=====
-    showBanner('💅 フォーム入力完了 — 画像をアップロード中...');
+    // ===== 画像アップロード =====
+    showBanner('💅 画像をアップロード中...');
 
     try {
       let response;
@@ -46,42 +36,60 @@
       }
 
       if (response && response.ok && response.images && response.images.length > 0) {
-        const csrf = getCsrf();
         let ok = 0;
-
         for (let i = 0; i < Math.min(response.images.length, 3); i++) {
           showBanner(`💅 画像 ${i + 1}/${Math.min(response.images.length, 3)} アップロード中...`);
           const uploadId = `blog_icon_${i + 1}-imgupload`;
           try {
-            const croppedUrl = await uploadAndCrop(response.images[i].base64, uploadId, csrf);
+            const croppedUrl = await uploadWithRetry(response.images[i].base64, uploadId, 3);
             if (croppedUrl) {
-              updateImagePreview(uploadId, croppedUrl);
+              insertImageDOM(i, uploadId, croppedUrl);
               ok++;
-              console.log('[エステ魂拡張] 画像', i + 1, '完了:', croppedUrl);
             }
           } catch (e) {
             console.warn('[エステ魂拡張] 画像', i + 1, '失敗:', e.message);
           }
         }
         showBanner(ok > 0
-          ? `✅ ${ok}枚の画像＆フォーム入力完了 — 投稿ボタンを押してください！`
-          : '✅ フォーム入力完了 — 投稿ボタンを押してください！');
+          ? `✅ ${ok}枚の画像＆入力完了 — 投稿ボタンを押してください！`
+          : '✅ 入力完了 — 投稿ボタンを押してください！');
       } else {
-        showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
+        showBanner('✅ 入力完了 — 投稿ボタンを押してください！');
       }
     } catch (e) {
       console.warn('[エステ魂拡張] 画像エラー:', e);
-      showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
+      showBanner('✅ 入力完了 — 投稿ボタンを押してください！');
     }
 
     chrome.storage.local.remove('estamaPost');
   });
 
   // =============================================
+  // アップロード（403リトライ付き）
+  // =============================================
+  async function uploadWithRetry(base64Data, uploadId, maxRetry) {
+    for (let attempt = 0; attempt < maxRetry; attempt++) {
+      try {
+        const csrf = getCsrf(); // 毎回再取得
+        const croppedUrl = await uploadAndCrop(base64Data, uploadId, csrf);
+        return croppedUrl;
+      } catch (e) {
+        console.warn(`[エステ魂拡張] 試行${attempt + 1}失敗:`, e.message);
+        if (attempt < maxRetry - 1) {
+          const wait = (attempt + 1) * 800;
+          console.log(`[エステ魂拡張] ${wait}ms後にリトライ...`);
+          await new Promise(r => setTimeout(r, wait));
+        } else {
+          throw e;
+        }
+      }
+    }
+  }
+
+  // =============================================
   // API直接アップロード（uptemp → cropping）
   // =============================================
   async function uploadAndCrop(base64Data, uploadId, csrf) {
-    // base64 → File
     const parts = base64Data.split(',');
     const mime = parts[0].match(/:(.*?);/)[1];
     const bin = atob(parts[1]);
@@ -96,17 +104,15 @@
     fd1.append('text', 'test');
     fd1.append('ctk', csrf);
 
-    console.log('[エステ魂拡張] uptemp送信:', uploadId);
     const res1 = await fetch('/post/uptemp/', { method: 'POST', body: fd1, credentials: 'same-origin' });
+    if (res1.status === 403) throw new Error('403 CSRF');
     const json1 = await res1.json();
-    console.log('[エステ魂拡張] uptemp応答:', JSON.stringify(json1));
-    if (json1.status !== 'success') throw new Error('uptemp: ' + JSON.stringify(json1));
+    console.log('[エステ魂拡張] uptemp:', JSON.stringify(json1));
+    if (json1.status !== 'success') throw new Error('uptemp: ' + json1.status);
 
-    const tempUrl = json1.url;
-    const W = json1.width;
-    const H = json1.height;
+    const W = json1.width, H = json1.height;
 
-    // Step 2: cropping（400x400正方形センタークロップ）
+    // Step 2: cropping（正方形センタークロップ）
     let imgW, imgH, x1, y1;
     if (W > H) {
       imgH = 400; imgW = Math.round(W * 400 / H);
@@ -117,7 +123,7 @@
     }
 
     const fd2 = new FormData();
-    fd2.append('imgUrl', tempUrl);
+    fd2.append('imgUrl', json1.url);
     fd2.append('imgInitW', String(W));
     fd2.append('imgInitH', String(H));
     fd2.append('imgW', String(imgW));
@@ -131,77 +137,68 @@
     fd2.append('text', 'test');
     fd2.append('ctk', csrf);
 
-    console.log('[エステ魂拡張] cropping送信:', uploadId);
     const res2 = await fetch('/post/cropping/', { method: 'POST', body: fd2, credentials: 'same-origin' });
+    if (res2.status === 403) throw new Error('403 CSRF crop');
     const json2 = await res2.json();
-    console.log('[エステ魂拡張] cropping応答:', JSON.stringify(json2));
-    if (json2.status !== 'success') throw new Error('crop: ' + JSON.stringify(json2));
+    console.log('[エステ魂拡張] crop:', JSON.stringify(json2));
+    if (json2.status !== 'success') throw new Error('crop: ' + json2.status);
 
-    return json2.url; // /temp/cropped_xxx.jpg
+    return json2.url;
   }
 
   // =============================================
-  // UIプレビュー更新（アップロード済み画像をフォームに表示）
+  // DOM操作: div.img_area にクロップ済み画像を挿入
   // =============================================
-  function updateImagePreview(uploadId, croppedUrl) {
-    // upload_id = "blog_icon_1-imgupload" → コンテナを探す
-    const container = document.getElementById(uploadId);
-    if (container) {
-      // コンテナ内をクロップ済み画像に差し替え
-      const imgUrl = croppedUrl.startsWith('http') ? croppedUrl : 'https://estama.jp' + croppedUrl;
-      container.innerHTML = `<img src="${imgUrl}" style="width:100%;height:auto;border-radius:4px;">`;
-      console.log('[エステ魂拡張] プレビュー更新:', uploadId);
+  function insertImageDOM(index, uploadId, croppedUrl) {
+    const imgAreas = document.querySelectorAll('div.img_area');
+    const target = imgAreas[index];
+
+    if (target) {
+      target.innerHTML = `
+        <div class="up_items">
+          <img src="${croppedUrl}">
+          <a href="javascript:void(0)" class="temp-delete bc-delete">× キャンセル</a>
+          <input name="${uploadId}" value="${croppedUrl}" type="hidden">
+        </div>
+      `;
+      console.log('[エステ魂拡張] DOM挿入完了:', uploadId, '→ img_area[' + index + ']');
     } else {
-      // IDで見つからない場合、番号から推測
-      const num = uploadId.replace('blog_icon_', '').replace('-imgupload', '');
-      const wrapper = document.querySelector(`[id*="blog_icon_${num}"]`);
-      if (wrapper) {
-        const img = document.createElement('img');
-        img.src = croppedUrl.startsWith('http') ? croppedUrl : 'https://estama.jp' + croppedUrl;
-        img.style.cssText = 'width:100%;height:auto;border-radius:4px;';
-        wrapper.innerHTML = '';
-        wrapper.appendChild(img);
-      }
+      console.warn('[エステ魂拡張] img_area[' + index + '] が見つかりません。hidden inputのみ追加');
+      // フォールバック: hidden inputだけ追加
+      const form = document.querySelector('form') || document.body;
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = uploadId;
+      hidden.value = croppedUrl;
+      form.appendChild(hidden);
     }
   }
 
   // =============================================
   // ユーティリティ
   // =============================================
-  function waitForElement(sel, timeout = 5000) {
-    return new Promise(resolve => {
-      const el = document.querySelector(sel);
-      if (el) return resolve(el);
-      const t = Date.now();
-      const iv = setInterval(() => {
-        const e = document.querySelector(sel);
-        if (e || Date.now() - t > timeout) { clearInterval(iv); resolve(e); }
-      }, 200);
+  function waitForElement(sel, t = 5000) {
+    return new Promise(r => {
+      const e = document.querySelector(sel);
+      if (e) return r(e);
+      const s = Date.now();
+      const iv = setInterval(() => { const e2 = document.querySelector(sel); if (e2 || Date.now() - s > t) { clearInterval(iv); r(e2); } }, 200);
     });
   }
-
   function getCsrf() {
     return (document.getElementById('csrf_footer') || document.querySelector('input[name="ctk"]') || {}).value || '';
   }
-
-  function setInputValue(id, val) {
+  function setVal(id, v) {
     const el = document.getElementById(id);
-    if (el) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (el) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
   }
-
   function clickRadio(sel) {
     const el = document.querySelector(sel);
     if (el) { el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); el.click(); }
   }
-
   function showBanner(text) {
     let b = document.getElementById('estama-ext-banner');
-    if (!b) {
-      b = document.createElement('div');
-      b.id = 'estama-ext-banner';
-      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#ec4899,#a855f7);color:white;text-align:center;padding:14px;font-size:15px;font-weight:bold;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-      document.body.prepend(b);
-    }
+    if (!b) { b = document.createElement('div'); b.id = 'estama-ext-banner'; b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#ec4899,#a855f7);color:white;text-align:center;padding:14px;font-size:15px;font-weight:bold;box-shadow:0 4px 20px rgba(0,0,0,0.3);'; document.body.prepend(b); }
     b.textContent = text;
   }
 })();
