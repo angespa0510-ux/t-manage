@@ -19,13 +19,15 @@
     const content = el.dataset.content || '';
     const estamaId = el.dataset.estamaId || '';
     const estamaPw = el.dataset.estamaPw || '';
+    let imageUrls = [];
+    try { imageUrls = JSON.parse(el.dataset.imageUrls || '[]'); } catch (e) {}
 
     if (!title || !content) {
       console.warn('[エステ魂拡張] データ不足、手動モードにフォールバック');
       return;
     }
 
-    console.log('[エステ魂拡張] データ読み取り完了:', { room, titleLen: title.length });
+    console.log('[エステ魂拡張] データ読み取り完了:', { room, titleLen: title.length, images: imageUrls.length });
 
     // 拡張機能ステータスを表示
     const statusEl = document.getElementById('estama-bridge-status');
@@ -42,6 +44,7 @@
         content,
         estamaId,
         estamaPw,
+        imageUrls,
         timestamp: Date.now()
       }
     }, () => {

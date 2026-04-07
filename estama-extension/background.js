@@ -12,6 +12,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // 非同期レスポンス
   }
 
+  // 指定URLの画像をbase64取得（T-MANAGEセラピスト画像用）
+  if (msg.type === 'FETCH_IMAGE_URLS') {
+    fetchImageUrls(msg.urls || [])
+      .then(images => sendResponse({ ok: true, images }))
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
   // ブリッジタブを閉じて → ログアウト → ログインを開く
   if (msg.type === 'OPEN_ESTAMA_LOGIN') {
     const bridgeTabId = sender.tab?.id;
@@ -106,4 +114,30 @@ async function fetchScheduleImages(roomKey) {
     console.error('[エステ魂拡張] schedule.php取得失敗:', e);
     return [];
   }
+}
+
+// =============================================
+// 指定URLの画像を取得（T-MANAGEセラピスト画像用）
+// =============================================
+async function fetchImageUrls(urls) {
+  const results = [];
+  for (const url of urls.slice(0, 3)) {
+    try {
+      const imgRes = await fetch(url);
+      const buf = await imgRes.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const base64 = btoa(binary);
+      const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+      results.push({
+        base64: `data:${contentType};base64,${base64}`,
+        url: url
+      });
+      console.log('[エステ魂拡張] 画像取得OK:', url.substring(0, 60) + '...');
+    } catch (e) {
+      console.warn('[エステ魂拡張] 画像取得失敗:', url, e);
+    }
+  }
+  return results;
 }

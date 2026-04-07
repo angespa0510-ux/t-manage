@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "T-MANAGE エステ魂 自動投稿",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "T-MANAGEの速報パネルからエステ魂へワンクリック投稿",
   "permissions": [
     "storage",
@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://estama.jp/*",
-    "https://ange-spa.com/*"
+    "https://ange-spa.com/*",
+    "https://cbewozzdyjqmhzkxsjqo.supabase.co/*"
   ],
   "background": {
     "service_worker": "background.js"

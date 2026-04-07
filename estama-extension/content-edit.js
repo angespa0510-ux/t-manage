@@ -74,12 +74,25 @@
     showBanner('💅 フォーム入力完了 — 画像をアップロード中...');
 
     try {
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: 'FETCH_SCHEDULE_IMAGES', roomKey: post.room },
-          resolve
-        );
-      });
+      let response;
+      if (post.imageUrls && post.imageUrls.length > 0) {
+        // T-MANAGEセラピスト画像を使用
+        console.log('[エステ魂拡張] T-MANAGE画像URLs:', post.imageUrls.length, '枚');
+        response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: 'FETCH_IMAGE_URLS', urls: post.imageUrls },
+            resolve
+          );
+        });
+      } else {
+        // フォールバック: ange-spa.comから取得
+        response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: 'FETCH_SCHEDULE_IMAGES', roomKey: post.room },
+            resolve
+          );
+        });
+      }
 
       if (response && response.ok && response.images && response.images.length > 0) {
         console.log('[エステ魂拡張] 画像取得:', response.images.length, '枚');

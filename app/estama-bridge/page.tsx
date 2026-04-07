@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 export default function EstamaBridge() {
   const [postData, setPostData] = useState<{
-    room: string; title: string; content: string; estamaId: string; estamaPw: string;
+    room: string; title: string; content: string; estamaId: string; estamaPw: string; imageUrls?: string[];
   } | null>(null);
   const [status, setStatus] = useState("読み込み中...");
   const [copied, setCopied] = useState<"title" | "content" | null>(null);
@@ -52,6 +52,7 @@ export default function EstamaBridge() {
         data-content={postData.content}
         data-estama-id={postData.estamaId}
         data-estama-pw={postData.estamaPw}
+        data-image-urls={JSON.stringify(postData.imageUrls || [])}
         style={{ display: "none" }}
       />
 

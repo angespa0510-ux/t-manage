@@ -476,6 +476,15 @@ export function SokuhoPanel({
     const title = getEstamaTitle();
     const content = generateText();
 
+    // セラピスト画像をランダム3枚取得
+    const imageUrls: string[] = [];
+    for (const s of slots) {
+      const t = therapists.find((th) => th.id === s.id);
+      if (t && (t as any).photo_url) imageUrls.push((t as any).photo_url);
+    }
+    // シャッフルして最大3枚
+    const shuffled = imageUrls.sort(() => Math.random() - 0.5).slice(0, 3);
+
     // localStorageに保存してブリッジページへ
     localStorage.setItem("estama_post_data", JSON.stringify({
       room: currentRoom,
@@ -483,6 +492,7 @@ export function SokuhoPanel({
       content,
       estamaId,
       estamaPw,
+      imageUrls: shuffled,
     }));
 
     window.open("/estama-bridge", "_blank");
