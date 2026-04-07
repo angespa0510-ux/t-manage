@@ -1038,6 +1038,7 @@ export default function Dashboard() {
                       {detailCustomer.birthday && <span>🎂 {new Date(detailCustomer.birthday + "T00:00:00").toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</span>}
                     </div>
                     {detailCustomer.notes && <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>📝 {detailCustomer.notes}</p>}
+                    <p className="text-[10px] mt-1" style={{ color: T.textFaint }}>📅 登録日: {new Date(detailCustomer.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</p>
                   </div>
                 </div>
                 <button onClick={() => setDetailCustomer(null)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
