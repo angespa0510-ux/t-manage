@@ -220,7 +220,6 @@ export default function StaffAttendance() {
                 <div className="w-[120px] flex-shrink-0 px-3 py-3 flex items-start" style={{ borderRight: `1px solid ${T.border}` }}>
                   <div>
                     <div className="text-[12px] font-medium">{staff.name}</div>
-                    <div className="text-[9px] mt-0.5" style={{ color: T.textMuted }}>¥{staff.unit_price?.toLocaleString()}/u</div>
                   </div>
                 </div>
 
@@ -253,7 +252,6 @@ export default function StaffAttendance() {
                             <>
                               <div className="text-[10px] font-medium text-center" style={{ color: T.text }}>{sch.start_time?.slice(0,5)}〜{sch.end_time?.slice(0,5)}</div>
                               {(sch.break_minutes || 0) > 0 && <div className="text-[8px] text-center" style={{ color: "#f59e0b" }}>☕{sch.break_minutes}分</div>}
-                              <div className="text-[8px] text-center" style={{ color: T.textMuted }}>{sch.units}u ¥{(sch.total_payment || 0).toLocaleString()}</div>
                             </>
                           )}
 
@@ -295,8 +293,7 @@ export default function StaffAttendance() {
                 {/* Weekly total */}
                 <div className="w-[100px] flex-shrink-0 px-2 py-3 text-center" style={{ backgroundColor: T.cardAlt }}>
                   <div className="text-[11px] font-medium">{wt.days}日</div>
-                  <div className="text-[10px]" style={{ color: T.textSub }}>{wt.totalUnits}u</div>
-                  <div className="text-[11px] font-bold mt-1" style={{ color: "#c3a782" }}>¥{wt.totalPay.toLocaleString()}</div>
+                  <div className="text-[10px]" style={{ color: T.textSub }}>{wt.totalUnits}h</div>
                 </div>
               </div>
             );
