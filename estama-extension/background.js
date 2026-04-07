@@ -12,14 +12,39 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // 非同期レスポンス
   }
 
-  // ブリッジタブを閉じてエステ魂ログインを開く
-  // ※ セッションクリアは content-login.js が自動処理
+  // ブリッジタブを閉じて → ログアウト → ログインを開く
   if (msg.type === 'OPEN_ESTAMA_LOGIN') {
     const bridgeTabId = sender.tab?.id;
-    const loginUrl = 'https://estama.jp/login/?r=/admin/blog_edit/';
-    chrome.tabs.create({ url: loginUrl }, () => {
-      if (bridgeTabId) chrome.tabs.remove(bridgeTabId);
+    if (bridgeTabId) chrome.tabs.remove(bridgeTabId);
+
+    // ① まずログアウトタブを開いてセッションクリア
+    const logoutUrl = 'https://estama.jp/post/logout/';
+    chrome.tabs.create({ url: logoutUrl, active: false }, (logoutTab) => {
+      const logoutTabId = logoutTab.id;
+
+      // ② ログアウト完了を待つ（ページ読み込み完了 or 2秒タイムアウト）
+      let resolved = false;
+      const finish = () => {
+        if (resolved) return;
+        resolved = true;
+        // ログアウトタブを閉じる
+        try { chrome.tabs.remove(logoutTabId); } catch (e) {}
+        // ③ ログインページを開く
+        chrome.tabs.create({ url: 'https://estama.jp/login/?r=/admin/blog_edit/' });
+      };
+
+      // ページ読み込み完了で発火
+      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+        if (tabId === logoutTabId && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          setTimeout(finish, 300); // 少し待ってからログインページへ
+        }
+      });
+
+      // タイムアウト（2秒）
+      setTimeout(finish, 2000);
     });
+
     sendResponse({ ok: true });
     return true;
   }
