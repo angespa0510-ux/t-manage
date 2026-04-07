@@ -12,11 +12,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // 非同期レスポンス
   }
 
-  // ブリッジタブを閉じてエステ魂を開く
+  // ブリッジタブを閉じてエステ魂を開く（ログアウト→ログインの順）
   if (msg.type === 'OPEN_ESTAMA_LOGIN') {
     const bridgeTabId = sender.tab?.id;
-    const loginUrl = 'https://estama.jp/login/?r=/admin/blog_edit/';
-    chrome.tabs.create({ url: loginUrl }, () => {
+    // まずログアウトしてセッションをクリア → content-logout.js がログインへリダイレクト
+    const logoutUrl = 'https://estama.jp/post/logout/';
+    chrome.tabs.create({ url: logoutUrl }, () => {
       if (bridgeTabId) chrome.tabs.remove(bridgeTabId);
     });
     sendResponse({ ok: true });
