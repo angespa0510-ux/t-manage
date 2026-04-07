@@ -1,267 +1,215 @@
-// T-MANAGE SMS② — Googleメッセージ自動入力コンテンツスクリプト
-// chrome.storage.localからphone/bodyを読み、電話番号検索→メッセージ入力まで自動化
+// T-MANAGE SMS② — Googleメッセージ自動入力（検索→結果クリック→メッセージ入力）
 
 (function () {
   "use strict";
 
-  const LOG_PREFIX = "[T-MANAGE SMS②]";
-  const MAX_WAIT = 15000; // 最大待機15秒
-  const POLL = 300; // ポーリング間隔
+  const LOG = "[T-MANAGE SMS②]";
+  const MAX_WAIT = 15000;
+  const POLL = 300;
 
-  function log(msg) {
-    console.log(`${LOG_PREFIX} ${msg}`);
-  }
+  function log(msg) { console.log(`${LOG} ${msg}`); }
 
-  // 要素が見つかるまで待機
-  function waitForElement(selectorFn, timeout = MAX_WAIT) {
+  // 要素待機（ポーリング）
+  function waitFor(fn, timeout = MAX_WAIT) {
     return new Promise((resolve, reject) => {
-      const start = Date.now();
-      const check = () => {
-        const el = selectorFn();
+      const t0 = Date.now();
+      const tick = () => {
+        const el = fn();
         if (el) return resolve(el);
-        if (Date.now() - start > timeout) return reject(new Error("Element not found"));
-        setTimeout(check, POLL);
+        if (Date.now() - t0 > timeout) return reject(new Error("timeout"));
+        setTimeout(tick, POLL);
       };
-      check();
+      tick();
     });
   }
 
-  // テキストを1文字ずつ入力（Reactアプリ対策）
-  function typeText(el, text) {
-    el.focus();
-    // input/textareaの場合
-    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
-      // React/Angularのバリュー更新のため、nativeInputValueSetterを使用
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype, "value"
-      )?.set || Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, "value"
-      )?.set;
+  // 少し待つ
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-      if (nativeSetter) {
-        nativeSetter.call(el, text);
-      } else {
-        el.value = text;
-      }
+  // input にテキストを設定（Angular/React対策: nativeSetter + イベント）
+  function setInputValue(el, text) {
+    el.focus();
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+      const proto = el.tagName === "INPUT"
+        ? HTMLInputElement.prototype
+        : HTMLTextAreaElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+      if (setter) setter.call(el, text);
+      else el.value = text;
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-    // contenteditableの場合
-    else if (el.contentEditable === "true") {
+    } else if (el.contentEditable === "true") {
       el.focus();
-      el.textContent = text;
+      el.textContent = "";
+      document.execCommand("insertText", false, text);
       el.dispatchEvent(new Event("input", { bubbles: true }));
     }
   }
 
-  // キーイベントを発火
-  function pressKey(el, key, keyCode) {
-    const opts = { key, keyCode, which: keyCode, bubbles: true };
-    el.dispatchEvent(new KeyboardEvent("keydown", opts));
-    el.dispatchEvent(new KeyboardEvent("keyup", opts));
-  }
-
-  // ステータスバナーを表示
-  function showBanner(message, type = "info") {
-    let banner = document.getElementById("tmanage-sms-banner");
-    if (!banner) {
-      banner = document.createElement("div");
-      banner.id = "tmanage-sms-banner";
-      banner.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
-        padding: 12px 20px; font-size: 14px; font-weight: 600;
-        text-align: center; font-family: 'Hiragino Sans', sans-serif;
-        transition: all 0.3s; box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  // バナー表示
+  function banner(msg, type = "info") {
+    let b = document.getElementById("tm-sms-banner");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "tm-sms-banner";
+      b.style.cssText = `
+        position:fixed;top:0;left:0;right:0;z-index:99999;
+        padding:10px 20px;font-size:13px;font-weight:600;
+        text-align:center;font-family:'Hiragino Sans',sans-serif;
+        transition:all .3s;box-shadow:0 2px 12px rgba(0,0,0,.3);
       `;
-      document.body.appendChild(banner);
+      document.body.appendChild(b);
     }
-
-    const colors = {
-      info: { bg: "#8b5cf6", text: "#fff" },
-      success: { bg: "#22c55e", text: "#fff" },
-      error: { bg: "#ef4444", text: "#fff" },
-      waiting: { bg: "#f59e0b", text: "#fff" },
-    };
-    const c = colors[type] || colors.info;
-    banner.style.backgroundColor = c.bg;
-    banner.style.color = c.text;
-    banner.textContent = message;
-    banner.style.display = "block";
-
-    if (type === "success") {
-      setTimeout(() => { banner.style.display = "none"; }, 5000);
-    }
+    const C = { info:"#8b5cf6", success:"#22c55e", error:"#ef4444", waiting:"#f59e0b" };
+    b.style.backgroundColor = C[type] || C.info;
+    b.style.color = "#fff";
+    b.textContent = msg;
+    b.style.display = "block";
+    if (type === "success") setTimeout(() => b.style.display = "none", 6000);
   }
 
-  // メイン処理
-  async function autoFill() {
-    // storageからデータ取得
-    const data = await new Promise(resolve => {
-      chrome.storage.local.get(["sms_phone", "sms_body", "sms_timestamp"], resolve);
-    });
-
-    if (!data.sms_phone) {
-      log("No SMS data in storage, skipping");
-      return;
-    }
-
-    // 古いデータは無視（5分以上前）
-    if (data.sms_timestamp && Date.now() - data.sms_timestamp > 5 * 60 * 1000) {
-      log("SMS data is stale, skipping");
+  // ===== メイン =====
+  async function run() {
+    // storage からデータ取得
+    const data = await new Promise(r =>
+      chrome.storage.local.get(["sms_phone", "sms_body", "sms_timestamp"], r)
+    );
+    if (!data.sms_phone) { log("No data, skip"); return; }
+    if (data.sms_timestamp && Date.now() - data.sms_timestamp > 5 * 60000) {
+      log("Stale data, skip");
       chrome.storage.local.remove(["sms_phone", "sms_body", "sms_timestamp"]);
       return;
     }
 
     const phone = data.sms_phone;
     const body = data.sms_body;
-    log(`Auto-filling: phone=${phone}, body length=${body.length}`);
-
-    showBanner(`📲 T-MANAGE: ${phone} に自動入力中...`, "info");
+    log(`Start: phone=${phone} body=${body.length}chars`);
+    banner(`📲 ${phone} に自動入力中...`);
 
     try {
-      // ===== STEP 1: 宛先入力欄を探す =====
-      log("Step 1: Looking for recipient input...");
+      // ========== STEP 1: 宛先入力欄を見つけて電話番号を入力 ==========
+      log("STEP1: find recipient input");
 
-      const recipientInput = await waitForElement(() => {
-        // 戦略1: input[type=text] で placeholder が電話番号系
-        const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
-        for (const inp of inputs) {
-          const ph = (inp.placeholder || "").toLowerCase();
-          const al = (inp.getAttribute("aria-label") || "").toLowerCase();
-          if (ph.includes("名前") || ph.includes("電話") || ph.includes("番号") ||
-              ph.includes("name") || ph.includes("phone") || ph.includes("number") ||
-              ph.includes("person") || ph.includes("to") || ph.includes("recipient") ||
-              al.includes("名前") || al.includes("phone") || al.includes("recipient") ||
-              al.includes("to") || al.includes("検索")) {
-            if (inp.offsetParent !== null) return inp; // 表示されている要素のみ
-          }
-        }
-        // 戦略2: 新規チャット画面の最初の可視input
-        const allInputs = document.querySelectorAll('input');
-        for (const inp of allInputs) {
-          if (inp.offsetParent !== null && inp.type !== "hidden" && !inp.readOnly) {
-            return inp;
-          }
-        }
-        // 戦略3: contenteditable
-        const editables = document.querySelectorAll('[contenteditable="true"]');
-        for (const ed of editables) {
-          if (ed.offsetParent !== null && ed.offsetHeight < 100) return ed;
+      const recipientInput = await waitFor(() => {
+        // 可視 input を全取得
+        for (const inp of document.querySelectorAll("input")) {
+          if (inp.offsetParent === null || inp.type === "hidden") continue;
+          return inp;
         }
         return null;
       });
 
-      log("Step 1: Found recipient input");
-      showBanner(`📲 電話番号を入力中: ${phone}`, "info");
+      log("STEP1: found → typing phone number");
+      banner(`📲 宛先に ${phone} を入力中...`);
+      setInputValue(recipientInput, phone);
+      await sleep(2000); // 検索結果が出るまで待つ
 
-      // 電話番号を入力
-      typeText(recipientInput, phone);
-      // 少し待ってからEnterを押す（検索結果が出るのを待つ）
-      await new Promise(r => setTimeout(r, 1500));
+      // ========== STEP 2: 検索結果をクリック ==========
+      log("STEP2: find & click search result");
+      banner("🔍 検索結果を選択中...");
 
-      // ===== STEP 2: 検索結果をクリック or Enter =====
-      log("Step 2: Looking for search results...");
-
-      // 検索結果のリストアイテムを探す
-      let resultClicked = false;
-
-      // 戦略1: 電話番号を含むリスト項目を探す
-      const listItems = document.querySelectorAll(
-        'mws-contact-list-item, [role="option"], [role="listitem"], li, .contact-item, a[href*="conversation"]'
-      );
-      for (const item of listItems) {
-        const text = item.textContent || "";
-        // 電話番号の末尾4桁で照合（フォーマット違い対策）
-        const last4 = phone.replace(/\D/g, "").slice(-4);
-        if (text.includes(last4) || text.includes(phone)) {
-          item.click();
-          resultClicked = true;
-          log("Step 2: Clicked matching contact");
-          break;
+      const resultClicked = await waitFor(() => {
+        // 全テキストノードを走査して「宛に送信」を含む要素を探す
+        const allEls = document.querySelectorAll("a, button, [role='option'], [role='listitem'], mws-contact-selector-button, li, div[tabindex]");
+        for (const el of allEls) {
+          if (el.offsetParent === null) continue;
+          const text = el.textContent || "";
+          // 「宛に送信」パターン（"XXX 宛に送信"）
+          if (text.includes("宛に送信") && text.includes(phone.slice(-4))) {
+            el.click();
+            log("STEP2: clicked '宛に送信' item");
+            return el;
+          }
         }
-      }
+        // フォールバック: 電話番号を含むクリック可能な要素
+        for (const el of allEls) {
+          if (el.offsetParent === null) continue;
+          const text = el.textContent || "";
+          const last4 = phone.replace(/\D/g, "").slice(-4);
+          if (text.includes(phone) || text.includes(last4)) {
+            // 宛先入力欄自体は除外
+            if (el.tagName === "INPUT") continue;
+            el.click();
+            log("STEP2: clicked phone-matching item");
+            return el;
+          }
+        }
+        return null;
+      }, 8000).catch(() => null);
 
       if (!resultClicked) {
-        // Enterキーで最初の結果を選択
-        pressKey(recipientInput, "Enter", 13);
-        log("Step 2: Pressed Enter (no exact match found)");
+        // 最後の手段: Enterキー
+        log("STEP2: no result found, pressing Enter");
+        recipientInput.focus();
+        recipientInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 13, bubbles: true }));
+        recipientInput.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", keyCode: 13, bubbles: true }));
       }
 
-      await new Promise(r => setTimeout(r, 1500));
+      await sleep(2000); // 会話画面が開くのを待つ
 
-      // ===== STEP 3: メッセージ入力欄を探す =====
-      log("Step 3: Looking for message input...");
+      // ========== STEP 3: メッセージ入力欄を見つけて入力 ==========
+      log("STEP3: find message input");
+      banner("📝 メッセージを入力中...");
 
-      showBanner("📝 メッセージを入力中...", "info");
-
-      const messageInput = await waitForElement(() => {
-        // 戦略1: メッセージ入力エリアっぽいcontenteditable
+      const msgInput = await waitFor(() => {
+        // 戦略1: aria-label や placeholder で判定
         const editables = document.querySelectorAll('[contenteditable="true"]');
         for (const ed of editables) {
           if (ed.offsetParent === null) continue;
-          const ph = ed.getAttribute("data-placeholder") || ed.getAttribute("aria-label") || "";
-          if (ph.includes("メッセージ") || ph.includes("message") || ph.includes("SMS") ||
-              ph.includes("テキスト") || ph.includes("text")) {
+          const label = (ed.getAttribute("aria-label") || "") +
+                        (ed.getAttribute("data-placeholder") || "") +
+                        (ed.getAttribute("placeholder") || "");
+          if (/メッセージ|message|sms|テキスト|text message/i.test(label)) {
             return ed;
           }
         }
-        // 戦略2: 高さが小さくない contenteditable（メッセージ入力は通常下部にある）
-        for (const ed of editables) {
+        // 戦略2: 画面下部にある contenteditable（宛先入力とは別のもの）
+        const allEditables = document.querySelectorAll('[contenteditable="true"]');
+        for (const ed of allEditables) {
           if (ed.offsetParent === null) continue;
           const rect = ed.getBoundingClientRect();
-          // 画面の下半分にある contenteditable
-          if (rect.top > window.innerHeight * 0.3) return ed;
+          // 画面の下半分にある & 宛先入力欄ではない
+          if (rect.top > window.innerHeight * 0.4 && rect.height < 200) {
+            return ed;
+          }
         }
         // 戦略3: textarea
-        const textareas = document.querySelectorAll("textarea");
-        for (const ta of textareas) {
+        for (const ta of document.querySelectorAll("textarea")) {
           if (ta.offsetParent !== null) return ta;
         }
         return null;
       });
 
-      log("Step 3: Found message input");
+      log("STEP3: found → typing message");
+      setInputValue(msgInput, body);
+      // Angular 追加イベント
+      msgInput.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+      msgInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: body, inputType: "insertText" }));
 
-      // メッセージを入力
-      typeText(messageInput, body);
+      await sleep(300);
 
-      // もう一度 input イベントを発火（Angular対策）
-      messageInput.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-      messageInput.dispatchEvent(new Event("change", { bubbles: true }));
-
-      // ===== 完了 =====
-      showBanner(`✅ 自動入力完了！ 内容を確認して送信してください`, "success");
-      log("Auto-fill complete!");
-
-      // storageをクリア
+      // ========== 完了 ==========
+      banner("✅ 自動入力完了！ 内容を確認して送信してください", "success");
+      log("Done!");
       chrome.storage.local.remove(["sms_phone", "sms_body", "sms_timestamp"]);
 
     } catch (err) {
       log(`Error: ${err.message}`);
-      showBanner(`⚠️ 自動入力に失敗しました — 手動で入力してください`, "error");
-
-      // クリップボードにメッセージをコピー（フォールバック）
-      try {
-        await navigator.clipboard.writeText(body);
-        showBanner(`⚠️ 自動入力に失敗 — メッセージをコピーしました（Ctrl+V で貼り付け）`, "error");
-      } catch { /* ignore */ }
+      // フォールバック: クリップボードにコピー
+      try { await navigator.clipboard.writeText(body); } catch {}
+      banner("⚠️ 自動入力失敗 — メッセージはコピー済（Ctrl+V で貼り付け）", "error");
     }
   }
 
-  // ページ読み込み後に実行
+  // init
   function init() {
-    // /conversations/new ページでのみ実行
-    if (window.location.href.includes("conversations")) {
-      // ページの描画を待ってから開始
-      setTimeout(autoFill, 2000);
-    }
+    if (!window.location.href.includes("conversations")) return;
+    // ページ描画を待つ
+    setTimeout(run, 2500);
   }
 
-  if (document.readyState === "complete") {
-    init();
-  } else {
-    window.addEventListener("load", init);
-  }
+  if (document.readyState === "complete") init();
+  else window.addEventListener("load", init);
 
-  log("Google Messages content script loaded");
+  log("Content script loaded");
 })();

@@ -17,7 +17,7 @@
         "https://t-manage.vercel.app/sms-bridge*"
       ],
       "js": ["content-bridge.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     },
     {
       "matches": [
