@@ -146,29 +146,51 @@ export default function SmsBridgePage() {
                 </span>
               </button>
 
-              {/* ===== SMS起動ボタン（aタグ） ===== */}
-              <a
-                href={`sms:${phone}`}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "14px",
-                  borderRadius: "12px",
-                  border: "1px solid #f59e0b44",
-                  backgroundColor: "#f59e0b18",
-                  color: "#f59e0b",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  textAlign: "center",
-                  textDecoration: "none",
-                  marginBottom: "4px",
-                  boxSizing: "border-box",
-                }}
-              >
-                📱 SMSアプリを起動（{phone}）
-              </a>
+              {/* ===== 送信先ボタン ===== */}
+              <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+                <a
+                  href="https://messages.google.com/web/conversations/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    flex: 1,
+                    display: "block",
+                    padding: "14px 8px",
+                    borderRadius: "12px",
+                    border: "1px solid #4285f444",
+                    backgroundColor: "#4285f418",
+                    color: "#4285f4",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    textAlign: "center",
+                    textDecoration: "none",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  💬 Googleメッセージ
+                </a>
+                <a
+                  href={`sms:${phone}`}
+                  style={{
+                    flex: 1,
+                    display: "block",
+                    padding: "14px 8px",
+                    borderRadius: "12px",
+                    border: "1px solid #f59e0b44",
+                    backgroundColor: "#f59e0b18",
+                    color: "#f59e0b",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    textAlign: "center",
+                    textDecoration: "none",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  📱 Phone Link
+                </a>
+              </div>
               <p style={{ fontSize: "9px", color: "#6a6860", textAlign: "center", margin: "0 0 12px" }}>
-                ※ Chromeが開く場合は下の手順でPhone Linkを使ってください
+                新規メッセージ → 宛先に上の番号を入力 → Ctrl+V で貼り付け
               </p>
 
               {/* ===== メッセージ再コピーボタン ===== */}
@@ -234,7 +256,7 @@ export default function SmsBridgePage() {
                   textAlign: "left",
                 }}
               >
-                {showSteps ? "▼" : "▶"} 💡 Phone Link で送る手順
+                {showSteps ? "▼" : "▶"} 💡 SMS送信の手順
               </button>
               {showSteps && (
                 <div style={{
@@ -246,18 +268,21 @@ export default function SmsBridgePage() {
                   borderTopColor: "transparent",
                 }}>
                   <div style={{ fontSize: "11px", color: "#9a9890", lineHeight: 1.8 }}>
-                    <p style={{ margin: "0 0 8px", fontWeight: 600, color: "#c3a782" }}>🔧 初回セットアップ</p>
+                    <p style={{ margin: "0 0 8px", fontWeight: 600, color: "#4285f4" }}>💬 Googleメッセージで送る</p>
                     <p style={{ margin: 0 }}>
-                      ① タスクバーの Phone Link（📱）をクリック<br />
-                      ② スマホとペアリングを完了させる<br />
-                      ③ Windows設定 →「既定のアプリ」→ SMSの既定を<strong style={{ color: "#e8e6e2" }}> Phone Link </strong>に変更すると「SMSアプリを起動」ボタンで直接開けます
+                      ① 「Googleメッセージ」ボタンをタップ<br />
+                      ② 「チャットを開始」→ 宛先に <strong style={{ color: "#c3a782" }}>{phone}</strong> を入力<br />
+                      ③ メッセージ欄で <strong style={{ color: "#e8e6e2" }}>Ctrl+V</strong> で貼り付け → 送信
                     </p>
-                    <p style={{ margin: "12px 0 8px", fontWeight: 600, color: "#c3a782" }}>📲 毎回の送信手順</p>
+                    <div style={{ height: "1px", backgroundColor: "#3a3a42", margin: "12px 0" }} />
+                    <p style={{ margin: "0 0 8px", fontWeight: 600, color: "#f59e0b" }}>📱 Phone Link で送る</p>
                     <p style={{ margin: 0 }}>
-                      ① このページで「メッセージコピー済み」を確認<br />
-                      ② Phone Link → メッセージ タブを開く<br />
-                      ③ 新しいメッセージ → 宛先に <strong style={{ color: "#c3a782" }}>{phone}</strong> を入力<br />
-                      ④ メッセージ欄で <strong style={{ color: "#e8e6e2" }}>Ctrl+V</strong> で貼り付け → 送信
+                      ① タスクバーの Phone Link（📱）を開く<br />
+                      ② メッセージ → 新しいメッセージ → 宛先に <strong style={{ color: "#c3a782" }}>{phone}</strong><br />
+                      ③ <strong style={{ color: "#e8e6e2" }}>Ctrl+V</strong> で貼り付け → 送信
+                    </p>
+                    <p style={{ margin: "12px 0 0", fontSize: "10px", color: "#6a6860" }}>
+                      💡 Windows設定 →「既定のアプリ」→ SMSの既定を Phone Link に変更すると「Phone Link」ボタンで直接起動できます
                     </p>
                   </div>
                 </div>
