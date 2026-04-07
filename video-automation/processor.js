@@ -220,9 +220,14 @@ async function processRequest(job, supabase) {
           imageGenSuccess = true;
           console.log("  ✅ 画像生成成功！");
           break;
+        } else if (result === "rate_limit") {
+          console.log("  ⚠️ レート制限 → 60秒待機してリトライ");
+          await page.waitForTimeout(60000);
+          await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
+          await page.waitForTimeout(8000);
+          await switchToThinkingMode(page);
         } else if (result === "safety") {
           console.log("  ⚠️ セーフティフィルター → リトライ");
-          // 新しいチャットを開始
           await page.goto(dbSettings.geminiUrl || config.gemini.url, { waitUntil: "domcontentloaded", timeout: 90000 });
           await page.waitForTimeout(8000);
           await switchToThinkingMode(page);
@@ -250,22 +255,42 @@ async function processRequest(job, supabase) {
       return;
     }
 
-    // ── STEP 6: 動画生成プロンプト送信（英語 — DB設定優先） ──
+    // ── STEP 6: 動画生成プロンプト送信（英語 — DB設定優先）+ レート制限リトライ ──
     console.log("\n🎥 動画生成プロンプトを送信中...");
     const videoPrompt = dbSettings.videoPromptEn || EN_VIDEO_PROMPT;
-    await typePromptInGemini(page, videoPrompt);
-    await clickSendButton(page);
+    let videoResult = "failed";
+    const videoMaxRetries = 3;
 
-    // VEO生成待機（最大5分）
-    console.log("  ⏳ 動画生成を待機中（1〜3分）...");
-    const videoResult = await waitForVideoGeneration(page, 300000);
+    for (let vAttempt = 0; vAttempt < videoMaxRetries; vAttempt++) {
+      if (vAttempt > 0) {
+        console.log(`\n🎥 動画生成 再試行${vAttempt + 1}/${videoMaxRetries}...`);
+      }
+      await typePromptInGemini(page, videoPrompt);
+      await clickSendButton(page);
+
+      // VEO生成待機（最大5分）
+      console.log("  ⏳ 動画生成を待機中（1〜3分）...");
+      videoResult = await waitForVideoGeneration(page, 300000);
+
+      if (videoResult === "success") break;
+
+      if (videoResult === "rate_limit") {
+        console.log("  ⚠️ レート制限 → 90秒待機してリトライ");
+        await page.waitForTimeout(90000);
+        // 新しいチャットを開始（同じ画像のコンテキストが残っているため同じチャットで再送信）
+        continue;
+      }
+
+      // failed/timeout → リトライしない
+      break;
+    }
 
     if (videoResult !== "success") {
       await supabase.from("video_generation_logs").update({
         result: "failed",
         retry_count: retryCount + 1,
         prompt_used: imagePrompt,
-        error_message: "動画生成に失敗",
+        error_message: videoResult === "rate_limit" ? "レート制限により動画生成失敗" : "動画生成に失敗",
       }).eq("id", job.id);
 
       await sendNotification("failed", job, dbSettings);
@@ -583,6 +608,25 @@ async function waitForGeminiResponse(page, timeout) {
       }
     }
 
+    // レート制限検出
+    const rateLimitPhrases = [
+      "a lot of requests right now",
+      "try again later",
+      "リクエストが多い",
+      "しばらくしてから",
+      "Too many requests",
+      "rate limit",
+      "過負荷",
+      "I couldn't do that because",
+      "現在リクエストが集中",
+    ];
+    for (const phrase of rateLimitPhrases) {
+      if (responseTexts.toLowerCase().includes(phrase.toLowerCase())) {
+        console.log(`  ⚠️ レート制限検出: "${phrase}"`);
+        return "rate_limit";
+      }
+    }
+
     // 「この回答を停止しました」検出 → 再送信が必要
     const pageText = await page.textContent("body").catch(() => "");
     if (pageText && pageText.includes("この回答を停止しました")) {
@@ -782,6 +826,20 @@ async function waitForVideoGeneration(page, timeout) {
       if (responseTexts.includes(phrase)) {
         console.log(`  ⚠️ エラー検出: "${phrase}"`);
         return "failed";
+      }
+    }
+
+    // レート制限検出
+    const rateLimitPhrases = [
+      "a lot of requests right now", "try again later",
+      "リクエストが多い", "しばらくしてから",
+      "Too many requests", "rate limit", "過負荷",
+      "I couldn't do that because", "現在リクエストが集中",
+    ];
+    for (const phrase of rateLimitPhrases) {
+      if (responseTexts.toLowerCase().includes(phrase.toLowerCase())) {
+        console.log(`  ⚠️ レート制限検出: "${phrase}"`);
+        return "rate_limit";
       }
     }
 
