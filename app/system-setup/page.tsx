@@ -432,35 +432,44 @@ export default function SystemSetup() {
                 <div style={stepNumStyle("#3d6b9f")}>1</div>
                 <div>
                   <h3 className="text-[14px] font-medium" style={{ color: T.text }}>拡張機能をChromeにインストール</h3>
-                  <p className="text-[11px]" style={{ color: T.textMuted }}>開発者モードで読み込み</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>GitHubからダウンロード → 開発者モードで読み込み</p>
                 </div>
               </div>
               <div className="space-y-3 pl-11">
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> Chromeのアドレスバーに入力：
-                  </p>
-                  <code className="text-[11px] mt-1 block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
-                    chrome://extensions
-                  </code>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>📥 ファイルのダウンロード</p>
+                  <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> T-MANAGEのGitHubリポジトリからダウンロード：
+                    </p>
+                    <a href="https://github.com/angespa0510-ux/t-manage/tree/main/chrome-extension" target="_blank" rel="noopener noreferrer"
+                      className="block px-3 py-2 rounded-lg text-[11px]" style={{ backgroundColor: T.bg, color: "#c3a782", textDecoration: "underline" }}>
+                      📂 chrome-extension フォルダを開く（GitHub）
+                    </a>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>
+                      または、リポジトリ全体をZIPダウンロード → 解凍 → <code style={{ color: "#c3a782" }}>chrome-extension</code> フォルダを使用
+                    </p>
+                  </div>
                 </div>
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> 右上の「<span style={{ fontWeight: 600 }}>デベロッパーモード</span>」を <span style={{ color: "#4a7c59", fontWeight: 600 }}>ON</span> にする
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 「<span style={{ fontWeight: 600 }}>パッケージ化されていない拡張機能を読み込む</span>」をクリック
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px]" style={{ color: T.textSub }}>
-                    <span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> フォルダを選択：
-                  </p>
-                  <code className="text-[11px] mt-1 block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
-                    C:\Users\user\Desktop\t-manage\chrome-extension
-                  </code>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>⚙️ Chromeにインストール</p>
+                  <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> Chromeのアドレスバーに入力：
+                    </p>
+                    <code className="text-[11px] block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
+                      chrome://extensions
+                    </code>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 右上の「<span style={{ fontWeight: 600 }}>デベロッパーモード</span>」を <span style={{ color: "#4a7c59", fontWeight: 600 }}>ON</span> にする
+                    </p>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> 「<span style={{ fontWeight: 600 }}>パッケージ化されていない拡張機能を読み込む</span>」をクリック
+                    </p>
+                    <p>
+                      <span style={{ color: "#c3a782", fontWeight: 600 }}>⑤</span> ダウンロードした <code style={{ color: "#c3a782" }}>chrome-extension</code> フォルダを選択
+                    </p>
+                  </div>
                 </div>
                 <div className="p-4 rounded-xl" style={{ backgroundColor: "#4a7c5908", border: "1px solid #4a7c5922" }}>
                   <p className="text-[12px]" style={{ color: "#4a7c59" }}>
