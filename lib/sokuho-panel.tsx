@@ -479,6 +479,19 @@ export function SokuhoPanel({
   const availableCount = slots.filter((s) => !s.isSoldOut).length;
   const soldOutCount = slots.filter((s) => s.isSoldOut).length;
 
+  // ルーム別のセラピスト数を計算
+  const roomCounts = (() => {
+    const shiftIds = new Set(shifts.map(s => s.therapist_id));
+    const counts = { mikawa: 0, toyohashi: 0 };
+    for (const t of therapists) {
+      if (!shiftIds.has(t.id) || clockedOut.has(t.id)) continue;
+      const rk = getRoomKey(t.id);
+      if (rk === "mikawa") counts.mikawa++;
+      else if (rk === "toyohashi") counts.toyohashi++;
+    }
+    return counts;
+  })();
+
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -565,7 +578,7 @@ export function SokuhoPanel({
                 border: `1px solid ${currentRoom === "mikawa" ? "#ff6b9d44" : T.border}`,
               }}
             >
-              🏠 三河安城ルーム
+              🏠 三河安城ルーム{roomCounts.mikawa > 0 && <span className="ml-1 text-[10px] opacity-70">({roomCounts.mikawa})</span>}
             </button>
             <button
               onClick={() => setCurrentRoom("toyohashi")}
@@ -576,7 +589,7 @@ export function SokuhoPanel({
                 border: `1px solid ${currentRoom === "toyohashi" ? "#6b8bff44" : T.border}`,
               }}
             >
-              🏠 豊橋ルーム
+              🏠 豊橋ルーム{roomCounts.toyohashi > 0 && <span className="ml-1 text-[10px] opacity-70">({roomCounts.toyohashi})</span>}
             </button>
           </div>
 

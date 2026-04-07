@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 
-type Tab = "cti" | "chrome" | "video";
+type Tab = "cti" | "chrome" | "video" | "sokuho";
 
 export default function SystemSetup() {
   const router = useRouter();
@@ -19,13 +19,19 @@ export default function SystemSetup() {
   const [lineSaving, setLineSaving] = useState(false);
   const [lineMsg, setLineMsg] = useState("");
 
+  // 速報設定
+  const [bskyId, setBskyId] = useState("");
+  const [bskyPw, setBskyPw] = useState("");
+  const [bskySaving, setBskySaving] = useState(false);
+  const [bskyMsg, setBskyMsg] = useState("");
+
   useEffect(() => {
     const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); };
     check();
     // LINE URL読み込み
     const loadSettings = async () => {
-      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff"]);
-      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); } }
+      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff", "bsky_id", "bsky_pw"]);
+      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); if (s.key === "bsky_id") setBskyId(s.value); if (s.key === "bsky_pw") setBskyPw(s.value); } }
     };
     loadSettings();
   }, [router]);
@@ -39,6 +45,14 @@ export default function SystemSetup() {
     }
     setLineSaving(false); setLineMsg("保存しました！");
     setTimeout(() => setLineMsg(""), 3000);
+  };
+
+  const saveBskySettings = async () => {
+    setBskySaving(true); setBskyMsg("");
+    await supabase.from("store_settings").upsert({ key: "bsky_id", value: bskyId }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "bsky_pw", value: bskyPw }, { onConflict: "key" });
+    setBskySaving(false); setBskyMsg("保存しました！");
+    setTimeout(() => setBskyMsg(""), 3000);
   };
 
   const cardStyle = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 16 };
@@ -66,6 +80,7 @@ export default function SystemSetup() {
             { key: "cti" as Tab, label: "📞 CTI 着信表示", desc: "スマホ着信→PC表示" },
             { key: "chrome" as Tab, label: "🚀 Chrome拡張", desc: "通知の自動入力" },
             { key: "video" as Tab, label: "🎥 AI動画生成", desc: "セットアップ" },
+            { key: "sokuho" as Tab, label: "📢 リアルタイム速報", desc: "Bluesky / エステ魂" },
           ]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className="flex-1 py-4 rounded-2xl cursor-pointer text-center"
