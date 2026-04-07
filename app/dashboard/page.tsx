@@ -18,7 +18,7 @@ type Visit = {
   therapist_back: number; nomination: string; options: string; discount: number;
   total: number; payment_method: string; notes: string;
 };
-type Therapist = { id: number; name: string };
+type Therapist = { id: number; name: string; status: string };
 type Store = { id: number; name: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type CustomerNote = { id: number; therapist_id: number; customer_name: string; note: string; is_ng: boolean; ng_reason: string; rating: number };
@@ -170,7 +170,7 @@ export default function Dashboard() {
     const { data: repData } = await supabase.from("room_cash_replenishments").select("*").eq("date", date);
     const { data: crs } = await supabase.from("courses").select("*");
     const { data: ra } = await supabase.from("room_assignments").select("*").eq("date", date);
-    const { data: thList } = await supabase.from("therapists").select("id,name");
+    const { data: thList } = await supabase.from("therapists").select("id,name,status");
     const allRes = res || [];
     const completed = allRes.filter(r => (r as any).status === "completed");
     const getCourseByName = (name: string) => (crs || []).find((c: any) => c.name === name);
@@ -1067,10 +1067,37 @@ export default function Dashboard() {
               {/* セラピストメモ */}
               {customerNotes.length > 0 && (
                 <div className="mb-6">
+                  {/* NG サマリー */}
+                  {(() => {
+                    const ngNotes = customerNotes.filter(cn => cn.is_ng);
+                    const activeNg = ngNotes.filter(cn => { const th = therapists.find(t => t.id === cn.therapist_id); return th?.status === "active"; });
+                    const inactiveNg = ngNotes.filter(cn => { const th = therapists.find(t => t.id === cn.therapist_id); return th && th.status !== "active"; });
+                    if (ngNotes.length > 0) return (
+                      <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: activeNg.length >= 5 ? "#c4555518" : activeNg.length >= 3 ? "#f59e0b18" : "#88878018", border: `1px solid ${activeNg.length >= 5 ? "#c4555544" : activeNg.length >= 3 ? "#f59e0b44" : "#88878044"}` }}>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-[12px] font-medium" style={{ color: activeNg.length >= 5 ? "#c45555" : activeNg.length >= 3 ? "#f59e0b" : T.text }}>
+                            🚫 NG状況: 稼働中 {activeNg.length}名{inactiveNg.length > 0 && <span style={{ color: T.textMuted, fontWeight: 400 }}>（休止/退職 {inactiveNg.length}名は除外）</span>}
+                          </span>
+                          {activeNg.length >= 5 && <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>→ 出禁推奨</span>}
+                          {activeNg.length >= 3 && activeNg.length < 5 && <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>→ 要注意推奨</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {ngNotes.map(cn => {
+                            const th = therapists.find(t => t.id === cn.therapist_id);
+                            const isActive = th?.status === "active";
+                            return <span key={cn.id} className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: isActive ? "#c4555518" : "#88878012", color: isActive ? "#c45555" : "#888780", textDecoration: isActive ? "none" : "line-through", opacity: isActive ? 1 : 0.6 }}>{th?.name || "不明"}{!isActive && " (休止/退職)"}</span>;
+                          })}
+                        </div>
+                      </div>
+                    );
+                    return null;
+                  })()}
                   <h3 className="text-[14px] font-medium mb-3">💆 セラピストメモ（{customerNotes.length}件）</h3>
                   <div className="space-y-2">
                     {customerNotes.map((cn) => {
                       const tName = getTherapistName(cn.therapist_id);
+                      const th = therapists.find(t => t.id === cn.therapist_id);
+                      const isActive = th?.status === "active";
                       const stars = "★".repeat(cn.rating || 0) + "☆".repeat(5 - (cn.rating || 0));
                       return (
                         <div key={cn.id} className="rounded-xl p-3 border" style={{ borderColor: cn.is_ng ? "#c4555544" : T.border, backgroundColor: cn.is_ng ? "#c4555508" : T.cardAlt }}>
@@ -1078,8 +1105,9 @@ export default function Dashboard() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <span className="text-[12px] font-medium">{tName}</span>
+                                {th && !isActive && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: th.status === "retired" ? "#c4555518" : "#88878018", color: th.status === "retired" ? "#c45555" : "#888780" }}>{th.status === "retired" ? "退職" : "休止"}</span>}
                                 {cn.rating > 0 && <span className="text-[10px]" style={{ color: "#f59e0b" }}>{stars}</span>}
-                                {cn.is_ng && <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠ NG</span>}
+                                {cn.is_ng && <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠ NG{!isActive && "（カウント除外）"}</span>}
                               </div>
                               {cn.note && <p className="text-[11px] whitespace-pre-wrap" style={{ color: T.textSub }}>{cn.note}</p>}
                               {cn.is_ng && cn.ng_reason && <p className="text-[10px] mt-1" style={{ color: "#c45555" }}>NG理由: {cn.ng_reason}</p>}
