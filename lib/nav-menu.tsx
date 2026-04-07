@@ -38,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "🎬", label: "AI動画生成",           path: "/video-generator",              category: "セラピスト" },
 
   // ── スタッフ ──
+  { icon: "📊", label: "スタッフ勤怠",  path: "/staff-attendance",  category: "スタッフ" },
   { icon: "👥", label: "スタッフ設定",  path: "/staff",  category: "スタッフ" },
 
   // ── 登録・設定 ──
