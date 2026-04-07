@@ -241,7 +241,30 @@ export function SokuhoPanel({
         }
       }
     };
-    if (show) loadCredentials();
+    if (show) {
+      loadCredentials();
+      setEstamaStep(0);
+      setPostResult(null);
+
+      // 自動ルーム選択: セラピストがいるルームを優先
+      const shiftIds = new Set(shifts.map(s => s.therapist_id));
+      let mikawaCount = 0, toyohashiCount = 0;
+      for (const t of therapists) {
+        if (!shiftIds.has(t.id) || clockedOut.has(t.id)) continue;
+        const ra = roomAssigns.find(a => a.therapist_id === t.id);
+        if (!ra) continue;
+        const rm = allRooms.find(r => r.id === ra.room_id);
+        if (!rm) continue;
+        const bl = buildings.find(b => b.id === rm.building_id);
+        const st = stores.find(s => s.id === rm.store_id);
+        const combined = `${bl?.name || ""} ${st?.name || ""} ${rm.name || ""}`;
+        if (ROOMS_CONFIG.toyohashi.keywords.test(combined) || st?.name?.includes("豊橋")) toyohashiCount++;
+        else mikawaCount++;
+      }
+      if (toyohashiCount > 0 && mikawaCount === 0) setCurrentRoom("toyohashi");
+      else setCurrentRoom("mikawa");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show]);
 
   // ========================================
@@ -412,21 +435,38 @@ export function SokuhoPanel({
   };
 
   // ========================================
-  // Copy for エステ魂
+  // Copy for エステ魂 (step-by-step)
   // ========================================
-  const handleCopyEstama = () => {
-    const config = ROOMS_CONFIG[currentRoom];
+  const [estamaStep, setEstamaStep] = useState<0 | 1 | 2 | 3>(0);
+
+  const getEstamaTitle = () => {
     const now = new Date();
     const h = now.getHours() < 6 ? now.getHours() + 24 : now.getHours();
     const m = String(now.getMinutes()).padStart(2, "0");
-    const title = `☀️只今のご案内状況 ${h}:${m}☀️`.slice(0, 30);
-    const content = generateText();
+    return `☀️只今のご案内状況 ${h}:${m}☀️`.slice(0, 30);
+  };
 
-    // クリップボードにコピー
-    const copyText = `【タイトル】\n${title}\n\n【本文】\n${content}`;
-    navigator.clipboard.writeText(copyText);
+  const handleEstamaStart = () => {
+    setEstamaStep(1);
+    setPostResult(null);
+  };
 
-    setPostResult({ type: "success", msg: "エステ魂用テキストをコピーしました！" });
+  const handleEstamaCopyTitle = () => {
+    navigator.clipboard.writeText(getEstamaTitle());
+    setPostResult({ type: "success", msg: "タイトルをコピーしました" });
+    setEstamaStep(2);
+  };
+
+  const handleEstamaCopyContent = () => {
+    navigator.clipboard.writeText(generateText());
+    setPostResult({ type: "success", msg: "本文をコピーしました" });
+    setEstamaStep(3);
+  };
+
+  const handleEstamaOpen = () => {
+    window.open("https://estama.jp/admin/blog_edit/", "_blank");
+    setEstamaStep(0);
+    setPostResult({ type: "success", msg: "エステ魂を開きました。タイトル→本文の順で貼り付けてください" });
   };
 
   if (!show) return null;
@@ -650,6 +690,47 @@ export function SokuhoPanel({
 
         {/* Action buttons */}
         <div className="px-6 py-4 space-y-2" style={{ borderTop: `1px solid ${T.border}` }}>
+          {/* エステ魂ステップUI */}
+          {estamaStep > 0 && (
+            <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: "#ec489908", border: "1px solid #ec489933" }}>
+              <p className="text-[11px] font-medium" style={{ color: "#ec4899" }}>💅 エステ魂投稿フロー</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleEstamaCopyTitle}
+                  className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer"
+                  style={{
+                    backgroundColor: estamaStep >= 2 ? "#22c55e12" : "#ec489918",
+                    color: estamaStep >= 2 ? "#22c55e" : "#ec4899",
+                    border: `1px solid ${estamaStep >= 2 ? "#22c55e44" : "#ec489944"}`,
+                  }}
+                >
+                  {estamaStep >= 2 ? "✅ タイトルコピー済" : "① タイトルコピー"}
+                </button>
+                <button
+                  onClick={handleEstamaCopyContent}
+                  disabled={estamaStep < 2}
+                  className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer disabled:opacity-40"
+                  style={{
+                    backgroundColor: estamaStep >= 3 ? "#22c55e12" : "#ec489918",
+                    color: estamaStep >= 3 ? "#22c55e" : "#ec4899",
+                    border: `1px solid ${estamaStep >= 3 ? "#22c55e44" : "#ec489944"}`,
+                  }}
+                >
+                  {estamaStep >= 3 ? "✅ 本文コピー済" : "② 本文コピー"}
+                </button>
+                <button
+                  onClick={handleEstamaOpen}
+                  disabled={estamaStep < 3}
+                  className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer disabled:opacity-40"
+                  style={{ backgroundColor: "#ec489918", color: "#ec4899", border: "1px solid #ec489944" }}
+                >
+                  ③ エステ魂を開く
+                </button>
+              </div>
+              <button onClick={() => setEstamaStep(0)} className="text-[10px] cursor-pointer" style={{ color: T.textMuted }}>キャンセル</button>
+            </div>
+          )}
+
           <div className="flex gap-2">
             {/* Bluesky */}
             <button
@@ -663,12 +744,12 @@ export function SokuhoPanel({
 
             {/* エステ魂 */}
             <button
-              onClick={handleCopyEstama}
-              disabled={slots.length === 0}
+              onClick={handleEstamaStart}
+              disabled={slots.length === 0 || estamaStep > 0}
               className="flex-1 py-3 rounded-xl text-[13px] font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: "#ec489918", color: "#ec4899", border: "1px solid #ec489944" }}
             >
-              💅 エステ魂コピー
+              💅 エステ魂投稿
             </button>
           </div>
 
