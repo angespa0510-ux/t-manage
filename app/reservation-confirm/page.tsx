@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
-export default function ReservationConfirm() {
+function ReservationConfirmInner() {
   const supabase = createClientComponentClient();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -125,5 +125,17 @@ export default function ReservationConfirm() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ReservationConfirm() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: "#999", fontSize: 14 }}>読み込み中...</div>
+      </div>
+    }>
+      <ReservationConfirmInner />
+    </Suspense>
   );
 }
