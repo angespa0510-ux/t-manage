@@ -1048,7 +1048,7 @@ export default function ServiceSettings() {
             <div className="animate-[fadeIn_0.3s] space-y-6">
               {/* Sub-tabs: 5テンプレート切替 */}
               <div className="flex gap-1.5 flex-wrap">
-                {([["customer_url", "👤 概要（URL付）"], ["customer_no_url", "👤 概要（URLなし）"], ["customer_detail_url", "📋 詳細（URL付）"], ["customer_detail_no_url", "📋 詳細（URLなし）"], ["staff", "💼 セラピスト"]] as [NotifySubTab, string][]).map(([k, l]) => (
+                {([["customer_url", "👤 概要 当日・翌日"], ["customer_no_url", "👤 概要 明後日以降"], ["customer_detail_url", "📋 詳細 当日・翌日"], ["customer_detail_no_url", "📋 詳細 明後日以降"], ["staff", "💼 セラピスト"]] as [NotifySubTab, string][]).map(([k, l]) => (
                   <button key={k} onClick={() => { setNtSubTab(k); setNtMsg(""); setNtPreview(false); }} className="px-3 py-2 text-[10px] rounded-xl cursor-pointer transition-all whitespace-nowrap"
                     style={{ backgroundColor: ntSubTab === k ? "#3d6b9f18" : T.cardAlt, color: ntSubTab === k ? "#3d6b9f" : T.textMuted, fontWeight: ntSubTab === k ? 600 : 400 }}>
                     {l}
