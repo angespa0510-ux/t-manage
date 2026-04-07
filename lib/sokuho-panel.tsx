@@ -224,26 +224,35 @@ export function SokuhoPanel({
   const [slots, setSlots] = useState<TherapistSlot[]>([]);
   const [bskyId, setBskyId] = useState("");
   const [bskyPw, setBskyPw] = useState("");
+  const [estamaIdMikawa, setEstamaIdMikawa] = useState("");
+  const [estamaPwMikawa, setEstamaPwMikawa] = useState("");
+  const [estamaIdToyohashi, setEstamaIdToyohashi] = useState("");
+  const [estamaPwToyohashi, setEstamaPwToyohashi] = useState("");
   const [posting, setPosting] = useState(false);
   const [postResult, setPostResult] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const dragOverIdx = useRef<number | null>(null);
 
-  // Load Bluesky credentials from store_settings
+  // Load credentials from store_settings
   useEffect(() => {
     const loadCredentials = async () => {
-      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["bsky_id", "bsky_pw"]);
+      const { data } = await supabase.from("store_settings").select("key,value").in("key", [
+        "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi"
+      ]);
       if (data) {
         for (const s of data) {
           if (s.key === "bsky_id") setBskyId(s.value);
           if (s.key === "bsky_pw") setBskyPw(s.value);
+          if (s.key === "estama_id_mikawa") setEstamaIdMikawa(s.value);
+          if (s.key === "estama_pw_mikawa") setEstamaPwMikawa(s.value);
+          if (s.key === "estama_id_toyohashi") setEstamaIdToyohashi(s.value);
+          if (s.key === "estama_pw_toyohashi") setEstamaPwToyohashi(s.value);
         }
       }
     };
     if (show) {
       loadCredentials();
-      setEstamaStep(0);
       setPostResult(null);
 
       // 自動ルーム選択: セラピストがいるルームを優先
@@ -445,9 +454,8 @@ export function SokuhoPanel({
   };
 
   // ========================================
-  // Copy for エステ魂 (step-by-step)
+  // エステ魂 ワンクリック投稿
   // ========================================
-  const [estamaStep, setEstamaStep] = useState<0 | 1 | 2 | 3>(0);
 
   const getEstamaTitle = () => {
     const now = new Date();
@@ -456,27 +464,29 @@ export function SokuhoPanel({
     return `☀️只今のご案内状況 ${h}:${m}☀️`.slice(0, 30);
   };
 
-  const handleEstamaStart = () => {
-    setEstamaStep(1);
-    setPostResult(null);
-  };
+  const handleEstamaPost = () => {
+    const estamaId = currentRoom === "toyohashi" ? estamaIdToyohashi : estamaIdMikawa;
+    const estamaPw = currentRoom === "toyohashi" ? estamaPwToyohashi : estamaPwMikawa;
 
-  const handleEstamaCopyTitle = () => {
-    navigator.clipboard.writeText(getEstamaTitle());
-    setPostResult({ type: "success", msg: "タイトルをコピーしました" });
-    setEstamaStep(2);
-  };
+    if (!estamaId || !estamaPw) {
+      setPostResult({ type: "error", msg: `エステ魂（${currentRoom === "toyohashi" ? "豊橋" : "三河安城"}）のID/PWが未設定です。システム設定→速報タブで設定してください` });
+      return;
+    }
 
-  const handleEstamaCopyContent = () => {
-    navigator.clipboard.writeText(generateText());
-    setPostResult({ type: "success", msg: "本文をコピーしました" });
-    setEstamaStep(3);
-  };
+    const title = getEstamaTitle();
+    const content = generateText();
 
-  const handleEstamaOpen = () => {
-    window.open("https://estama.jp/admin/blog_edit/", "_blank");
-    setEstamaStep(0);
-    setPostResult({ type: "success", msg: "エステ魂を開きました。タイトル→本文の順で貼り付けてください" });
+    // localStorageに保存してブリッジページへ
+    localStorage.setItem("estama_post_data", JSON.stringify({
+      room: currentRoom,
+      title,
+      content,
+      estamaId,
+      estamaPw,
+    }));
+
+    window.open("/estama-bridge", "_blank");
+    setPostResult({ type: "success", msg: "エステ魂ブリッジを開きました" });
   };
 
   if (!show) return null;
@@ -722,47 +732,6 @@ export function SokuhoPanel({
 
         {/* Action buttons */}
         <div className="px-6 py-4 space-y-2" style={{ borderTop: `1px solid ${T.border}` }}>
-          {/* エステ魂ステップUI */}
-          {estamaStep > 0 && (
-            <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: "#ec489908", border: "1px solid #ec489933" }}>
-              <p className="text-[11px] font-medium" style={{ color: "#ec4899" }}>💅 エステ魂投稿フロー</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleEstamaCopyTitle}
-                  className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer"
-                  style={{
-                    backgroundColor: estamaStep >= 2 ? "#22c55e12" : "#ec489918",
-                    color: estamaStep >= 2 ? "#22c55e" : "#ec4899",
-                    border: `1px solid ${estamaStep >= 2 ? "#22c55e44" : "#ec489944"}`,
-                  }}
-                >
-                  {estamaStep >= 2 ? "✅ タイトルコピー済" : "① タイトルコピー"}
-                </button>
-                <button
-                  onClick={handleEstamaCopyContent}
-                  disabled={estamaStep < 2}
-                  className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer disabled:opacity-40"
-                  style={{
-                    backgroundColor: estamaStep >= 3 ? "#22c55e12" : "#ec489918",
-                    color: estamaStep >= 3 ? "#22c55e" : "#ec4899",
-                    border: `1px solid ${estamaStep >= 3 ? "#22c55e44" : "#ec489944"}`,
-                  }}
-                >
-                  {estamaStep >= 3 ? "✅ 本文コピー済" : "② 本文コピー"}
-                </button>
-                <button
-                  onClick={handleEstamaOpen}
-                  disabled={estamaStep < 3}
-                  className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer disabled:opacity-40"
-                  style={{ backgroundColor: "#ec489918", color: "#ec4899", border: "1px solid #ec489944" }}
-                >
-                  ③ エステ魂を開く
-                </button>
-              </div>
-              <button onClick={() => setEstamaStep(0)} className="text-[10px] cursor-pointer" style={{ color: T.textMuted }}>キャンセル</button>
-            </div>
-          )}
-
           <div className="flex gap-2">
             {/* Bluesky */}
             <button
@@ -774,10 +743,10 @@ export function SokuhoPanel({
               {posting ? "投稿中..." : "🦋 Bluesky投稿"}
             </button>
 
-            {/* エステ魂 */}
+            {/* エステ魂 ワンクリック */}
             <button
-              onClick={handleEstamaStart}
-              disabled={slots.length === 0 || estamaStep > 0}
+              onClick={handleEstamaPost}
+              disabled={slots.length === 0}
               className="flex-1 py-3 rounded-xl text-[13px] font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: "#ec489918", color: "#ec4899", border: "1px solid #ec489944" }}
             >

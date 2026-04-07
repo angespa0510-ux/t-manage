@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "T-MANAGE エステ魂 自動投稿",
+  "version": "1.0.0",
+  "description": "T-MANAGEの速報パネルからエステ魂へワンクリック投稿",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://estama.jp/*",
+    "https://ange-spa.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://t-manage.vercel.app/estama-bridge*"
+      ],
+      "js": ["content-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://estama.jp/login/*",
+        "https://estama.jp/login"
+      ],
+      "js": ["content-login.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://estama.jp/admin/blog_edit/*",
+        "https://estama.jp/admin/blog_edit"
+      ],
+      "js": ["content-edit.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://estama.jp/admin/*"
+      ],
+      "js": ["content-redirect.js"],
+      "run_at": "document_idle",
+      "exclude_matches": [
+        "https://estama.jp/admin/blog_edit/*",
+        "https://estama.jp/admin/blog_edit"
+      ]
+    }
+  ],
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

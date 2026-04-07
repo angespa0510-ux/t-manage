@@ -24,14 +24,20 @@ export default function SystemSetup() {
   const [bskyPw, setBskyPw] = useState("");
   const [bskySaving, setBskySaving] = useState(false);
   const [bskyMsg, setBskyMsg] = useState("");
+  const [estamaIdMikawa, setEstamaIdMikawa] = useState("");
+  const [estamaPwMikawa, setEstamaPwMikawa] = useState("");
+  const [estamaIdToyohashi, setEstamaIdToyohashi] = useState("");
+  const [estamaPwToyohashi, setEstamaPwToyohashi] = useState("");
+  const [estamaSaving, setEstamaSaving] = useState(false);
+  const [estamaMsg, setEstamaMsg] = useState("");
 
   useEffect(() => {
     const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); };
     check();
     // LINE URL読み込み
     const loadSettings = async () => {
-      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff", "bsky_id", "bsky_pw"]);
-      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); if (s.key === "bsky_id") setBskyId(s.value); if (s.key === "bsky_pw") setBskyPw(s.value); } }
+      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff", "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi"]);
+      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); if (s.key === "bsky_id") setBskyId(s.value); if (s.key === "bsky_pw") setBskyPw(s.value); if (s.key === "estama_id_mikawa") setEstamaIdMikawa(s.value); if (s.key === "estama_pw_mikawa") setEstamaPwMikawa(s.value); if (s.key === "estama_id_toyohashi") setEstamaIdToyohashi(s.value); if (s.key === "estama_pw_toyohashi") setEstamaPwToyohashi(s.value); } }
     };
     loadSettings();
   }, [router]);
@@ -53,6 +59,16 @@ export default function SystemSetup() {
     await supabase.from("store_settings").upsert({ key: "bsky_pw", value: bskyPw }, { onConflict: "key" });
     setBskySaving(false); setBskyMsg("保存しました！");
     setTimeout(() => setBskyMsg(""), 3000);
+  };
+
+  const saveEstamaSettings = async () => {
+    setEstamaSaving(true); setEstamaMsg("");
+    await supabase.from("store_settings").upsert({ key: "estama_id_mikawa", value: estamaIdMikawa }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "estama_pw_mikawa", value: estamaPwMikawa }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "estama_id_toyohashi", value: estamaIdToyohashi }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "estama_pw_toyohashi", value: estamaPwToyohashi }, { onConflict: "key" });
+    setEstamaSaving(false); setEstamaMsg("保存しました！");
+    setTimeout(() => setEstamaMsg(""), 3000);
   };
 
   const cardStyle = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 16 };
@@ -872,6 +888,105 @@ export default function SystemSetup() {
               </div>
             </div>
 
+            {/* エステ魂認証設定 */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#ec4899")}>3</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>エステ魂認証設定</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>ルームごとにアカウントを設定</p>
+                </div>
+              </div>
+              <div className="space-y-4 pl-11">
+                {/* 三河安城ルーム */}
+                <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <p className="text-[12px] font-medium" style={{ color: "#ff6b9d" }}>🏠 三河安城ルーム</p>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>エステ魂 ID（メールアドレス）</label>
+                    <input type="text" value={estamaIdMikawa} onChange={e => setEstamaIdMikawa(e.target.value)} placeholder="info@example.com"
+                      className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid ${T.border}` }} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>パスワード</label>
+                    <input type="password" value={estamaPwMikawa} onChange={e => setEstamaPwMikawa(e.target.value)} placeholder="••••••"
+                      className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid ${T.border}` }} />
+                  </div>
+                </div>
+
+                {/* 豊橋ルーム */}
+                <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <p className="text-[12px] font-medium" style={{ color: "#6b8bff" }}>🏠 豊橋ルーム</p>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>エステ魂 ID（メールアドレス）</label>
+                    <input type="text" value={estamaIdToyohashi} onChange={e => setEstamaIdToyohashi(e.target.value)} placeholder="toyohashi@example.com"
+                      className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid ${T.border}` }} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>パスワード</label>
+                    <input type="password" value={estamaPwToyohashi} onChange={e => setEstamaPwToyohashi(e.target.value)} placeholder="••••••"
+                      className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid ${T.border}` }} />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button onClick={saveEstamaSettings} disabled={estamaSaving}
+                    className="px-5 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer disabled:opacity-50"
+                    style={{ backgroundColor: "#ec489918", color: "#ec4899", border: "1px solid #ec489944" }}>
+                    {estamaSaving ? "保存中..." : "💾 保存"}
+                  </button>
+                  {estamaMsg && <span className="text-[11px]" style={{ color: "#22c55e" }}>✅ {estamaMsg}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* エステ魂拡張機能インストール */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#a855f7")}>4</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>エステ魂拡張機能（Chrome）</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>ワンクリック自動入力に必要</p>
+                </div>
+              </div>
+              <div className="space-y-4 pl-11">
+                <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>📥 ダウンロード</p>
+                  <a href="https://github.com/angespa0510-ux/t-manage/tree/main/estama-extension" target="_blank" rel="noopener noreferrer"
+                    className="block text-center py-3 rounded-xl text-[13px] font-medium"
+                    style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744", textDecoration: "none" }}>
+                    📂 estama-extension フォルダをダウンロード（GitHub）
+                  </a>
+                </div>
+
+                <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>⚙️ Chromeにインストール</p>
+                  <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> GitHubからestama-extensionフォルダをダウンロード・解凍</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> Chromeのアドレスバーに入力：</p>
+                    <code className="block px-3 py-1.5 rounded-lg text-[11px]" style={{ backgroundColor: T.bg, color: "#c3a782" }}>chrome://extensions</code>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 右上の「<span style={{ fontWeight: 600 }}>デベロッパーモード</span>」をONにする</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> 「パッケージ化されていない拡張機能を読み込む」をクリック</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>⑤</span> ダウンロードした<span style={{ fontWeight: 600 }}>estama-extension</span>フォルダを選択</p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl space-y-2" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium" style={{ color: T.text }}>🔄 フロー（拡張機能あり）</p>
+                  <div className="text-[11px] space-y-1" style={{ color: T.textMuted }}>
+                    <p>📢 速報パネル「エステ魂投稿」→ ブリッジページ → 拡張機能が自動通過</p>
+                    <p>→ estama.jp/login（ID/PW自動入力、ログインボタンのみ手動）</p>
+                    <p>→ blog_edit（タイトル・本文・カテゴリ・画像すべて自動入力）</p>
+                    <p>→ <span style={{ color: "#ec4899", fontWeight: 600 }}>投稿ボタンを押すだけ！</span></p>
+                  </div>
+                </div>
+
+                <div className="text-[11px] space-y-1" style={{ color: T.textMuted }}>
+                  <p>🔄 <strong>更新方法</strong>: GitHubから最新版をDL→フォルダ上書き→chrome://extensionsで「🔄」をクリック</p>
+                  <p>💡 拡張機能なしでもブリッジページからタイトル/本文をコピーして手動投稿できます</p>
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-2xl p-6" style={cardStyle}>
               <h3 className="text-[14px] font-medium mb-4" style={{ color: T.text }}>❓ よくある質問</h3>
               <div className="space-y-4">
@@ -879,7 +994,9 @@ export default function SystemSetup() {
                   { q: "速報パネルにセラピストが表示されない", a: "セラピストにシフトとルーム割り当てが設定されていることを確認してください。退勤済みかつ完売のセラピストは自動的に除外されます。" },
                   { q: "案内時間が実際と異なる", a: "セラピスト設定の「施術間インターバル」を確認してください。未設定の場合は15分がデフォルトです。" },
                   { q: "Bluesky投稿でエラーが出る", a: "App Passwordが正しいか確認してください。メインパスワードではなくApp Passwordの使用が必要です。" },
-                  { q: "エステ魂への投稿で画像を付けたい", a: "画像はエステ魂のフォームから手動で追加してください。タイトルと本文はコピーフローで入力できます。" },
+                  { q: "エステ魂のID/PWが未設定と表示される", a: "システム設定→速報タブのSTEP3でルームごとのID/PWを設定してください。三河安城と豊橋でアカウントが別です。" },
+                  { q: "エステ魂でフォームが自動入力されない", a: "Chrome拡張機能がインストールされていることを確認してください。STEP4の手順に従ってestama-extensionをインストールしてください。" },
+                  { q: "エステ魂のログインページで止まる", a: "CSRF保護のため、ログインボタンのクリックのみ手動が必要です。ID/PWは自動入力されます。" },
                 ].map((faq, i) => (
                   <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                     <p className="text-[12px] font-medium mb-1" style={{ color: T.text }}>Q. {faq.q}</p>
