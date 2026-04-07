@@ -835,32 +835,6 @@ export default function TimeChart() {
             <h2 className="text-[16px] font-medium mb-1">オーダー編集</h2>
             <p className="text-[11px] mb-3" style={{ color: T.textFaint }}>{editCustName} 様の予約を編集</p>
             <div className="flex flex-wrap gap-1.5 mb-4">{([["unprocessed","未処理","#888780"],["email_sent","確認メール済","#3d6b9f"],["customer_confirmed","お客様確定","#4a7c59"],["processed","処理済","#85a8c4"],["web_reservation","WEB予約","#a855f7"],["phone_check","電話確認","#f59e0b"],["serving","接客中","#22c55e"],["completed","終了","#c3a782"]] as const).map(([val,label,color]) => (<button key={val} onClick={() => setEditStatus(val)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: editStatus === val ? color + "22" : T.cardAlt, color: editStatus === val ? color : T.textMuted, border: `1px solid ${editStatus === val ? color : T.border}`, fontWeight: editStatus === val ? 700 : 400 }}>{label}</button>))}</div>
-            {/* 確定メール送信ボタン */}
-            {editRes && (editStatus === "unprocessed" || editStatus === "email_sent") && (<div className="mb-4 rounded-xl p-3" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f30" }}>
-              <p className="text-[11px] font-medium mb-2" style={{ color: "#3d6b9f" }}>📧 確定メール送信</p>
-              <div className="flex gap-2">
-                <button onClick={async () => {
-                  const token = (editRes as any).confirmation_token || (Math.random().toString(36).slice(2) + Date.now().toString(36));
-                  if (!(editRes as any).confirmation_token) { await supabase.from("reservations").update({ confirmation_token: token, status: "email_sent" }).eq("id", editRes.id); setEditStatus("email_sent"); fetchData(); }
-                  const url = `${window.location.origin}/customer-mypage/confirm?token=${token}`;
-                  const { data: cust } = await supabase.from("customers").select("email,login_email").or(`name.eq.${editCustName}`).limit(1);
-                  const email = cust?.[0]?.login_email || cust?.[0]?.email || "";
-                  const subject = encodeURIComponent("【チョップ】ご予約の確認");
-                  const body = encodeURIComponent(`${editCustName} 様\n\nご予約リクエストありがとうございます。\n\n以下のリンクから予約内容をご確認いただき、\n「予約を確定する」ボタンを押してください。\n\n▼ 予約確認リンク\n${url}\n\n【ご予約内容】\n日時: ${selectedDate} ${editStart}〜${editEnd}\nコース: ${editSelectedCourse?.name || editRes.course}\n\n※ 翌日以降のご予約はお部屋が確定次第、\n別途ルーム詳細メールをお送りいたします。\n\nチョップ`);
-                  window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`, "_blank");
-                  if (!(editRes as any).confirmation_token) { await supabase.from("reservations").update({ confirmation_token: token, status: "email_sent" }).eq("id", editRes.id); setEditStatus("email_sent"); fetchData(); }
-                  toast.show("Gmailを開きました", "success");
-                }} className="flex-1 py-2.5 rounded-lg text-[10px] font-medium cursor-pointer flex items-center justify-center gap-1" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f44" }}>📧 Gmailで送信</button>
-                <button onClick={async () => {
-                  const token = (editRes as any).confirmation_token || (Math.random().toString(36).slice(2) + Date.now().toString(36));
-                  if (!(editRes as any).confirmation_token) { await supabase.from("reservations").update({ confirmation_token: token, status: "email_sent" }).eq("id", editRes.id); setEditStatus("email_sent"); fetchData(); }
-                  const url = `${window.location.origin}/customer-mypage/confirm?token=${token}`;
-                  const text = `【チョップ】ご予約確認\n${editCustName}様\n\n以下のリンクからご予約を確定してください。\n${url}`;
-                  try { await navigator.clipboard.writeText(text); toast.show("LINE/SMS用テキストをコピーしました！", "success"); } catch { prompt("コピーしてLINE/SMSで送信:", text); }
-                }} className="flex-1 py-2.5 rounded-lg text-[10px] font-medium cursor-pointer flex items-center justify-center gap-1" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59", border: "1px solid #4a7c5944" }}>📋 LINE/SMS用コピー</button>
-              </div>
-              <p className="text-[9px] mt-1.5 text-center" style={{ color: T.textMuted }}>※ Gmailが開きます。送信ボタンを押してください</p>
-            </div>)}
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={editCustName} onChange={(e) => setEditCustName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
