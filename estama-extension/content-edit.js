@@ -70,8 +70,8 @@
       console.log('[エステ魂拡張] 投稿: すぐ公開');
     }
 
-    // ===== 6. 画像アップロード =====
-    showBanner('💅 フォーム入力完了 — 画像を設定中...');
+    // ===== 6. 画像アップロード（1枚ずつ: ファイルセット→クロップ保存→次へ）=====
+    showBanner('💅 フォーム入力完了 — 画像をアップロード中...');
 
     try {
       let response;
@@ -88,37 +88,48 @@
 
       if (response && response.ok && response.images && response.images.length > 0) {
         console.log('[エステ魂拡張] 画像取得成功:', response.images.length, '枚');
+        let uploadedCount = 0;
 
         for (let i = 0; i < Math.min(response.images.length, 3); i++) {
+          showBanner(`💅 画像 ${i + 1}/${Math.min(response.images.length, 3)} アップロード中...`);
           const img = response.images[i];
           const fileInputId = `blog_icon_${i + 1}-imgupload_imgUploadField`;
           const fileInput = document.getElementById(fileInputId);
 
           if (!fileInput) {
-            console.warn('[エステ魂拡張] ファイル入力欄が見つかりません:', fileInputId);
+            console.warn('[エステ魂拡張] ファイル入力欄なし:', fileInputId);
             continue;
           }
 
           try {
-            // base64 → File変換
             const file = base64ToFile(img.base64, `therapist_${i + 1}.jpg`);
-
-            // DataTransfer でファイルをセット
             const dt = new DataTransfer();
             dt.items.add(file);
             fileInput.files = dt.files;
-
-            // changeイベントを発火（estama.jpのアップロードJSをトリガー）
             fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log('[エステ魂拡張] 画像', i + 1, 'をファイル入力にセット');
+            console.log('[エステ魂拡張] 画像', i + 1, 'ファイルセット完了');
 
-            // 次の画像まで少し待つ（サーバー処理のため）
-            await new Promise(r => setTimeout(r, 1500));
+            // クロップダイアログの「保存」ボタンを待って自動クリック
+            const saved = await waitAndClickSave(8000);
+            if (saved) {
+              uploadedCount++;
+              console.log('[エステ魂拡張] 画像', i + 1, '保存完了');
+            } else {
+              console.warn('[エステ魂拡張] 画像', i + 1, '保存ボタン未検出');
+            }
+
+            // ダイアログが閉じるのを待つ
+            await new Promise(r => setTimeout(r, 2000));
           } catch (e) {
-            console.warn('[エステ魂拡張] 画像', i + 1, 'セット失敗:', e);
+            console.warn('[エステ魂拡張] 画像', i + 1, 'エラー:', e);
           }
         }
-        showBanner('✅ 入力＆画像アップロード完了 — 投稿ボタンを押してください！');
+
+        if (uploadedCount > 0) {
+          showBanner(`✅ ${uploadedCount}枚の画像アップロード完了 — 投稿ボタンを押してください！`);
+        } else {
+          showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
+        }
       } else {
         console.log('[エステ魂拡張] 画像なしまたは取得失敗:', response);
         showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
@@ -174,5 +185,47 @@
     const arr = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
     return new File([arr], fileName, { type: mime });
+  }
+
+  // クロップダイアログの「保存」ボタンを待って自動クリック
+  function waitAndClickSave(timeout = 8000) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const check = setInterval(() => {
+        // 「保存」ボタンを探す（複数の方法）
+        const allBtns = [
+          ...document.querySelectorAll('button'),
+          ...document.querySelectorAll('a'),
+          ...document.querySelectorAll('input[type="button"]'),
+          ...document.querySelectorAll('input[type="submit"]'),
+          ...document.querySelectorAll('[role="button"]'),
+          ...document.querySelectorAll('.btn'),
+        ];
+
+        for (const btn of allBtns) {
+          const text = (btn.textContent || btn.value || '').trim();
+          // 「保存」ボタンを探す（クロップダイアログ内）
+          if (text === '保存' || text === 'Save' || text === '切り抜き保存') {
+            // バナーでなく、実際のクロップダイアログのボタンか確認
+            if (btn.closest('#estama-ext-banner')) continue;
+            console.log('[エステ魂拡張] 保存ボタン発見:', btn.tagName, text);
+            clearInterval(check);
+            // 少し待ってからクリック（クロップが完了するのを待つ）
+            setTimeout(() => {
+              btn.click();
+              console.log('[エステ魂拡張] 保存ボタンクリック完了');
+              resolve(true);
+            }, 1000);
+            return;
+          }
+        }
+
+        if (Date.now() - start > timeout) {
+          clearInterval(check);
+          console.warn('[エステ魂拡張] 保存ボタンタイムアウト');
+          resolve(false);
+        }
+      }, 500);
+    });
   }
 })();
