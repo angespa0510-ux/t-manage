@@ -86,6 +86,8 @@ export default function Dashboard() {
   const [safeHistory, setSafeHistory] = useState<{ id: number; date: string; total_cash: number; final_payment: number; room_id: number; therapist_name: string; room_label: string; replenish: number; safe_collected_date: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRank, setFilterRank] = useState<string>("all");
+  const [custStats, setCustStats] = useState<Record<number, { visitCount: number; lastVisit: string; pointBalance: number }>>({});
+  const [custMemoStats, setCustMemoStats] = useState<Record<string, { count: number; hasNg: boolean }>>({});
 
   // Register
   const [custName, setCustName] = useState(""); const [custPhone, setCustPhone] = useState(""); const [custPhone2, setCustPhone2] = useState(""); const [custPhone3, setCustPhone3] = useState("");
@@ -316,6 +318,38 @@ export default function Dashboard() {
 
   const fetchCustomers = useCallback(async () => {
     const { data } = await supabase.from("customers").select("*").order("created_at", { ascending: false }); if (data) setCustomers(data);
+    // 利用回数・最終利用日
+    const { data: visits } = await supabase.from("customer_visits").select("customer_id,date");
+    if (visits) {
+      const stats: Record<number, { visitCount: number; lastVisit: string; pointBalance: number }> = {};
+      for (const v of visits) {
+        if (!stats[v.customer_id]) stats[v.customer_id] = { visitCount: 0, lastVisit: "", pointBalance: 0 };
+        stats[v.customer_id].visitCount++;
+        if (v.date > stats[v.customer_id].lastVisit) stats[v.customer_id].lastVisit = v.date;
+      }
+      // ポイント残高
+      const { data: pts } = await supabase.from("customer_points").select("customer_id,amount,type,expires_at");
+      if (pts) {
+        const now = new Date().toISOString();
+        for (const p of pts) {
+          if (!stats[p.customer_id]) stats[p.customer_id] = { visitCount: 0, lastVisit: "", pointBalance: 0 };
+          if (p.type === "earn" && p.expires_at && p.expires_at < now) continue; // 期限切れ除外
+          stats[p.customer_id].pointBalance += p.amount;
+        }
+      }
+      setCustStats(stats);
+    }
+    // メモ統計（名前ベース）
+    const { data: notes } = await supabase.from("therapist_customer_notes").select("customer_name,is_ng");
+    if (notes) {
+      const ms: Record<string, { count: number; hasNg: boolean }> = {};
+      for (const n of notes) {
+        if (!ms[n.customer_name]) ms[n.customer_name] = { count: 0, hasNg: false };
+        ms[n.customer_name].count++;
+        if (n.is_ng) ms[n.customer_name].hasNg = true;
+      }
+      setCustMemoStats(ms);
+    }
   }, []);
 
   const fetchMaster = useCallback(async () => {
@@ -612,13 +646,15 @@ export default function Dashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead><tr style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
-                      {["ランク", "名前", "電話番号", "備考", "登録日", "操作"].map((h) => (<th key={h} className="text-left py-3.5 px-4 font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                      {["ランク", "名前", "電話番号", "利用回数", "最終利用日", "ポイント", "メモ", "備考", "操作"].map((h) => (<th key={h} className="text-left py-3.5 px-4 font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
                     </tr></thead>
                     <tbody>
                       {filteredCustomers.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center py-16 text-[12px]" style={{ color: T.textFaint }}>{customers.length === 0 ? "顧客データがありません" : "検索結果がありません"}</td></tr>
+                        <tr><td colSpan={9} className="text-center py-16 text-[12px]" style={{ color: T.textFaint }}>{customers.length === 0 ? "顧客データがありません" : "検索結果がありません"}</td></tr>
                       ) : filteredCustomers.map((c) => {
                         const phones = [c.phone, c.phone2, c.phone3].filter(Boolean);
+                        const st = custStats[c.id] || { visitCount: 0, lastVisit: "", pointBalance: 0 };
+                        const memo = custMemoStats[c.name] || { count: 0, hasNg: false };
                         return (
                           <tr key={c.id} className="transition-colors cursor-pointer" style={{ borderBottom: `1px solid ${T.cardAlt}` }} onClick={() => openDetail(c)}>
                             <td className="py-3 px-4"><RankBadge rank={c.rank || "normal"} /></td>
@@ -626,8 +662,11 @@ export default function Dashboard() {
                             <td className="py-3 px-4" style={{ color: T.textSub }}>
                               {phones.length === 0 ? "—" : phones.map((p, i) => (<span key={i} className="block text-[11px]">{p}</span>))}
                             </td>
-                            <td className="py-3 px-4 max-w-[200px] truncate" style={{ color: T.textMuted }}>{c.notes || "—"}</td>
-                            <td className="py-3 px-4" style={{ color: T.textMuted }}>{new Date(c.created_at).toLocaleDateString("ja-JP")}</td>
+                            <td className="py-3 px-4 text-center" style={{ color: st.visitCount > 0 ? T.text : T.textFaint }}>{st.visitCount > 0 ? <span className="font-medium">{st.visitCount}<span className="text-[9px] font-normal" style={{ color: T.textMuted }}>回</span></span> : "—"}</td>
+                            <td className="py-3 px-4 text-[11px]" style={{ color: st.lastVisit ? T.textSub : T.textFaint }}>{st.lastVisit ? new Date(st.lastVisit).toLocaleDateString("ja-JP", { month: "short", day: "numeric" }) : "—"}</td>
+                            <td className="py-3 px-4" style={{ color: st.pointBalance > 0 ? "#d4a843" : T.textFaint }}>{st.pointBalance > 0 ? <span className="font-medium text-[11px]">{st.pointBalance.toLocaleString()}<span className="text-[8px]">pt</span></span> : "—"}</td>
+                            <td className="py-3 px-4">{memo.count > 0 ? <span className="text-[10px] px-2 py-1 rounded-lg" style={{ backgroundColor: memo.hasNg ? "#c4555515" : "#e8849a15", color: memo.hasNg ? "#c45555" : "#e8849a" }}>{memo.hasNg && "🚫"}{memo.count}件</span> : <span style={{ color: T.textFaint }}>—</span>}</td>
+                            <td className="py-3 px-4 max-w-[150px] truncate" style={{ color: T.textMuted }}>{c.notes || "—"}</td>
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                 <button onClick={() => openDetail(c)} className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer" style={{ color: "#c3a782", backgroundColor: "#c3a78218" }}>オーダー</button>
