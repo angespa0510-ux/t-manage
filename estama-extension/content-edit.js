@@ -95,8 +95,9 @@
     const bin = atob(parts[1]);
     const arr = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    const file = new File([arr], 'photo.jpg', { type: mime });
-    console.log('[エステ魂拡張] 画像準備:', uploadId, 'size=' + file.size + 'bytes', 'type=' + mime);
+    const ext = mime.includes('png') ? 'png' : 'jpg';
+    const file = new File([arr], `photo.${ext}`, { type: mime });
+    console.log('[エステ魂拡張] 画像準備:', uploadId, 'size=' + file.size + 'bytes', 'type=' + mime, 'ext=' + ext);
 
     // Step 1: uptemp
     const fd1 = new FormData();
