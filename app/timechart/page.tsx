@@ -836,7 +836,27 @@ export default function TimeChart() {
         return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRes(null)}>
           <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-1">オーダー編集</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-[16px] font-medium">オーダー編集</h2>
+              <div className="flex gap-2">
+                <button onClick={updateReservation} disabled={editSaving} className="px-4 py-1.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[10px] rounded-lg cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "💾 更新"}</button>
+                <button onClick={async () => {
+                  const thName = therapists.find(t => t.id === editTherapistId)?.name || "";
+                  const { data: custInfo } = await supabase.from("customers").select("phone,login_email,self_name").eq("name", editCustName.trim()).maybeSingle();
+                  const hasLine = /\sL$/i.test(editCustName.trim()) || /\sL\s/i.test(editCustName.trim());
+                  const isMember = !!(custInfo?.login_email);
+                  const ra = roomAssigns.find(a => a.therapist_id === editTherapistId);
+                  const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
+                  const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
+                  const st = rm ? stores.find(s => s.id === rm.store_id) : null;
+                  const courseWithExt = (editSelectedCourse?.name || editRes.course) + (editExtension ? `＋${editExtension}` : "");
+                  const eOptTotal2 = editOptions.reduce((s,o)=>s+o.price,0);
+                  const eDiscTotal2 = editDiscounts.reduce((s,d)=>s+d.amount,0);
+                  const eTotal2 = (editSelectedCourse?.price || 0) + editNomFee + eOptTotal2 + editExtPrice - eDiscTotal2;
+                  setNotifyInfo({ custName: editCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: editRes.date, startTime: editStart, endTime: editEnd, course: courseWithExt, therapistName: thName, total: eTotal2, nomination: editNomination || "指名なし", discountName: editDiscounts.map(d => d.name).join(",") || "なし", extensionName: editExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
+                }} className="px-4 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f44" }}>📩 通知</button>
+              </div>
+            </div>
             <p className="text-[11px] mb-3" style={{ color: T.textFaint }}>{editCustName} 様の予約を編集</p>
             {/* ── デュアルステータス ── */}
             <div className="mb-4 space-y-3">
@@ -865,25 +885,6 @@ export default function TimeChart() {
                   ["completed","終了","#c3a782"],
                 ] as const).map(([val,label,color]) => (<button key={val} onClick={() => { setEditCustomerStatus(val); setEditTherapistStatus(val); setEditStatus(val); }} className="px-2.5 py-1 rounded-lg text-[9px] cursor-pointer" style={{ backgroundColor: (editCustomerStatus === val && editTherapistStatus === val) ? color + "22" : T.cardAlt, color: (editCustomerStatus === val && editTherapistStatus === val) ? color : T.textMuted, border: `1px solid ${(editCustomerStatus === val && editTherapistStatus === val) ? color : T.border}`, fontWeight: (editCustomerStatus === val && editTherapistStatus === val) ? 700 : 400 }}>{label}</button>))}</div>
               </div>
-            </div>
-            {/* ── 上部アクションボタン ── */}
-            <div className="flex gap-2 mb-3">
-              <button onClick={updateReservation} disabled={editSaving} className="flex-1 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "💾 更新"}</button>
-              <button onClick={async () => {
-                const thName = therapists.find(t => t.id === editTherapistId)?.name || "";
-                const { data: custInfo } = await supabase.from("customers").select("phone,login_email,self_name").eq("name", editCustName.trim()).maybeSingle();
-                const hasLine = /\sL$/i.test(editCustName.trim()) || /\sL\s/i.test(editCustName.trim());
-                const isMember = !!(custInfo?.login_email);
-                const ra = roomAssigns.find(a => a.therapist_id === editTherapistId);
-                const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
-                const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
-                const st = rm ? stores.find(s => s.id === rm.store_id) : null;
-                const courseWithExt = (editSelectedCourse?.name || editRes.course) + (editExtension ? `＋${editExtension}` : "");
-                const eOptTotal2 = editOptions.reduce((s,o)=>s+o.price,0);
-                const eDiscTotal2 = editDiscounts.reduce((s,d)=>s+d.amount,0);
-                const eTotal2 = (editSelectedCourse?.price || 0) + editNomFee + eOptTotal2 + editExtPrice - eDiscTotal2;
-                setNotifyInfo({ custName: editCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: editRes.date, startTime: editStart, endTime: editEnd, course: courseWithExt, therapistName: thName, total: eTotal2, nomination: editNomination || "指名なし", discountName: editDiscounts.map(d => d.name).join(",") || "なし", extensionName: editExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
-              }} className="flex-1 py-2 text-[11px] rounded-xl cursor-pointer" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f44" }}>📩 通知</button>
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
