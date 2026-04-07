@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 
-type Tab = "cti" | "chrome";
+type Tab = "cti" | "chrome" | "video";
 
 export default function SystemSetup() {
   const router = useRouter();
@@ -65,6 +65,7 @@ export default function SystemSetup() {
           {([
             { key: "cti" as Tab, label: "📞 CTI 着信表示", desc: "スマホ着信→PC表示" },
             { key: "chrome" as Tab, label: "🚀 Chrome拡張", desc: "通知の自動入力" },
+            { key: "video" as Tab, label: "🎥 AI動画生成", desc: "セットアップ" },
           ]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className="flex-1 py-4 rounded-2xl cursor-pointer text-center"
@@ -696,6 +697,90 @@ export default function SystemSetup() {
                     <div className="px-4 pb-3 text-[11px] whitespace-pre-wrap" style={{ color: T.textSub }}>{faq.a}</div>
                   </details>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== AI動画生成 タブ ===== */}
+        {tab === "video" && (
+          <div className="space-y-6">
+            {/* 概要 */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <h2 className="text-[16px] font-medium mb-3" style={{ color: T.text }}>🎥 AI動画生成システム</h2>
+              <p className="text-[13px] leading-relaxed" style={{ color: T.textSub }}>
+                セラピストの写真をGeminiで動画に自動変換するシステムです。ローカルPCで動作します。
+              </p>
+              <div className="mt-4 p-4 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 text-[11px] flex-wrap" style={{ color: T.textSub }}>
+                  <span className="px-2 py-1.5 rounded-lg" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>📸 写真アップロード</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-2 py-1.5 rounded-lg" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6" }}>🤖 Gemini自動生成</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-2 py-1.5 rounded-lg" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>📁 Googleドライブ保存</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-2 py-1.5 rounded-lg" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>📧 メール通知</span>
+                </div>
+              </div>
+            </div>
+
+            {/* GitHubダウンロード */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#8b5cf6")}>1</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>GitHubからダウンロード</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>video-automation フォルダを取得</p>
+                </div>
+              </div>
+              <div className="space-y-3 pl-11">
+                <a href="https://github.com/angespa0510-ux/t-manage/tree/main/video-automation" target="_blank" rel="noopener noreferrer"
+                  className="block p-3 rounded-xl text-[12px]" style={{ backgroundColor: T.cardAlt, color: "#8b5cf6", textDecoration: "underline" }}>
+                  📂 video-automation フォルダを開く（GitHub）
+                </a>
+                <p className="text-[11px]" style={{ color: T.textMuted }}>
+                  リポジトリ全体をZIPダウンロード → 解凍 → <code style={{ color: "#c3a782" }}>video-automation</code> フォルダを使用
+                </p>
+              </div>
+            </div>
+
+            {/* セットアップガイドへのリンク */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#4a7c59")}>2</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>セットアップ手順</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>AI動画生成ページに詳しいガイドがあります</p>
+                </div>
+              </div>
+              <div className="space-y-3 pl-11">
+                <a href="/video-generator"
+                  className="block p-4 rounded-xl text-[13px] font-medium" style={{ backgroundColor: "#c3a78210", color: "#c3a782", border: "1px solid #c3a78233", textDecoration: "none" }}>
+                  📖 AI動画生成ページの「ローカルPCセットアップガイド」を見る →
+                </a>
+                <p className="text-[11px]" style={{ color: T.textSub }}>
+                  Node.js・ffmpegインストール → npm install → .env設定 → Geminiログイン → ウォッチャー起動 まで、ステップごとに解説しています。
+                </p>
+              </div>
+            </div>
+
+            {/* 更新方法 */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#3d6b9f")}>3</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>更新方法</h3>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>最新版への更新</p>
+                </div>
+              </div>
+              <div className="space-y-3 pl-11">
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] mb-2" style={{ color: T.textSub }}>git pull で最新版に更新：</p>
+                  <code className="text-[11px] block px-3 py-2 rounded-lg whitespace-pre-wrap" style={{ backgroundColor: T.bg, color: "#c3a782" }}>{`cd video-automation\ngit pull`}</code>
+                </div>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>
+                  ※ .env ファイルは更新されません（店舗ごとの設定が保持されます）
+                </p>
               </div>
             </div>
           </div>
