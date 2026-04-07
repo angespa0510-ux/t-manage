@@ -829,8 +829,8 @@ export default function SystemSetup() {
               <div className="mt-4 p-4 rounded-xl text-[12px] space-y-2" style={{ backgroundColor: T.cardAlt }}>
                 <p style={{ color: T.text }}>🔄 <strong>自動計算</strong>: シフト・予約・インターバルから案内可能時間を算出</p>
                 <p style={{ color: T.text }}>🏠 <strong>ルーム別</strong>: 三河安城・豊橋を切り替えて投稿</p>
-                <p style={{ color: T.text }}>🦋 <strong>Bluesky</strong>: ワンクリックで投稿（URLリンク自動生成）</p>
-                <p style={{ color: T.text }}>💅 <strong>エステ魂</strong>: タイトル・本文の3ステップコピーフロー</p>
+                <p style={{ color: T.text }}>🦋 <strong>Bluesky</strong>: ワンクリックで投稿完了（URLリンク自動生成）</p>
+                <p style={{ color: T.text }}>💅 <strong>エステ魂</strong>: ワンクリックで自動ログイン→フォーム入力→画像アップロード（投稿ボタンを押すだけ）</p>
                 <p style={{ color: T.text }}>⠿ <strong>並び替え</strong>: ドラッグ＆ドロップでセラピストの掲載順を変更</p>
                 <p style={{ color: T.text }}>🌈 <strong>絵文字切替</strong>: 🌈 / 🟧 をタップで切り替え</p>
               </div>
@@ -847,8 +847,13 @@ export default function SystemSetup() {
               <div className="space-y-3 pl-11 text-[12px]" style={{ color: T.textSub }}>
                 <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> タイムチャートの「<span style={{ color: "#ff6b9d", fontWeight: 600 }}>📢 速報</span>」ボタンをクリック</p>
                 <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> ルーム（三河安城 / 豊橋）を選択</p>
-                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> セラピストの並び順・絵文字を調整</p>
-                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> 投稿先を選択: 🦋 Bluesky / 💅 エステ魂 / 📋 テキストコピー</p>
+                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> セラピストの並び順・絵文字を調整（任意）</p>
+                <p><span style={{ color: "#c3a782", fontWeight: 600 }}>④</span> 投稿ボタンをクリック:</p>
+                <div className="ml-4 space-y-1.5 mt-1">
+                  <p>🦋 <strong>Bluesky投稿</strong> → ワンクリックで投稿完了！</p>
+                  <p>💅 <strong>エステ魂投稿</strong> → 自動でログイン→フォーム入力→画像アップロード→<span style={{ color: "#ec4899", fontWeight: 600 }}>投稿ボタンを押すだけ！</span></p>
+                  <p>📋 <strong>テキストコピー</strong> → クリップボードにコピー（他のSNS等に貼り付け）</p>
+                </div>
               </div>
             </div>
 
@@ -951,17 +956,18 @@ export default function SystemSetup() {
               <div className="space-y-4 pl-11">
                 <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>📥 ダウンロード</p>
-                  <a href="https://github.com/angespa0510-ux/t-manage/tree/main/estama-extension" target="_blank" rel="noopener noreferrer"
+                  <a href="https://github.com/angespa0510-ux/t-manage" target="_blank" rel="noopener noreferrer"
                     className="block text-center py-3 rounded-xl text-[13px] font-medium"
                     style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744", textDecoration: "none" }}>
-                    📂 estama-extension フォルダをダウンロード（GitHub）
+                    📂 GitHubからZIPダウンロード → estama-extensionフォルダを使用
                   </a>
+                  <p className="text-[10px]" style={{ color: T.textMuted }}>※ GitHubの「Code」→「Download ZIP」→ 解凍 → estama-extensionフォルダを取り出す</p>
                 </div>
 
                 <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>⚙️ Chromeにインストール</p>
                   <div className="space-y-2 text-[12px]" style={{ color: T.textSub }}>
-                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> GitHubからestama-extensionフォルダをダウンロード・解凍</p>
+                    <p><span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> 上のリンクからGitHubを開き「Code」→「Download ZIP」→ 解凍</p>
                     <p><span style={{ color: "#c3a782", fontWeight: 600 }}>②</span> Chromeのアドレスバーに入力：</p>
                     <code className="block px-3 py-1.5 rounded-lg text-[11px]" style={{ backgroundColor: T.bg, color: "#c3a782" }}>chrome://extensions</code>
                     <p><span style={{ color: "#c3a782", fontWeight: 600 }}>③</span> 右上の「<span style={{ fontWeight: 600 }}>デベロッパーモード</span>」をONにする</p>
@@ -971,11 +977,12 @@ export default function SystemSetup() {
                 </div>
 
                 <div className="p-4 rounded-xl space-y-2" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px] font-medium" style={{ color: T.text }}>🔄 フロー（拡張機能あり）</p>
+                  <p className="text-[12px] font-medium" style={{ color: T.text }}>🔄 投稿フロー（すべて自動）</p>
                   <div className="text-[11px] space-y-1" style={{ color: T.textMuted }}>
-                    <p>📢 速報パネル「エステ魂投稿」→ ブリッジページ → 拡張機能が自動通過</p>
-                    <p>→ estama.jp/login（ID/PW自動入力、ログインボタンのみ手動）</p>
-                    <p>→ blog_edit（タイトル・本文・カテゴリ・画像すべて自動入力）</p>
+                    <p>📢 速報パネル「💅 エステ魂投稿」をクリック</p>
+                    <p>→ ブリッジページ（拡張機能が自動通過）</p>
+                    <p>→ 前のセッションを自動ログアウト → 正しいルームのアカウントで自動ログイン</p>
+                    <p>→ blog_edit（カテゴリ・タイトル・本文・ボタン・投稿日時・<span style={{ fontWeight: 600 }}>画像3枚</span>すべて自動入力）</p>
                     <p>→ <span style={{ color: "#ec4899", fontWeight: 600 }}>投稿ボタンを押すだけ！</span></p>
                   </div>
                 </div>
@@ -996,7 +1003,8 @@ export default function SystemSetup() {
                   { q: "Bluesky投稿でエラーが出る", a: "App Passwordが正しいか確認してください。メインパスワードではなくApp Passwordの使用が必要です。" },
                   { q: "エステ魂のID/PWが未設定と表示される", a: "システム設定→速報タブのSTEP3でルームごとのID/PWを設定してください。三河安城と豊橋でアカウントが別です。" },
                   { q: "エステ魂でフォームが自動入力されない", a: "Chrome拡張機能がインストールされていることを確認してください。STEP4の手順に従ってestama-extensionをインストールしてください。" },
-                  { q: "エステ魂のログインページで止まる", a: "CSRF保護のため、ログインボタンのクリックのみ手動が必要です。ID/PWは自動入力されます。" },
+                  { q: "エステ魂の画像がアップロードされない", a: "セラピスト管理でセラピストの写真が登録されていることを確認してください。PNG/JPEGに対応しています。" },
+                  { q: "三河安城→豊橋で同じアカウントになる", a: "拡張機能が毎回自動ログアウト→再ログインします。拡張機能を最新版に更新してください。" },
                 ].map((faq, i) => (
                   <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                     <p className="text-[12px] font-medium mb-1" style={{ color: T.text }}>Q. {faq.q}</p>
