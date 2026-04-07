@@ -96,6 +96,7 @@
     const arr = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     const file = new File([arr], 'photo.jpg', { type: mime });
+    console.log('[エステ魂拡張] 画像準備:', uploadId, 'size=' + file.size + 'bytes', 'type=' + mime);
 
     // Step 1: uptemp
     const fd1 = new FormData();
@@ -106,9 +107,12 @@
 
     const res1 = await fetch('/post/uptemp/', { method: 'POST', body: fd1, credentials: 'same-origin' });
     if (res1.status === 403) throw new Error('403 CSRF');
-    const json1 = await res1.json();
+    const text1 = await res1.text();
+    console.log('[エステ魂拡張] uptemp応答(raw):', text1.substring(0, 300));
+    let json1;
+    try { json1 = JSON.parse(text1); } catch (e) { throw new Error('uptemp parse失敗: ' + text1.substring(0, 100)); }
     console.log('[エステ魂拡張] uptemp:', JSON.stringify(json1));
-    if (json1.status !== 'success') throw new Error('uptemp: ' + json1.status);
+    if (json1.status !== 'success') throw new Error('uptemp: ' + json1.status + ' ' + (json1.message || json1.error || ''));
 
     const W = json1.width, H = json1.height;
 
