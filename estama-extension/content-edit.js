@@ -188,41 +188,52 @@
   }
 
   // クロップダイアログの「保存」ボタンを待って自動クリック
-  function waitAndClickSave(timeout = 8000) {
+  function waitAndClickSave(timeout = 10000) {
     return new Promise((resolve) => {
       const start = Date.now();
       const check = setInterval(() => {
-        // 「保存」ボタンを探す（複数の方法）
-        const allBtns = [
-          ...document.querySelectorAll('button'),
-          ...document.querySelectorAll('a'),
-          ...document.querySelectorAll('input[type="button"]'),
-          ...document.querySelectorAll('input[type="submit"]'),
-          ...document.querySelectorAll('[role="button"]'),
-          ...document.querySelectorAll('.btn'),
-        ];
-
-        for (const btn of allBtns) {
-          const text = (btn.textContent || btn.value || '').trim();
-          // 「保存」ボタンを探す（クロップダイアログ内）
-          if (text === '保存' || text === 'Save' || text === '切り抜き保存') {
-            // バナーでなく、実際のクロップダイアログのボタンか確認
-            if (btn.closest('#estama-ext-banner')) continue;
-            console.log('[エステ魂拡張] 保存ボタン発見:', btn.tagName, text);
+        // 全要素を走査して「保存」テキストを探す
+        const allElements = document.querySelectorAll('*');
+        for (const el of allElements) {
+          if (el.closest('#estama-ext-banner')) continue;
+          // 直接テキストノードのみ（子要素のテキストを含まない）
+          const directText = Array.from(el.childNodes)
+            .filter(n => n.nodeType === Node.TEXT_NODE)
+            .map(n => n.textContent.trim())
+            .join('');
+          if (directText === '保存') {
+            const clickTarget = el.closest('a, button, [role="button"], [onclick]') || el;
+            console.log('[エステ魂拡張] 保存ボタン発見:', clickTarget.tagName, clickTarget.className);
             clearInterval(check);
-            // 少し待ってからクリック（クロップが完了するのを待つ）
             setTimeout(() => {
-              btn.click();
-              console.log('[エステ魂拡張] 保存ボタンクリック完了');
+              // 複数のクリック戦略
+              clickTarget.click();
+              clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+              clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+              clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              // 直接のテキスト要素もクリック
+              if (el !== clickTarget) {
+                el.click();
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+              }
+              console.log('[エステ魂拡張] 保存クリック完了');
               resolve(true);
-            }, 1000);
+            }, 1500);
             return;
           }
         }
 
         if (Date.now() - start > timeout) {
           clearInterval(check);
-          console.warn('[エステ魂拡張] 保存ボタンタイムアウト');
+          // デバッグ用ログ
+          const found = [];
+          document.querySelectorAll('*').forEach(el => {
+            const t = (el.textContent || '').trim();
+            if (t === '保存' || t === 'キャンセル' || t === 'Save') {
+              found.push({ tag: el.tagName, cls: el.className.substring(0,50), id: el.id, text: t.substring(0,20) });
+            }
+          });
+          console.warn('[エステ魂拡張] 保存タイムアウト。検索結果:', JSON.stringify(found.slice(0,10)));
           resolve(false);
         }
       }, 500);
