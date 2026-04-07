@@ -103,6 +103,9 @@ export default function ServiceSettings() {
   const [ntLocToyohashi, setNtLocToyohashi] = useState("");
   const [ntLocMycourt, setNtLocMycourt] = useState("");
   const [ntLocOasis, setNtLocOasis] = useState("");
+  const [ntMapToyohashi, setNtMapToyohashi] = useState("");
+  const [ntMapMycourt, setNtMapMycourt] = useState("");
+  const [ntMapOasis, setNtMapOasis] = useState("");
   const [ntPreview, setNtPreview] = useState(false);
 
   // Add states
@@ -146,9 +149,9 @@ export default function ServiceSettings() {
     const { data: ss } = await supabase.from("store_settings").select("*").eq("key", "newcomer_duration_months").maybeSingle(); if (ss) setNewcomerMonths(ss.value);
     // Notification templates
     const { data: nts } = await supabase.from("notification_templates").select("*").order("id"); if (nts) setNtTemplates(nts);
-    const ntKeys = ["notify_url_days", "notify_sender_default", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis"];
+    const ntKeys = ["notify_url_days", "notify_sender_default", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis", "notify_map_toyohashi", "notify_map_mycourt", "notify_map_oasis"];
     const { data: ntSettings } = await supabase.from("store_settings").select("*").in("key", ntKeys);
-    if (ntSettings) { for (const s of ntSettings) { if (s.key === "notify_url_days") setNtUrlDays(s.value); else if (s.key === "notify_sender_default") setNtSenderDefault(s.value); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); } }
+    if (ntSettings) { for (const s of ntSettings) { if (s.key === "notify_url_days") setNtUrlDays(s.value); else if (s.key === "notify_sender_default") setNtSenderDefault(s.value); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); else if (s.key === "notify_map_toyohashi") setNtMapToyohashi(s.value); else if (s.key === "notify_map_mycourt") setNtMapMycourt(s.value); else if (s.key === "notify_map_oasis") setNtMapOasis(s.value); } }
   }, []);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -1173,6 +1176,25 @@ export default function ServiceSettings() {
                   ))}
                 </div>
                 <p className="text-[9px] mt-3" style={{ color: T.textFaint }}>💡 判定: 店舗名に「豊橋」含む→豊橋URL / ビル名に「マイコート」含む→マイコートURL / それ以外→オアシスURL</p>
+              </div>
+
+              {/* 地図埋め込み設定 */}
+              <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <h3 className="text-[14px] font-medium mb-1">🗺️ 地図埋め込み設定</h3>
+                <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>確認ページに表示するGoogleマップの埋め込みURLです。Googleマップ → 共有 → 「地図を埋め込む」からHTMLをコピーし、src=&quot;...&quot; のURL部分だけ貼り付けてください。</p>
+                <div className="space-y-3">
+                  {([["豊橋ルーム", ntMapToyohashi, setNtMapToyohashi, "notify_map_toyohashi"],
+                    ["マイコート", ntMapMycourt, setNtMapMycourt, "notify_map_mycourt"],
+                    ["オアシス等（その他）", ntMapOasis, setNtMapOasis, "notify_map_oasis"]
+                  ] as [string, string, (v: string) => void, string][]).map(([label, val, setter, key]) => (
+                    <div key={key}>
+                      <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>🗺️ {label}</label>
+                      <input type="text" value={val} onChange={e => setter(e.target.value)} onBlur={async () => { await supabase.from("store_settings").upsert({ key, value: val }, { onConflict: "key" }); }}
+                        className="w-full px-3 py-2.5 rounded-xl text-[10px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} placeholder="https://www.google.com/maps/embed?pb=..." />
+                      {val && <div style={{ marginTop: 6, borderRadius: 8, overflow: "hidden" }}><iframe src={val} width="100%" height="120" style={{ border: 0 }} loading="lazy" /></div>}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* 通知設定 */}

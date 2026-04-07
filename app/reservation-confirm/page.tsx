@@ -8,7 +8,7 @@ function ReservationConfirmInner() {
   const token = searchParams.get("token");
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [renderedText, setRenderedText] = useState("");
-  const [mapQuery, setMapQuery] = useState("");
+  const [mapEmbedUrl, setMapEmbedUrl] = useState("");
 
   useEffect(() => {
     if (!token) { setStatus("error"); return; }
@@ -35,7 +35,7 @@ function ReservationConfirmInner() {
           supabase.from("room_assignments").select("room_id").eq("date", res.date).eq("therapist_id", res.therapist_id).maybeSingle(),
           supabase.from("rooms").select("id,name,store_id,building_id"),
           supabase.from("buildings").select("id,name"),
-          supabase.from("store_settings").select("key,value").in("key", ["notify_loc_toyohashi","notify_loc_mycourt","notify_loc_oasis","notify_url_days"]),
+          supabase.from("store_settings").select("key,value").in("key", ["notify_loc_toyohashi","notify_loc_mycourt","notify_loc_oasis","notify_url_days","notify_map_toyohashi","notify_map_mycourt","notify_map_oasis"]),
           supabase.from("notification_templates").select("template_key,body"),
         ]);
 
@@ -45,7 +45,6 @@ function ReservationConfirmInner() {
         const building = room ? (buildingsRes.data || []).find((b: any) => b.id === room.building_id) : null;
         const roomName = room?.name || "";
         const buildingName = building?.name || "";
-        if (buildingName || roomName) setMapQuery(buildingName || roomName);
 
         // 場所URL判定
         const stg: Record<string, string> = {};
@@ -53,6 +52,12 @@ function ReservationConfirmInner() {
         const locUrl = (res.store_name || "").includes("豊橋") ? (stg.notify_loc_toyohashi || "")
           : buildingName.includes("マイコート") ? (stg.notify_loc_mycourt || "")
           : (stg.notify_loc_oasis || "");
+
+        // 地図埋め込みURL判定
+        const mapUrl = (res.store_name || "").includes("豊橋") ? (stg.notify_map_toyohashi || "")
+          : buildingName.includes("マイコート") ? (stg.notify_map_mycourt || "")
+          : (stg.notify_map_oasis || "");
+        if (mapUrl) setMapEmbedUrl(mapUrl);
 
         // URL付き/なし判定
         const urlDays = parseInt(stg.notify_url_days || "1") || 1;
@@ -164,23 +169,14 @@ function ReservationConfirmInner() {
             <div style={{ background: "#2a2a40", borderRadius: 14, padding: 20, marginBottom: 16, fontSize: 13, color: "#ddd", lineHeight: 2, whiteSpace: "pre-wrap" }}>
               {renderWithLinks(renderedText)}
             </div>
-            {mapQuery && (
+            {mapEmbedUrl && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ borderRadius: 14, overflow: "hidden", marginBottom: 8 }}>
+                <div style={{ borderRadius: 14, overflow: "hidden" }}>
                   <iframe
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed&z=16`}
-                    width="100%" height="200" style={{ border: 0 }} loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade" />
+                    src={mapEmbedUrl}
+                    width="100%" height="220" style={{ border: 0 }} loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade" allowFullScreen />
                 </div>
-                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  style={{
-                    display: "block", textAlign: "center", padding: "10px 16px",
-                    backgroundColor: "#4285f418", color: "#4285f4", borderRadius: 10,
-                    border: "1px solid #4285f444", fontSize: 13, textDecoration: "none",
-                  }}>
-                  🗺️ Googleマップで開く
-                </a>
               </div>
             )}
             <p style={{ textAlign: "center", fontSize: 11, color: "#666", marginTop: 16 }}>
