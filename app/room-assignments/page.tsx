@@ -8,6 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import HPOutputPanel from "../../lib/hp-output-panel";
 import LineShiftPanel from "../../lib/line-shift-panel";
+import WeeklyTaskPanel from "../../lib/weekly-task-panel";
 
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
@@ -23,6 +24,8 @@ type StaffMember = { id: number; name: string; role: string; unit_price: number;
 type StaffSchedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_checked: boolean; checked_by: string; clock_in_time: string; clock_out_time: string; break_minutes: number };
 type DailyTask = { id: number; date: string; title: string; is_completed: boolean; completed_by: string; completed_at: string; sort_order: number };
 type ShiftRequest = { id: number; therapist_id: number; week_start: string; date: string; start_time: string; end_time: string; store_id: number; status: string; notes: string };
+type WeeklyTask = { id: number; day_of_week: number; title: string; scope: string; sort_order: number; is_active: boolean };
+type WeeklyTaskCompletion = { id: number; weekly_task_id: number; date: string; completed_by: string; completed_at: string };
 
 const CLEAN_OPTS: { value: string; label: string; color: string }[] = [
   { value: "", label: "—", color: "#b4b2a9" },
@@ -109,6 +112,10 @@ useEffect(() => {
   const [copiedVacancy, setCopiedVacancy] = useState(false);
   const [showHpOutput, setShowHpOutput] = useState(false);
   const [showLineSend, setShowLineSend] = useState(false);
+  const [showWeeklyTaskPanel, setShowWeeklyTaskPanel] = useState(false);
+  const [weeklyTasks, setWeeklyTasks] = useState<WeeklyTask[]>([]);
+  const [weeklyCompletions, setWeeklyCompletions] = useState<WeeklyTaskCompletion[]>([]);
+  const [taskTabMode, setTaskTabMode] = useState<"daily" | "weekly">("daily");
   const dayRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const [year, month] = currentMonth.split("-").map(Number);
@@ -144,6 +151,8 @@ useEffect(() => {
     const tma = new Date(year, month - 4, 1); const pointStart = `${tma.getFullYear()}-${String(tma.getMonth() + 1).padStart(2, "0")}-01`;
     const { data: pa } = await supabase.from("room_assignments").select("*").gte("date", pointStart).lte("date", endDate); if (pa) setPointAssignments(pa);
     const { data: pab } = await supabase.from("absent_records").select("*").gte("date", pointStart).lte("date", endDate); if (pab) setPointAbsents(pab);
+    const { data: wt } = await supabase.from("weekly_tasks").select("*").eq("is_active", true).order("sort_order"); if (wt) setWeeklyTasks(wt);
+    const { data: wc } = await supabase.from("weekly_task_completions").select("*").gte("date", startDate).lte("date", endDate); if (wc) setWeeklyCompletions(wc);
   }, [currentMonth, daysInMonth, year, month]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -156,6 +165,8 @@ useEffect(() => {
       .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "staff_schedules" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "daily_tasks" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "weekly_tasks" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "weekly_task_completions" }, () => fetchData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]); 
@@ -294,6 +305,27 @@ useEffect(() => {
   const toggleDailyTask = async (id: number, current: boolean) => { await supabase.from("daily_tasks").update({ is_completed: !current, completed_by: !current ? (activeStaff?.name || "") : "", completed_at: !current ? new Date().toISOString() : null }).eq("id", id); fetchData(); };
   const deleteDailyTask = async (id: number) => { await supabase.from("daily_tasks").delete().eq("id", id); fetchData(); };
   const hasUncheckedStaff = (date: string) => getStaffSchedulesForDate(date).some(s => !s.is_checked);
+
+  // 曜日別タスク
+  const getWeeklyTasksForDate = (date: string) => {
+    const dow = new Date(date + "T00:00:00").getDay();
+    return weeklyTasks.filter(t => t.day_of_week === dow);
+  };
+  const isWeeklyTaskCompleted = (taskId: number, date: string) => weeklyCompletions.some(c => c.weekly_task_id === taskId && c.date === date);
+  const toggleWeeklyTask = async (taskId: number, date: string, completed: boolean) => {
+    if (completed) {
+      await supabase.from("weekly_task_completions").delete().eq("weekly_task_id", taskId).eq("date", date);
+    } else {
+      await supabase.from("weekly_task_completions").insert({ weekly_task_id: taskId, date, completed_by: activeStaff?.name || "" });
+    }
+    fetchData();
+  };
+  const getWeeklyScopeLabel = (scope: string) => {
+    if (scope === "all") return "";
+    if (scope.startsWith("building:")) { const bid = parseInt(scope.split(":")[1]); const b = buildings.find(x => x.id === bid); if (!b) return ""; const n = b.name.toLowerCase(); if (n.includes("oasis")) return "オアシス"; if (n.includes("mycourt")) return "マイコート"; if (n.includes("ring")) return "リングセレクト"; return b.name; }
+    if (scope.startsWith("store:")) { const sid = parseInt(scope.split(":")[1]); const s = stores.find(x => x.id === sid); return s?.name || ""; }
+    return "";
+  };
   const STAFF_TIMES: string[] = []; for (let h = 6; h <= 23; h++) { STAFF_TIMES.push(`${String(h).padStart(2,"0")}:00`); STAFF_TIMES.push(`${String(h).padStart(2,"0")}:15`); STAFF_TIMES.push(`${String(h).padStart(2,"0")}:30`); STAFF_TIMES.push(`${String(h).padStart(2,"0")}:45`); }
 
   const prevMonth2 = () => { const d = new Date(year, month - 2, 1); setCurrentMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
@@ -413,7 +445,7 @@ useEffect(() => {
                     {dayAb.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#c45555" }}>当欠:{dayAb.length}</span>}
                     {dayPU.length > 0 && <span className="text-[11px] ml-1" style={{ color: "#85a8c4" }}>🅿{dayPU.length}</span>}
                     {getStaffSchedulesForDate(date).length > 0 && <span className="text-[11px] ml-1" style={{ color: "#85a8c4" }}>👤{getStaffSchedulesForDate(date).length}</span>}
-                    {getDailyTasksForDate(date).filter(t => !t.is_completed).length > 0 && <span className="text-[11px] ml-1" style={{ color: "#f59e0b" }}>📋{getDailyTasksForDate(date).filter(t => !t.is_completed).length}</span>}
+                    {(() => { const dp = getDailyTasksForDate(date).filter(t => !t.is_completed).length; const wp = getWeeklyTasksForDate(date).filter(t => !isWeeklyTaskCompleted(t.id, date)).length; const total = dp + wp; return total > 0 ? <span className="text-[11px] ml-1" style={{ color: "#f59e0b" }}>📋{total}</span> : null; })()}
                     {dayReqs.filter(r => r.status === "pending").length > 0 && <span className="text-[11px] ml-1 px-1.5 py-0.5 rounded-full" style={{ color: "#fff", backgroundColor: "#c3a782" }}>⏳希望{dayReqs.filter(r => r.status === "pending").length}</span>}
                   </div>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textFaint} strokeWidth="2" style={{ transform: isExp ? "rotate(180deg)" : "", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
@@ -600,8 +632,13 @@ useEffect(() => {
                       <button onClick={() => setTaskOpen(!taskOpen)} className="w-full flex items-center justify-between px-3 py-2 cursor-pointer" style={{ background: "none", border: "none", color: T.text }}>
                         <div className="flex items-center gap-2">
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c3a782" strokeWidth="2" style={{ transform: taskOpen ? "rotate(180deg)" : "", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9"/></svg>
-                          <span className="text-[10px] font-medium" style={{ color: "#c3a782" }}>📋 日次タスク</span>
-                          {(() => { const pending = getDailyTasksForDate(date).filter(t => !t.is_completed).length; const total = getDailyTasksForDate(date).length; return total > 0 ? <span className="text-[9px]" style={{ color: pending > 0 ? "#f59e0b" : "#22c55e" }}>{pending > 0 ? `${pending}件未完了` : "✅全完了"}</span> : <span className="text-[9px]" style={{ color: T.textMuted }}>0件</span>; })()}
+                          <span className="text-[10px] font-medium" style={{ color: "#c3a782" }}>📋 タスク</span>
+                          {(() => {
+                            const dailyPending = getDailyTasksForDate(date).filter(t => !t.is_completed).length;
+                            const weeklyPending = getWeeklyTasksForDate(date).filter(t => !isWeeklyTaskCompleted(t.id, date)).length;
+                            const total = dailyPending + weeklyPending;
+                            return total > 0 ? <span className="text-[9px]" style={{ color: "#f59e0b" }}>{total}件未完了</span> : (getDailyTasksForDate(date).length + getWeeklyTasksForDate(date).length > 0 ? <span className="text-[9px]" style={{ color: "#22c55e" }}>✅全完了</span> : <span className="text-[9px]" style={{ color: T.textMuted }}>0件</span>);
+                          })()}
                           {hasUncheckedStaff(date) && getStaffSchedulesForDate(date).length > 0 && !staffOpen && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⚠スタッフ未確認</span>}
                         </div>
                       </button>
@@ -613,6 +650,15 @@ useEffect(() => {
                           <p className="text-[9px]" style={{ color: "#f59e0b88" }}>管理者権限で「🔓 確認」ボタンを押してください</p>
                         </div>
                       )}
+
+                      {/* タスクタブ */}
+                      <div className="flex gap-1.5 mb-2">
+                        <button onClick={() => setTaskTabMode("daily")} className="px-2.5 py-1 rounded-lg text-[9px] cursor-pointer" style={{ backgroundColor: taskTabMode === "daily" ? "#c3a78222" : "transparent", color: taskTabMode === "daily" ? "#c3a782" : T.textMuted, border: `1px solid ${taskTabMode === "daily" ? "#c3a782" : T.border}`, fontWeight: taskTabMode === "daily" ? 700 : 400 }}>📋 日次タスク ({getDailyTasksForDate(date).length})</button>
+                        <button onClick={() => setTaskTabMode("weekly")} className="px-2.5 py-1 rounded-lg text-[9px] cursor-pointer" style={{ backgroundColor: taskTabMode === "weekly" ? "#85a8c422" : "transparent", color: taskTabMode === "weekly" ? "#85a8c4" : T.textMuted, border: `1px solid ${taskTabMode === "weekly" ? "#85a8c4" : T.border}`, fontWeight: taskTabMode === "weekly" ? 700 : 400 }}>🔄 曜日タスク ({getWeeklyTasksForDate(date).length})</button>
+                      </div>
+
+                      {/* 日次タスク */}
+                      {taskTabMode === "daily" && (<>
                       <div className="space-y-1">
                         {getDailyTasksForDate(date).map(task => (
                           <div key={task.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ backgroundColor: T.card }}>
@@ -627,6 +673,28 @@ useEffect(() => {
                         <input type="text" placeholder="タスクを追加..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && newTaskTitle.trim()) { addDailyTask(date, newTaskTitle); setNewTaskTitle(""); } }} className="flex-1 px-2.5 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
                         <button onClick={() => { if (newTaskTitle.trim()) { addDailyTask(date, newTaskTitle); setNewTaskTitle(""); } }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>追加</button>
                       </div>
+                      </>)}
+
+                      {/* 曜日タスク */}
+                      {taskTabMode === "weekly" && (<>
+                      <div className="space-y-1">
+                        {getWeeklyTasksForDate(date).length === 0 ? (
+                          <p className="text-[10px] py-2" style={{ color: T.textFaint }}>この曜日のタスクはありません</p>
+                        ) : getWeeklyTasksForDate(date).map(task => {
+                          const done = isWeeklyTaskCompleted(task.id, date);
+                          const scopeLabel = getWeeklyScopeLabel(task.scope);
+                          return (
+                            <div key={task.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ backgroundColor: T.card }}>
+                              <button onClick={() => toggleWeeklyTask(task.id, date, done)} className="text-[12px] cursor-pointer flex-shrink-0" style={{ background: "none", border: "none", padding: 0 }}>{done ? "✅" : "⬜"}</button>
+                              <span className="text-[10px] flex-1" style={{ color: done ? T.textMuted : T.text, textDecoration: done ? "line-through" : "none" }}>{task.title}</span>
+                              {scopeLabel && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>{scopeLabel}</span>}
+                              <span className="text-[8px]" style={{ color: T.textFaint }}>🔄</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <button onClick={() => setShowWeeklyTaskPanel(true)} className="mt-2 px-3 py-1.5 rounded-lg text-[9px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>⚙️ 曜日タスク管理</button>
+                      </>)}
                         </div>
                       )}
                     </div>
@@ -685,6 +753,10 @@ useEffect(() => {
       {/* LINE Shift Send Panel */}
       {showLineSend && (
         <LineShiftPanel T={T} onClose={() => setShowLineSend(false)} stores={stores} buildings={buildings} rooms={rooms} therapists={therapists} />
+      )}
+      {/* Weekly Task Management Panel */}
+      {showWeeklyTaskPanel && (
+        <WeeklyTaskPanel T={T} dark={dark} onClose={() => { setShowWeeklyTaskPanel(false); fetchData(); }} buildings={buildings} stores={stores} />
       )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
