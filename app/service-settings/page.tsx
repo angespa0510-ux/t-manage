@@ -26,7 +26,7 @@ type BackRateRule = { id: number; min_sessions: number; min_nomination_rate: num
 
 type Tab = "nomination" | "discount" | "extension" | "option" | "point" | "backrate" | "notify";
 type NotifyTemplate = { id: number; template_key: string; body: string };
-type NotifySubTab = "staff" | "customer_url" | "customer_no_url";
+type NotifySubTab = "staff" | "customer_url" | "customer_no_url" | "customer_detail";
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -1046,9 +1046,9 @@ export default function ServiceSettings() {
           {/* ════════════ NOTIFY TAB ════════════ */}
           {tab === "notify" && (
             <div className="animate-[fadeIn_0.3s] space-y-6">
-              {/* Sub-tabs: 3テンプレート切替 */}
-              <div className="flex gap-2">
-                {([["staff", "💼 セラピスト向け"], ["customer_url", "👤 お客様（URL付）"], ["customer_no_url", "👤 お客様（URLなし）"]] as [NotifySubTab, string][]).map(([k, l]) => (
+              {/* Sub-tabs: 4テンプレート切替 */}
+              <div className="flex gap-2 flex-wrap">
+                {([["customer_url", "👤 概要（URL付）"], ["customer_no_url", "👤 概要（URLなし）"], ["customer_detail", "📋 詳細通知"], ["staff", "💼 セラピスト向け"]] as [NotifySubTab, string][]).map(([k, l]) => (
                   <button key={k} onClick={() => { setNtSubTab(k); setNtMsg(""); setNtPreview(false); }} className="px-3 py-2 text-[10px] rounded-xl cursor-pointer transition-all whitespace-nowrap"
                     style={{ backgroundColor: ntSubTab === k ? "#3d6b9f18" : T.cardAlt, color: ntSubTab === k ? "#3d6b9f" : T.textMuted, fontWeight: ntSubTab === k ? 600 : 400 }}>
                     {l}
@@ -1060,7 +1060,7 @@ export default function ServiceSettings() {
               <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <h3 className="text-[14px] font-medium mb-1">📝 テンプレート本文</h3>
                 <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>
-                  {ntSubTab === "staff" ? "セラピストLINEに送る予約確認メッセージ" : ntSubTab === "customer_url" ? "お客様向け（今日/明日）場所URL付きメッセージ" : "お客様向け（明後日以降）URLなしメッセージ"}
+                  {ntSubTab === "staff" ? "セラピストLINEに送る予約確認メッセージ" : ntSubTab === "customer_url" ? "お客様向け概要（予約日が近い場合）確認リンク＋概要情報" : ntSubTab === "customer_detail" ? "お客様向け詳細通知（ルーム・場所等の当日情報）" : "お客様向け概要（予約日が先の場合）URLなし"}
                 </p>
 
                 {/* 変数挿入ボタン */}
@@ -1069,6 +1069,8 @@ export default function ServiceSettings() {
                   <div className="flex flex-wrap gap-1.5">
                     {(ntSubTab === "staff"
                       ? ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名}","{割引}","{店舗名}","{金額}","{送信者}","{送信者行}","{お客様リンク}"]
+                      : ntSubTab === "customer_detail"
+                      ? ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名行}","{割引行}","{セラピスト行}","{店舗名}","{金額}","{場所URL}","{ルーム名}","{ビル名}"]
                       : ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名行}","{割引行}","{セラピスト行}","{店舗名}","{金額}","{場所URL}"]
                     ).map(v => (
                       <button key={v} onClick={() => {
@@ -1095,6 +1097,8 @@ export default function ServiceSettings() {
                     <p><b>{"{店舗名}"}</b> — 店舗名　<b>{"{金額}"}</b> — 合計金額</p>
                     <p><b>{"{送信者}"}</b> — 送信者名　<b>{"{送信者行}"}</b> — 未入力時は行ごと非表示</p>
                     <p><b>{"{場所URL}"}</b> — 店舗に応じた場所リンク（下の設定で変更可能）</p>
+                    <p><b>{"{ルーム名}"}</b> — 部屋名（部屋割当が設定されている場合）</p>
+                    <p><b>{"{ビル名}"}</b> — ビル名（部屋割当が設定されている場合）</p>
                     <p><b>{"{お客様リンク}"}</b> — セラピストマイページのお客様詳細ページURL</p>
                   </div>
                 </details>
@@ -1136,6 +1140,7 @@ export default function ServiceSettings() {
                         "{金額}": "12,000", "{送信者}": "田中", "{セラピスト名}": "花子",
                         "{場所URL}": ntLocToyohashi || "https://example.com/location",
                         "{お客様リンク}": "https://t-manage.vercel.app/mypage/customer?name=田中太郎",
+                        "{ルーム名}": "Room A", "{ビル名}": "豊橋ルーム",
                       };
                       text = text.replace(/\{指名行\}/g, "\n指名 : 本指名");
                       text = text.replace(/\{割引行\}/g, "\n割引 : 新規割引");
@@ -1183,12 +1188,6 @@ export default function ServiceSettings() {
                       <span className="text-[12px]" style={{ color: T.textSub }}>→ URL付きテンプレート</span>
                     </div>
                     <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>それ以降の日付は「URLなし」テンプレートが自動適用されます</p>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>✍️ 送信者名デフォルト</label>
-                    <input type="text" value={ntSenderDefault} onChange={e => setNtSenderDefault(e.target.value)} onBlur={async () => { await supabase.from("store_settings").upsert({ key: "notify_sender_default", value: ntSenderDefault }, { onConflict: "key" }); }}
-                      className="w-full max-w-[200px] px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} placeholder="田中" />
-                    <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>セラピスト向けテンプレートの送信者名のデフォルト値</p>
                   </div>
                 </div>
               </div>
