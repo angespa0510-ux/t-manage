@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "T-MANAGE SMS② 自動入力",
+  "version": "1.0.0",
+  "description": "SMS②ブリッジページからGoogleメッセージへ自動入力",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://t-manage.vercel.app/sms-bridge*"
+      ],
+      "js": ["content-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://messages.google.com/*"
+      ],
+      "js": ["content-messages.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
