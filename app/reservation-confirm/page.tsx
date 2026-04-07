@@ -8,6 +8,7 @@ function ReservationConfirmInner() {
   const token = searchParams.get("token");
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [renderedText, setRenderedText] = useState("");
+  const [mapQuery, setMapQuery] = useState("");
 
   useEffect(() => {
     if (!token) { setStatus("error"); return; }
@@ -44,6 +45,7 @@ function ReservationConfirmInner() {
         const building = room ? (buildingsRes.data || []).find((b: any) => b.id === room.building_id) : null;
         const roomName = room?.name || "";
         const buildingName = building?.name || "";
+        if (buildingName || roomName) setMapQuery(buildingName || roomName);
 
         // 場所URL判定
         const stg: Record<string, string> = {};
@@ -110,6 +112,32 @@ function ReservationConfirmInner() {
     })();
   }, [token]);
 
+  // URLをクリック可能なリンクに変換
+  const renderWithLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (urlRegex.test(part)) {
+        // Notion等のURLは「場所を確認」ボタンとして表示
+        const isLocationUrl = part.includes("notion.site") || part.includes("google.com/maps");
+        return (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+            style={{
+              color: "#c3a782", textDecoration: "underline", wordBreak: "break-all",
+              ...(isLocationUrl ? {
+                display: "inline-block", marginTop: 4, padding: "8px 16px",
+                backgroundColor: "#c3a78218", borderRadius: 8, textDecoration: "none",
+                border: "1px solid #c3a78244", fontSize: 13,
+              } : {})
+            }}>
+            {isLocationUrl ? "📍 場所・アクセスを確認する" : part}
+          </a>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ maxWidth: 440, width: "100%", background: "#1e1e30", borderRadius: 20, padding: 32, color: "#e0e0e0" }}>
@@ -134,8 +162,27 @@ function ReservationConfirmInner() {
               <p style={{ fontSize: 12, color: "#999", marginTop: 4 }}>ご確認ありがとうございます</p>
             </div>
             <div style={{ background: "#2a2a40", borderRadius: 14, padding: 20, marginBottom: 16, fontSize: 13, color: "#ddd", lineHeight: 2, whiteSpace: "pre-wrap" }}>
-              {renderedText}
+              {renderWithLinks(renderedText)}
             </div>
+            {mapQuery && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ borderRadius: 14, overflow: "hidden", marginBottom: 8 }}>
+                  <iframe
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed&z=16`}
+                    width="100%" height="200" style={{ border: 0 }} loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade" />
+                </div>
+                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{
+                    display: "block", textAlign: "center", padding: "10px 16px",
+                    backgroundColor: "#4285f418", color: "#4285f4", borderRadius: 10,
+                    border: "1px solid #4285f444", fontSize: 13, textDecoration: "none",
+                  }}>
+                  🗺️ Googleマップで開く
+                </a>
+              </div>
+            )}
             <p style={{ textAlign: "center", fontSize: 11, color: "#666", marginTop: 16 }}>
               当日のご来店を心よりお待ちしております
             </p>
