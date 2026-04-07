@@ -25,11 +25,34 @@ async function testMail() {
   });
 
   try {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,"0")}/${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    const driveUrl = "https://drive.google.com/drive/my-drive";
+
     await transporter.sendMail({
       from: user,
-      to: user, // 自分自身に送信
-      subject: "✅ T-MANAGE メール送信テスト",
-      text: "このメールが届いていれば、動画生成の通知メールは正常に動作します！\n\n— T-MANAGE AI動画生成システム",
+      to: user,
+      subject: "✅ 動画生成完了 - テストセラピスト（テスト送信）",
+      text: [
+        `動画生成が完了しました。`,
+        ``,
+        `━━━━━━━━━━━━━━━━━━━━`,
+        `📅 生成日時: ${dateStr}`,
+        `💆 セラピスト: テストセラピスト`,
+        `🎬 動きの印象: AIにお任せ`,
+        `📁 ファイル名: テスト_AIにお任せ_${now.toISOString().slice(0,19).replace(/:/g,"-")}.mp4`,
+        `━━━━━━━━━━━━━━━━━━━━`,
+        ``,
+        `📂 Googleドライブで確認:`,
+        `${driveUrl}`,
+        `（フォルダ「AI動画生成」内）`,
+        ``,
+        `※ Googleドライブへのアップロード直後はファイルが反映されるまで`,
+        `  数分かかる場合があります。表示されない場合は少し時間をおいてから`,
+        `  再度ご確認ください。`,
+        ``,
+        `— T-MANAGE AI動画生成システム`,
+      ].join("\n"),
     });
     console.log("\n🎉 送信成功！ 受信トレイを確認してください");
   } catch (err) {
