@@ -188,6 +188,19 @@ export default function TimeChart() {
   // Sokuho (Real-time bulletin)
   const [showSokuho, setShowSokuho] = useState(false);
 
+  // Customer Memo List
+  type CustMemo = { id: number; therapist_id: number; customer_name: string; note: string; is_ng: boolean; ng_reason: string; rating: number; updated_at: string; created_at: string };
+  const [showCustMemos, setShowCustMemos] = useState(false);
+  const [custMemos, setCustMemos] = useState<CustMemo[]>([]);
+  const [custMemoSearch, setCustMemoSearch] = useState("");
+
+  const openCustMemos = async () => {
+    setShowCustMemos(true);
+    setCustMemoSearch("");
+    const { data } = await supabase.from("therapist_customer_notes").select("*").order("updated_at", { ascending: false }).limit(200);
+    if (data) setCustMemos(data);
+  };
+
   const selectedCourse = courses.find((c) => c.id === newCourseId);
   const editSelectedCourse = courses.find((c) => c.id === editCourseId);
 
@@ -563,6 +576,7 @@ export default function TimeChart() {
           <button onClick={() => setShowStatusList(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📋 ステータス一覧</button>
           <button onClick={openBulkNotify} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#3d6b9f44", color: "#3d6b9f" }}>📩 一括通知</button>
           <button onClick={() => setShowSokuho(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#ff6b9d44", color: "#ff6b9d" }}>📢 速報</button>
+          <button onClick={openCustMemos} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#e8849a44", color: "#e8849a" }}>📝 お客様メモ</button>
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
           <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
@@ -1747,6 +1761,59 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
                   <button onClick={() => setShowBulkNotify(false)} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted }}>閉じる</button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* お客様メモ一覧 */}
+      {showCustMemos && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowCustMemos(false)}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-[560px] max-h-[85vh] overflow-hidden flex flex-col" style={{ backgroundColor: T.card }} onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}`, background: "linear-gradient(135deg, #e8849a18, #d4687e18)" }}>
+              <div>
+                <h2 className="text-[16px] font-semibold" style={{ color: T.text }}>📝 お客様メモ一覧</h2>
+                <p className="text-[10px] mt-0.5" style={{ color: T.textFaint }}>セラピストが記録したお客様メモ（新しい順）</p>
+              </div>
+              <button onClick={() => setShowCustMemos(false)} className="text-[16px] cursor-pointer p-1.5" style={{ color: T.textSub }}>✕</button>
+            </div>
+            <div className="px-6 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <input type="text" value={custMemoSearch} onChange={e => setCustMemoSearch(e.target.value)} placeholder="お客様名・セラピスト名・メモ内容で検索" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {(() => {
+                const filtered = custMemos.filter(m => {
+                  if (!custMemoSearch) return true;
+                  const q = custMemoSearch.toLowerCase();
+                  const thName = therapists.find(t => t.id === m.therapist_id)?.name || "";
+                  return m.customer_name.toLowerCase().includes(q) || thName.toLowerCase().includes(q) || (m.note || "").toLowerCase().includes(q);
+                });
+                if (filtered.length === 0) return <p className="text-center text-[12px] py-10" style={{ color: T.textFaint }}>メモがありません</p>;
+                return filtered.map(m => {
+                  const th = therapists.find(t => t.id === m.therapist_id);
+                  const dateStr = m.updated_at ? new Date(m.updated_at).toLocaleDateString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+                  return (
+                    <div key={m.id} className="px-6 py-3 cursor-pointer" style={{ borderBottom: `1px solid ${T.border}` }}
+                      onClick={() => { setShowCustMemos(false); router.push("/dashboard?page=" + encodeURIComponent("顧客") + "&search=" + encodeURIComponent(m.customer_name)); }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-medium" style={{ color: "#e8849a" }}>{m.customer_name}</span>
+                          {m.is_ng && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}
+                          {m.rating > 0 && <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(m.rating)}</span>}
+                        </div>
+                        <span className="text-[9px]" style={{ color: T.textFaint }}>{dateStr}</span>
+                      </div>
+                      {th && <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>👤 {th.name}</p>}
+                      {m.note && <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>{m.note.length > 100 ? m.note.substring(0, 100) + "..." : m.note}</p>}
+                      {m.is_ng && m.ng_reason && <p className="text-[10px] mt-1" style={{ color: "#c45555" }}>NG理由: {m.ng_reason}</p>}
+                      <p className="text-[8px] mt-1 text-right" style={{ color: "#3b82f6" }}>→ お客様詳細を開く</p>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+            <div className="px-6 py-3 text-center" style={{ borderTop: `1px solid ${T.border}` }}>
+              <span className="text-[10px]" style={{ color: T.textFaint }}>{custMemos.length}件のメモ</span>
             </div>
           </div>
         </div>
