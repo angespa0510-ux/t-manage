@@ -83,9 +83,10 @@ export default function LineShiftPanel({
   const [castList, setCastList] = useState<CastData[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
-  const [lineUrlStaff, setLineUrlStaff] = useState("");
-  const [bulkSending, setBulkSending] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  // ★ LINE送信ポップアップ（タイムチャートと同じdata-tm方式）
+  const [activeSend, setActiveSend] = useState<CastData | null>(null);
 
   // 初期日付設定（翌週月曜〜日曜）
   useEffect(() => {
@@ -98,15 +99,6 @@ export default function LineShiftPanel({
     nextSun.setDate(nextMon.getDate() + 6);
     setStartDate(nextMon.toISOString().split("T")[0]);
     setEndDate(nextSun.toISOString().split("T")[0]);
-  }, []);
-
-  // LINE URL読み込み
-  useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase.from("store_settings").select("key,value").eq("key", "line_url_staff").maybeSingle();
-      if (data?.value) setLineUrlStaff(data.value);
-    };
-    load();
   }, []);
 
   // クイック日付選択
@@ -141,7 +133,6 @@ export default function LineShiftPanel({
       .lte("date", endDate)
       .order("date");
 
-    // セラピストごとにグループ化
     const castMap: Record<number, CastShift[]> = {};
 
     if (aData) {
@@ -162,11 +153,9 @@ export default function LineShiftPanel({
       }
     }
 
-    // 部屋割りに入っているセラピストのみ + シフトだけある人も含める
     const dateRange = formatDateRange(startDate, endDate);
     const allCastIds = new Set<number>(Object.keys(castMap).map(Number));
 
-    // シフトだけのセラピストも取得（割り当てなし）
     const { data: shiftData } = await supabase
       .from("shifts")
       .select("therapist_id")
@@ -222,45 +211,17 @@ export default function LineShiftPanel({
     } catch { /* ignore */ }
   };
 
-  // LINE送信（拡張機能経由 or フォールバック）
-  const sendLine = (cast: CastData) => {
-    // クリップボードに常にコピー（フォールバック用）
-    navigator.clipboard.writeText(cast.message).catch(() => {});
-
-    // 拡張機能検知: content_tmanage.jsがbodyにdata-tmanage-extension属性をセット
-    const hasExtension = document.body.dataset.tmanageExtension === 'true';
-
-    if (hasExtension) {
-      // 拡張機能あり → カスタムイベントで送信
-      const event = new CustomEvent("TMANAGE_LINE_SHIFT_SEND", {
-        detail: { name: cast.therapistName, template: cast.message },
-      });
-      window.dispatchEvent(event);
-    } else {
-      // 拡張機能なし → LINE新タブ + ガイド表示
-      const url = lineUrlStaff || "https://chat.line.biz/";
-      window.open(url, "_blank");
-      alert(`📋 メッセージをコピーしました！\n\n① LINEで「${cast.therapistName}」を検索\n② チャットを開く\n③ Ctrl+V で貼り付けて送信`);
-    }
-
-    // 送信済みマーク
-    setCastList(prev => prev.map(c => c.therapistId === cast.therapistId ? { ...c, sent: true } : c));
+  // ★ LINE送信ポップアップを開く
+  const openLineSend = (cast: CastData) => {
+    setActiveSend(cast);
   };
 
-  // 全員送信
-  const sendAll = async () => {
-    const unsent = castList.filter(c => !c.sent && c.shifts.length > 0);
-    if (unsent.length === 0) return;
-    if (!confirm(`${unsent.length}名に順番にLINE送信します。\n3秒間隔で送信されます。`)) return;
-
-    setBulkSending(true);
-    for (let i = 0; i < unsent.length; i++) {
-      sendLine(unsent[i]);
-      if (i < unsent.length - 1) {
-        await new Promise(r => setTimeout(r, 3000));
-      }
+  // 送信済みマーク & ポップアップ閉じる
+  const markSentAndClose = () => {
+    if (activeSend) {
+      setCastList(prev => prev.map(c => c.therapistId === activeSend.therapistId ? { ...c, sent: true } : c));
     }
-    setBulkSending(false);
+    setActiveSend(null);
   };
 
   // フィルタ
@@ -272,123 +233,157 @@ export default function LineShiftPanel({
   const totalWithShifts = castList.filter(c => c.shifts.length > 0).length;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="rounded-2xl w-full max-w-[800px] max-h-[90vh] flex flex-col animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: T.border }}>
-          <div>
-            <h2 className="text-[16px] font-medium">💬 確定シフトLINE送信</h2>
-            <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>セラピストに確定シフトをLINEで送信します</p>
+    <>
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="rounded-2xl w-full max-w-[800px] max-h-[90vh] flex flex-col animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: T.border }}>
+            <div>
+              <h2 className="text-[16px] font-medium">💬 確定シフトLINE送信</h2>
+              <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>セラピストに確定シフトをLINEで送信します</p>
+            </div>
+            <button onClick={onClose} className="text-[16px] cursor-pointer p-2" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
           </div>
-          <button onClick={onClose} className="text-[16px] cursor-pointer p-2" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
-        </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* 日付範囲 */}
-          <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-[12px] font-medium">📅 対象期間</span>
-              <div className="flex gap-1.5">
-                {[["今週", 0], ["翌週", 1], ["2週先", 2]].map(([label, offset]) => (
-                  <button key={String(offset)} onClick={() => setQuickDate(offset as number)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>{String(label)}</button>
-                ))}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {/* 日付範囲 */}
+            <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-[12px] font-medium">📅 対象期間</span>
+                <div className="flex gap-1.5">
+                  {[["今週", 0], ["翌週", 1], ["2週先", 2]].map(([label, offset]) => (
+                    <button key={String(offset)} onClick={() => setQuickDate(offset as number)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>{String(label)}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
+                <span className="text-[12px]" style={{ color: T.textMuted }}>〜</span>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
-              <span className="text-[12px]" style={{ color: T.textMuted }}>〜</span>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none border" style={{ backgroundColor: T.card, borderColor: T.border, color: T.text }} />
-            </div>
-          </div>
 
-          {/* 操作バー */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <input
-              type="text"
-              placeholder="🔍 名前で検索"
-              value={searchFilter}
-              onChange={e => setSearchFilter(e.target.value)}
-              className="px-3 py-1.5 rounded-lg text-[11px] outline-none border"
-              style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text, width: 160 }}
-            />
-            {totalWithShifts > 0 && (
-              <button
-                onClick={sendAll}
-                disabled={bulkSending}
-                className="px-4 py-2 rounded-xl text-[12px] font-medium cursor-pointer text-white"
-                style={{ backgroundColor: bulkSending ? "#999" : "#06C755" }}
-              >
-                {bulkSending ? "⏳ 送信中..." : `💬 全員にLINE送信（${totalWithShifts - sentCount}名）`}
-              </button>
-            )}
-            {sentCount > 0 && (
-              <span className="text-[11px]" style={{ color: "#22c55e" }}>✅ {sentCount}/{totalWithShifts}名 送信済</span>
-            )}
-          </div>
-
-          {/* セラピストカード */}
-          {loading ? (
-            <div className="text-center py-8">
-              <p className="text-[12px]" style={{ color: T.textMuted }}>読み込み中...</p>
+            {/* 操作バー */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <input
+                type="text"
+                placeholder="🔍 名前で検索"
+                value={searchFilter}
+                onChange={e => setSearchFilter(e.target.value)}
+                className="px-3 py-1.5 rounded-lg text-[11px] outline-none border"
+                style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text, width: 160 }}
+              />
+              {sentCount > 0 && (
+                <span className="text-[11px]" style={{ color: "#22c55e" }}>✅ {sentCount}/{totalWithShifts}名 送信済</span>
+              )}
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-[12px]" style={{ color: T.textMuted }}>対象セラピストがいません</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filtered.map(cast => (
-                <div key={cast.therapistId} className="rounded-xl p-3 transition-all" style={{
-                  backgroundColor: T.card,
-                  border: `1px solid ${cast.sent ? "#22c55e44" : T.border}`,
-                }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium">{cast.therapistName}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: cast.shifts.length > 0 ? "#22c55e18" : "#f59e0b18", color: cast.shifts.length > 0 ? "#22c55e" : "#f59e0b" }}>
-                        {cast.shifts.length > 0 ? `${cast.shifts.length}日出勤` : "出勤なし"}
-                      </span>
-                      {cast.sent && <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 送信済</span>}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => toggleEdit(cast.therapistId)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>
-                        {cast.editing ? "📄 閉じる" : "✏️ 編集"}
-                      </button>
-                      <button onClick={() => copyMessage(cast.therapistId, cast.message)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: copiedId === cast.therapistId ? "#22c55e18" : T.cardAlt, color: copiedId === cast.therapistId ? "#22c55e" : T.textSub, border: `1px solid ${copiedId === cast.therapistId ? "#22c55e44" : T.border}` }}>
-                        {copiedId === cast.therapistId ? "✅ コピー済" : "📋 コピー"}
-                      </button>
-                      <button onClick={() => sendLine(cast)} disabled={bulkSending} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer font-medium text-white" style={{ backgroundColor: cast.sent ? "#999" : "#06C755" }}>
-                        💬 LINE送信
-                      </button>
-                    </div>
-                  </div>
 
-                  {/* シフト概要 */}
-                  {!cast.editing && cast.shifts.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-1">
-                      {cast.shifts.map((s, i) => (
-                        <span key={i} className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>
-                          {s.dateLabel} {s.startTime}〜{s.endTime} {s.room}
+            {/* セラピストカード */}
+            {loading ? (
+              <div className="text-center py-8">
+                <p className="text-[12px]" style={{ color: T.textMuted }}>読み込み中...</p>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-[12px]" style={{ color: T.textMuted }}>対象セラピストがいません</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map(cast => (
+                  <div key={cast.therapistId} className="rounded-xl p-3 transition-all" style={{
+                    backgroundColor: T.card,
+                    border: `1px solid ${cast.sent ? "#22c55e44" : T.border}`,
+                  }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-medium">{cast.therapistName}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: cast.shifts.length > 0 ? "#22c55e18" : "#f59e0b18", color: cast.shifts.length > 0 ? "#22c55e" : "#f59e0b" }}>
+                          {cast.shifts.length > 0 ? `${cast.shifts.length}日出勤` : "出勤なし"}
                         </span>
-                      ))}
+                        {cast.sent && <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 送信済</span>}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => toggleEdit(cast.therapistId)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>
+                          {cast.editing ? "📄 閉じる" : "✏️ 編集"}
+                        </button>
+                        <button onClick={() => copyMessage(cast.therapistId, cast.message)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: copiedId === cast.therapistId ? "#22c55e18" : T.cardAlt, color: copiedId === cast.therapistId ? "#22c55e" : T.textSub, border: `1px solid ${copiedId === cast.therapistId ? "#22c55e44" : T.border}` }}>
+                          {copiedId === cast.therapistId ? "✅ コピー済" : "📋 コピー"}
+                        </button>
+                        <button onClick={() => openLineSend(cast)} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer font-medium text-white" style={{ backgroundColor: cast.sent ? "#999" : "#06C755" }}>
+                          💬 LINE送信
+                        </button>
+                      </div>
                     </div>
-                  )}
 
-                  {/* 編集モード */}
-                  {cast.editing && (
-                    <textarea
-                      value={cast.message}
-                      onChange={e => updateMessage(cast.therapistId, e.target.value)}
-                      className="w-full mt-1 p-3 rounded-xl text-[11px] outline-none border resize-none leading-relaxed"
-                      style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text, minHeight: 200, fontFamily: "monospace" }}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    {/* シフト概要 */}
+                    {!cast.editing && cast.shifts.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-1">
+                        {cast.shifts.map((s, i) => (
+                          <span key={i} className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>
+                            {s.dateLabel} {s.startTime}〜{s.endTime} {s.room}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 編集モード */}
+                    {cast.editing && (
+                      <textarea
+                        value={cast.message}
+                        onChange={e => updateMessage(cast.therapistId, e.target.value)}
+                        className="w-full mt-1 p-3 rounded-xl text-[11px] outline-none border resize-none leading-relaxed"
+                        style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text, minHeight: 200, fontFamily: "monospace" }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* ★★★ LINE送信ポップアップ（タイムチャートと同じdata-tm方式） ★★★ */}
+      {/* Chrome拡張 content_tmanage.js が以下を検知して「🚀 セラピストLINE自動入力」ボタンを追加:
+          - data-tm-notify="true" → ポップアップ識別
+          - data-tm-therapist="名前" → セラピスト名
+          - data-tm-preview="true" → メッセージテキスト取得
+          - "セラピストLINE用コピー" ボタン → 自動入力ボタン追加位置 */}
+      {activeSend && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+          onClick={markSentAndClose}
+          data-tm-notify="true"
+          data-tm-therapist={activeSend.therapistName}
+          data-tm-custname=""
+          data-tm-phone=""
+        >
+          <div className="rounded-2xl border w-full max-w-lg max-h-[80vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <div>
+                <h2 className="text-[15px] font-medium">💬 確定シフト LINE送信</h2>
+                <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{activeSend.therapistName} | {activeSend.shifts.length > 0 ? `${activeSend.shifts.length}日出勤` : "出勤なし"}</p>
+              </div>
+              <button onClick={markSentAndClose} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
+            </div>
+            <div className="px-6 py-4">
+              {/* メッセージプレビュー（data-tm-preview で拡張機能がテキストを取得） */}
+              <div data-tm-preview="true" className="rounded-xl p-4 mb-4 text-[11px] whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto" style={{ backgroundColor: T.cardAlt, color: T.textSub, fontFamily: "var(--font-mono, monospace)" }}>
+                {activeSend.message}
+              </div>
+
+              {/* 送信ボタン — 拡張機能が「セラピストLINE用コピー」を検知して自動入力ボタンを追加 */}
+              <div className="space-y-2">
+                <button onClick={() => {
+                  navigator.clipboard.writeText(activeSend.message);
+                }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>💬 セラピストLINE用コピー</button>
+
+                <button onClick={markSentAndClose} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted }}>閉じる（送信済みにする）</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
