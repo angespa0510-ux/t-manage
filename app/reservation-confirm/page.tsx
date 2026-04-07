@@ -1,10 +1,9 @@
 "use client";
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { supabase } from "../../lib/supabase";
 
 function ReservationConfirmInner() {
-  const supabase = createClientComponentClient();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
@@ -44,7 +43,7 @@ function ReservationConfirmInner() {
         setStatus("error");
       }
     })();
-  }, [token, supabase]);
+  }, [token]);
 
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
   const d = res ? new Date(res.date + "T00:00:00") : null;
