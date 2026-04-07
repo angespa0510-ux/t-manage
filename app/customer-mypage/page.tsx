@@ -88,6 +88,7 @@ export default function CustomerMypage() {
   const [rankRules, setRankRules] = useState<{rank_name:string;multiplier:number;min_visits_in_period:number;period_months:number;min_total_visits:number}[]>([]);
   const [recentVisitCount, setRecentVisitCount] = useState(0);
   const [tickerMsgs, setTickerMsgs] = useState<string[]>([]);
+  const [ngTherapistIdsForMe, setNgTherapistIdsForMe] = useState<Set<number>>(new Set());
 
   useEffect(() => { const saved = localStorage.getItem("customer_mypage_id"); if (saved) { supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) { setCustomer(data); setSetEmail(data.login_email || ""); setSetBday(data.birthday || ""); setSetSelfN(data.self_name || data.name || ""); } }); } }, []);
 
@@ -110,6 +111,9 @@ export default function CustomerMypage() {
     const { data: disc } = await supabase.from("discounts").select("id,name,amount,type").order("id"); if (disc) setDiscounts(disc);
     const { data: ext } = await supabase.from("extensions").select("id,name,duration,price").order("duration"); if (ext) setExtensions(ext);
     const { data: opts } = await supabase.from("options").select("id,name,price").order("id"); if (opts) setOptionsList(opts);
+    // NGセラピスト取得（このお客様をNGにしたセラピスト）
+    const { data: ngNotes } = await supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", customer.name).eq("is_ng", true);
+    if (ngNotes) setNgTherapistIdsForMe(new Set(ngNotes.map(n => n.therapist_id)));
   }, [customer]);
   useEffect(() => { if (customer) fetchData(); }, [customer, fetchData]);
 
@@ -360,6 +364,7 @@ export default function CustomerMypage() {
                 const filtered = schedShifts.filter(shift => {
                   const t = therapists.find(th => th.id === shift.therapist_id);
                   if (!t) return false;
+                  if (ngTherapistIdsForMe.has(shift.therapist_id)) return false;
                   if (schedSearch && !t.name.toLowerCase().includes(schedSearch.toLowerCase())) return false;
                   return true;
                 });
