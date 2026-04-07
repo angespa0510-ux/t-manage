@@ -1,6 +1,6 @@
 // =============================================
-// T-MANAGE エステ魂自動投稿 — content-edit.js
-// estama.jp/admin/blog_edit フォーム自動入力＆画像アップロード
+// T-MANAGE エステ魂自動投稿 — content-edit.js v3
+// API直接アップロード方式（クロップダイアログをバイパス）
 // =============================================
 
 (function () {
@@ -12,8 +12,6 @@
       console.log('[エステ魂拡張] 投稿データなし、スキップ');
       return;
     }
-
-    // 古いデータ（10分以上前）はスキップ
     if (Date.now() - post.timestamp > 10 * 60 * 1000) {
       console.log('[エステ魂拡張] 古いデータ、スキップ');
       chrome.storage.local.remove('estamaPost');
@@ -21,222 +19,189 @@
     }
 
     console.log('[エステ魂拡張] フォーム自動入力開始');
-
-    // フォーム要素の読み込み待機
     await waitForElement('#PostTitle', 5000);
 
-    // ===== 1. カテゴリ選択: ご案内状況 (value=11) =====
-    const categoryRadio = document.querySelector('input[name="main[category_id]"][value="11"]');
-    if (categoryRadio) {
-      categoryRadio.checked = true;
-      categoryRadio.dispatchEvent(new Event('change', { bubbles: true }));
-      categoryRadio.click();
-      console.log('[エステ魂拡張] カテゴリ: ご案内状況');
-    }
+    // ===== 1. カテゴリ: ご案内状況 =====
+    clickRadio('input[name="main[category_id]"][value="11"]');
+    // ===== 2. タイトル =====
+    setInputValue('PostTitle', post.title);
+    // ===== 3. 本文 =====
+    setInputValue('PostContent', post.content);
+    // ===== 4. ボタン: 公式HP =====
+    clickRadio('input[name="main[blog_type]"][value="3"]');
+    // ===== 5. 投稿: すぐ公開 =====
+    clickRadio('input[name="future[post]"][value="0"]');
 
-    // ===== 2. タイトル入力 =====
-    const titleInput = document.getElementById('PostTitle');
-    if (titleInput) {
-      titleInput.value = post.title;
-      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log('[エステ魂拡張] タイトル:', post.title);
-    }
+    console.log('[エステ魂拡張] フォーム入力完了');
 
-    // ===== 3. 本文入力 =====
-    const contentArea = document.getElementById('PostContent');
-    if (contentArea) {
-      contentArea.value = post.content;
-      contentArea.dispatchEvent(new Event('input', { bubbles: true }));
-      contentArea.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log('[エステ魂拡張] 本文入力完了（', post.content.length, '文字）');
-    }
-
-    // ===== 4. 設置するボタン: 公式HP (value=3) =====
-    const blogTypeRadio = document.querySelector('input[name="main[blog_type]"][value="3"]');
-    if (blogTypeRadio) {
-      blogTypeRadio.checked = true;
-      blogTypeRadio.dispatchEvent(new Event('change', { bubbles: true }));
-      blogTypeRadio.click();
-      console.log('[エステ魂拡張] ボタン: 公式HP');
-    }
-
-    // ===== 5. 投稿日時: すぐ公開する (value=0) =====
-    const postTimingRadio = document.querySelector('input[name="future[post]"][value="0"]');
-    if (postTimingRadio) {
-      postTimingRadio.checked = true;
-      postTimingRadio.dispatchEvent(new Event('change', { bubbles: true }));
-      postTimingRadio.click();
-      console.log('[エステ魂拡張] 投稿: すぐ公開');
-    }
-
-    // ===== 6. 画像アップロード（1枚ずつ: ファイルセット→クロップ保存→次へ）=====
+    // ===== 6. 画像アップロード（API直接方式）=====
     showBanner('💅 フォーム入力完了 — 画像をアップロード中...');
 
     try {
       let response;
       if (post.imageUrls && post.imageUrls.length > 0) {
-        console.log('[エステ魂拡張] T-MANAGE画像URLs:', post.imageUrls.length, '枚');
-        response = await new Promise((resolve) => {
-          chrome.runtime.sendMessage({ type: 'FETCH_IMAGE_URLS', urls: post.imageUrls }, resolve);
-        });
+        response = await new Promise(r => chrome.runtime.sendMessage({ type: 'FETCH_IMAGE_URLS', urls: post.imageUrls }, r));
       } else {
-        response = await new Promise((resolve) => {
-          chrome.runtime.sendMessage({ type: 'FETCH_SCHEDULE_IMAGES', roomKey: post.room }, resolve);
-        });
+        response = await new Promise(r => chrome.runtime.sendMessage({ type: 'FETCH_SCHEDULE_IMAGES', roomKey: post.room }, r));
       }
 
       if (response && response.ok && response.images && response.images.length > 0) {
-        console.log('[エステ魂拡張] 画像取得成功:', response.images.length, '枚');
-        let uploadedCount = 0;
+        const csrf = getCsrf();
+        let ok = 0;
 
         for (let i = 0; i < Math.min(response.images.length, 3); i++) {
           showBanner(`💅 画像 ${i + 1}/${Math.min(response.images.length, 3)} アップロード中...`);
-          const img = response.images[i];
-          const fileInputId = `blog_icon_${i + 1}-imgupload_imgUploadField`;
-          const fileInput = document.getElementById(fileInputId);
-
-          if (!fileInput) {
-            console.warn('[エステ魂拡張] ファイル入力欄なし:', fileInputId);
-            continue;
-          }
-
+          const uploadId = `blog_icon_${i + 1}-imgupload`;
           try {
-            const file = base64ToFile(img.base64, `therapist_${i + 1}.jpg`);
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            fileInput.files = dt.files;
-            fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log('[エステ魂拡張] 画像', i + 1, 'ファイルセット完了');
-
-            // クロップダイアログの「保存」ボタンを待って自動クリック
-            const saved = await waitAndClickSave(8000);
-            if (saved) {
-              uploadedCount++;
-              console.log('[エステ魂拡張] 画像', i + 1, '保存完了');
-            } else {
-              console.warn('[エステ魂拡張] 画像', i + 1, '保存ボタン未検出');
+            const croppedUrl = await uploadAndCrop(response.images[i].base64, uploadId, csrf);
+            if (croppedUrl) {
+              updateImagePreview(uploadId, croppedUrl);
+              ok++;
+              console.log('[エステ魂拡張] 画像', i + 1, '完了:', croppedUrl);
             }
-
-            // ダイアログが閉じるのを待つ
-            await new Promise(r => setTimeout(r, 2000));
           } catch (e) {
-            console.warn('[エステ魂拡張] 画像', i + 1, 'エラー:', e);
+            console.warn('[エステ魂拡張] 画像', i + 1, '失敗:', e.message);
           }
         }
-
-        if (uploadedCount > 0) {
-          showBanner(`✅ ${uploadedCount}枚の画像アップロード完了 — 投稿ボタンを押してください！`);
-        } else {
-          showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
-        }
+        showBanner(ok > 0
+          ? `✅ ${ok}枚の画像＆フォーム入力完了 — 投稿ボタンを押してください！`
+          : '✅ フォーム入力完了 — 投稿ボタンを押してください！');
       } else {
-        console.log('[エステ魂拡張] 画像なしまたは取得失敗:', response);
         showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
       }
     } catch (e) {
-      console.warn('[エステ魂拡張] 画像処理エラー:', e);
-      showBanner('✅ フォーム入力完了（画像なし） — 投稿ボタンを押してください！');
+      console.warn('[エステ魂拡張] 画像エラー:', e);
+      showBanner('✅ フォーム入力完了 — 投稿ボタンを押してください！');
     }
 
-    // 投稿データをクリア
     chrome.storage.local.remove('estamaPost');
   });
 
   // =============================================
-  // ユーティリティ関数
+  // API直接アップロード（uptemp → cropping）
   // =============================================
+  async function uploadAndCrop(base64Data, uploadId, csrf) {
+    // base64 → File
+    const parts = base64Data.split(',');
+    const mime = parts[0].match(/:(.*?);/)[1];
+    const bin = atob(parts[1]);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const file = new File([arr], 'photo.jpg', { type: mime });
 
-  function waitForElement(selector, timeout = 5000) {
-    return new Promise((resolve) => {
-      const el = document.querySelector(selector);
+    // Step 1: uptemp
+    const fd1 = new FormData();
+    fd1.append('img', file);
+    fd1.append('upload_id', uploadId);
+    fd1.append('text', 'test');
+    fd1.append('ctk', csrf);
+
+    console.log('[エステ魂拡張] uptemp送信:', uploadId);
+    const res1 = await fetch('/post/uptemp/', { method: 'POST', body: fd1, credentials: 'same-origin' });
+    const json1 = await res1.json();
+    console.log('[エステ魂拡張] uptemp応答:', JSON.stringify(json1));
+    if (json1.status !== 'success') throw new Error('uptemp: ' + JSON.stringify(json1));
+
+    const tempUrl = json1.url;
+    const W = json1.width;
+    const H = json1.height;
+
+    // Step 2: cropping（400x400正方形センタークロップ）
+    let imgW, imgH, x1, y1;
+    if (W > H) {
+      imgH = 400; imgW = Math.round(W * 400 / H);
+      x1 = Math.round((imgW - 400) / 2); y1 = 0;
+    } else {
+      imgW = 400; imgH = Math.round(H * 400 / W);
+      x1 = 0; y1 = Math.round((imgH - 400) / 2);
+    }
+
+    const fd2 = new FormData();
+    fd2.append('imgUrl', tempUrl);
+    fd2.append('imgInitW', String(W));
+    fd2.append('imgInitH', String(H));
+    fd2.append('imgW', String(imgW));
+    fd2.append('imgH', String(imgH));
+    fd2.append('imgY1', String(y1));
+    fd2.append('imgX1', String(x1));
+    fd2.append('cropH', '400');
+    fd2.append('cropW', '400');
+    fd2.append('rotation', '0');
+    fd2.append('upload_id', uploadId);
+    fd2.append('text', 'test');
+    fd2.append('ctk', csrf);
+
+    console.log('[エステ魂拡張] cropping送信:', uploadId);
+    const res2 = await fetch('/post/cropping/', { method: 'POST', body: fd2, credentials: 'same-origin' });
+    const json2 = await res2.json();
+    console.log('[エステ魂拡張] cropping応答:', JSON.stringify(json2));
+    if (json2.status !== 'success') throw new Error('crop: ' + JSON.stringify(json2));
+
+    return json2.url; // /temp/cropped_xxx.jpg
+  }
+
+  // =============================================
+  // UIプレビュー更新（アップロード済み画像をフォームに表示）
+  // =============================================
+  function updateImagePreview(uploadId, croppedUrl) {
+    // upload_id = "blog_icon_1-imgupload" → コンテナを探す
+    const container = document.getElementById(uploadId);
+    if (container) {
+      // コンテナ内をクロップ済み画像に差し替え
+      const imgUrl = croppedUrl.startsWith('http') ? croppedUrl : 'https://estama.jp' + croppedUrl;
+      container.innerHTML = `<img src="${imgUrl}" style="width:100%;height:auto;border-radius:4px;">`;
+      console.log('[エステ魂拡張] プレビュー更新:', uploadId);
+    } else {
+      // IDで見つからない場合、番号から推測
+      const num = uploadId.replace('blog_icon_', '').replace('-imgupload', '');
+      const wrapper = document.querySelector(`[id*="blog_icon_${num}"]`);
+      if (wrapper) {
+        const img = document.createElement('img');
+        img.src = croppedUrl.startsWith('http') ? croppedUrl : 'https://estama.jp' + croppedUrl;
+        img.style.cssText = 'width:100%;height:auto;border-radius:4px;';
+        wrapper.innerHTML = '';
+        wrapper.appendChild(img);
+      }
+    }
+  }
+
+  // =============================================
+  // ユーティリティ
+  // =============================================
+  function waitForElement(sel, timeout = 5000) {
+    return new Promise(resolve => {
+      const el = document.querySelector(sel);
       if (el) return resolve(el);
-      const start = Date.now();
-      const check = setInterval(() => {
-        const el2 = document.querySelector(selector);
-        if (el2 || Date.now() - start > timeout) {
-          clearInterval(check);
-          resolve(el2);
-        }
+      const t = Date.now();
+      const iv = setInterval(() => {
+        const e = document.querySelector(sel);
+        if (e || Date.now() - t > timeout) { clearInterval(iv); resolve(e); }
       }, 200);
     });
   }
 
   function getCsrf() {
-    const el = document.getElementById('csrf_footer');
-    return el ? el.value : '';
+    return (document.getElementById('csrf_footer') || document.querySelector('input[name="ctk"]') || {}).value || '';
+  }
+
+  function setInputValue(id, val) {
+    const el = document.getElementById(id);
+    if (el) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+  }
+
+  function clickRadio(sel) {
+    const el = document.querySelector(sel);
+    if (el) { el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); el.click(); }
   }
 
   function showBanner(text) {
-    let banner = document.getElementById('estama-ext-banner');
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'estama-ext-banner';
-      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#ec4899,#a855f7);color:white;text-align:center;padding:14px;font-size:15px;font-weight:bold;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:opacity 0.3s;';
-      document.body.prepend(banner);
+    let b = document.getElementById('estama-ext-banner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'estama-ext-banner';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#ec4899,#a855f7);color:white;text-align:center;padding:14px;font-size:15px;font-weight:bold;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+      document.body.prepend(b);
     }
-    banner.textContent = text;
-  }
-
-  function base64ToFile(base64Data, fileName) {
-    const parts = base64Data.split(',');
-    const mime = parts[0].match(/:(.*?);/)[1];
-    const binary = atob(parts[1]);
-    const arr = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-    return new File([arr], fileName, { type: mime });
-  }
-
-  // クロップダイアログの「保存」ボタンを待って自動クリック
-  function waitAndClickSave(timeout = 10000) {
-    return new Promise((resolve) => {
-      const start = Date.now();
-      const check = setInterval(() => {
-        // 全要素を走査して「保存」テキストを探す
-        const allElements = document.querySelectorAll('*');
-        for (const el of allElements) {
-          if (el.closest('#estama-ext-banner')) continue;
-          // 直接テキストノードのみ（子要素のテキストを含まない）
-          const directText = Array.from(el.childNodes)
-            .filter(n => n.nodeType === Node.TEXT_NODE)
-            .map(n => n.textContent.trim())
-            .join('');
-          if (directText === '保存') {
-            const clickTarget = el.closest('a, button, [role="button"], [onclick]') || el;
-            console.log('[エステ魂拡張] 保存ボタン発見:', clickTarget.tagName, clickTarget.className);
-            clearInterval(check);
-            setTimeout(() => {
-              // 複数のクリック戦略
-              clickTarget.click();
-              clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-              clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-              clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-              // 直接のテキスト要素もクリック
-              if (el !== clickTarget) {
-                el.click();
-                el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-              }
-              console.log('[エステ魂拡張] 保存クリック完了');
-              resolve(true);
-            }, 1500);
-            return;
-          }
-        }
-
-        if (Date.now() - start > timeout) {
-          clearInterval(check);
-          // デバッグ用ログ
-          const found = [];
-          document.querySelectorAll('*').forEach(el => {
-            const t = (el.textContent || '').trim();
-            if (t === '保存' || t === 'キャンセル' || t === 'Save') {
-              found.push({ tag: el.tagName, cls: el.className.substring(0,50), id: el.id, text: t.substring(0,20) });
-            }
-          });
-          console.warn('[エステ魂拡張] 保存タイムアウト。検索結果:', JSON.stringify(found.slice(0,10)));
-          resolve(false);
-        }
-      }, 500);
-    });
+    b.textContent = text;
   }
 })();
