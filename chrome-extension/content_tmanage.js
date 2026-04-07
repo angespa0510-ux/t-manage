@@ -1,6 +1,7 @@
-// T-MANAGE Content Script v3.0
-// 通知ポップアップに「自動入力」ボタンを追加 + LINE URL管理
+// T-MANAGE Content Script v3.1
+// 通知ポップアップに「自動入力」ボタンを追加 + LINE URL管理 + 確定シフトLINE送信
 //
+// v3.1: 確定シフトLINE送信イベント対応（TMANAGE_LINE_SHIFT_SEND）
 // v3.0: data属性方式に全面切り替え
 //   T-MANAGEのタイムチャートが以下のdata属性をポップアップに埋め込む:
 //     data-tm-notify="true"     — ポップアップ識別
@@ -25,6 +26,10 @@
       chrome.storage.local.set(data);
     }
   }
+
+  // 拡張機能の存在をマーク（React側で検知用）
+  document.body.dataset.tmanageExtension = 'true';
+
   setTimeout(syncLineUrls, 2000);
   setInterval(syncLineUrls, 10000);
 
@@ -245,6 +250,25 @@
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
   }
+
+  // ============================================================
+  //  確定シフトLINE送信（部屋割り管理からの送信イベント）
+  // ============================================================
+  window.addEventListener('TMANAGE_LINE_SHIFT_SEND', (e) => {
+    const detail = e.detail || {};
+    const name = detail.name || '';
+    const template = detail.template || '';
+    if (!name || !template) {
+      showToast('⚠️ セラピスト名またはメッセージが空です', 'error');
+      return;
+    }
+    showToast(`🔍 ${name} をセラピストLINEで検索します...`, 'success');
+    safeSendMessage({
+      type: 'SEARCH_LINE_THERAPIST',
+      name: name,
+      template: template
+    });
+  });
 
   console.log('[T-MANAGE] content_tmanage.js v3.0 loaded');
 })();

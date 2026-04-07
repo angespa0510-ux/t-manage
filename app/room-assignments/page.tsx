@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import HPOutputPanel from "../../lib/hp-output-panel";
+import LineShiftPanel from "../../lib/line-shift-panel";
 
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
@@ -105,6 +107,8 @@ useEffect(() => {
   const [showVacancy, setShowVacancy] = useState(false);
   const [vacancyText, setVacancyText] = useState("");
   const [copiedVacancy, setCopiedVacancy] = useState(false);
+  const [showHpOutput, setShowHpOutput] = useState(false);
+  const [showLineSend, setShowLineSend] = useState(false);
   const dayRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const [year, month] = currentMonth.split("-").map(Number);
@@ -329,6 +333,8 @@ useEffect(() => {
             <button onClick={() => { setShowPinModal(true); setPinInput(""); setPinError(""); }} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer font-medium" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>🔑 ログイン</button>
           )}
           <button onClick={extractVacancy} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#3b82f6" }}>🔍 空き状況</button>
+          <button onClick={() => setShowHpOutput(true)} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#7c3aed" }}>🌐 HP出力</button>
+          <button onClick={() => setShowLineSend(true)} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#06C755" }}>💬 LINE送信</button>
           <button onClick={() => setShowPoints(!showPoints)} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>📊 ポイント</button>
           <button onClick={() => router.push("/rooms")} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>利用場所</button>
           <button onClick={() => router.push("/shifts")} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>シフト</button>
@@ -671,6 +677,14 @@ useEffect(() => {
             <button onClick={() => setShowPinModal(false)} className="w-full mt-2 py-2 text-[11px] rounded-xl cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
           </div>
         </div>
+      )}
+      {/* HP Output Panel */}
+      {showHpOutput && (
+        <HPOutputPanel T={T} onClose={() => setShowHpOutput(false)} stores={stores} buildings={buildings} rooms={rooms} therapists={therapists} />
+      )}
+      {/* LINE Shift Send Panel */}
+      {showLineSend && (
+        <LineShiftPanel T={T} onClose={() => setShowLineSend(false)} stores={stores} buildings={buildings} rooms={rooms} therapists={therapists} />
       )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "T-MANAGE 通知アシスタント",
-  "version": "2.0.0",
-  "description": "T-MANAGEの予約通知をLINE/SMSに自動入力するアシスタント",
+  "version": "2.1.0",
+  "description": "T-MANAGEの予約通知をLINE/SMSに自動入力 + 確定シフトLINE送信",
   "permissions": [
     "storage",
     "clipboardWrite",

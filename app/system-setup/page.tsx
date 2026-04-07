@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 
-type Tab = "cti" | "chrome" | "video" | "sokuho";
+type Tab = "cti" | "chrome" | "video" | "sokuho" | "hp";
 
 export default function SystemSetup() {
   const router = useRouter();
@@ -31,13 +31,21 @@ export default function SystemSetup() {
   const [estamaSaving, setEstamaSaving] = useState(false);
   const [estamaMsg, setEstamaMsg] = useState("");
 
+  // HP連携設定
+  const [hpLoginId, setHpLoginId] = useState("");
+  const [hpLoginPass, setHpLoginPass] = useState("");
+  const [hpSaving, setHpSaving] = useState(false);
+  const [hpMsg, setHpMsg] = useState("");
+  const [hpTesting, setHpTesting] = useState(false);
+  const [hpTestResult, setHpTestResult] = useState("");
+
   useEffect(() => {
     const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); };
     check();
     // LINE URL読み込み
     const loadSettings = async () => {
-      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff", "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi"]);
-      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); if (s.key === "bsky_id") setBskyId(s.value); if (s.key === "bsky_pw") setBskyPw(s.value); if (s.key === "estama_id_mikawa") setEstamaIdMikawa(s.value); if (s.key === "estama_pw_mikawa") setEstamaPwMikawa(s.value); if (s.key === "estama_id_toyohashi") setEstamaIdToyohashi(s.value); if (s.key === "estama_pw_toyohashi") setEstamaPwToyohashi(s.value); } }
+      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff", "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi", "hp_login_id", "hp_login_pass"]);
+      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); if (s.key === "bsky_id") setBskyId(s.value); if (s.key === "bsky_pw") setBskyPw(s.value); if (s.key === "estama_id_mikawa") setEstamaIdMikawa(s.value); if (s.key === "estama_pw_mikawa") setEstamaPwMikawa(s.value); if (s.key === "estama_id_toyohashi") setEstamaIdToyohashi(s.value); if (s.key === "estama_pw_toyohashi") setEstamaPwToyohashi(s.value); if (s.key === "hp_login_id") setHpLoginId(s.value); if (s.key === "hp_login_pass") setHpLoginPass(s.value); } }
     };
     loadSettings();
   }, [router]);
@@ -71,6 +79,35 @@ export default function SystemSetup() {
     setTimeout(() => setEstamaMsg(""), 3000);
   };
 
+  const saveHpSettings = async () => {
+    setHpSaving(true); setHpMsg("");
+    await supabase.from("store_settings").upsert({ key: "hp_login_id", value: hpLoginId }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "hp_login_pass", value: hpLoginPass }, { onConflict: "key" });
+    setHpSaving(false); setHpMsg("保存しました！");
+    setTimeout(() => setHpMsg(""), 3000);
+  };
+
+  const testHpLogin = async () => {
+    setHpTesting(true); setHpTestResult("");
+    try {
+      const res = await fetch("/api/hp-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login_test", loginId: hpLoginId, loginPass: hpLoginPass }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHpTestResult("✅ ログイン成功！");
+      } else {
+        setHpTestResult(`❌ ${data.error || "ログイン失敗"}`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "通信エラー";
+      setHpTestResult(`❌ ${msg}`);
+    }
+    setHpTesting(false);
+  };
+
   const cardStyle = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 16 };
   const stepNumStyle = (color: string) => ({
     width: 32, height: 32, borderRadius: "50%", backgroundColor: color + "18",
@@ -95,6 +132,7 @@ export default function SystemSetup() {
           {([
             { key: "cti" as Tab, label: "📞 CTI 着信表示", desc: "スマホ着信→PC表示" },
             { key: "chrome" as Tab, label: "🚀 Chrome拡張", desc: "通知の自動入力" },
+            { key: "hp" as Tab, label: "🌐 HP連携", desc: "Panda Web Concierge" },
             { key: "video" as Tab, label: "🎥 AI動画生成", desc: "セットアップ" },
             { key: "sokuho" as Tab, label: "📢 リアルタイム速報", desc: "Bluesky / エステ魂" },
           ]).map(t => (
@@ -1005,6 +1043,117 @@ export default function SystemSetup() {
                   { q: "エステ魂でフォームが自動入力されない", a: "Chrome拡張機能がインストールされていることを確認してください。STEP4の手順に従ってestama-extensionをインストールしてください。" },
                   { q: "エステ魂の画像がアップロードされない", a: "セラピスト管理でセラピストの写真が登録されていることを確認してください。PNG/JPEGに対応しています。" },
                   { q: "三河安城→豊橋で同じアカウントになる", a: "拡張機能が毎回自動ログアウト→再ログインします。拡張機能を最新版に更新してください。" },
+                ].map((faq, i) => (
+                  <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[12px] font-medium mb-1" style={{ color: T.text }}>Q. {faq.q}</p>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>A. {faq.a}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== HP連携 タブ ===== */}
+        {tab === "hp" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <h2 className="text-[16px] font-medium mb-3" style={{ color: T.text }}>🌐 HP連携（Panda Web Concierge）とは？</h2>
+              <p className="text-[13px] leading-relaxed" style={{ color: T.textSub }}>
+                部屋割り管理で決定したセラピストのスケジュールを、<span style={{ color: "#7c3aed", fontWeight: 600 }}>HPの管理画面に自動で反映</span>する機能です。
+                出勤時間・退勤時間・店舗の設定とお休み解除が自動で行われます。
+              </p>
+              <div className="mt-4 p-4 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-4 text-[12px]" style={{ color: T.textSub }}>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>🏠 部屋割り確定</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#7c3aed18", color: "#7c3aed" }}>🌐 HP出力ボタン</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ HP自動更新！</span>
+                </div>
+              </div>
+            </div>
+
+            {/* STEP1: HP認証設定 */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#7c3aed")}>1</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>HP管理画面 認証設定</h3>
+                  <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>Panda Web Concierge（ange-spa.com/pwc-admin）のログイン情報</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[12px] font-medium mb-1.5 block" style={{ color: T.textSub }}>ログインID</label>
+                  <input type="text" value={hpLoginId} onChange={e => setHpLoginId(e.target.value)} placeholder="HP管理画面のID" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium mb-1.5 block" style={{ color: T.textSub }}>パスワード</label>
+                  <input type="password" value={hpLoginPass} onChange={e => setHpLoginPass(e.target.value)} placeholder="HP管理画面のパスワード" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={saveHpSettings} disabled={hpSaving} className="px-6 py-2.5 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ backgroundColor: "#7c3aed" }}>
+                    {hpSaving ? "保存中..." : "💾 保存"}
+                  </button>
+                  <button onClick={testHpLogin} disabled={hpTesting || !hpLoginId || !hpLoginPass} className="px-4 py-2.5 rounded-xl text-[13px] cursor-pointer" style={{ backgroundColor: "#7c3aed18", color: "#7c3aed", border: "1px solid #7c3aed44" }}>
+                    {hpTesting ? "テスト中..." : "🔌 接続テスト"}
+                  </button>
+                  {hpMsg && <span className="text-[12px]" style={{ color: "#22c55e" }}>✅ {hpMsg}</span>}
+                  {hpTestResult && <span className="text-[12px]" style={{ color: hpTestResult.startsWith("✅") ? "#22c55e" : "#c45555" }}>{hpTestResult}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* STEP2: 使い方 */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#3b82f6")}>2</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>使い方</h3>
+                  <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>部屋割り管理画面からHP出力</p>
+                </div>
+              </div>
+              <div className="space-y-3 text-[12px]" style={{ color: T.textSub }}>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="font-medium mb-1">① 部屋割り管理ページで「🌐 HP出力」ボタンをクリック</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>ヘッダーの紫色のボタンです</p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="font-medium mb-1">② 対象期間を選択</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>今週/翌週/2週先のクイック選択、または日付ピッカーで自由選択</p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="font-medium mb-1">③ セラピスト個別 or 一括でHP出力</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>各セラピストの「🌐 HP出力」ボタンまたは「全員HP出力」で一括更新</p>
+                </div>
+              </div>
+            </div>
+
+            {/* STEP3: HP名前マッピング */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={stepNumStyle("#f59e0b")}>3</div>
+                <div>
+                  <h3 className="text-[14px] font-medium" style={{ color: T.text }}>HP名前マッピング</h3>
+                  <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>T-MANAGEとHP管理画面で名前が異なるセラピストの対応付け</p>
+                </div>
+              </div>
+              <p className="text-[12px] leading-relaxed" style={{ color: T.textSub }}>
+                T-MANAGE名とHP登録名が異なる場合、HP出力パネル内の「🔗 HP名前マッピング」から設定できます。
+                例: T-MANAGE「静香」→ HP「しずか」
+              </p>
+            </div>
+
+            {/* FAQ */}
+            <div className="rounded-2xl p-6" style={cardStyle}>
+              <h3 className="text-[14px] font-medium mb-4" style={{ color: T.text }}>❓ よくある質問</h3>
+              <div className="space-y-4">
+                {[
+                  { q: "HP出力でエラーが出る", a: "STEP1の「接続テスト」でログインできるか確認してください。パスワードが変更されている可能性があります。" },
+                  { q: "「HP未検出」と表示される", a: "T-MANAGEとHP管理画面で名前が異なる場合は、HP出力パネルの名前マッピングを設定してください。" },
+                  { q: "お休みが解除されない", a: "HPのスケジュールページの構造が変更された可能性があります。管理者に問い合わせてください。" },
+                  { q: "HPの出力先週が正しくない", a: "HPのスケジュールは水曜始まりです。対象日が正しい週に含まれているか確認してください。" },
                 ].map((faq, i) => (
                   <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                     <p className="text-[12px] font-medium mb-1" style={{ color: T.text }}>Q. {faq.q}</p>
