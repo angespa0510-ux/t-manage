@@ -1373,6 +1373,13 @@ export default function Dashboard() {
               <button onClick={() => { setShowNgRegister(false); setNgSelectedCust(null); setNgCustSearch(""); setNgTherapistId(0); setNgReason(""); setNgMsg(""); }} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
             </div>
             <div className="px-6 py-5 space-y-4">
+              <div className="rounded-xl p-3" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c430" }}>
+                <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
+                  🛡️ NG登録されたお客様は、ネット予約時にそのセラピストの出勤枠が<span style={{ color: "#c45555", fontWeight: 600 }}>すべてお休み表示</span>になります。
+                  タイムチャートでのオーダー登録時もセラピスト名の横に<span style={{ color: "#c45555", fontWeight: 600 }}>⚠️NG</span>と表示されます。
+                </p>
+                <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>稼働中セラピストのNG登録が<span style={{ color: "#f59e0b", fontWeight: 600 }}>3件で要注意</span>、<span style={{ color: "#c45555", fontWeight: 600 }}>5件以上で出禁</span>に自動変更されます（休止・退職セラピストは除外）。</p>
+              </div>
               {/* お客様選択 */}
               <div>
                 <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>お客様を検索・選択</label>
