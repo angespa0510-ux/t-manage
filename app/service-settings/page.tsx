@@ -26,7 +26,7 @@ type BackRateRule = { id: number; min_sessions: number; min_nomination_rate: num
 
 type Tab = "nomination" | "discount" | "extension" | "option" | "point" | "backrate" | "notify";
 type NotifyTemplate = { id: number; template_key: string; body: string };
-type NotifySubTab = "staff" | "customer_url" | "customer_no_url" | "customer_detail";
+type NotifySubTab = "customer_url" | "customer_no_url" | "customer_detail_url" | "customer_detail_no_url" | "staff";
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -94,7 +94,7 @@ export default function ServiceSettings() {
 
   // Notification template states
   const [ntTemplates, setNtTemplates] = useState<NotifyTemplate[]>([]);
-  const [ntSubTab, setNtSubTab] = useState<NotifySubTab>("staff");
+  const [ntSubTab, setNtSubTab] = useState<NotifySubTab>("customer_url");
   const [ntBody, setNtBody] = useState("");
   const [ntSaving, setNtSaving] = useState(false);
   const [ntMsg, setNtMsg] = useState("");
@@ -1046,9 +1046,9 @@ export default function ServiceSettings() {
           {/* ════════════ NOTIFY TAB ════════════ */}
           {tab === "notify" && (
             <div className="animate-[fadeIn_0.3s] space-y-6">
-              {/* Sub-tabs: 4テンプレート切替 */}
-              <div className="flex gap-2 flex-wrap">
-                {([["customer_url", "👤 概要（URL付）"], ["customer_no_url", "👤 概要（URLなし）"], ["customer_detail", "📋 詳細通知"], ["staff", "💼 セラピスト向け"]] as [NotifySubTab, string][]).map(([k, l]) => (
+              {/* Sub-tabs: 5テンプレート切替 */}
+              <div className="flex gap-1.5 flex-wrap">
+                {([["customer_url", "👤 概要（URL付）"], ["customer_no_url", "👤 概要（URLなし）"], ["customer_detail_url", "📋 詳細（URL付）"], ["customer_detail_no_url", "📋 詳細（URLなし）"], ["staff", "💼 セラピスト"]] as [NotifySubTab, string][]).map(([k, l]) => (
                   <button key={k} onClick={() => { setNtSubTab(k); setNtMsg(""); setNtPreview(false); }} className="px-3 py-2 text-[10px] rounded-xl cursor-pointer transition-all whitespace-nowrap"
                     style={{ backgroundColor: ntSubTab === k ? "#3d6b9f18" : T.cardAlt, color: ntSubTab === k ? "#3d6b9f" : T.textMuted, fontWeight: ntSubTab === k ? 600 : 400 }}>
                     {l}
@@ -1060,7 +1060,7 @@ export default function ServiceSettings() {
               <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <h3 className="text-[14px] font-medium mb-1">📝 テンプレート本文</h3>
                 <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>
-                  {ntSubTab === "staff" ? "セラピストLINEに送る予約確認メッセージ" : ntSubTab === "customer_url" ? "お客様向け概要（予約日が近い場合）確認リンク＋概要情報" : ntSubTab === "customer_detail" ? "お客様向け詳細通知（ルーム・場所等の当日情報）" : "お客様向け概要（予約日が先の場合）URLなし"}
+                  {ntSubTab === "staff" ? "セラピストLINEに送る予約確認メッセージ" : ntSubTab === "customer_url" ? "概要通知（近い予約）確認リンク＋場所URL付き" : ntSubTab === "customer_no_url" ? "概要通知（先の予約）確認リンク付き・場所URLなし" : ntSubTab === "customer_detail_url" ? "詳細通知（前日/当日）ルーム・場所URL付き" : "詳細通知（場所未定）ルーム確定前の詳細連絡"}
                 </p>
 
                 {/* 変数挿入ボタン */}
@@ -1069,8 +1069,10 @@ export default function ServiceSettings() {
                   <div className="flex flex-wrap gap-1.5">
                     {(ntSubTab === "staff"
                       ? ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名}","{割引}","{店舗名}","{金額}","{送信者}","{送信者行}","{お客様リンク}"]
-                      : ntSubTab === "customer_detail"
+                      : ntSubTab === "customer_detail_url"
                       ? ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名行}","{割引行}","{セラピスト行}","{店舗名}","{金額}","{場所URL}","{ルーム名}","{ビル名}"]
+                      : ntSubTab === "customer_detail_no_url"
+                      ? ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名行}","{割引行}","{セラピスト行}","{店舗名}","{金額}","{ルーム名}","{ビル名}"]
                       : ["{お客様名}","{日時}","{日付}","{開始時刻}","{終了時刻}","{コース}","{指名行}","{割引行}","{セラピスト行}","{店舗名}","{金額}","{場所URL}"]
                     ).map(v => (
                       <button key={v} onClick={() => {
