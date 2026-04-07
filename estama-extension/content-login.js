@@ -1,34 +1,52 @@
 // =============================================
-// T-MANAGE エステ魂自動投稿 — content-login.js
-// estama.jp/login ログインフォーム自動入力
+// T-MANAGE エステ魂自動投稿 — content-login.js v2
+// ログインページで: ① セッションクリア → ② リロード → ③ フォーム入力
 // =============================================
 
 (function () {
   console.log('[エステ魂拡張] ログインページ検出');
 
-  chrome.storage.local.get('estamaPost', (data) => {
+  chrome.storage.local.get('estamaPost', async (data) => {
     const post = data.estamaPost;
     if (!post || !post.estamaId || !post.estamaPw) {
       console.log('[エステ魂拡張] 投稿データなし、スキップ');
       return;
     }
 
-    // 古いデータ（5分以上前）はスキップ
     if (Date.now() - post.timestamp > 5 * 60 * 1000) {
       console.log('[エステ魂拡張] 古いデータ、スキップ');
       return;
     }
 
-    console.log('[エステ魂拡張] ログイン情報入力開始');
+    // ===== ① まずセッションをクリア（同一オリジンfetch）=====
+    // 2回目（リロード後）はスキップ
+    const RELOADED_KEY = 'estama_ext_session_cleared';
+    if (!sessionStorage.getItem(RELOADED_KEY)) {
+      console.log('[エステ魂拡張] セッションクリア中...');
+      sessionStorage.setItem(RELOADED_KEY, '1');
+      try {
+        await fetch('/post/logout/', { credentials: 'same-origin' });
+      } catch (e) {
+        console.warn('[エステ魂拡張] logout fetch失敗:', e);
+      }
+      // リロードして新しいCSRFトークンを取得
+      setTimeout(() => {
+        window.location.href = 'https://estama.jp/login/?r=/admin/blog_edit/';
+      }, 300);
+      return;
+    }
 
-    // ログインフォームの入力欄をポーリング
+    // ===== ② リロード後 → フォーム入力 =====
+    sessionStorage.removeItem(RELOADED_KEY);
+    console.log('[エステ魂拡張] セッションクリア済 → フォーム入力開始');
+
     let attempts = 0;
     const maxAttempts = 30;
 
     const tryFill = setInterval(() => {
       attempts++;
-      const emailInput = document.getElementById('inputEmail');
-      const pwInput = document.getElementById('inputPassword');
+      const emailInput = document.querySelector('input[name="mail"]') || document.getElementById('inputEmail');
+      const pwInput = document.querySelector('input[name="password"]') || document.getElementById('inputPassword');
 
       if (!emailInput || !pwInput) {
         if (attempts >= maxAttempts) {
@@ -40,24 +58,24 @@
 
       clearInterval(tryFill);
 
-      // Native setter で値を設定（React/Angular対応）
-      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-      nativeSetter.call(emailInput, post.estamaId);
+      // フォーム入力
+      emailInput.focus();
+      emailInput.value = post.estamaId;
       emailInput.dispatchEvent(new Event('input', { bubbles: true }));
       emailInput.dispatchEvent(new Event('change', { bubbles: true }));
+      emailInput.blur();
 
-      nativeSetter.call(pwInput, post.estamaPw);
+      pwInput.focus();
+      pwInput.value = post.estamaPw;
       pwInput.dispatchEvent(new Event('input', { bubbles: true }));
       pwInput.dispatchEvent(new Event('change', { bubbles: true }));
+      pwInput.blur();
 
       // rパラメータを blog_edit に設定
       const rInput = document.querySelector('input[name="r"]');
-      if (rInput) {
-        nativeSetter.call(rInput, '/admin/blog_edit/');
-        rInput.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      if (rInput) rInput.value = '/admin/blog_edit/';
 
-      console.log('[エステ魂拡張] ID/PW入力完了');
+      console.log('[エステ魂拡張] ID/PW入力完了:', post.estamaId);
 
       // バナー表示
       const banner = document.createElement('div');

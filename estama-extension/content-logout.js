@@ -1,16 +1,19 @@
 // =============================================
 // T-MANAGE エステ魂自動投稿 — content-logout.js
-// ログアウト後 → ログインページへ自動リダイレクト
+// ログアウト完了検知 → ログインページへリダイレクト
+// estama.jp/post/logout, /login（ログアウト後リダイレクト先）両方で動作
 // =============================================
 
 (function () {
-  chrome.storage.local.get('estamaPost', (data) => {
-    if (data.estamaPost && data.estamaPost.title) {
-      console.log('[エステ魂拡張] ログアウト完了 → ログインページへリダイレクト');
-      // 少し待ってからログインページへ（セッションクリア確認）
-      setTimeout(() => {
-        window.location.href = 'https://estama.jp/login/?r=/admin/blog_edit/';
-      }, 500);
-    }
-  });
+  // ログアウトURLにいる場合 → 待ってからログインページへ
+  if (window.location.href.includes('/logout')) {
+    chrome.storage.local.get('estamaPost', (data) => {
+      if (data.estamaPost && data.estamaPost.title) {
+        console.log('[エステ魂拡張] ログアウトページ検出 → 1秒後にログインへ');
+        setTimeout(() => {
+          window.location.href = 'https://estama.jp/login/?r=/admin/blog_edit/';
+        }, 1000);
+      }
+    });
+  }
 })();
