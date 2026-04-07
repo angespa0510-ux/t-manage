@@ -425,6 +425,7 @@ useEffect(() => {
         {([["all", "🏠 すべて"], ["rooms", "🏠 部屋割り"], ["staff", "👤 スタッフ"], ["tasks", "📋 タスク"]] as const).map(([key, label]) => (
           <button key={key} onClick={() => { setViewFilter(key as typeof viewFilter); if (key === "staff") setStaffOpen(true); if (key === "tasks") setTaskOpen(true); }} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: viewFilter === key ? "#c3a78222" : "transparent", color: viewFilter === key ? "#c3a782" : T.textMuted, border: `1px solid ${viewFilter === key ? "#c3a782" : T.border}`, fontWeight: viewFilter === key ? 700 : 400 }}>{label}</button>
         ))}
+        <button onClick={() => setShowWeeklyTaskPanel(true)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>⚙️ 曜日タスク管理</button>
       </div>
 
       {/* Calendar */}
@@ -693,7 +694,6 @@ useEffect(() => {
                           );
                         })}
                       </div>
-                      <button onClick={() => setShowWeeklyTaskPanel(true)} className="mt-2 px-3 py-1.5 rounded-lg text-[9px] cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>⚙️ 曜日タスク管理</button>
                       </>)}
                         </div>
                       )}
