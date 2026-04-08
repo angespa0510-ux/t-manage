@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 
 type Customer = {
   id: number; created_at: string; name: string; self_name: string; phone: string; phone2: string; phone3: string;
@@ -128,6 +129,140 @@ export default function Dashboard() {
 
   // Register
   const [custName, setCustName] = useState(""); const [custSelfName, setCustSelfName] = useState(""); const [custPhone, setCustPhone] = useState(""); const [custPhone2, setCustPhone2] = useState(""); const [custPhone3, setCustPhone3] = useState("");
+
+  // Import
+  type ImportRow = { name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; birthday: string; rank: string; notes: string };
+  type ImportNgRow = { customer_name: string; therapist_name: string; is_ng: boolean; ng_reason: string; note: string; rating: number };
+  const [showImport, setShowImport] = useState(false);
+  const [importStep, setImportStep] = useState<1 | 2 | 3 | 4>(1);
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [importNgRows, setImportNgRows] = useState<ImportNgRow[]>([]);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importTotal, setImportTotal] = useState(0);
+  const [importDone, setImportDone] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const [importSkipDup, setImportSkipDup] = useState(true);
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const importNgFileRef = useRef<HTMLInputElement>(null);
+
+  const parseCSV = (text: string): string[][] => {
+    const rows: string[][] = []; let current = ""; let inQuote = false; let row: string[] = [];
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQuote) { if (ch === '"' && text[i+1] === '"') { current += '"'; i++; } else if (ch === '"') inQuote = false; else current += ch; }
+      else { if (ch === '"') inQuote = true; else if (ch === ',') { row.push(current.trim()); current = ""; } else if (ch === '\n' || ch === '\r') { if (current || row.length) { row.push(current.trim()); rows.push(row); } current = ""; row = []; if (ch === '\r' && text[i+1] === '\n') i++; } else current += ch; }
+    }
+    if (current || row.length) { row.push(current.trim()); rows.push(row); }
+    return rows;
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseCSV(text);
+      if (rows.length < 2) { setImportMsg("データが見つかりません"); return; }
+      // Skip header row (and optional description row)
+      let startIdx = 1;
+      const firstDataRow = rows[1];
+      if (firstDataRow && firstDataRow[0] && (firstDataRow[0].includes("必須") || firstDataRow[0].includes("管理名") || firstDataRow[0].includes("タイムチャート"))) startIdx = 2;
+      const parsed: ImportRow[] = [];
+      for (let i = startIdx; i < rows.length; i++) {
+        const r = rows[i]; if (!r[0]) continue;
+        parsed.push({ name: r[0] || "", self_name: r[1] || "", phone: (r[2] || "").replace(/[-\s　()（）]/g, ""), phone2: (r[3] || "").replace(/[-\s　()（）]/g, ""), phone3: (r[4] || "").replace(/[-\s　()（）]/g, ""), email: r[5] || "", birthday: r[6] || "", rank: (r[7] || "normal").toLowerCase(), notes: r[8] || "" });
+      }
+      setImportRows(parsed);
+      setImportMsg(`✅ ${parsed.length}件の顧客データを読み込みました`);
+      if (parsed.length > 0) setImportStep(2);
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
+  const handleImportNgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseCSV(text);
+      let startIdx = 1;
+      if (rows[1] && rows[1][0] && (rows[1][0].includes("一致") || rows[1][0].includes("顧客"))) startIdx = 2;
+      const parsed: ImportNgRow[] = [];
+      for (let i = startIdx; i < rows.length; i++) {
+        const r = rows[i]; if (!r[0] || !r[1]) continue;
+        parsed.push({ customer_name: r[0], therapist_name: r[1], is_ng: (r[2] || "").includes("はい"), ng_reason: r[3] || "", note: r[4] || "", rating: parseInt(r[5]) || 0 });
+      }
+      setImportNgRows(parsed);
+      setImportMsg(`✅ ${parsed.length}件のNG・メモデータを読み込みました`);
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
+  const executeImport = async () => {
+    setImportStep(3); setImportProgress(0); setImportDone(false); setImportMsg("");
+    const total = importRows.length + importNgRows.length;
+    setImportTotal(total);
+    let done = 0; let created = 0; let updated = 0; let skipped = 0; let ngCreated = 0;
+
+    // 顧客インポート
+    for (const row of importRows) {
+      if (!row.name) { skipped++; done++; setImportProgress(done); continue; }
+      const phone = row.phone || null;
+      // 重複チェック（名前 or 電話番号）
+      let existing = null;
+      if (importSkipDup) {
+        const { data: byName } = await supabase.from("customers").select("id").eq("name", row.name).maybeSingle();
+        if (byName) existing = byName;
+        if (!existing && phone) {
+          const { data: byPhone } = await supabase.from("customers").select("id").or(`phone.eq.${phone},phone2.eq.${phone},phone3.eq.${phone}`).maybeSingle();
+          if (byPhone) existing = byPhone;
+        }
+      }
+      if (existing) {
+        // 更新（備考は追記）
+        const updates: Record<string, string | null> = {};
+        if (row.self_name) updates.self_name = row.self_name;
+        if (row.phone) updates.phone = row.phone;
+        if (row.phone2) updates.phone2 = row.phone2;
+        if (row.phone3) updates.phone3 = row.phone3;
+        if (row.email) updates.email = row.email;
+        if (row.birthday) updates.birthday = row.birthday;
+        if (row.rank && row.rank !== "normal") updates.rank = row.rank;
+        if (row.notes) {
+          const { data: cur } = await supabase.from("customers").select("notes").eq("id", existing.id).maybeSingle();
+          updates.notes = cur?.notes ? cur.notes + "\n" + row.notes : row.notes;
+        }
+        if (Object.keys(updates).length > 0) await supabase.from("customers").update(updates).eq("id", existing.id);
+        updated++;
+      } else {
+        await supabase.from("customers").insert({ name: row.name, self_name: row.self_name || null, phone: row.phone || null, phone2: row.phone2 || null, phone3: row.phone3 || null, email: row.email || null, birthday: row.birthday || null, rank: row.rank || "normal", notes: row.notes || null });
+        created++;
+      }
+      done++;
+      if (done % 10 === 0) setImportProgress(done);
+    }
+
+    // NG・メモインポート
+    for (const row of importNgRows) {
+      const th = therapists.find(t => t.name === row.therapist_name);
+      if (!th) { skipped++; done++; setImportProgress(done); continue; }
+      const { data: ex } = await supabase.from("therapist_customer_notes").select("id").eq("customer_name", row.customer_name).eq("therapist_id", th.id).maybeSingle();
+      if (ex) {
+        await supabase.from("therapist_customer_notes").update({ is_ng: row.is_ng, ng_reason: row.ng_reason, note: row.note, rating: row.rating }).eq("id", ex.id);
+      } else {
+        await supabase.from("therapist_customer_notes").insert({ customer_name: row.customer_name, therapist_id: th.id, is_ng: row.is_ng, ng_reason: row.ng_reason, note: row.note, rating: row.rating });
+      }
+      ngCreated++;
+      done++;
+      if (done % 10 === 0) setImportProgress(done);
+    }
+
+    setImportProgress(total);
+    setImportDone(true);
+    setImportMsg(`✅ 完了！ 新規: ${created}件 / 更新: ${updated}件 / NG・メモ: ${ngCreated}件 / スキップ: ${skipped}件`);
+    setImportStep(4);
+    fetchCustomers();
+  };
   const [custEmail, setCustEmail] = useState(""); const [custNotes, setCustNotes] = useState(""); const [custRank, setCustRank] = useState("normal"); const [custBirthday, setCustBirthday] = useState("");
   const [saving, setSaving] = useState(false); const [saveMsg, setSaveMsg] = useState("");
 
@@ -667,6 +802,7 @@ export default function Dashboard() {
                 <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
                   <div><h2 className="text-[15px] font-medium">顧客一覧</h2><p className="text-[11px] mt-0.5" style={{ color: T.textFaint }}>{customers.length}件の顧客情報</p></div>
                   <div className="flex items-center gap-2">
+                    <button onClick={() => setShowImport(true)} className="px-4 py-2.5 text-[12px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📥 インポート</button>
                     <button onClick={() => setShowNgRegister(true)} className="px-4 py-2.5 text-[12px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
                     <button onClick={() => setActivePage("顧客登録")} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">+ 新規登録</button>
                   </div>
@@ -1431,6 +1567,171 @@ export default function Dashboard() {
                 </button>
                 <button onClick={() => { setShowNgRegister(false); setNgSelectedCust(null); setNgCustSearch(""); setNgTherapistId(0); setNgReason(""); setNgMsg(""); }} className="px-6 py-3 border text-[13px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* インポートモーダル */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !importProgress || importDone ? setShowImport(false) : null}>
+          <div className="rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between sticky top-0 z-10" style={{ backgroundColor: T.card, borderBottom: `1px solid ${T.border}` }}>
+              <h2 className="text-[16px] font-medium" style={{ color: "#3b82f6" }}>📥 顧客データ インポート</h2>
+              <button onClick={() => setShowImport(false)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-5">
+
+              {/* ステップ表示 */}
+              <div className="flex items-center gap-2">
+                {[1,2,3,4].map(s => (
+                  <div key={s} className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ backgroundColor: importStep >= s ? "#3b82f6" : T.cardAlt, color: importStep >= s ? "white" : T.textMuted }}>{s}</div>
+                    {s < 4 && <div className="w-8 h-[2px]" style={{ backgroundColor: importStep > s ? "#3b82f6" : T.border }} />}
+                  </div>
+                ))}
+                <span className="text-[11px] ml-2" style={{ color: T.textMuted }}>{importStep === 1 ? "ファイル選択" : importStep === 2 ? "プレビュー確認" : importStep === 3 ? "インポート中" : "完了"}</span>
+              </div>
+
+              {/* STEP1: ファイル選択 + 説明 */}
+              {importStep === 1 && (<>
+                <div className="rounded-xl p-4" style={{ backgroundColor: "#3b82f608", border: "1px solid #3b82f625" }}>
+                  <p className="text-[13px] font-medium mb-3" style={{ color: "#3b82f6" }}>📋 インポートの流れ</p>
+                  <div className="space-y-2 text-[11px]" style={{ color: T.textSub }}>
+                    <p>① 以前のシステムから顧客データをCSV形式でエクスポート</p>
+                    <p>② テンプレートの列順に合わせてデータを整形</p>
+                    <p>③ このページでCSVファイルをアップロード</p>
+                    <p>④ プレビューで内容を確認してインポート実行</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2">📂 顧客CSVの列順（必須）</p>
+                  <div className="text-[10px] font-mono p-2 rounded-lg overflow-x-auto" style={{ backgroundColor: T.bg, color: T.textMuted }}>名前（スタッフ管理用）, 名前（お客様用）, 電話番号1, 電話番号2, 電話番号3, メール, 誕生日, ランク, 備考</div>
+                  <p className="text-[10px] mt-2" style={{ color: T.textMuted }}>※ 1行目はヘッダー行（自動スキップ）。ランクは normal / caution / banned / good。備考の1行目がタイムチャートに表示されます。</p>
+                </div>
+
+                <div>
+                  <p className="text-[12px] font-medium mb-2">① 顧客データCSV <span style={{ color: "#c49885" }}>*</span></p>
+                  <input ref={importFileRef} type="file" accept=".csv,.txt" onChange={handleImportFile} className="hidden" />
+                  <button onClick={() => importFileRef.current?.click()} className="w-full py-4 rounded-xl text-[13px] cursor-pointer border-2 border-dashed" style={{ borderColor: importRows.length > 0 ? "#22c55e" : "#3b82f6", color: importRows.length > 0 ? "#22c55e" : "#3b82f6", backgroundColor: importRows.length > 0 ? "#22c55e08" : "#3b82f608" }}>
+                    {importRows.length > 0 ? `✅ ${importRows.length}件読み込み済み — クリックで再選択` : "📁 CSVファイルを選択"}
+                  </button>
+                </div>
+
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-2">📂 NG・メモCSVの列順（任意）</p>
+                  <div className="text-[10px] font-mono p-2 rounded-lg overflow-x-auto" style={{ backgroundColor: T.bg, color: T.textMuted }}>お客様名, セラピスト名, NG(はい/いいえ), NG理由, メモ, 評価(1-5)</div>
+                  <p className="text-[10px] mt-2" style={{ color: T.textMuted }}>※ お客様名は顧客CSVの「名前（スタッフ管理用）」と一致。セラピスト名はT-MANAGEに登録済みのセラピスト名と一致させてください。</p>
+                </div>
+
+                <div>
+                  <p className="text-[12px] font-medium mb-2">② NG・セラピストメモCSV（任意）</p>
+                  <input ref={importNgFileRef} type="file" accept=".csv,.txt" onChange={handleImportNgFile} className="hidden" />
+                  <button onClick={() => importNgFileRef.current?.click()} className="w-full py-4 rounded-xl text-[13px] cursor-pointer border-2 border-dashed" style={{ borderColor: importNgRows.length > 0 ? "#22c55e" : T.border, color: importNgRows.length > 0 ? "#22c55e" : T.textMuted, backgroundColor: importNgRows.length > 0 ? "#22c55e08" : "transparent" }}>
+                    {importNgRows.length > 0 ? `✅ ${importNgRows.length}件読み込み済み — クリックで再選択` : "📁 NG・メモCSVを選択（スキップ可）"}
+                  </button>
+                </div>
+
+                {importMsg && <p className="text-[12px]" style={{ color: importMsg.startsWith("✅") ? "#22c55e" : "#c45555" }}>{importMsg}</p>}
+
+                <button onClick={() => { if (importRows.length > 0) setImportStep(2); else setImportMsg("顧客CSVを選択してください"); }} disabled={importRows.length === 0} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ backgroundColor: "#3b82f6" }}>次へ → プレビュー確認</button>
+              </>)}
+
+              {/* STEP2: プレビュー */}
+              {importStep === 2 && (<>
+                <div className="rounded-xl p-3" style={{ backgroundColor: "#f59e0b10", border: "1px solid #f59e0b30" }}>
+                  <p className="text-[11px]" style={{ color: "#f59e0b" }}>⚠ インポート前に内容を確認してください。問題なければ「インポート実行」を押してください。</p>
+                </div>
+
+                <div>
+                  <p className="text-[12px] font-medium mb-2">👥 顧客データ（先頭10件）</p>
+                  <div className="max-h-[250px] overflow-auto rounded-xl border" style={{ borderColor: T.border }}>
+                    <table className="w-full text-[10px]">
+                      <thead><tr style={{ backgroundColor: T.cardAlt }}>
+                        {["名前(管理)", "名前(お客様)", "電話1", "電話2", "電話3", "メール", "誕生日", "ランク", "備考"].map(h => <th key={h} className="py-2 px-2 text-left font-medium" style={{ color: T.textMuted }}>{h}</th>)}
+                      </tr></thead>
+                      <tbody>{importRows.slice(0, 10).map((r, i) => (
+                        <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
+                          <td className="py-1.5 px-2 font-medium">{r.name}</td>
+                          <td className="py-1.5 px-2" style={{ color: T.textSub }}>{r.self_name || "—"}</td>
+                          <td className="py-1.5 px-2">{r.phone || "—"}</td>
+                          <td className="py-1.5 px-2">{r.phone2 || "—"}</td>
+                          <td className="py-1.5 px-2">{r.phone3 || "—"}</td>
+                          <td className="py-1.5 px-2">{r.email || "—"}</td>
+                          <td className="py-1.5 px-2">{r.birthday || "—"}</td>
+                          <td className="py-1.5 px-2">{r.rank}</td>
+                          <td className="py-1.5 px-2 max-w-[120px] truncate">{r.notes?.split("\n")[0] || "—"}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                  {importRows.length > 10 && <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>…他 {importRows.length - 10}件</p>}
+                </div>
+
+                {importNgRows.length > 0 && (
+                  <div>
+                    <p className="text-[12px] font-medium mb-2">🚫 NG・メモ（先頭10件）</p>
+                    <div className="max-h-[150px] overflow-auto rounded-xl border" style={{ borderColor: T.border }}>
+                      <table className="w-full text-[10px]">
+                        <thead><tr style={{ backgroundColor: T.cardAlt }}>
+                          {["お客様名", "セラピスト", "NG", "理由", "メモ", "評価"].map(h => <th key={h} className="py-2 px-2 text-left font-medium" style={{ color: T.textMuted }}>{h}</th>)}
+                        </tr></thead>
+                        <tbody>{importNgRows.slice(0, 10).map((r, i) => (
+                          <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
+                            <td className="py-1.5 px-2 font-medium">{r.customer_name}</td>
+                            <td className="py-1.5 px-2">{r.therapist_name}</td>
+                            <td className="py-1.5 px-2" style={{ color: r.is_ng ? "#c45555" : T.textMuted }}>{r.is_ng ? "🚫" : "—"}</td>
+                            <td className="py-1.5 px-2">{r.ng_reason || "—"}</td>
+                            <td className="py-1.5 px-2 max-w-[100px] truncate">{r.note || "—"}</td>
+                            <td className="py-1.5 px-2">{r.rating > 0 ? "★".repeat(r.rating) : "—"}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <button onClick={() => setImportSkipDup(!importSkipDup)} className="flex items-center gap-2 px-4 py-3 rounded-xl cursor-pointer w-full text-left" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                    <span className="text-[14px]">{importSkipDup ? "☑️" : "⬜"}</span>
+                    <div>
+                      <span className="text-[12px] font-medium" style={{ color: importSkipDup ? "#3b82f6" : T.textMuted }}>重複チェック（名前・電話番号で照合）</span>
+                      <p className="text-[10px]" style={{ color: T.textMuted }}>ONにすると既存顧客と重複する場合は更新、OFFだとすべて新規登録</p>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={() => setImportStep(1)} className="px-6 py-3 border text-[13px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>← 戻る</button>
+                  <button onClick={executeImport} className="flex-1 py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ backgroundColor: "#3b82f6" }}>🚀 インポート実行（{importRows.length}件{importNgRows.length > 0 ? ` + NG${importNgRows.length}件` : ""}）</button>
+                </div>
+              </>)}
+
+              {/* STEP3: インポート中 */}
+              {importStep === 3 && !importDone && (
+                <div className="text-center py-8">
+                  <div className="text-[36px] mb-4">⏳</div>
+                  <p className="text-[14px] font-medium mb-3">インポート中...</p>
+                  <div className="w-full h-3 rounded-full overflow-hidden mb-2" style={{ backgroundColor: T.cardAlt }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${importTotal > 0 ? (importProgress / importTotal) * 100 : 0}%`, backgroundColor: "#3b82f6" }} />
+                  </div>
+                  <p className="text-[12px]" style={{ color: T.textMuted }}>{importProgress} / {importTotal} 件処理中...</p>
+                  <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>大量データの場合は数分かかることがあります。画面を閉じないでください。</p>
+                </div>
+              )}
+
+              {/* STEP4: 完了 */}
+              {importStep === 4 && (
+                <div className="text-center py-6">
+                  <div className="text-[48px] mb-3">🎉</div>
+                  <p className="text-[16px] font-medium mb-4">インポート完了！</p>
+                  {importMsg && <div className="px-4 py-3 rounded-xl text-[13px] mb-4 inline-block" style={{ backgroundColor: "#22c55e12", color: "#22c55e", border: "1px solid #22c55e30" }}>{importMsg}</div>}
+                  <div className="pt-4">
+                    <button onClick={() => setShowImport(false)} className="px-8 py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ backgroundColor: "#3b82f6" }}>閉じる</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
