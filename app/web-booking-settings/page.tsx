@@ -230,7 +230,7 @@ export default function WebBookingSettings() {
               </p>
               <div className="rounded-lg mt-2 p-3" style={{ backgroundColor: "rgba(232,168,56,0.06)", border: "1px solid rgba(232,168,56,0.2)" }}>
                 <p className="text-[11px] m-0" style={{ color: "#e8a838", fontWeight: 600 }}>⚠ 終了時刻を超えるご予約です</p>
-                <p className="text-[10px] m-0 mt-1" style={{ color: T.textMuted }}>コース内容の調整をお願いする場合がございます。予めご了承ください。</p>
+                <p className="text-[10px] m-0 mt-1" style={{ color: T.textMuted }}>コース内容の調整、またはご予約キャンセルをお願いする場合がございます。予めご了承ください。</p>
               </div>
               <p className="text-[11px] m-0 mt-2" style={{ color: T.textMuted, lineHeight: 1.8 }}>
                 <strong style={{ color: T.text }}>具体例①:</strong> 出勤20:00まで → 19:00開始 → 60分コースはOK / 90分コースは ⚠ 注意書き表示<br />

@@ -729,7 +729,7 @@ function PublicScheduleInner() {
                   <p style={{ fontSize: 11, color: C.textSub, margin: "6px 0 0", lineHeight: 1.7 }}>
                     セラピストの出勤終了は <strong style={{ color: C.text }}>{selShift?.end_time.slice(0,5)}</strong> ですが、
                     選択されたコースの終了は <strong style={{ color: C.text }}>{minToTime(endMin)}</strong> になります。<br />
-                    ご予約は可能ですが、<strong style={{ color: "#e8a838" }}>コース内容の調整をお願いする場合がございます</strong>。予めご了承ください。
+                    ご予約は可能ですが、<strong style={{ color: "#e8a838" }}>コース内容の調整、またはご予約キャンセルをお願いする場合がございます</strong>。予めご了承ください。
                   </p>
                 </div>
               );
@@ -953,7 +953,7 @@ function PublicScheduleInner() {
                 <div style={{ padding: "12px 14px", borderRadius: 12, marginBottom: 12, backgroundColor: "rgba(232,168,56,0.08)", border: "1px solid rgba(232,168,56,0.25)" }}>
                   <p style={{ fontSize: 12, fontWeight: 600, color: "#e8a838", margin: 0 }}>⚠ 終了時刻を超えるご予約です</p>
                   <p style={{ fontSize: 11, color: C.textSub, margin: "4px 0 0", lineHeight: 1.6 }}>
-                    コース内容の調整をお願いする場合がございます。予めご了承ください。
+                    コース内容の調整、またはご予約キャンセルをお願いする場合がございます。予めご了承ください。
                   </p>
                 </div>
               );
