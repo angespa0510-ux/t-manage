@@ -77,6 +77,7 @@ export default function PublicSchedule() {
   // Booking
   const [bookSaving, setBookSaving] = useState(false);
   const [bookMsg, setBookMsg] = useState("");
+  const [custPastRes, setCustPastRes] = useState<{ therapist_id: number }[]>([]);
 
   // Weekly view
   const [weeklyMode, setWeeklyMode] = useState(false);
@@ -137,6 +138,13 @@ export default function PublicSchedule() {
       supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) setCustomer(data); });
     }
   }, []);
+  // お客様の過去予約取得（指名判定用）
+  useEffect(() => {
+    if (!customer) return;
+    supabase.from("reservations").select("therapist_id").eq("customer_name", customer.name).eq("status", "completed").then(({ data }) => {
+      if (data) setCustPastRes(data);
+    });
+  }, [customer]);
 
   /* ─── Slot generation ─── */
   const makeSlots = (shift: Shift, resForTherapist: Reservation[]) => {
@@ -152,9 +160,13 @@ export default function PublicSchedule() {
 
   /* ─── Nomination logic ─── */
   const getNominationType = (tid: number): { name: string; label: string; price: number } => {
-    if (tid === 0 || !customer) return { name: "P指名", label: "✨ P指名", price: nominations.find(n => n.name.includes("P指名") || n.name.includes("パネル"))?.price || 0 };
-    // No history check without customer reservations - default to P指名
-    return { name: "P指名", label: "✨ P指名（初回）", price: nominations.find(n => n.name.includes("P指名") || n.name.includes("パネル"))?.price || 0 };
+    if (tid === 0) return { name: "", label: "フリー", price: 0 };
+    if (customer && custPastRes.some(r => r.therapist_id === tid)) {
+      const n = nominations.find(n => n.name.includes("本指名"));
+      return { name: n?.name || "本指名", label: "⭐ 本指名（リピーター）", price: n?.price || 0 };
+    }
+    const n = nominations.find(n => n.name.includes("P指名") || n.name.includes("パネル"));
+    return { name: n?.name || "P指名", label: "✨ P指名（初回）", price: n?.price || 0 };
   };
 
   /* ─── Helpers ─── */
