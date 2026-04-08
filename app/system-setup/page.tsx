@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 
-type Tab = "cti" | "chrome" | "video" | "sokuho" | "hp";
+type Tab = "cti" | "chrome" | "video" | "sokuho" | "hp" | "mail";
 
 export default function SystemSetup() {
   const router = useRouter();
@@ -39,13 +39,23 @@ export default function SystemSetup() {
   const [hpTesting, setHpTesting] = useState(false);
   const [hpTestResult, setHpTestResult] = useState("");
 
+  // SMTP
+  const [smtpHost, setSmtpHost] = useState("smtp.gmail.com");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPass, setSmtpPass] = useState("");
+  const [smtpFrom, setSmtpFrom] = useState("");
+  const [mailStoreName, setMailStoreName] = useState("チョップ");
+  const [smtpSaving, setSmtpSaving] = useState(false);
+  const [smtpMsg, setSmtpMsg] = useState("");
+
   useEffect(() => {
     const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); };
     check();
     // LINE URL読み込み
     const loadSettings = async () => {
-      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff", "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi", "hp_login_id", "hp_login_pass"]);
-      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); if (s.key === "bsky_id") setBskyId(s.value); if (s.key === "bsky_pw") setBskyPw(s.value); if (s.key === "estama_id_mikawa") setEstamaIdMikawa(s.value); if (s.key === "estama_pw_mikawa") setEstamaPwMikawa(s.value); if (s.key === "estama_id_toyohashi") setEstamaIdToyohashi(s.value); if (s.key === "estama_pw_toyohashi") setEstamaPwToyohashi(s.value); if (s.key === "hp_login_id") setHpLoginId(s.value); if (s.key === "hp_login_pass") setHpLoginPass(s.value); } }
+      const { data } = await supabase.from("store_settings").select("key,value").in("key", ["line_url_customer", "line_url_staff", "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi", "hp_login_id", "hp_login_pass", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_from", "store_name"]);
+      if (data) { for (const s of data) { if (s.key === "line_url_customer") setLineUrlCustomer(s.value); if (s.key === "line_url_staff") setLineUrlStaff(s.value); if (s.key === "bsky_id") setBskyId(s.value); if (s.key === "bsky_pw") setBskyPw(s.value); if (s.key === "estama_id_mikawa") setEstamaIdMikawa(s.value); if (s.key === "estama_pw_mikawa") setEstamaPwMikawa(s.value); if (s.key === "estama_id_toyohashi") setEstamaIdToyohashi(s.value); if (s.key === "estama_pw_toyohashi") setEstamaPwToyohashi(s.value); if (s.key === "hp_login_id") setHpLoginId(s.value); if (s.key === "hp_login_pass") setHpLoginPass(s.value); if (s.key === "smtp_host") setSmtpHost(s.value); if (s.key === "smtp_port") setSmtpPort(s.value); if (s.key === "smtp_user") setSmtpUser(s.value); if (s.key === "smtp_pass") setSmtpPass(s.value); if (s.key === "smtp_from") setSmtpFrom(s.value); if (s.key === "store_name") setMailStoreName(s.value); } }
     };
     loadSettings();
   }, [router]);
@@ -85,6 +95,15 @@ export default function SystemSetup() {
     await supabase.from("store_settings").upsert({ key: "hp_login_pass", value: hpLoginPass }, { onConflict: "key" });
     setHpSaving(false); setHpMsg("保存しました！");
     setTimeout(() => setHpMsg(""), 3000);
+  };
+
+  const saveSmtpSettings = async () => {
+    setSmtpSaving(true); setSmtpMsg("");
+    for (const [key, value] of [["smtp_host", smtpHost], ["smtp_port", smtpPort], ["smtp_user", smtpUser], ["smtp_pass", smtpPass], ["smtp_from", smtpFrom || smtpUser], ["store_name", mailStoreName]] as [string, string][]) {
+      await supabase.from("store_settings").upsert({ key, value }, { onConflict: "key" });
+    }
+    setSmtpSaving(false); setSmtpMsg("✅ 保存しました！");
+    setTimeout(() => setSmtpMsg(""), 3000);
   };
 
   const testHpLogin = async () => {
@@ -135,6 +154,7 @@ export default function SystemSetup() {
             { key: "hp" as Tab, label: "🌐 HP連携", desc: "Panda Web Concierge" },
             { key: "video" as Tab, label: "🎥 AI動画生成", desc: "セットアップ" },
             { key: "sokuho" as Tab, label: "📢 リアルタイム速報", desc: "Bluesky / エステ魂" },
+            { key: "mail" as Tab, label: "✉️ メール送信", desc: "パスワード再発行" },
           ]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className="flex-1 py-4 rounded-2xl cursor-pointer text-center"
@@ -1160,6 +1180,71 @@ export default function SystemSetup() {
                     <p className="text-[11px]" style={{ color: T.textMuted }}>A. {faq.a}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════ メール送信設定 ═══════ */}
+        {tab === "mail" && (
+          <div className="space-y-6 animate-[fadeIn_0.3s]">
+            <div className="rounded-2xl border p-6" style={cardStyle}>
+              <h2 className="text-[16px] font-medium mb-1">✉️ メール送信設定</h2>
+              <p className="text-[12px] mb-5" style={{ color: T.textMuted }}>パスワード再発行などのメール送信に使用するSMTP設定</p>
+
+              <div className="rounded-xl p-4 mb-5" style={{ backgroundColor: "#3b82f610", border: "1px solid #3b82f630" }}>
+                <p className="text-[11px] font-medium mb-1" style={{ color: "#3b82f6" }}>💡 Gmailを使う場合</p>
+                <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
+                  ① <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" style={{ color: "#3b82f6", textDecoration: "underline" }}>Googleアカウント セキュリティ</a> → 2段階認証を有効にする<br />
+                  ② 2段階認証の設定内 →「アプリパスワード」で新しいパスワードを生成<br />
+                  ③ 生成された16文字のパスワードを下の「パスワード」欄に入力<br />
+                  ※ SMTPサーバーは <code>smtp.gmail.com</code>、ポートは <code>587</code> のままでOK
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>店舗名（メール送信者名）</label>
+                  <input type="text" value={mailStoreName} onChange={e => setMailStoreName(e.target.value)} placeholder="チョップ" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>SMTPサーバー</label>
+                    <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ポート</label>
+                    <input type="text" value={smtpPort} onChange={e => setSmtpPort(e.target.value)} placeholder="587" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メールアドレス（ログインID）</label>
+                  <input type="email" value={smtpUser} onChange={e => setSmtpUser(e.target.value)} placeholder="example@gmail.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>パスワード（Gmailの場合はアプリパスワード）</label>
+                  <input type="password" value={smtpPass} onChange={e => setSmtpPass(e.target.value)} placeholder="アプリパスワード16文字" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>送信元メールアドレス（空欄の場合はログインIDと同じ）</label>
+                  <input type="email" value={smtpFrom} onChange={e => setSmtpFrom(e.target.value)} placeholder="noreply@example.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button onClick={saveSmtpSettings} disabled={smtpSaving} className="px-6 py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg, #c3a782, #b09672)" }}>{smtpSaving ? "保存中..." : "💾 設定を保存"}</button>
+                  {smtpMsg && <span className="text-[12px]" style={{ color: smtpMsg.includes("✅") ? "#4a7c59" : "#c45555" }}>{smtpMsg}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* 用途説明 */}
+            <div className="rounded-2xl border p-6" style={cardStyle}>
+              <h3 className="text-[14px] font-medium mb-3">📋 メール送信が使われる場面</h3>
+              <div className="space-y-2">
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-1">🔑 パスワード再発行</p>
+                  <p className="text-[10px]" style={{ color: T.textMuted }}>お客様マイページで「パスワードを忘れた方はこちら」→ 電話番号入力 → 登録メールアドレスに新パスワードを送信</p>
+                </div>
               </div>
             </div>
           </div>
