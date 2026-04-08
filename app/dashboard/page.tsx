@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
+const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
 
 type Customer = {
   id: number; created_at: string; name: string; self_name: string; phone: string; phone2: string; phone3: string;
@@ -93,6 +94,7 @@ export default function Dashboard() {
   // NG登録
   const [showNgRegister, setShowNgRegister] = useState(false);
   const [showCustImport, setShowCustImport] = useState(false);
+  const [showNgImport, setShowNgImport] = useState(false);
   const [ngCustSearch, setNgCustSearch] = useState("");
   const [ngSelectedCust, setNgSelectedCust] = useState<Customer | null>(null);
   const [ngTherapistId, setNgTherapistId] = useState(0);
@@ -671,6 +673,7 @@ export default function Dashboard() {
                   <div><h2 className="text-[15px] font-medium">顧客一覧</h2><p className="text-[11px] mt-0.5" style={{ color: T.textFaint }}>{customers.length}件の顧客情報</p></div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setShowCustImport(true)} className="px-4 py-2.5 text-[12px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📥 インポート</button>
+                    <button onClick={() => setShowNgImport(true)} className="px-4 py-2.5 text-[12px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NGインポート</button>
                     <button onClick={() => setShowNgRegister(true)} className="px-4 py-2.5 text-[12px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
                     <button onClick={() => setActivePage("顧客登録")} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">+ 新規登録</button>
                   </div>
@@ -1444,6 +1447,13 @@ export default function Dashboard() {
       {showCustImport && (
         <Suspense fallback={null}>
           <CustomerImportPanel T={T} onClose={() => setShowCustImport(false)} onComplete={fetchCustomers} />
+        </Suspense>
+      )}
+
+      {/* NGインポート */}
+      {showNgImport && (
+        <Suspense fallback={null}>
+          <NgImportPanel T={T} onClose={() => setShowNgImport(false)} onComplete={fetchCustomers} />
         </Suspense>
       )}
 

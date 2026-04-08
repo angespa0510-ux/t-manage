@@ -10,10 +10,6 @@ type ThRow = {
   interval_minutes: number; photo_url: string; notes: string;
 };
 
-type NgRow = {
-  customer_name: string; therapist_name: string; is_ng: boolean; ng_reason: string; note: string; rating: number;
-};
-
 type Result = { name: string; status: "created" | "updated" | "skipped" | "error"; error?: string };
 
 type Props = { T: Record<string, string>; onClose: () => void; onComplete: () => void };
@@ -21,14 +17,11 @@ type Props = { T: Record<string, string>; onClose: () => void; onComplete: () =>
 export default function TherapistImportPanel({ T, onClose, onComplete }: Props) {
   const [step, setStep] = useState<"guide" | "upload" | "preview" | "importing" | "done">("guide");
   const [thRows, setThRows] = useState<ThRow[]>([]);
-  const [ngRows, setNgRows] = useState<NgRow[]>([]);
   const [fileName, setFileName] = useState("");
-  const [hasNgSheet, setHasNgSheet] = useState(false);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
   const [results, setResults] = useState<Result[]>([]);
-  const [ngResults, setNgResults] = useState<{ name: string; status: string }[]>([]);
   const [dupMode, setDupMode] = useState<"skip" | "update">("update");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -69,26 +62,7 @@ export default function TherapistImportPanel({ T, onClose, onComplete }: Props) 
 
       setThRows(therapists);
 
-      // NGシートを探す
-      const ngSheetName = workbook.SheetNames.find(n => n.includes("NG") || n.includes("メモ"));
-      if (ngSheetName) {
-        const sheet2 = workbook.Sheets[ngSheetName];
-        const raw2: string[][] = XLSX.utils.sheet_to_json(sheet2, { header: 1, defval: "" });
-        const ngData = raw2.slice(2).filter(r => r.some(c => c && String(c).trim()));
-        const ngMemos: NgRow[] = ngData.map(r => ({
-          customer_name: String(r[0] || "").trim(),
-          therapist_name: String(r[1] || "").trim(),
-          is_ng: ["はい", "yes", "true", "1", "○"].includes(String(r[2] || "").toLowerCase().trim()),
-          ng_reason: String(r[3] || "").trim(),
-          note: String(r[4] || "").trim(),
-          rating: parseInt(String(r[5] || "0")) || 0,
-        })).filter(r => r.customer_name && r.therapist_name);
-
-        setNgRows(ngMemos);
-        setHasNgSheet(ngMemos.length > 0);
-      }
-
-      setStep("preview");
+            setStep("preview");
     };
     reader.readAsArrayBuffer(file);
   };
@@ -186,54 +160,7 @@ export default function TherapistImportPanel({ T, onClose, onComplete }: Props) 
 
     setResults(res);
 
-    // NG・メモのインポート（二重登録防止）
-    if (ngRows.length > 0) {
-      setProgressText("NG・メモをインポート中...");
-      const { data: therapists } = await supabase.from("therapists").select("id,name");
-      const thMap = new Map((therapists || []).map(t => [t.name, t.id]));
-
-      const ngRes: { name: string; status: string }[] = [];
-      for (const ng of ngRows) {
-        const tid = thMap.get(ng.therapist_name);
-        if (!tid) {
-          ngRes.push({ name: `${ng.customer_name}→${ng.therapist_name}`, status: `セラピスト「${ng.therapist_name}」が見つかりません` });
-          continue;
-        }
-
-        // 二重登録チェック
-        const { data: existing } = await supabase.from("therapist_customer_notes")
-          .select("id")
-          .eq("customer_name", ng.customer_name)
-          .eq("therapist_id", tid)
-          .maybeSingle();
-
-        if (existing) {
-          // 既存レコードがある場合は上書き更新
-          const updates: Record<string, string | number | boolean> = {};
-          if (ng.is_ng) updates.is_ng = true;
-          if (ng.ng_reason) updates.ng_reason = ng.ng_reason;
-          if (ng.note) updates.note = ng.note;
-          if (ng.rating) updates.rating = ng.rating;
-          if (Object.keys(updates).length > 0) {
-            await supabase.from("therapist_customer_notes").update(updates).eq("id", existing.id);
-          }
-          ngRes.push({ name: `${ng.customer_name}→${ng.therapist_name}`, status: "更新（既存）" });
-        } else {
-          await supabase.from("therapist_customer_notes").insert({
-            customer_name: ng.customer_name,
-            therapist_id: tid,
-            is_ng: ng.is_ng,
-            ng_reason: ng.ng_reason || "",
-            note: ng.note || "",
-            rating: ng.rating || 0,
-          });
-          ngRes.push({ name: `${ng.customer_name}→${ng.therapist_name}`, status: "登録" });
-        }
-      }
-      setNgResults(ngRes);
-    }
-
-    setImporting(false);
+        setImporting(false);
     setStep("done");
     onComplete();
   };
@@ -290,6 +217,7 @@ export default function TherapistImportPanel({ T, onClose, onComplete }: Props) 
                 <div className="text-[11px] space-y-1" style={{ color: T.textSub }}>
                   <p>・データは<strong>3行目から</strong>入力（1行目ヘッダー、2行目説明）</p>
                   <p>・名前または電話番号が一致するセラピストは重複登録されません</p>
+                  <p>・NG・メモのインポートは、顧客とセラピスト両方を先に登録してから「🚫 NGインポート」から行ってください</p>
                   <p>・ステータスは active / inactive / retired（日本語でも可）</p>
                 </div>
               </div>
@@ -330,7 +258,7 @@ export default function TherapistImportPanel({ T, onClose, onComplete }: Props) 
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="px-3 py-1.5 rounded-lg text-[11px] font-medium" style={{ backgroundColor: "#e8849a18", color: "#e8849a" }}>💆 セラピスト {thRows.length}件</span>
-                  {hasNgSheet && <span className="px-3 py-1.5 rounded-lg text-[11px] font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG・メモ {ngRows.length}件</span>}
+                  
                 </div>
               </div>
 
@@ -361,39 +289,13 @@ export default function TherapistImportPanel({ T, onClose, onComplete }: Props) 
                 </div>
               </div>
 
-              {hasNgSheet && (
-                <div className="rounded-xl border overflow-hidden" style={{ borderColor: T.border }}>
-                  <div className="px-4 py-2.5" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
-                    <p className="text-[11px] font-medium">NG・セラピストメモ（先頭10件）</p>
-                  </div>
-                  <div className="max-h-[200px] overflow-auto">
-                    <table className="w-full text-[10px]">
-                      <thead><tr style={{ backgroundColor: T.cardAlt }}>
-                        {["お客様", "セラピスト", "NG", "理由/メモ"].map(h => <th key={h} className="py-2 px-3 text-left font-medium" style={{ color: T.textMuted }}>{h}</th>)}
-                      </tr></thead>
-                      <tbody>
-                        {ngRows.slice(0, 10).map((r, i) => (
-                          <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
-                            <td className="py-2 px-3 font-medium">{r.customer_name}</td>
-                            <td className="py-2 px-3" style={{ color: "#e8849a" }}>{r.therapist_name}</td>
-                            <td className="py-2 px-3">{r.is_ng ? <span style={{ color: "#c45555" }}>🚫 NG</span> : "—"}</td>
-                            <td className="py-2 px-3 max-w-[150px] truncate" style={{ color: T.textMuted }}>{r.ng_reason || r.note || "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {ngRows.length > 10 && <p className="text-center py-2 text-[10px]" style={{ color: T.textFaint }}>... 他 {ngRows.length - 10}件</p>}
-                  </div>
-                </div>
-              )}
-
               <div className="rounded-xl p-3" style={{ backgroundColor: "#f59e0b10", border: "1px solid #f59e0b30" }}>
-                <p className="text-[11px]" style={{ color: "#f59e0b" }}>⚠️ 重複: 名前または電話番号が一致 → {dupMode === "update" ? "🔄 上書き更新" : "⏭️ スキップ"} | NG: 同じ組み合わせは二重登録しません</p>
+                <p className="text-[11px]" style={{ color: "#f59e0b" }}>⚠️ 重複: 名前または電話番号が一致 → {dupMode === "update" ? "🔄 上書き更新" : "⏭️ スキップ"}</p>
               </div>
 
               <div className="flex gap-3">
-                <button onClick={runImport} className="flex-1 py-3.5 rounded-xl text-[14px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>📥 インポート実行（{thRows.length}件{hasNgSheet ? ` + NG ${ngRows.length}件` : ""}）</button>
-                <button onClick={() => { setStep("upload"); setThRows([]); setNgRows([]); }} className="px-6 py-3.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted, border: `1px solid ${T.border}` }}>← 戻る</button>
+                <button onClick={runImport} className="flex-1 py-3.5 rounded-xl text-[14px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>📥 インポート実行（{thRows.length}件）</button>
+                <button onClick={() => { setStep("upload"); setThRows([]); }} className="px-6 py-3.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted, border: `1px solid ${T.border}` }}>← 戻る</button>
               </div>
             </div>
           )}
@@ -425,12 +327,7 @@ export default function TherapistImportPanel({ T, onClose, onComplete }: Props) 
                 {errors > 0 && <span className="px-4 py-2 rounded-xl text-[13px] font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>❌ エラー {errors}件</span>}
               </div>
 
-              {ngResults.length > 0 && (
-                <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[11px] font-medium mb-1">🚫 NG・メモ結果</p>
-                  <p className="text-[10px]" style={{ color: T.textMuted }}>{ngResults.filter(r => r.status === "登録").length}件新規 / {ngResults.filter(r => r.status.includes("既存")).length}件更新 / {ngResults.filter(r => r.status.includes("見つかりません")).length}件エラー</p>
-                </div>
-              )}
+
 
               {errors > 0 && (
                 <div className="rounded-xl border overflow-hidden max-h-[200px] overflow-y-auto" style={{ borderColor: T.border }}>
