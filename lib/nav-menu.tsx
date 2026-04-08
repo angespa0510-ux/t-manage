@@ -44,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   // ── 登録・設定 ──
   { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
   { icon: "🔑", label: "利用場所登録",  path: "/rooms",             category: "登録・設定" },
+  { icon: "📱", label: "電話番号バックアップ", path: "/contact-sync", category: "登録・設定" },
   { icon: "⚙️", label: "サービス設定",  path: "/service-settings",  category: "登録・設定" },
   { icon: "🛠️", label: "システム設定",  path: "/system-setup",      category: "登録・設定" },
 ];
