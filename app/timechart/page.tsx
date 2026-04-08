@@ -280,7 +280,7 @@ export default function TimeChart() {
     const { data: nts } = await supabase.from("notification_templates").select("template_key,body"); if (nts) setNtTemplates(nts);
     // WEB予約一覧（未完了の当日以降の予約）
     const today = new Date().toISOString().split("T")[0];
-    const { data: webRes } = await supabase.from("reservations").select("id,customer_name,therapist_id,date,start_time,end_time,course,status,customer_status,created_at").gte("date", today).eq("customer_status", "web_reservation").neq("status", "completed").order("date").order("start_time"); if (webRes) setWebReservations(webRes);
+    const { data: webRes } = await supabase.from("reservations").select("id,customer_name,therapist_id,date,start_time,end_time,course,status,customer_status,created_at").gte("date", today).in("customer_status", ["web_reservation", "summary_unread"]).neq("status", "completed").order("date").order("start_time"); if (webRes) setWebReservations(webRes);
     const ntKeys = ["notify_url_days", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis", "notify_sender_default", "line_url_customer", "line_url_staff"];
     const { data: ntSets } = await supabase.from("store_settings").select("key,value").in("key", ntKeys);
     if (ntSets) { for (const s of ntSets) { if (s.key === "notify_url_days") setNtUrlDays(parseInt(s.value) || 1); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); else if (s.key === "notify_sender_default" && s.value && !notifySender) setNotifySender(s.value); else if (s.key === "line_url_customer") document.body.dataset.lineUrlCustomer = s.value; else if (s.key === "line_url_staff") document.body.dataset.lineUrlStaff = s.value; } }
@@ -665,6 +665,8 @@ export default function TimeChart() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-[11px] font-medium px-2 py-0.5 rounded" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>{wr.date.slice(5).replace("-", "/")}</span>
                         <span className="text-[12px] font-medium">{wr.start_time.slice(0, 5)}〜{wr.end_time.slice(0, 5)}</span>
+                        {wr.customer_status === "web_reservation" && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>新規</span>}
+                        {wr.customer_status === "summary_unread" && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>概要未読</span>}
                       </div>
                       <div className="flex items-center gap-2 text-[11px]">
                         <span className="font-medium">{wr.customer_name}</span>
