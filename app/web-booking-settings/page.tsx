@@ -136,6 +136,91 @@ export default function WebBookingSettings() {
           </button>
         </div>
 
+        {/* ═══ NG表示の仕組み ═══ */}
+        <div className="rounded-xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <h2 className="text-[15px] font-medium mb-4 flex items-center gap-2">🚫 NGセラピストの表示について</h2>
+          <p className="text-[12px] mb-4" style={{ color: T.textSub }}>お客様のログイン状態によって、NGセラピストの表示が異なります。</p>
+
+          <div className="space-y-4">
+            {/* ログイン前 */}
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f630" }}>ログイン前</span>
+                <span className="text-[13px] font-medium">全セラピストが表示されます</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                ログインしていない状態では、NGかどうかの判定ができないため、全ての出勤セラピストが一覧に表示されます。<br />
+                ただし、予約を完了するにはログインが必要です。ログイン後にNGセラピストと判定された場合は、確認画面で<strong style={{ color: "#c45555" }}>「⚠️ このセラピストはご予約いただけません」</strong>と表示され、予約送信ボタンが無効化されます。
+              </p>
+            </div>
+
+            {/* ログイン後 */}
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59", border: "1px solid #4a7c5930" }}>ログイン後</span>
+                <span className="text-[13px] font-medium">NGセラピストは一覧から自動で非表示</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                お客様がログイン済みの場合、そのお客様をNGに設定しているセラピストは<strong style={{ color: T.text }}>セラピスト一覧に表示されません</strong>。<br />
+                お客様側には「NGで非表示にされている」とは伝わらず、単にそのセラピストが出勤していないように見えます。<br />
+                NGデータは<strong style={{ color: T.text }}>ダッシュボードの顧客一覧 → NGタブ</strong>で管理されています。
+              </p>
+            </div>
+
+            {/* 図解 */}
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <p className="text-[12px] font-medium mb-2" style={{ color: T.accent }}>📊 フロー図</p>
+              <div className="text-[11px]" style={{ color: T.textSub, lineHeight: 2 }}>
+                <p className="m-0">お客様（未ログイン）→ 全セラピスト表示 → セラピスト選択 → コース選択</p>
+                <p className="m-0">→ <strong style={{ color: T.accent }}>ログイン/新規登録</strong> → NG判定実行</p>
+                <p className="m-0">→ NGの場合: <strong style={{ color: "#c45555" }}>⚠️ 警告表示 + 予約ボタン無効</strong></p>
+                <p className="m-0">→ NGでない場合: ✅ 予約確認 → 送信</p>
+                <p className="m-0 mt-2">お客様（ログイン済み）→ <strong style={{ color: "#4a7c59" }}>NGセラピストは最初から非表示</strong> → 問題なく予約</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ 予約時間のルール ═══ */}
+        <div className="rounded-xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <h2 className="text-[15px] font-medium mb-4 flex items-center gap-2">⏰ 予約時間のルール</h2>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f730" }}>30分ルール</span>
+                <span className="text-[13px] font-medium">現在時刻から最速30分後の枠から予約可能</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                スタッフの準備時間を確保するため、お客様は<strong style={{ color: T.text }}>現在時刻から30分以内の時間帯には予約できません</strong>。<br />
+                例: 現在14:20の場合 → 14:00〜14:30の枠は「✕」表示 → <strong style={{ color: T.text }}>14:45の枠から予約可能</strong>（15分刻み）
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555530" }}>過去の時間帯</span>
+                <span className="text-[13px] font-medium">現在時刻より前の枠は全て「✕」表示</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                本日の出勤スケジュールで、すでに過ぎた時間帯は自動的に「✕」と表示されます。<br />
+                過去の日付を選択した場合も、全ての枠が「✕」になり予約はできません。
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78230" }}>インターバル</span>
+                <span className="text-[13px] font-medium">施術間の休憩時間も空き枠計算に反映</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                セラピストごとに設定された<strong style={{ color: T.text }}>インターバル（施術間の休憩時間）</strong>も空き枠の計算に含まれます。<br />
+                例: 予約が15:00〜16:00、インターバル15分の場合 → 16:00〜16:15も「✕」表示
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* ═══ 注意事項 ═══ */}
         <div className="rounded-xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
           <h2 className="text-[15px] font-medium mb-4 flex items-center gap-2">💡 注意事項</h2>
