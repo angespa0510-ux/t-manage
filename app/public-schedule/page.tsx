@@ -82,6 +82,7 @@ function PublicScheduleInner() {
   const [bookSaving, setBookSaving] = useState(false);
   const [bookMsg, setBookMsg] = useState("");
   const [custPastRes, setCustPastRes] = useState<{ therapist_id: number }[]>([]);
+  const [ngTherapistIds, setNgTherapistIds] = useState<Set<number>>(new Set());
 
   // Weekly view
   const [weeklyMode, setWeeklyMode] = useState(false);
@@ -143,11 +144,15 @@ function PublicScheduleInner() {
       supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) setCustomer(data); });
     }
   }, []);
-  // お客様の過去予約取得（指名判定用）
+  // お客様の過去予約取得（指名判定用）+ NG取得
   useEffect(() => {
-    if (!customer) return;
+    if (!customer) { setNgTherapistIds(new Set()); return; }
     supabase.from("reservations").select("therapist_id").eq("customer_name", customer.name).eq("status", "completed").then(({ data }) => {
       if (data) setCustPastRes(data);
+    });
+    // NGセラピスト取得（このお客様をNGにしたセラピスト）
+    supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", customer.name).eq("is_ng", true).then(({ data }) => {
+      if (data) setNgTherapistIds(new Set(data.map(n => n.therapist_id)));
     });
   }, [customer]);
 
@@ -168,14 +173,27 @@ function PublicScheduleInner() {
     loadRecent();
   }, []);
 
-  /* ─── Slot generation (interval考慮) ─── */
-  const makeSlots = (shift: Shift, resForTherapist: Reservation[]) => {
+  /* ─── Slot generation (interval考慮 + 過去/30分バッファ) ─── */
+  const MIN_BUFFER = 30; // 最速30分後から予約可能
+  const makeSlots = (shift: Shift, resForTherapist: Reservation[], slotDate?: string) => {
     const ss = timeToMin(shift.start_time); const se = timeToMin(shift.end_time);
-    const t = therapists.find(th => th.id === shift.therapist_id);
-    const interval = t?.interval_minutes || 0;
+    const th = therapists.find(t => t.id === shift.therapist_id);
+    const interval = th?.interval_minutes || 0;
+    const checkDate = slotDate || date;
+    const isToday = checkDate === today;
+    const isPast = checkDate < today;
+    // 現在時刻 + 30分バッファ
+    const now = new Date();
+    const nowMin = isToday ? (now.getHours() < 9 ? now.getHours() + 24 : now.getHours()) * 60 + now.getMinutes() : 0;
+    const earliestMin = nowMin + MIN_BUFFER;
+
     const slots: { time: string; available: boolean }[] = [];
     for (let m = ss; m < se; m += 15) {
       const tm = minToTime(m);
+      // 過去日付 → 全て不可
+      if (isPast) { slots.push({ time: tm, available: false }); continue; }
+      // 本日で現在時刻+30分より前 → 不可
+      if (isToday && m < earliestMin) { slots.push({ time: tm, available: false }); continue; }
       // 予約中 or インターバル中はbusy
       const busy = resForTherapist.find(r => {
         const rs = timeToMin(r.start_time);
@@ -472,6 +490,8 @@ function PublicScheduleInner() {
             const filtered = shifts.filter(shift => {
               const t = therapists.find(th => th.id === shift.therapist_id);
               if (!t) return false;
+              // NGセラピストを非表示（ログイン済みの場合）
+              if (ngTherapistIds.has(shift.therapist_id)) return false;
               if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
               return true;
             });
@@ -529,8 +549,9 @@ function PublicScheduleInner() {
                           {freeCount > 0 && date === today && (() => {
                             const now = new Date();
                             const nowMin = (now.getHours() < 9 ? now.getHours() + 24 : now.getHours()) * 60 + now.getMinutes();
-                            const nextSlot = slots.find(s => s.available && timeToMin(s.time) >= nowMin);
-                            if (nextSlot && timeToMin(nextSlot.time) - nowMin <= 30) {
+                            const nextSlot = slots.find(s => s.available);
+                            // 最初の空き枠が60分以内なら「今すぐOK」（30分バッファ込み）
+                            if (nextSlot && timeToMin(nextSlot.time) - nowMin <= 60) {
                               return <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 99, backgroundColor: "rgba(168,85,247,0.1)", color: "#a855f7", border: "1px solid rgba(168,85,247,0.25)", fontWeight: 600 }}>⚡ 今すぐOK</span>;
                             }
                             return null;
@@ -591,13 +612,9 @@ function PublicScheduleInner() {
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10, backgroundColor: sl.available ? "transparent" : "rgba(196,85,85,0.04)" }}>
                         <span style={{ fontSize: 13, fontFamily: "monospace", width: 48, flexShrink: 0, color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
                         {sl.available ? (
-                          date < today ? (
-                            <span style={{ flex: 1, textAlign: "center", fontSize: 12, color: C.textFaint, padding: "8px 0" }}>◯ 空き（過去）</span>
-                          ) : (
-                            <button onClick={() => selectTime(sl.time)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "center", backgroundColor: C.greenBg, color: C.green, border: `1px solid ${C.greenBorder}` }}>◯ 空き — タップで予約</button>
-                          )
+                          <button onClick={() => selectTime(sl.time)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "center", backgroundColor: C.greenBg, color: C.green, border: `1px solid ${C.greenBorder}` }}>◯ 空き — タップで予約</button>
                         ) : (
-                          <span style={{ flex: 1, textAlign: "center", fontSize: 12, color: C.textFaint, padding: "8px 0" }}>✕ 予約済</span>
+                          <span style={{ flex: 1, textAlign: "center", fontSize: 12, color: C.textFaint, padding: "8px 0" }}>✕</span>
                         )}
                       </div>
                     ))}
@@ -624,7 +641,7 @@ function PublicScheduleInner() {
                       const dt = new Date(wd + "T00:00:00");
                       const isPast = wd < today;
                       const isSel = wd === date;
-                      const slots = ws ? makeSlots(ws, wr) : [];
+                      const slots = ws ? makeSlots(ws, wr, wd) : [];
                       const freeCount = slots.filter(s => s.available).length;
                       return (
                         <button key={wd} onClick={() => { if (ws && !isPast) { setDate(wd); setWeeklyMode(false); fetchDay(wd); } }}
@@ -825,6 +842,15 @@ function PublicScheduleInner() {
         {step === "confirm" && customer && (<>
           <button onClick={() => goBack(customer ? "course" : "auth")} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: C.accent, cursor: "pointer", background: "none", border: "none", marginBottom: 12, padding: 0 }}>← 戻る</button>
 
+          {/* NG警告 */}
+          {ngTherapistIds.has(selTherapistId) && (
+            <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid rgba(196,85,85,0.4)`, backgroundColor: "rgba(196,85,85,0.08)" }}>
+              <p style={{ fontSize: 13, color: C.red, margin: 0, fontWeight: 600 }}>⚠️ このセラピストはご予約いただけません</p>
+              <p style={{ fontSize: 11, color: C.textMuted, margin: "6px 0 0" }}>申し訳ございませんが、別のセラピストをお選びください。</p>
+              <button onClick={() => goBack("list")} style={{ marginTop: 12, padding: "10px 0", borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%", background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})`, color: "#fff", border: "none" }}>セラピスト一覧に戻る</button>
+            </div>
+          )}
+
           <div style={{ textAlign: "center", marginBottom: 20 }}>
             <p style={{ fontSize: 32, marginBottom: 4 }}>📋</p>
             <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: C.accent }}>ご予約内容の確認</h2>
@@ -890,7 +916,7 @@ function PublicScheduleInner() {
 
           {bookMsg && <p style={{ fontSize: 12, color: C.red, marginBottom: 12, textAlign: "center" }}>{bookMsg}</p>}
 
-          <button onClick={submitBooking} disabled={bookSaving} style={{ ...btnPrimary, width: "100%", padding: "16px 0", borderRadius: 14, fontSize: 16, fontWeight: 600, cursor: "pointer", opacity: bookSaving ? 0.6 : 1, boxSizing: "border-box" }}>
+          <button onClick={submitBooking} disabled={bookSaving || ngTherapistIds.has(selTherapistId)} style={{ ...btnPrimary, width: "100%", padding: "16px 0", borderRadius: 14, fontSize: 16, fontWeight: 600, cursor: "pointer", opacity: bookSaving || ngTherapistIds.has(selTherapistId) ? 0.4 : 1, boxSizing: "border-box" }}>
             {bookSaving ? "送信中..." : "✨ 予約リクエストを送信"}
           </button>
           <p style={{ fontSize: 10, color: C.textFaint, textAlign: "center", marginTop: 8 }}>※ リクエスト後、お店から確認のご連絡をいたします</p>
