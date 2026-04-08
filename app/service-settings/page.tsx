@@ -119,6 +119,7 @@ export default function ServiceSettings() {
   const [addWebAvailable, setAddWebAvailable] = useState(true);
   const [addValidFrom, setAddValidFrom] = useState("");
   const [addValidUntil, setAddValidUntil] = useState("");
+  const [addUnlimited, setAddUnlimited] = useState(true);
   const [addCombinable, setAddCombinable] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -135,6 +136,7 @@ export default function ServiceSettings() {
   const [editWebAvailable, setEditWebAvailable] = useState(true);
   const [editValidFrom, setEditValidFrom] = useState("");
   const [editValidUntil, setEditValidUntil] = useState("");
+  const [editUnlimited, setEditUnlimited] = useState(true);
   const [editCombinable, setEditCombinable] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -220,8 +222,8 @@ export default function ServiceSettings() {
     navigator.clipboard.writeText(msg); setBrCopiedId(r.therapist_id); setTimeout(() => setBrCopiedId(null), 2000);
   };
 
-  const resetAdd = () => { setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("30"); setAddAmount(""); setAddDiscountType("fixed"); setAddNewcomerOnly(false); setAddWebAvailable(true); setAddValidFrom(""); setAddValidUntil(""); setAddCombinable(true); setMsg(""); };
-  const resetEdit = () => { setEditId(null); setEditName(""); setEditPrice(""); setEditBack(""); setEditDuration(""); setEditAmount(""); setEditDiscountType("fixed"); setEditNewcomerOnly(false); setEditWebAvailable(true); setEditValidFrom(""); setEditValidUntil(""); setEditCombinable(true); };
+  const resetAdd = () => { setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("30"); setAddAmount(""); setAddDiscountType("fixed"); setAddNewcomerOnly(false); setAddWebAvailable(true); setAddValidFrom(""); setAddValidUntil(""); setAddUnlimited(true); setAddCombinable(true); setMsg(""); };
+  const resetEdit = () => { setEditId(null); setEditName(""); setEditPrice(""); setEditBack(""); setEditDuration(""); setEditAmount(""); setEditDiscountType("fixed"); setEditNewcomerOnly(false); setEditWebAvailable(true); setEditValidFrom(""); setEditValidUntil(""); setEditUnlimited(true); setEditCombinable(true); };
 
   // ===== Add =====
   const handleAdd = async () => {
@@ -837,9 +839,12 @@ export default function ServiceSettings() {
                   <button onClick={() => setAddNewcomerOnly(!addNewcomerOnly)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: addNewcomerOnly ? "#8b5cf618" : T.cardAlt, color: addNewcomerOnly ? "#8b5cf6" : T.textMuted, border: `1px solid ${addNewcomerOnly ? "#8b5cf6" : T.border}` }}>{addNewcomerOnly ? "🌟 新人のみ" : "新人のみ"}</button>
                   <button onClick={() => setAddWebAvailable(!addWebAvailable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !addWebAvailable ? "#c4555518" : "#22c55e18", color: !addWebAvailable ? "#c45555" : "#22c55e", border: `1px solid ${!addWebAvailable ? "#c45555" : "#22c55e"}44` }}>{addWebAvailable ? "🌐 ネット予約可" : "🚫 ネット予約不可"}</button>
                   <button onClick={() => setAddCombinable(!addCombinable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !addCombinable ? "#f59e0b18" : T.cardAlt, color: !addCombinable ? "#f59e0b" : T.textMuted, border: `1px solid ${!addCombinable ? "#f59e0b" : T.border}` }}>{addCombinable ? "併用可" : "⚠ 併用不可"}</button>
-                  <input type="date" value={addValidFrom} onChange={(e) => setAddValidFrom(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
-                  <span className="text-[10px]" style={{ color: T.textMuted }}>〜</span>
-                  <input type="date" value={addValidUntil} onChange={(e) => setAddValidUntil(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                  <button onClick={() => { setAddUnlimited(!addUnlimited); if (!addUnlimited) { setAddValidFrom(""); setAddValidUntil(""); } }} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: addUnlimited ? "#22c55e18" : T.cardAlt, color: addUnlimited ? "#22c55e" : T.textMuted, border: `1px solid ${addUnlimited ? "#22c55e" : T.border}` }}>{addUnlimited ? "♾️ 無期限" : "📅 期間指定"}</button>
+                  {!addUnlimited && <>
+                    <input type="date" value={addValidFrom} onChange={(e) => setAddValidFrom(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                    <span className="text-[10px]" style={{ color: T.textMuted }}>〜</span>
+                    <input type="date" value={addValidUntil} onChange={(e) => setAddValidUntil(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                  </>}
                 </div>
               )}
               {msg && <p className="text-[11px] mt-2" style={{ color: msg.includes("失敗") || msg.includes("入力") ? "#c45555" : "#4a7c59" }}>{msg}</p>}
@@ -893,9 +898,12 @@ export default function ServiceSettings() {
                             <button onClick={() => setEditNewcomerOnly(!editNewcomerOnly)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: editNewcomerOnly ? "#8b5cf618" : T.cardAlt, color: editNewcomerOnly ? "#8b5cf6" : T.textMuted, border: `1px solid ${editNewcomerOnly ? "#8b5cf6" : T.border}` }}>{editNewcomerOnly ? "🌟 新人のみ" : "新人のみ"}</button>
                             <button onClick={() => setEditWebAvailable(!editWebAvailable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !editWebAvailable ? "#c4555518" : "#22c55e18", color: !editWebAvailable ? "#c45555" : "#22c55e", border: `1px solid ${!editWebAvailable ? "#c45555" : "#22c55e"}44` }}>{editWebAvailable ? "🌐 ネット予約可" : "🚫 ネット予約不可"}</button>
                             <button onClick={() => setEditCombinable(!editCombinable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !editCombinable ? "#f59e0b18" : T.cardAlt, color: !editCombinable ? "#f59e0b" : T.textMuted, border: `1px solid ${!editCombinable ? "#f59e0b" : T.border}` }}>{editCombinable ? "併用可" : "⚠ 併用不可"}</button>
-                            <input type="date" value={editValidFrom} onChange={(e) => setEditValidFrom(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
-                            <span className="text-[10px]" style={{ color: T.textMuted }}>〜</span>
-                            <input type="date" value={editValidUntil} onChange={(e) => setEditValidUntil(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                            <button onClick={() => { setEditUnlimited(!editUnlimited); if (!editUnlimited) { setEditValidFrom(""); setEditValidUntil(""); } }} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: editUnlimited ? "#22c55e18" : T.cardAlt, color: editUnlimited ? "#22c55e" : T.textMuted, border: `1px solid ${editUnlimited ? "#22c55e" : T.border}` }}>{editUnlimited ? "♾️ 無期限" : "📅 期間指定"}</button>
+                            {!editUnlimited && <>
+                              <input type="date" value={editValidFrom} onChange={(e) => setEditValidFrom(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                              <span className="text-[10px]" style={{ color: T.textMuted }}>〜</span>
+                              <input type="date" value={editValidUntil} onChange={(e) => setEditValidUntil(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                            </>}
                           </div>
                           <div className="flex gap-2">
                             <button onClick={handleUpdate} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button>
@@ -913,11 +921,11 @@ export default function ServiceSettings() {
                               {!d.web_available && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 ネット予約不可</span>}
                               {d.web_available && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>🌐 ネット予約可</span>}
                               {!d.combinable && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⚠ 併用不可</span>}
-                              {(d.valid_from || d.valid_until) && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>📅 {d.valid_from || "?"} 〜 {d.valid_until || "?"}</span>}
+                              {(d.valid_from || d.valid_until) ? <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>📅 {d.valid_from || "?"} 〜 {d.valid_until || "?"}</span> : <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>♾️ 無期限</span>}
                             </div>
                           </div>
                           <div className="flex gap-1 flex-shrink-0">
-                            <button onClick={() => { setEditId(d.id); setEditName(d.name); setEditAmount(String(d.amount)); setEditDiscountType(d.type); setEditNewcomerOnly(d.newcomer_only || false); setEditWebAvailable(d.web_available !== false); setEditValidFrom(d.valid_from || ""); setEditValidUntil(d.valid_until || ""); setEditCombinable(d.combinable !== false); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
+                            <button onClick={() => { setEditId(d.id); setEditName(d.name); setEditAmount(String(d.amount)); setEditDiscountType(d.type); setEditNewcomerOnly(d.newcomer_only || false); setEditWebAvailable(d.web_available !== false); setEditValidFrom(d.valid_from || ""); setEditValidUntil(d.valid_until || ""); setEditUnlimited(!d.valid_from && !d.valid_until); setEditCombinable(d.combinable !== false); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
                             <button onClick={() => handleDelete(d.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                           </div>
                         </div>)}
