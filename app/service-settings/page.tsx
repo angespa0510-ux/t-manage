@@ -920,7 +920,7 @@ export default function ServiceSettings() {
                               {d.newcomer_only && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6" }}>🌟 新人のみ</span>}
                               {!d.web_available && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 ネット予約不可</span>}
                               {d.web_available && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>🌐 ネット予約可</span>}
-                              {!d.combinable && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⚠ 併用不可</span>}
+                              {d.combinable && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 併用可</span>}
                               {(d.valid_from || d.valid_until) ? <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>📅 {d.valid_from || "?"} 〜 {d.valid_until || "?"}</span> : <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>♾️ 無期限</span>}
                             </div>
                           </div>
