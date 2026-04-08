@@ -108,7 +108,7 @@ export default function CustomerMypage() {
     const { data: nr } = await supabase.from("customer_notification_reads").select("notification_id").eq("customer_id", customer.id); if (nr) setReadNotifIds(nr.map((x: { notification_id: number }) => x.notification_id));
     const { data: cd } = await supabase.from("customer_cards").select("*").eq("customer_id", customer.id).order("is_default", { ascending: false }); if (cd) setCards(cd);
     const { data: nom } = await supabase.from("nominations").select("id,name,price").order("id"); if (nom) setNominations(nom);
-    const { data: disc } = await supabase.from("discounts").select("id,name,amount,type").order("id"); if (disc) setDiscounts(disc);
+    const { data: disc } = await supabase.from("discounts").select("id,name,amount,type,web_available,newcomer_only,valid_from,valid_until,combinable").order("id"); if (disc) setDiscounts(disc.filter(d => d.web_available !== false));
     const { data: ext } = await supabase.from("extensions").select("id,name,duration,price").order("duration"); if (ext) setExtensions(ext);
     const { data: opts } = await supabase.from("options").select("id,name,price").order("id"); if (opts) setOptionsList(opts);
     // NGセラピスト取得（このお客様をNGにしたセラピスト）

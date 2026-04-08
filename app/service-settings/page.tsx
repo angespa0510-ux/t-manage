@@ -7,7 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 
 type Nomination = { id: number; name: string; price: number; therapist_back: number };
-type Discount = { id: number; name: string; amount: number; type: string };
+type Discount = { id: number; name: string; amount: number; type: string; newcomer_only: boolean; web_available: boolean; valid_from: string | null; valid_until: string | null; combinable: boolean };
 type Extension = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Option = { id: number; name: string; price: number; therapist_back: number };
 type PointSettings = {
@@ -115,6 +115,11 @@ export default function ServiceSettings() {
   const [addDuration, setAddDuration] = useState("30");
   const [addAmount, setAddAmount] = useState("");
   const [addDiscountType, setAddDiscountType] = useState("fixed");
+  const [addNewcomerOnly, setAddNewcomerOnly] = useState(false);
+  const [addWebAvailable, setAddWebAvailable] = useState(true);
+  const [addValidFrom, setAddValidFrom] = useState("");
+  const [addValidUntil, setAddValidUntil] = useState("");
+  const [addCombinable, setAddCombinable] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -126,6 +131,11 @@ export default function ServiceSettings() {
   const [editDuration, setEditDuration] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editDiscountType, setEditDiscountType] = useState("fixed");
+  const [editNewcomerOnly, setEditNewcomerOnly] = useState(false);
+  const [editWebAvailable, setEditWebAvailable] = useState(true);
+  const [editValidFrom, setEditValidFrom] = useState("");
+  const [editValidUntil, setEditValidUntil] = useState("");
+  const [editCombinable, setEditCombinable] = useState(true);
 
   const fetchData = useCallback(async () => {
     const { data: n } = await supabase.from("nominations").select("*").order("id"); if (n) setNominations(n);
@@ -210,8 +220,8 @@ export default function ServiceSettings() {
     navigator.clipboard.writeText(msg); setBrCopiedId(r.therapist_id); setTimeout(() => setBrCopiedId(null), 2000);
   };
 
-  const resetAdd = () => { setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("30"); setAddAmount(""); setAddDiscountType("fixed"); setMsg(""); };
-  const resetEdit = () => { setEditId(null); setEditName(""); setEditPrice(""); setEditBack(""); setEditDuration(""); setEditAmount(""); setEditDiscountType("fixed"); };
+  const resetAdd = () => { setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("30"); setAddAmount(""); setAddDiscountType("fixed"); setAddNewcomerOnly(false); setAddWebAvailable(true); setAddValidFrom(""); setAddValidUntil(""); setAddCombinable(true); setMsg(""); };
+  const resetEdit = () => { setEditId(null); setEditName(""); setEditPrice(""); setEditBack(""); setEditDuration(""); setEditAmount(""); setEditDiscountType("fixed"); setEditNewcomerOnly(false); setEditWebAvailable(true); setEditValidFrom(""); setEditValidUntil(""); setEditCombinable(true); };
 
   // ===== Add =====
   const handleAdd = async () => {
@@ -221,7 +231,7 @@ export default function ServiceSettings() {
     if (tab === "nomination") {
       ({ error } = await supabase.from("nominations").insert({ name: addName.trim(), price: parseInt(addPrice) || 0, therapist_back: parseInt(addBack) || 0 }));
     } else if (tab === "discount") {
-      ({ error } = await supabase.from("discounts").insert({ name: addName.trim(), amount: parseInt(addAmount) || 0, type: addDiscountType }));
+      ({ error } = await supabase.from("discounts").insert({ name: addName.trim(), amount: parseInt(addAmount) || 0, type: addDiscountType, newcomer_only: addNewcomerOnly, web_available: addWebAvailable, valid_from: addValidFrom || null, valid_until: addValidUntil || null, combinable: addCombinable }));
     } else if (tab === "extension") {
       ({ error } = await supabase.from("extensions").insert({ name: addName.trim(), duration: parseInt(addDuration) || 30, price: parseInt(addPrice) || 0, therapist_back: parseInt(addBack) || 0 }));
     } else if (tab === "option") {
@@ -238,7 +248,7 @@ export default function ServiceSettings() {
     if (tab === "nomination") {
       await supabase.from("nominations").update({ name: editName.trim(), price: parseInt(editPrice) || 0, therapist_back: parseInt(editBack) || 0 }).eq("id", editId);
     } else if (tab === "discount") {
-      await supabase.from("discounts").update({ name: editName.trim(), amount: parseInt(editAmount) || 0, type: editDiscountType }).eq("id", editId);
+      await supabase.from("discounts").update({ name: editName.trim(), amount: parseInt(editAmount) || 0, type: editDiscountType, newcomer_only: editNewcomerOnly, web_available: editWebAvailable, valid_from: editValidFrom || null, valid_until: editValidUntil || null, combinable: editCombinable }).eq("id", editId);
     } else if (tab === "extension") {
       await supabase.from("extensions").update({ name: editName.trim(), duration: parseInt(editDuration) || 30, price: parseInt(editPrice) || 0, therapist_back: parseInt(editBack) || 0 }).eq("id", editId);
     } else if (tab === "option") {
@@ -821,6 +831,17 @@ export default function ServiceSettings() {
                 <button onClick={handleAdd} disabled={saving} className="px-4 py-2.5 text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60"
                   style={{ backgroundColor: currentTab.color }}>{saving ? "登録中..." : "追加"}</button>
               </div>
+              {/* 割引の追加オプション */}
+              {tab === "discount" && (
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <button onClick={() => setAddNewcomerOnly(!addNewcomerOnly)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: addNewcomerOnly ? "#8b5cf618" : T.cardAlt, color: addNewcomerOnly ? "#8b5cf6" : T.textMuted, border: `1px solid ${addNewcomerOnly ? "#8b5cf6" : T.border}` }}>{addNewcomerOnly ? "🌟 新人のみ" : "新人のみ"}</button>
+                  <button onClick={() => setAddWebAvailable(!addWebAvailable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !addWebAvailable ? "#c4555518" : "#22c55e18", color: !addWebAvailable ? "#c45555" : "#22c55e", border: `1px solid ${!addWebAvailable ? "#c45555" : "#22c55e"}44` }}>{addWebAvailable ? "🌐 ネット予約可" : "🚫 ネット予約不可"}</button>
+                  <button onClick={() => setAddCombinable(!addCombinable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !addCombinable ? "#f59e0b18" : T.cardAlt, color: !addCombinable ? "#f59e0b" : T.textMuted, border: `1px solid ${!addCombinable ? "#f59e0b" : T.border}` }}>{addCombinable ? "併用可" : "⚠ 併用不可"}</button>
+                  <input type="date" value={addValidFrom} onChange={(e) => setAddValidFrom(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                  <span className="text-[10px]" style={{ color: T.textMuted }}>〜</span>
+                  <input type="date" value={addValidUntil} onChange={(e) => setAddValidUntil(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                </div>
+              )}
               {msg && <p className="text-[11px] mt-2" style={{ color: msg.includes("失敗") || msg.includes("入力") ? "#c45555" : "#4a7c59" }}>{msg}</p>}
             </div>
           )}
@@ -859,26 +880,50 @@ export default function ServiceSettings() {
               {/* 割引 */}
               {tab === "discount" && (
                 discounts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>割引が登録されていません</p> : (
-                  <table className="w-full text-[12px]">
-                    <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                      {["割引名", "金額/率", "種別", "操作"].map((h) => (<th key={h} className="py-3 px-4 text-left font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
-                    </tr></thead>
-                    <tbody>{discounts.map((d) => (
-                      <tr key={d.id} style={{ borderBottom: `1px solid ${T.border}` }}>
-                        {editId === d.id ? (<>
-                          <td className="py-2 px-4"><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none w-full" style={inputStyle} /></td>
-                          <td className="py-2 px-4"><input type="text" inputMode="numeric" value={editAmount} onChange={(e) => setEditAmount(e.target.value.replace(/[^0-9]/g, ""))} className="px-2 py-1 rounded text-[12px] outline-none w-20" style={inputStyle} /></td>
-                          <td className="py-2 px-4"><select value={editDiscountType} onChange={(e) => setEditDiscountType(e.target.value)} className="px-2 py-1 rounded text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">固定額</option><option value="percent">%</option></select></td>
-                          <td className="py-2 px-4"><div className="flex gap-1"><button onClick={handleUpdate} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button><button onClick={resetEdit} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: T.textMuted }}>取消</button></div></td>
-                        </>) : (<>
-                          <td className="py-3 px-4 font-medium">{d.name}</td>
-                          <td className="py-3 px-4" style={{ color: currentTab.color }}>{d.type === "percent" ? `${d.amount}%` : fmt(d.amount)}</td>
-                          <td className="py-3 px-4" style={{ color: T.textSub }}>{d.type === "percent" ? "%割引" : "固定額"}</td>
-                          <td className="py-3 px-4"><div className="flex gap-1"><button onClick={() => { setEditId(d.id); setEditName(d.name); setEditAmount(String(d.amount)); setEditDiscountType(d.type); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button><button onClick={() => handleDelete(d.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button></div></td>
-                        </>)}
-                      </tr>
-                    ))}</tbody>
-                  </table>
+                  <div className="divide-y" style={{ borderColor: T.border }}>
+                    {discounts.map((d) => (
+                      <div key={d.id} className="px-4 py-3">
+                        {editId === d.id ? (<div className="space-y-3">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="割引名" className="flex-1 min-w-[150px] px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                            <input type="text" inputMode="numeric" value={editAmount} onChange={(e) => setEditAmount(e.target.value.replace(/[^0-9]/g, ""))} className="w-[100px] px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                            <select value={editDiscountType} onChange={(e) => setEditDiscountType(e.target.value)} className="px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="fixed">固定額</option><option value="percent">%</option></select>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button onClick={() => setEditNewcomerOnly(!editNewcomerOnly)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: editNewcomerOnly ? "#8b5cf618" : T.cardAlt, color: editNewcomerOnly ? "#8b5cf6" : T.textMuted, border: `1px solid ${editNewcomerOnly ? "#8b5cf6" : T.border}` }}>{editNewcomerOnly ? "🌟 新人のみ" : "新人のみ"}</button>
+                            <button onClick={() => setEditWebAvailable(!editWebAvailable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !editWebAvailable ? "#c4555518" : "#22c55e18", color: !editWebAvailable ? "#c45555" : "#22c55e", border: `1px solid ${!editWebAvailable ? "#c45555" : "#22c55e"}44` }}>{editWebAvailable ? "🌐 ネット予約可" : "🚫 ネット予約不可"}</button>
+                            <button onClick={() => setEditCombinable(!editCombinable)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: !editCombinable ? "#f59e0b18" : T.cardAlt, color: !editCombinable ? "#f59e0b" : T.textMuted, border: `1px solid ${!editCombinable ? "#f59e0b" : T.border}` }}>{editCombinable ? "併用可" : "⚠ 併用不可"}</button>
+                            <input type="date" value={editValidFrom} onChange={(e) => setEditValidFrom(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                            <span className="text-[10px]" style={{ color: T.textMuted }}>〜</span>
+                            <input type="date" value={editValidUntil} onChange={(e) => setEditValidUntil(e.target.value)} className="px-2 py-1.5 rounded-lg text-[10px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={handleUpdate} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5918" }}>保存</button>
+                            <button onClick={resetEdit} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: T.textMuted }}>取消</button>
+                          </div>
+                        </div>) : (<div className="flex items-center justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[12px] font-medium">{d.name}</span>
+                              <span className="text-[11px]" style={{ color: currentTab.color }}>{d.type === "percent" ? `${d.amount}%` : fmt(d.amount)}</span>
+                              <span className="text-[10px]" style={{ color: T.textMuted }}>{d.type === "percent" ? "%割引" : "固定額"}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              {d.newcomer_only && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6" }}>🌟 新人のみ</span>}
+                              {!d.web_available && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 ネット予約不可</span>}
+                              {d.web_available && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>🌐 ネット予約可</span>}
+                              {!d.combinable && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⚠ 併用不可</span>}
+                              {(d.valid_from || d.valid_until) && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>📅 {d.valid_from || "?"} 〜 {d.valid_until || "?"}</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button onClick={() => { setEditId(d.id); setEditName(d.name); setEditAmount(String(d.amount)); setEditDiscountType(d.type); setEditNewcomerOnly(d.newcomer_only || false); setEditWebAvailable(d.web_available !== false); setEditValidFrom(d.valid_from || ""); setEditValidUntil(d.valid_until || ""); setEditCombinable(d.combinable !== false); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
+                            <button onClick={() => handleDelete(d.id)} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
+                          </div>
+                        </div>)}
+                      </div>
+                    ))}
+                  </div>
                 )
               )}
 
