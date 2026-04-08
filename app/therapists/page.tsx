@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
+
+const TherapistImportPanel = lazy(() => import("../../lib/therapist-import-panel"));
 
 type Therapist = {
   id: number; created_at: string; name: string; phone: string; status: string;
@@ -91,6 +93,7 @@ const [editLoginPassword, setEditLoginPassword] = useState("");
   // NG登録
   type NgCustomer = { id: number; name: string; phone: string; rank: string };
   const [showNgRegister, setShowNgRegister] = useState(false);
+  const [showThImport, setShowThImport] = useState(false);
   const [ngCustomers, setNgCustomers] = useState<NgCustomer[]>([]);
   const [ngCustSearch, setNgCustSearch] = useState("");
   const [ngSelectedCust, setNgSelectedCust] = useState<NgCustomer | null>(null);
@@ -458,6 +461,7 @@ const generatePassword = () => {
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={openNgRegister} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
+          <button onClick={() => setShowThImport(true)} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📥 インポート</button>
           <button onClick={() => { setShowAdd(true); setMsg(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 新規登録</button>
         </div>
       </div>
@@ -860,6 +864,13 @@ const generatePassword = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* セラピストインポート */}
+      {showThImport && (
+        <Suspense fallback={null}>
+          <TherapistImportPanel T={T} onClose={() => setShowThImport(false)} onComplete={fetchTherapists} />
+        </Suspense>
       )}
 
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
