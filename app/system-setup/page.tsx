@@ -1242,8 +1242,12 @@ export default function SystemSetup() {
               <h3 className="text-[14px] font-medium mb-3">📋 メール送信が使われる場面</h3>
               <div className="space-y-2">
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[12px] font-medium mb-1">🔑 パスワード再発行</p>
+                  <p className="text-[12px] font-medium mb-1">🔑 お客様パスワード再発行</p>
                   <p className="text-[10px]" style={{ color: T.textMuted }}>お客様マイページで「パスワードを忘れた方はこちら」→ 電話番号入力 → 登録メールアドレスに新パスワードを送信</p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[12px] font-medium mb-1">💆 セラピストパスワード再発行</p>
+                  <p className="text-[10px]" style={{ color: T.textMuted }}>セラピストマイページで「パスワードを忘れた方はこちら」→ 電話番号入力 → 登録メールアドレスに新パスワードを送信</p>
                 </div>
               </div>
             </div>

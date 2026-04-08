@@ -19,29 +19,38 @@ function normalizePhone(phone: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { phone } = await req.json();
+    const { phone, type } = await req.json();
+    const isTherapist = type === "therapist";
 
     if (!phone || phone.trim().length < 8) {
       return NextResponse.json({ error: "電話番号を入力してください" }, { status: 400 });
     }
 
     const cleanPhone = normalizePhone(phone.trim());
+    const table = isTherapist ? "therapists" : "customers";
 
-    // 電話番号で顧客を検索（phone, phone2, phone3すべてチェック）
-    const { data: customers } = await supabase
-      .from("customers")
-      .select("id, name, self_name, phone, phone2, phone3, login_email, login_password")
-      .or(`phone.eq.${cleanPhone},phone2.eq.${cleanPhone},phone3.eq.${cleanPhone}`);
+    type UserRecord = { id: number; name: string; self_name?: string; phone: string; login_email: string; login_password: string };
 
-    if (!customers || customers.length === 0) {
+    // 電話番号で検索
+    let queryFilter = `phone.eq.${cleanPhone}`;
+    if (!isTherapist) queryFilter += `,phone2.eq.${cleanPhone},phone3.eq.${cleanPhone}`;
+
+    const { data: rawRecords } = await supabase
+      .from(table)
+      .select("id, name, " + (isTherapist ? "" : "self_name, ") + "phone, login_email, login_password")
+      .or(queryFilter);
+
+    const records = (rawRecords || []) as unknown as UserRecord[];
+
+    if (records.length === 0) {
       return NextResponse.json({ error: "この電話番号は登録されていません" }, { status: 404 });
     }
 
-    // マイページ登録済みの顧客を探す
-    const customer = customers.find(c => c.login_email);
+    // マイページ登録済みを探す
+    const record = records.find(r => r.login_email);
 
-    if (!customer || !customer.login_email) {
-      return NextResponse.json({ error: "この電話番号にマイページ登録が見つかりません。お店にお問い合わせください。" }, { status: 404 });
+    if (!record || !record.login_email) {
+      return NextResponse.json({ error: isTherapist ? "この電話番号にマイページ登録が見つかりません。オーナーにお問い合わせください。" : "この電話番号にマイページ登録が見つかりません。お店にお問い合わせください。" }, { status: 404 });
     }
 
     // 新しいパスワードを生成
@@ -49,9 +58,9 @@ export async function POST(req: Request) {
 
     // パスワードを更新
     await supabase
-      .from("customers")
+      .from(table)
       .update({ login_password: newPassword })
-      .eq("id", customer.id);
+      .eq("id", record.id);
 
     // メール送信用の設定を取得
     const { data: settings } = await supabase
@@ -78,7 +87,7 @@ export async function POST(req: Request) {
         success: true,
         emailSent: false,
         message: "パスワードを再発行しました。メール送信設定がないため、お店にお問い合わせください。",
-        maskedEmail: maskEmail(customer.login_email),
+        maskedEmail: maskEmail(record.login_email),
       });
     }
 
@@ -90,12 +99,12 @@ export async function POST(req: Request) {
       auth: { user: smtpUser, pass: smtpPass },
     });
 
-    const displayName = customer.self_name || customer.name || "お客様";
+    const displayName = record.self_name || record.name || (isTherapist ? "セラピスト" : "お客様");
 
     await transporter.sendMail({
       from: `"${storeName}" <${smtpFrom}>`,
-      to: customer.login_email,
-      subject: `【${storeName}】パスワード再発行のお知らせ`,
+      to: record.login_email,
+      subject: `【${storeName}】${isTherapist ? "セラピスト" : ""}マイページ パスワード再発行のお知らせ`,
       html: `
         <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #c3a782; font-size: 18px;">🔑 パスワード再発行</h2>
@@ -117,7 +126,7 @@ export async function POST(req: Request) {
       success: true,
       emailSent: true,
       message: "新しいパスワードをメールで送信しました",
-      maskedEmail: maskEmail(customer.login_email),
+      maskedEmail: maskEmail(record.login_email),
     });
 
   } catch (error: unknown) {

@@ -50,6 +50,7 @@ export default function TherapistMyPage() {
   const [therapist, setTherapist] = useState<Therapist | null>(null);
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
   const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers">("home");
   const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -79,6 +80,25 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     setLoginLoading(false);
     if (data) { setTherapist(data); setLoggedIn(true); localStorage.setItem("therapist_session", JSON.stringify({ id: data.id, email: data.login_email })); }
     else { setLoginError("メールアドレスまたはパスワードが間違っています"); }
+  };
+
+  const handleResetPassword = async () => {
+    setResetMsg(""); setLoginLoading(true);
+    try {
+      const res = await fetch("/api/password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: resetPhone, type: "therapist" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResetDone(true);
+        setResetMsg(data.emailSent ? `✅ 新しいパスワードを ${data.maskedEmail} に送信しました` : "✅ パスワードを再発行しました。オーナーにお問い合わせください。");
+      } else {
+        setResetMsg(data.error || "エラーが発生しました");
+      }
+    } catch { setResetMsg("通信エラーが発生しました"); }
+    setLoginLoading(false);
   };
 
   useEffect(() => {
@@ -161,12 +181,35 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       <div className="w-full max-w-[360px]">
         <div className="text-center mb-8"><div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}><span className="text-white text-2xl font-bold">C</span></div><h1 className="text-xl font-medium" style={{ color: "#d4687e" }}>チョップ</h1><p className="text-xs mt-1" style={{ color: "#c4879a" }}>セラピスト マイページ</p></div>
         <div className="rounded-2xl p-6 space-y-4" style={{ backgroundColor: "#ffffff", border: "1px solid #f0c6d0", boxShadow: "0 8px 30px rgba(232,132,154,0.12)" }}>
-          <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>メールアドレス</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
-          <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>パスワード</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
-          {loginError && <p className="text-[11px] text-center" style={{ color: "#e85d75" }}>{loginError}</p>}
-          <button onClick={handleLogin} disabled={loginLoading} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
+          {showReset ? (<>
+            <div className="text-center">
+              <p className="text-[14px] font-medium mb-1" style={{ color: "#d4687e" }}>🔑 パスワード再発行</p>
+              <p className="text-[11px]" style={{ color: "#c4879a" }}>ご登録の電話番号を入力してください</p>
+            </div>
+            {!resetDone ? (<>
+              <div>
+                <label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>電話番号</label>
+                <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)} placeholder="090-1234-5678" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} />
+                <p className="text-[9px] mt-1" style={{ color: "#c4879a" }}>セラピスト登録時の電話番号を入力</p>
+              </div>
+              {resetMsg && <p className="text-[11px] text-center" style={{ color: "#e85d75" }}>{resetMsg}</p>}
+              <button onClick={handleResetPassword} disabled={loginLoading || !resetPhone.trim()} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{loginLoading ? "送信中..." : "パスワードを再発行"}</button>
+              <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="w-full py-2 rounded-xl text-[11px] cursor-pointer" style={{ color: "#c4879a", border: "1px solid #f0c6d0" }}>← ログインに戻る</button>
+            </>) : (<>
+              <div className="px-4 py-4 rounded-xl text-center" style={{ backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                <p className="text-[12px] font-medium mb-1" style={{ color: "#16a34a" }}>{resetMsg}</p>
+                <p className="text-[10px] mt-2" style={{ color: "#888" }}>メールに記載のパスワードでログインしてください</p>
+              </div>
+              <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>ログイン画面に戻る</button>
+            </>)}
+          </>) : (<>
+            <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>メールアドレス</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
+            <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>パスワード</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
+            {loginError && <p className="text-[11px] text-center" style={{ color: "#e85d75" }}>{loginError}</p>}
+            <button onClick={handleLogin} disabled={loginLoading} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
+          </>)}
         </div>
-        <p className="text-[9px] text-center mt-4" style={{ color: "#c4879a" }}>ログイン情報はオーナーにお問い合わせください</p>
+        {!showReset && <p className="text-center mt-4"><button onClick={() => { setShowReset(true); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="text-[10px] cursor-pointer" style={{ color: "#d4687e", background: "none", border: "none", textDecoration: "underline" }}>パスワードを忘れた方はこちら</button></p>}
       </div>
     </div>
   );
