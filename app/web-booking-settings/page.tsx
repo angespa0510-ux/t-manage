@@ -234,7 +234,7 @@ export default function WebBookingSettings() {
               </div>
               <p className="text-[11px] m-0 mt-2" style={{ color: T.textMuted, lineHeight: 1.8 }}>
                 <strong style={{ color: T.text }}>具体例①:</strong> 出勤20:00まで → 19:00開始 → 60分コースはOK / 90分コースは ⚠ 注意書き表示<br />
-                <strong style={{ color: T.text }}>具体例②:</strong> 出勤翌3:00まで → 2:00開始 → 60分コースは ⚠ 注意書き表示<br />
+                <strong style={{ color: T.text }}>具体例②:</strong> 出勤翌3:00まで → 2:00開始 → 60分コースはOK / 90分コースは ⚠ 注意書き表示<br />
                 <strong style={{ color: T.text }}>コース選択画面:</strong> 各コースに終了時刻を表示し、超過する場合はオレンジ色の ⚠ マークを表示<br />
                 <strong style={{ color: T.text }}>確認画面:</strong> 送信ボタンの上に注意書きを再表示
               </p>
