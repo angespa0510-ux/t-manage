@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 /* ═══ Types ═══ */
@@ -37,12 +38,15 @@ const C = {
 /* ═══ Steps ═══ */
 type Step = "list" | "therapist" | "course" | "auth" | "confirm" | "done";
 
-export default function PublicSchedule() {
+function PublicScheduleInner() {
+  const searchParams = useSearchParams();
   const today = new Date().toISOString().split("T")[0];
+  const initialDate = searchParams.get("date") || today;
 
   /* ─── State ─── */
   const [step, setStep] = useState<Step>("list");
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(initialDate);
+  const [search, setSearch] = useState("");
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -400,6 +404,21 @@ export default function PublicSchedule() {
             </div>
           </div>
 
+          {/* Past date warning */}
+          {date < today && (
+            <div style={{ ...cardStyle, padding: "12px 16px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8, border: `1px solid rgba(196,85,85,0.3)`, backgroundColor: "rgba(196,85,85,0.06)" }}>
+              <span style={{ fontSize: 16 }}>⚠️</span>
+              <p style={{ fontSize: 12, color: C.red, margin: 0 }}>過去の日付です。予約はできません。</p>
+            </div>
+          )}
+
+          {/* Search bar */}
+          <div style={{ position: "relative", marginBottom: 12 }}>
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="セラピスト名で検索" style={{ width: "100%", padding: "10px 14px 10px 36px", borderRadius: 12, fontSize: 13, outline: "none", backgroundColor: C.card, border: `1px solid ${C.border}`, color: C.text, boxSizing: "border-box" }} />
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13 }}>🔍</span>
+            {search && <button onClick={() => setSearch("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 12 }}>✕</button>}
+          </div>
+
           {/* Therapist Grid */}
           {loading ? (
             <div style={{ textAlign: "center", padding: "60px 0" }}>
@@ -412,13 +431,23 @@ export default function PublicSchedule() {
               <p style={{ fontSize: 13, color: C.textMuted }}>この日の出勤はありません</p>
               <p style={{ fontSize: 11, color: C.textFaint, marginTop: 8 }}>別の日付をお選びください</p>
             </div>
-          ) : (
-            <>
+          ) : (() => {
+            const filtered = shifts.filter(shift => {
+              const t = therapists.find(th => th.id === shift.therapist_id);
+              if (!t) return false;
+              if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
+              return true;
+            });
+            return filtered.length === 0 ? (
+              <div style={{ ...cardStyle, padding: "48px 24px", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: C.textMuted }}>該当するセラピストがいません</p>
+              </div>
+            ) : (<>
               <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, paddingLeft: 4 }}>
-                {dateFmt(date)} の出勤 — <span style={{ color: C.accent, fontWeight: 600 }}>{shifts.filter(s => therapists.some(t => t.id === s.therapist_id)).length}名</span>
+                {dateFmt(date)} の出勤 — <span style={{ color: C.accent, fontWeight: 600 }}>{filtered.length}名</span>
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {shifts.map(shift => {
+                {filtered.map(shift => {
                   const t = therapists.find(th => th.id === shift.therapist_id);
                   if (!t) return null;
                   const tRes = reservations.filter(r => r.therapist_id === shift.therapist_id);
@@ -466,8 +495,8 @@ export default function PublicSchedule() {
                   );
                 })}
               </div>
-            </>
-          )}
+            </>);
+          })()}
         </>)}
 
         {/* ═══════════════════════════════════════════════════ */}
@@ -516,7 +545,11 @@ export default function PublicSchedule() {
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10, backgroundColor: sl.available ? "transparent" : "rgba(196,85,85,0.04)" }}>
                         <span style={{ fontSize: 13, fontFamily: "monospace", width: 48, flexShrink: 0, color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
                         {sl.available ? (
-                          <button onClick={() => selectTime(sl.time)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "center", backgroundColor: C.greenBg, color: C.green, border: `1px solid ${C.greenBorder}` }}>◯ 空き — タップで予約</button>
+                          date < today ? (
+                            <span style={{ flex: 1, textAlign: "center", fontSize: 12, color: C.textFaint, padding: "8px 0" }}>◯ 空き（過去）</span>
+                          ) : (
+                            <button onClick={() => selectTime(sl.time)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "center", backgroundColor: C.greenBg, color: C.green, border: `1px solid ${C.greenBorder}` }}>◯ 空き — タップで予約</button>
+                          )
                         ) : (
                           <span style={{ flex: 1, textAlign: "center", fontSize: 12, color: C.textFaint, padding: "8px 0" }}>✕ 予約済</span>
                         )}
@@ -863,5 +896,20 @@ export default function PublicSchedule() {
         body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       `}</style>
     </div>
+  );
+}
+
+export default function PublicSchedule() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: "100vh", background: "linear-gradient(180deg, #0f0f14 0%, #1a1520 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg, #c3a782, #a88d68)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", margin: "0 auto 12px" }}>C</div>
+          <p style={{ fontSize: 13, color: "#6a6860" }}>読み込み中...</p>
+        </div>
+      </div>
+    }>
+      <PublicScheduleInner />
+    </Suspense>
   );
 }
