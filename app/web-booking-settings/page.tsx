@@ -9,13 +9,28 @@ export default function WebBookingSettings() {
   const [copied, setCopied] = useState("");
   const [origin, setOrigin] = useState("");
   const [storeName, setStoreName] = useState("チョップ");
+  const [cancelPhone, setCancelPhone] = useState("070-1675-5900");
+  const [phoneSaving, setPhoneSaving] = useState(false);
+  const [phoneMsg, setPhoneMsg] = useState("");
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    supabase.from("store_settings").select("key,value").eq("key", "store_name").maybeSingle().then(({ data }) => {
-      if (data?.value) setStoreName(data.value);
+    supabase.from("store_settings").select("key,value").in("key", ["store_name", "cancel_phone"]).then(({ data }) => {
+      if (data) {
+        for (const s of data) {
+          if (s.key === "store_name") setStoreName(s.value);
+          if (s.key === "cancel_phone") setCancelPhone(s.value);
+        }
+      }
     });
   }, []);
+
+  const savePhone = async () => {
+    setPhoneSaving(true); setPhoneMsg("");
+    await supabase.from("store_settings").upsert({ key: "cancel_phone", value: cancelPhone.trim() }, { onConflict: "key" });
+    setPhoneSaving(false); setPhoneMsg("✅ 保存しました");
+    setTimeout(() => setPhoneMsg(""), 2000);
+  };
 
   const publicUrl = `${origin}/public-schedule`;
   const mypageUrl = `${origin}/customer-mypage`;
@@ -238,6 +253,74 @@ export default function WebBookingSettings() {
                 <strong style={{ color: T.text }}>コース選択画面:</strong> 各コースに終了時刻を表示し、超過する場合はオレンジ色の ⚠ マークを表示<br />
                 <strong style={{ color: T.text }}>確認画面:</strong> 送信ボタンの上に注意書きを再表示
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ 電話番号設定 ═══ */}
+        <div className="rounded-xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <h2 className="text-[15px] font-medium mb-4 flex items-center gap-2">📞 キャンセル用電話番号の設定</h2>
+          <p className="text-[12px] mb-4" style={{ color: T.textSub }}>お客様マイページのキャンセル案内に表示される電話番号です。タップで発信できるリンクになります。</p>
+
+          <div className="flex gap-2 mb-3">
+            <input type="tel" value={cancelPhone} onChange={e => setCancelPhone(e.target.value)} placeholder="070-1675-5900" className="flex-1 px-3 py-2.5 rounded-lg text-[14px] border outline-none" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+            <button onClick={savePhone} disabled={phoneSaving} className="px-5 py-2.5 rounded-lg text-[12px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${T.accent}, #a88d68)`, opacity: phoneSaving ? 0.6 : 1 }}>
+              {phoneSaving ? "保存中..." : "💾 保存"}
+            </button>
+          </div>
+          {phoneMsg && <p className="text-[12px] mb-2" style={{ color: "#4a7c59" }}>{phoneMsg}</p>}
+          <p className="text-[10px]" style={{ color: T.textMuted }}>※ この番号はお客様マイページの「キャンセル・変更について」モーダルに表示されます</p>
+        </div>
+
+        {/* ═══ キャンセルポリシーの仕組み ═══ */}
+        <div className="rounded-xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <h2 className="text-[15px] font-medium mb-4 flex items-center gap-2">🚫 キャンセル・変更の仕組み</h2>
+          <p className="text-[12px] mb-4" style={{ color: T.textSub }}>お客様マイページでの予約キャンセルは、予約のステータスによって動作が異なります。</p>
+
+          <div className="space-y-4">
+            {/* リクエスト中 */}
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#f59e0b18", color: "#b45309", border: "1px solid #f59e0b30" }}>リクエスト中</span>
+                <span className="text-[13px] font-medium">お客様自身でキャンセル可能</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                WEB予約リクエスト後、<strong style={{ color: T.text }}>まだスタッフが概要リンクを送信していない状態</strong>では、お客様がマイページから直接キャンセルできます。<br />
+                「✕ この予約をキャンセル」ボタンをタップ → 確認モーダル → キャンセル確定
+              </p>
+            </div>
+
+            {/* 確定済み */}
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f30" }}>概要送信済み〜</span>
+                <span className="text-[13px] font-medium">お電話での連絡を案内</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                スタッフが概要リンクを送信し、<strong style={{ color: T.text }}>お客様がリンクを開いた後</strong>は予約確定扱いとなります。<br />
+                「📞 キャンセル・変更について」ボタンをタップすると以下のモーダルが表示されます：
+              </p>
+              <div className="rounded-lg mt-2 p-3" style={{ backgroundColor: "#88878008", border: `1px solid ${T.border}` }}>
+                <p className="text-[12px] font-medium m-0">📞 キャンセル・変更について</p>
+                <p className="text-[11px] m-0 mt-1" style={{ color: T.textSub }}>ご予約は確定しておりますので、<br /><strong style={{ color: T.text }}>キャンセル・変更はお電話にてお願いいたします。</strong></p>
+                <p className="text-[11px] m-0 mt-2" style={{ color: T.accent }}>📞 {cancelPhone || "070-1675-5900"}（タップで発信）</p>
+                <p className="text-[10px] m-0 mt-1" style={{ color: "#c45555" }}>⚠ 当日のキャンセルにつきましては、100％キャンセル料を頂戴いたします。</p>
+              </div>
+            </div>
+
+            {/* ポリシー表示 */}
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555530" }}>常時表示</span>
+                <span className="text-[13px] font-medium">キャンセルポリシーを予約カード下に表示</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                お客様マイページのホーム画面「次回のご予約」カードの下に、常にキャンセルポリシーが表示されます：
+              </p>
+              <div className="rounded-lg mt-2 p-3" style={{ backgroundColor: "#c4555506", border: "1px solid #c4555515" }}>
+                <p className="text-[10px] font-medium mb-1" style={{ color: "#c45555" }}>📌 キャンセル・変更について</p>
+                <p className="text-[9px] m-0" style={{ color: T.textMuted, lineHeight: 1.7 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。<br />当日のキャンセルにつきましては、<strong style={{ color: "#c45555" }}>100％キャンセル料</strong>を頂戴いたします。</p>
+              </div>
             </div>
           </div>
         </div>
