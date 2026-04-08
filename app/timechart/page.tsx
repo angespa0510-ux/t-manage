@@ -36,6 +36,7 @@ export default function TimeChart() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [clockedOut, setClockedOut] = useState<Set<number>>(new Set());
+  const [webReservations, setWebReservations] = useState<{ id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; status: string; customer_status: string; created_at: string }[]>([]);
 
   const [showCustSearch, setShowCustSearch] = useState(false);
   const [custSearchQ, setCustSearchQ] = useState("");
@@ -276,6 +277,9 @@ export default function TimeChart() {
     const { data: pts } = await supabase.from("point_settings").select("earn_per_yen,earn_points,expiry_months,rainy_day_active,rainy_day_multiplier").limit(1).single(); if (pts) setPtSettings(pts);
     // Notification templates from DB
     const { data: nts } = await supabase.from("notification_templates").select("template_key,body"); if (nts) setNtTemplates(nts);
+    // WEB予約一覧（未完了の当日以降の予約）
+    const today = new Date().toISOString().split("T")[0];
+    const { data: webRes } = await supabase.from("reservations").select("id,customer_name,therapist_id,date,start_time,end_time,course,status,customer_status,created_at").gte("date", today).in("customer_status", ["web_reservation"]).not("status", "eq", "completed").order("date").order("start_time"); if (webRes) setWebReservations(webRes);
     const ntKeys = ["notify_url_days", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis", "notify_sender_default", "line_url_customer", "line_url_staff"];
     const { data: ntSets } = await supabase.from("store_settings").select("key,value").in("key", ntKeys);
     if (ntSets) { for (const s of ntSets) { if (s.key === "notify_url_days") setNtUrlDays(parseInt(s.value) || 1); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); else if (s.key === "notify_sender_default" && s.value && !notifySender) setNotifySender(s.value); else if (s.key === "line_url_customer") document.body.dataset.lineUrlCustomer = s.value; else if (s.key === "line_url_staff") document.body.dataset.lineUrlStaff = s.value; } }
@@ -637,6 +641,29 @@ export default function TimeChart() {
         <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="text-[12px] border rounded-lg px-2 py-1 outline-none cursor-pointer" style={{ borderColor: T.border, color: T.textSub, backgroundColor: T.card }} />
         <button onClick={nextDay} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="9 18 15 12 9 6"/></svg></button>
       </div>
+
+      {/* WEB予約一覧 */}
+      {webReservations.length > 0 && (
+        <div className="border-b flex-shrink-0 px-4 py-2" style={{ backgroundColor: "#a855f708", borderColor: T.border }}>
+          <div className="flex items-center gap-3 overflow-x-auto [&::-webkit-scrollbar]:h-0">
+            <span className="flex-shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>📱 WEB予約 {webReservations.length}件</span>
+            {webReservations.map(wr => {
+              const th = therapists.find(t => t.id === wr.therapist_id);
+              const isToday = wr.date === selectedDate;
+              return (
+                <button key={wr.id} onClick={() => { setSelectedDate(wr.date); setTimeout(() => { const target = reservations.find(r => r.id === wr.id) || wr; openEdit(target as Reservation); }, 300); }} className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-[10px]" style={{ backgroundColor: isToday ? "#a855f715" : T.cardAlt, border: `1px solid ${isToday ? "#a855f740" : T.border}`, color: T.text }}>
+                  <span style={{ color: "#a855f7" }}>{wr.date.slice(5).replace("-", "/")}</span>
+                  <span>{wr.start_time.slice(0, 5)}</span>
+                  <span className="font-medium">{wr.customer_name}</span>
+                  {th && <span style={{ color: T.textMuted }}>→ {th.name}</span>}
+                  {!th && <span style={{ color: "#f59e0b" }}>セラピスト未定</span>}
+                  <span style={{ color: T.textMuted }}>{wr.course}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Timeline */}
       <div className="flex-1 overflow-auto select-none [&::-webkit-scrollbar]:h-[4px] [&::-webkit-scrollbar-thumb]:bg-[#d3d1c7]/40 [&::-webkit-scrollbar-thumb]:rounded-full" ref={timelineRef} style={{ cursor: isPanning ? "grabbing" : "grab" }} onMouseDown={handlePanStart} onMouseMove={handlePanMove} onMouseUp={handlePanEnd} onMouseLeave={handlePanEnd}>
