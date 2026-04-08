@@ -37,6 +37,7 @@ export default function TimeChart() {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [clockedOut, setClockedOut] = useState<Set<number>>(new Set());
   const [webReservations, setWebReservations] = useState<{ id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; status: string; customer_status: string; created_at: string }[]>([]);
+  const [showWebRes, setShowWebRes] = useState(false);
 
   const [showCustSearch, setShowCustSearch] = useState(false);
   const [custSearchQ, setCustSearchQ] = useState("");
@@ -620,6 +621,9 @@ export default function TimeChart() {
           <button onClick={() => setShowShiftNotif(!showShiftNotif)} className="relative px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: pendingShiftReqs.length > 0 ? "#f59e0b44" : T.border, color: pendingShiftReqs.length > 0 ? "#f59e0b" : T.textSub }}>
             📝 出勤希望{pendingShiftReqs.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: "#f59e0b" }}>{new Set(pendingShiftReqs.map(r => r.therapist_id)).size}</span>}
           </button>
+          <button onClick={() => setShowWebRes(!showWebRes)} className="relative px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: webReservations.length > 0 ? "#a855f744" : T.border, color: webReservations.length > 0 ? "#a855f7" : T.textSub }}>
+            📱 WEB予約{webReservations.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: "#a855f7" }}>{webReservations.length}</span>}
+          </button>
           <button onClick={() => setShowStatusList(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📋 ステータス一覧</button>
           <button onClick={openBulkNotify} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#3d6b9f44", color: "#3d6b9f" }}>📩 一括通知</button>
           <button onClick={() => setShowSokuho(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#ff6b9d44", color: "#ff6b9d" }}>📢 速報</button>
@@ -642,25 +646,37 @@ export default function TimeChart() {
         <button onClick={nextDay} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="9 18 15 12 9 6"/></svg></button>
       </div>
 
-      {/* WEB予約一覧 */}
-      {webReservations.length > 0 && (
-        <div className="border-b flex-shrink-0 px-4 py-2" style={{ backgroundColor: "#a855f708", borderColor: T.border }}>
-          <div className="flex items-center gap-3 overflow-x-auto [&::-webkit-scrollbar]:h-0">
-            <span className="flex-shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>📱 WEB予約 {webReservations.length}件</span>
-            {webReservations.map(wr => {
-              const th = therapists.find(t => t.id === wr.therapist_id);
-              const isToday = wr.date === selectedDate;
-              return (
-                <button key={wr.id} onClick={() => { setSelectedDate(wr.date); setTimeout(() => { const target = reservations.find(r => r.id === wr.id) || wr; openEdit(target as Reservation); }, 300); }} className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-[10px]" style={{ backgroundColor: isToday ? "#a855f715" : T.cardAlt, border: `1px solid ${isToday ? "#a855f740" : T.border}`, color: T.text }}>
-                  <span style={{ color: "#a855f7" }}>{wr.date.slice(5).replace("-", "/")}</span>
-                  <span>{wr.start_time.slice(0, 5)}</span>
-                  <span className="font-medium">{wr.customer_name}</span>
-                  {th && <span style={{ color: T.textMuted }}>→ {th.name}</span>}
-                  {!th && <span style={{ color: "#f59e0b" }}>セラピスト未定</span>}
-                  <span style={{ color: T.textMuted }}>{wr.course}</span>
-                </button>
-              );
-            })}
+      {/* WEB予約ドロップダウン */}
+      {showWebRes && (
+        <div className="fixed inset-0 z-40" onClick={() => setShowWebRes(false)}>
+          <div className="absolute top-[64px] right-[200px] w-[420px] max-h-[500px] overflow-y-auto rounded-2xl border shadow-xl animate-[fadeIn_0.2s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 flex items-center justify-between sticky top-0" style={{ backgroundColor: T.card, borderBottom: `1px solid ${T.border}` }}>
+              <span className="text-[13px] font-medium" style={{ color: "#a855f7" }}>📱 WEB予約一覧</span>
+              <span className="text-[11px]" style={{ color: T.textMuted }}>{webReservations.length}件</span>
+            </div>
+            {webReservations.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[12px]" style={{ color: T.textFaint }}>未処理のWEB予約はありません</div>
+            ) : (
+              <div>
+                {webReservations.map(wr => {
+                  const th = therapists.find(t => t.id === wr.therapist_id);
+                  return (
+                    <button key={wr.id} onClick={() => { setShowWebRes(false); setSelectedDate(wr.date); setTimeout(() => { const target = reservations.find(r => r.id === wr.id) || wr; openEdit(target as Reservation); }, 300); }} className="w-full text-left px-4 py-3 cursor-pointer" style={{ borderBottom: `1px solid ${T.border}` }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>{wr.date.slice(5).replace("-", "/")}</span>
+                        <span className="text-[12px] font-medium">{wr.start_time.slice(0, 5)}〜{wr.end_time.slice(0, 5)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="font-medium">{wr.customer_name}</span>
+                        <span style={{ color: T.textMuted }}>→</span>
+                        {th ? <span style={{ color: "#e8849a" }}>{th.name}</span> : <span style={{ color: "#f59e0b" }}>セラピスト未定</span>}
+                        <span style={{ color: T.textMuted }}>{wr.course}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
