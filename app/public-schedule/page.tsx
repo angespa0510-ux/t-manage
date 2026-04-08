@@ -90,6 +90,7 @@ function PublicScheduleInner() {
 
   // Store name
   const [storeName, setStoreName] = useState("チョップ");
+  const [tickerMsgs, setTickerMsgs] = useState<string[]>([]);
 
   /* ─── Data fetch ─── */
   const fetchMaster = useCallback(async () => {
@@ -150,14 +151,39 @@ function PublicScheduleInner() {
     });
   }, [customer]);
 
-  /* ─── Slot generation ─── */
+  // ソーシャルプルーフ: 最近の予約ティッカー
+  useEffect(() => {
+    const loadRecent = async () => {
+      const { data } = await supabase.from("reservations").select("therapist_id,course,created_at").order("created_at", { ascending: false }).limit(10);
+      if (data && data.length > 0) {
+        const msgs = await Promise.all(data.map(async (r) => {
+          const { data: th } = await supabase.from("therapists").select("name").eq("id", r.therapist_id).maybeSingle();
+          const ago = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60000);
+          const agoStr = ago < 60 ? `${ago}分前` : ago < 1440 ? `${Math.floor(ago / 60)}時間前` : `${Math.floor(ago / 1440)}日前`;
+          return `🔥 ${agoStr}に ${th?.name || "セラピスト"}さん ${r.course || ""}の予約が入りました`;
+        }));
+        setTickerMsgs(msgs);
+      }
+    };
+    loadRecent();
+  }, []);
+
+  /* ─── Slot generation (interval考慮) ─── */
   const makeSlots = (shift: Shift, resForTherapist: Reservation[]) => {
     const ss = timeToMin(shift.start_time); const se = timeToMin(shift.end_time);
+    const t = therapists.find(th => th.id === shift.therapist_id);
+    const interval = t?.interval_minutes || 0;
     const slots: { time: string; available: boolean }[] = [];
     for (let m = ss; m < se; m += 15) {
-      const t = minToTime(m);
-      const busy = resForTherapist.find(r => { const rs = timeToMin(r.start_time); const re = timeToMin(r.end_time); return m >= rs && m < re; });
-      slots.push({ time: t, available: !busy });
+      const tm = minToTime(m);
+      // 予約中 or インターバル中はbusy
+      const busy = resForTherapist.find(r => {
+        const rs = timeToMin(r.start_time);
+        const re = timeToMin(r.end_time);
+        const reWithInterval = re + interval;
+        return m >= rs && m < reWithInterval;
+      });
+      slots.push({ time: tm, available: !busy });
     }
     return slots;
   };
@@ -373,6 +399,17 @@ function PublicScheduleInner() {
         {/* STEP: LIST — セラピスト一覧 */}
         {/* ═══════════════════════════════════════════════════ */}
         {step === "list" && (<>
+          {/* Social proof ticker */}
+          {tickerMsgs.length > 0 && (
+            <div style={{ marginBottom: 12, borderRadius: 10, padding: "8px 12px", overflow: "hidden", backgroundColor: "rgba(195,167,130,0.06)", border: `1px solid ${C.accentBorder}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", animation: `ticker ${tickerMsgs.length * 4}s linear infinite` }}>
+                {tickerMsgs.map((msg, i) => (
+                  <span key={i} style={{ fontSize: 11, color: C.accent, paddingRight: 40 }}>{msg}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Date navigation */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 12 }}>
@@ -480,7 +517,7 @@ function PublicScheduleInner() {
                         {(t.height_cm > 0 || t.bust > 0) && (
                           <p style={{ fontSize: 10, margin: "2px 0 0", color: C.textMuted }}>T{t.height_cm} B{t.bust}({t.cup}) W{t.waist} H{t.hip}</p>
                         )}
-                        <div style={{ marginTop: 6 }}>
+                        <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
                           <span style={{
                             fontSize: 10, padding: "3px 10px", borderRadius: 99,
                             backgroundColor: freeCount > 0 ? C.greenBg : C.redBg,
@@ -489,6 +526,15 @@ function PublicScheduleInner() {
                           }}>
                             {freeCount > 0 ? `◯ 空き${freeCount}枠` : "✕ 空きなし"}
                           </span>
+                          {freeCount > 0 && date === today && (() => {
+                            const now = new Date();
+                            const nowMin = (now.getHours() < 9 ? now.getHours() + 24 : now.getHours()) * 60 + now.getMinutes();
+                            const nextSlot = slots.find(s => s.available && timeToMin(s.time) >= nowMin);
+                            if (nextSlot && timeToMin(nextSlot.time) - nowMin <= 30) {
+                              return <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 99, backgroundColor: "rgba(168,85,247,0.1)", color: "#a855f7", border: "1px solid rgba(168,85,247,0.25)", fontWeight: 600 }}>⚡ 今すぐOK</span>;
+                            }
+                            return null;
+                          })()}
                         </div>
                       </div>
                     </button>
@@ -889,6 +935,7 @@ function PublicScheduleInner() {
       {/* ═══ CSS Animation ═══ */}
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes ticker { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         main > div { animation: fadeIn 0.3s ease-out; }
         input::placeholder, textarea::placeholder { color: ${C.textFaint}; }
