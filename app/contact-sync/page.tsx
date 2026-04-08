@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "../../lib/theme";
@@ -20,7 +20,7 @@ const GROUP_NAMES = [
   "T-MANAGE スタッフ",
 ];
 
-export default function ContactSync() {
+function ContactSyncInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { dark, toggle, T } = useTheme();
@@ -535,4 +535,8 @@ export default function ContactSync() {
       </div>
     </div>
   );
+}
+
+export default function ContactSync() {
+  return <Suspense fallback={<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}><p>読み込み中...</p></div>}><ContactSyncInner /></Suspense>;
 }
