@@ -127,13 +127,13 @@ export default function Dashboard() {
   };
 
   // Register
-  const [custName, setCustName] = useState(""); const [custPhone, setCustPhone] = useState(""); const [custPhone2, setCustPhone2] = useState(""); const [custPhone3, setCustPhone3] = useState("");
+  const [custName, setCustName] = useState(""); const [custSelfName, setCustSelfName] = useState(""); const [custPhone, setCustPhone] = useState(""); const [custPhone2, setCustPhone2] = useState(""); const [custPhone3, setCustPhone3] = useState("");
   const [custEmail, setCustEmail] = useState(""); const [custNotes, setCustNotes] = useState(""); const [custRank, setCustRank] = useState("normal"); const [custBirthday, setCustBirthday] = useState("");
   const [saving, setSaving] = useState(false); const [saveMsg, setSaveMsg] = useState("");
 
   // Edit
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [editName, setEditName] = useState(""); const [editPhone, setEditPhone] = useState(""); const [editPhone2, setEditPhone2] = useState(""); const [editPhone3, setEditPhone3] = useState("");
+  const [editName, setEditName] = useState(""); const [editSelfName, setEditSelfName] = useState(""); const [editPhone, setEditPhone] = useState(""); const [editPhone2, setEditPhone2] = useState(""); const [editPhone3, setEditPhone3] = useState("");
   const [editEmail, setEditEmail] = useState(""); const [editNotes, setEditNotes] = useState(""); const [editRank, setEditRank] = useState("normal"); const [editBirthday, setEditBirthday] = useState("");
   const [editSaving, setEditSaving] = useState(false); const [editMsg, setEditMsg] = useState("");
 
@@ -413,18 +413,18 @@ export default function Dashboard() {
       const { data: dup } = await supabase.from("customers").select("id, name").or(`phone.eq.${p1},phone2.eq.${p1},phone3.eq.${p1}`);
       if (dup && dup.length > 0) { setSaving(false); setSaveMsg(`この電話番号は「${dup[0].name}」で既に登録されています`); return; }
     }
-    const { error } = await supabase.from("customers").insert({ name: custName.trim(), phone: p1, phone2: p2, phone3: p3, email: custEmail.trim(), notes: custNotes.trim(), rank: custRank, birthday: custBirthday || null, user_id: userId });
+    const { error } = await supabase.from("customers").insert({ name: custName.trim(), self_name: custSelfName.trim() || null, phone: p1, phone2: p2, phone3: p3, email: custEmail.trim(), notes: custNotes.trim(), rank: custRank, birthday: custBirthday || null, user_id: userId });
     setSaving(false);
     if (error) { setSaveMsg("登録に失敗しました: " + error.message); }
-    else { setSaveMsg("登録しました！"); setCustName(""); setCustPhone(""); setCustPhone2(""); setCustPhone3(""); setCustEmail(""); setCustNotes(""); setCustRank("normal"); setCustBirthday(""); fetchCustomers(); setTimeout(() => { setSaveMsg(""); setActivePage("顧客一覧"); }, 1000); }
+    else { setSaveMsg("登録しました！"); setCustName(""); setCustSelfName(""); setCustPhone(""); setCustPhone2(""); setCustPhone3(""); setCustEmail(""); setCustNotes(""); setCustRank("normal"); setCustBirthday(""); fetchCustomers(); setTimeout(() => { setSaveMsg(""); setActivePage("顧客一覧"); }, 1000); }
   };
 
   // Edit
-  const startEdit = (c: Customer) => { setEditingCustomer(c); setEditName(c.name || ""); setEditPhone(c.phone || ""); setEditPhone2(c.phone2 || ""); setEditPhone3(c.phone3 || ""); setEditEmail(c.email || c.login_email || ""); setEditNotes(c.notes || ""); setEditRank(c.rank || "normal"); setEditBirthday(c.birthday || ""); setEditMsg(""); };
+  const startEdit = (c: Customer) => { setEditingCustomer(c); setEditName(c.name || ""); setEditSelfName(c.self_name || ""); setEditPhone(c.phone || ""); setEditPhone2(c.phone2 || ""); setEditPhone3(c.phone3 || ""); setEditEmail(c.email || c.login_email || ""); setEditNotes(c.notes || ""); setEditRank(c.rank || "normal"); setEditBirthday(c.birthday || ""); setEditMsg(""); };
   const handleUpdate = async () => {
     if (!editingCustomer || !editName.trim()) { setEditMsg("名前を入力してください"); return; }
     setEditSaving(true); setEditMsg("");
-    const { error } = await supabase.from("customers").update({ name: editName.trim(), phone: normPhone(editPhone), phone2: normPhone(editPhone2), phone3: normPhone(editPhone3), email: editEmail.trim(), notes: editNotes.trim(), rank: editRank, birthday: editBirthday || null }).eq("id", editingCustomer.id);
+    const { error } = await supabase.from("customers").update({ name: editName.trim(), self_name: editSelfName.trim() || null, phone: normPhone(editPhone), phone2: normPhone(editPhone2), phone3: normPhone(editPhone3), email: editEmail.trim(), notes: editNotes.trim(), rank: editRank, birthday: editBirthday || null }).eq("id", editingCustomer.id);
     setEditSaving(false);
     if (error) { setEditMsg("更新に失敗しました: " + error.message); }
     else { setEditMsg("更新しました！"); fetchCustomers(); setTimeout(() => { setEditingCustomer(null); setEditMsg(""); }, 800); }
@@ -731,7 +731,8 @@ export default function Dashboard() {
               <div className="rounded-2xl border p-8" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="mb-8"><h2 className="text-[16px] font-medium">顧客登録</h2><p className="text-[11px] mt-1" style={{ color: T.textFaint }}>新しい顧客情報を登録します</p></div>
                 <div className="space-y-5">
-                  <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前 <span style={{ color: "#c49885" }}>*</span></label><input type="text" placeholder="山田 太郎" value={custName} onChange={(e) => setCustName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
+                  <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前（スタッフ管理用）<span style={{ color: "#c49885" }}> *</span></label><input type="text" placeholder="タナカ1234" value={custName} onChange={(e) => setCustName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>スタッフがタイムチャート等で使う管理用の名前</p></div>
+                  <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>会員登録名（お客様用）</label><input type="text" placeholder="山田 太郎" value={custSelfName} onChange={(e) => setCustSelfName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>お客様がマイページで見る名前（未入力の場合はお客様が登録時に設定）</p></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号①</label><input type="tel" placeholder="090-1234-5678" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号②</label><input type="tel" placeholder="2つ目の電話番号（任意）" value={custPhone2} onChange={(e) => setCustPhone2(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
                   <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号③</label><input type="tel" placeholder="3つ目の電話番号（任意）" value={custPhone3} onChange={(e) => setCustPhone3(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
@@ -983,8 +984,8 @@ export default function Dashboard() {
           <div className="rounded-2xl border p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <div className="mb-6"><h2 className="text-[16px] font-medium">顧客情報を編集</h2></div>
             <div className="space-y-4">
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前（スタッフ管理用） <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
-              {editingCustomer?.self_name && <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 お客様登録名（本人入力）</label><p className="px-4 py-3 rounded-xl text-[13px]" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{editingCustomer.self_name}</p></div>}
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>名前（スタッフ管理用） <span style={{ color: "#c49885" }}>*</span></label><input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>スタッフがタイムチャート等で使う管理用の名前</p></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 会員登録名（お客様用）</label><input type="text" value={editSelfName} onChange={(e) => setEditSelfName(e.target.value)} placeholder="お客様が設定した名前" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>お客様がマイページで見る名前・パスワード再発行メールにも使用</p></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号①</label><input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号②</label><input type="tel" value={editPhone2} onChange={(e) => setEditPhone2(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号③</label><input type="tel" value={editPhone3} onChange={(e) => setEditPhone3(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} /></div>
