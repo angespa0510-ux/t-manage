@@ -692,25 +692,50 @@ function PublicScheduleInner() {
 
           {/* Course selection */}
           <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: C.textSub }}>📋 コースを選択</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
             {courses.map(c => {
               const isSel = selCourseId === c.id;
+              const endMin = timeToMin(selTime) + c.duration;
+              const shiftEndMin = selShift ? timeToMin(selShift.end_time) : 9999;
+              const exceeds = endMin > shiftEndMin;
               return (
                 <button key={c.id} onClick={() => setSelCourseId(c.id)} style={{
                   ...cardStyle, padding: "14px 16px", cursor: "pointer", textAlign: "left",
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  border: isSel ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
+                  border: isSel ? `2px solid ${C.accent}` : exceeds ? `1px solid rgba(196,85,85,0.3)` : `1px solid ${C.border}`,
                   backgroundColor: isSel ? C.accentBg : C.card,
                 }}>
                   <div>
                     <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{c.name}</p>
-                    <p style={{ fontSize: 11, color: C.textMuted, margin: "2px 0 0" }}>⏱ {c.duration}分</p>
+                    <p style={{ fontSize: 11, color: C.textMuted, margin: "2px 0 0" }}>⏱ {c.duration}分 → 終了 {minToTime(endMin)}</p>
+                    {exceeds && <p style={{ fontSize: 10, color: "#e8a838", margin: "3px 0 0" }}>⚠ 出勤終了 {selShift?.end_time.slice(0,5)} を超えます</p>}
                   </div>
                   <span style={{ fontSize: 15, fontWeight: 700, color: C.accent }}>{fmt(c.price)}</span>
                 </button>
               );
             })}
           </div>
+          {/* 終了時刻超過の注意書き */}
+          {selCourseId > 0 && (() => {
+            const course = courses.find(c => c.id === selCourseId);
+            const ext = extensions.find(e => e.id === selExtId);
+            const totalDur = (course?.duration || 0) + (ext?.duration || 0);
+            const endMin = timeToMin(selTime) + totalDur;
+            const shiftEndMin = selShift ? timeToMin(selShift.end_time) : 9999;
+            if (endMin > shiftEndMin) {
+              return (
+                <div style={{ padding: "12px 14px", borderRadius: 12, marginBottom: 16, backgroundColor: "rgba(232,168,56,0.08)", border: "1px solid rgba(232,168,56,0.25)" }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: "#e8a838", margin: 0 }}>⚠ 終了時刻を超えるご予約です</p>
+                  <p style={{ fontSize: 11, color: C.textSub, margin: "6px 0 0", lineHeight: 1.7 }}>
+                    セラピストの出勤終了は <strong style={{ color: C.text }}>{selShift?.end_time.slice(0,5)}</strong> ですが、
+                    選択されたコースの終了は <strong style={{ color: C.text }}>{minToTime(endMin)}</strong> になります。<br />
+                    ご予約は可能ですが、<strong style={{ color: "#e8a838" }}>コース内容の調整をお願いする場合がございます</strong>。予めご了承ください。
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           {/* Extension */}
           {extensions.length > 0 && (<>
@@ -915,6 +940,26 @@ function PublicScheduleInner() {
           </div>
 
           {bookMsg && <p style={{ fontSize: 12, color: C.red, marginBottom: 12, textAlign: "center" }}>{bookMsg}</p>}
+
+          {/* 終了時刻超過の注意書き（確認画面） */}
+          {selShift && (() => {
+            const course = courses.find(c => c.id === selCourseId);
+            const ext = extensions.find(e => e.id === selExtId);
+            const totalDur = (course?.duration || 0) + (ext?.duration || 0);
+            const endMin = timeToMin(selTime) + totalDur;
+            const shiftEndMin = timeToMin(selShift.end_time);
+            if (endMin > shiftEndMin) {
+              return (
+                <div style={{ padding: "12px 14px", borderRadius: 12, marginBottom: 12, backgroundColor: "rgba(232,168,56,0.08)", border: "1px solid rgba(232,168,56,0.25)" }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: "#e8a838", margin: 0 }}>⚠ 終了時刻を超えるご予約です</p>
+                  <p style={{ fontSize: 11, color: C.textSub, margin: "4px 0 0", lineHeight: 1.6 }}>
+                    コース内容の調整をお願いする場合がございます。予めご了承ください。
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           <button onClick={submitBooking} disabled={bookSaving || ngTherapistIds.has(selTherapistId)} style={{ ...btnPrimary, width: "100%", padding: "16px 0", borderRadius: 14, fontSize: 16, fontWeight: 600, cursor: "pointer", opacity: bookSaving || ngTherapistIds.has(selTherapistId) ? 0.4 : 1, boxSizing: "border-box" }}>
             {bookSaving ? "送信中..." : "✨ 予約リクエストを送信"}

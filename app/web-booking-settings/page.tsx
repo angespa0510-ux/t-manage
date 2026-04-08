@@ -218,6 +218,27 @@ export default function WebBookingSettings() {
                 例: 予約が15:00〜16:00、インターバル15分の場合 → 16:00〜16:15も「✕」表示
               </p>
             </div>
+
+            <div className="rounded-lg border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#e8a83818", color: "#e8a838", border: "1px solid #e8a83830" }}>終了時刻超過</span>
+                <span className="text-[13px] font-medium">出勤終了を超えるコースも予約可能（注意書き付き）</span>
+              </div>
+              <p className="text-[11px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                選択した開始時間＋コース時間がセラピストの出勤終了時刻を超える場合でも、<strong style={{ color: T.text }}>予約リクエスト自体は可能</strong>です。<br />
+                ただしお客様には以下の注意書きが表示されます：
+              </p>
+              <div className="rounded-lg mt-2 p-3" style={{ backgroundColor: "rgba(232,168,56,0.06)", border: "1px solid rgba(232,168,56,0.2)" }}>
+                <p className="text-[11px] m-0" style={{ color: "#e8a838", fontWeight: 600 }}>⚠ 終了時刻を超えるご予約です</p>
+                <p className="text-[10px] m-0 mt-1" style={{ color: T.textMuted }}>コース内容の調整をお願いする場合がございます。予めご了承ください。</p>
+              </div>
+              <p className="text-[11px] m-0 mt-2" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+                <strong style={{ color: T.text }}>具体例①:</strong> 出勤20:00まで → 19:00開始 → 60分コースはOK / 90分コースは ⚠ 注意書き表示<br />
+                <strong style={{ color: T.text }}>具体例②:</strong> 出勤翌3:00まで → 2:00開始 → 60分コースは ⚠ 注意書き表示<br />
+                <strong style={{ color: T.text }}>コース選択画面:</strong> 各コースに終了時刻を表示し、超過する場合はオレンジ色の ⚠ マークを表示<br />
+                <strong style={{ color: T.text }}>確認画面:</strong> 送信ボタンの上に注意書きを再表示
+              </p>
+            </div>
           </div>
         </div>
 
