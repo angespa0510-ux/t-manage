@@ -2,12 +2,10 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
-import { useRole } from "../../lib/use-role";
 import { supabase } from "../../lib/supabase";
 
 export default function WebBookingSettings() {
   const { T } = useTheme();
-  const { role } = useRole();
   const [copied, setCopied] = useState("");
   const [origin, setOrigin] = useState("");
   const [storeName, setStoreName] = useState("チョップ");
@@ -27,8 +25,6 @@ export default function WebBookingSettings() {
     setCopied(label);
     setTimeout(() => setCopied(""), 2000);
   };
-
-  if (role === null) return <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><p style={{ color: T.textMuted }}>Loading...</p></div>;
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: T.bg, color: T.text }}>
