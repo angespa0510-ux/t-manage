@@ -56,10 +56,11 @@ function ContactSyncInner() {
   const loadSettings = useCallback(async () => {
     const { data } = await supabase.from("store_settings").select("key,value").in("key", SETTING_KEYS);
     if (data) {
+      let hasRefresh = false;
       for (const s of data) {
         if (s.key === "google_client_id") setClientId(s.value);
         if (s.key === "google_client_secret") setClientSecret(s.value);
-        if (s.key === "google_refresh_token") setRefreshToken(s.value);
+        if (s.key === "google_refresh_token") { setRefreshToken(s.value); if (s.value) hasRefresh = true; }
         if (s.key === "google_access_token") setAccessToken(s.value);
         if (s.key === "contact_sync_customers") setSyncCustomers(s.value === "true");
         if (s.key === "contact_sync_therapists") setSyncTherapists(s.value === "true");
@@ -67,6 +68,7 @@ function ContactSyncInner() {
         if (s.key === "contact_sync_name_overwrite") setNameOverwrite(s.value === "true");
         if (s.key === "contact_sync_auto") setAutoSync(s.value === "true");
       }
+      if (hasRefresh) setConnected(true);
     }
   }, []);
 
@@ -129,9 +131,13 @@ function ContactSyncInner() {
     setTimeout(() => setSaveMsg(""), 3000);
   };
 
-  // Google認証開始
-  const startAuth = () => {
+  // Google認証開始（認証前にID/Secretを保存）
+  const startAuth = async () => {
     if (!clientId) { setTestMsg("❌ クライアントIDを入力してください"); return; }
+    if (!clientSecret) { setTestMsg("❌ クライアントシークレットを入力してください"); return; }
+    // 認証前にDB保存（リダイレクト後に読み込めるように）
+    await supabase.from("store_settings").upsert({ key: "google_client_id", value: clientId }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "google_client_secret", value: clientSecret }, { onConflict: "key" });
     const redirectUri = `${window.location.origin}/api/google-auth/callback`;
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent("https://www.googleapis.com/auth/contacts")}&access_type=offline&prompt=consent`;
   };
@@ -365,26 +371,34 @@ function ContactSyncInner() {
         <div className="rounded-2xl p-6" style={cardStyle}>
           <div className="flex items-center gap-3 mb-5">
             <div style={stepNumStyle("#34a853")}>2</div>
-            <div>
+            <div className="flex-1">
               <h3 className="text-[14px] font-medium">認証情報</h3>
               <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>Google Cloud Consoleで取得したクライアントID/シークレットを入力</p>
             </div>
+            {connected && (
+              <span className="px-3 py-1.5 rounded-xl text-[11px] font-medium" style={{ backgroundColor: "#34a85318", color: "#34a853", border: "1px solid #34a85344" }}>✅ 認証済み</span>
+            )}
           </div>
+          {connected && (
+            <div className="rounded-xl p-3 mb-4" style={{ backgroundColor: "#34a85310", border: "1px solid #34a85330" }}>
+              <p className="text-[11px]" style={{ color: "#34a853" }}>Googleアカウントとの連携が完了しています。{accountName && `（${accountName}）`}</p>
+              <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>クライアントIDやシークレットを変更する場合は、再入力して「🔑 Googleアカウントで認証」を押してください。</p>
+            </div>
+          )}
           <div className="space-y-4">
             <div>
-              <label className="text-[12px] font-medium mb-1.5 block" style={{ color: T.textSub }}>クライアントID</label>
+              <label className="text-[12px] font-medium mb-1.5 block" style={{ color: T.textSub }}>クライアントID {clientId && <span className="text-[10px] font-normal" style={{ color: "#34a853" }}>（保存済み）</span>}</label>
               <input type="text" value={clientId} onChange={e => setClientId(e.target.value)} placeholder="xxxx.apps.googleusercontent.com" className="w-full px-4 py-3 rounded-xl text-[12px] outline-none border" style={{ ...inputStyle, fontFamily: "monospace" }} />
             </div>
             <div>
-              <label className="text-[12px] font-medium mb-1.5 block" style={{ color: T.textSub }}>クライアントシークレット</label>
+              <label className="text-[12px] font-medium mb-1.5 block" style={{ color: T.textSub }}>クライアントシークレット {clientSecret && <span className="text-[10px] font-normal" style={{ color: "#34a853" }}>（保存済み）</span>}</label>
               <input type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="GOCSPX-xxxx" className="w-full px-4 py-3 rounded-xl text-[12px] outline-none border" style={inputStyle} />
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-              <button onClick={startAuth} disabled={!clientId || !clientSecret} className="px-5 py-2.5 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ backgroundColor: "#4285f4" }}>🔑 Googleアカウントで認証</button>
+              <button onClick={startAuth} disabled={!clientId || !clientSecret} className="px-5 py-2.5 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ backgroundColor: "#4285f4" }}>{connected ? "🔄 再認証" : "🔑 Googleアカウントで認証"}</button>
               {refreshToken && <button onClick={testConnection} disabled={testing} className="px-4 py-2.5 rounded-xl text-[13px] cursor-pointer" style={{ backgroundColor: "#34a85318", color: "#34a853", border: "1px solid #34a85344" }}>{testing ? "テスト中..." : "🔌 接続テスト"}</button>}
               {testMsg && <span className="text-[12px]" style={{ color: testMsg.startsWith("✅") ? "#34a853" : "#c45555" }}>{testMsg}</span>}
             </div>
-            {connected && accountName && <p className="text-[12px]" style={{ color: "#34a853" }}>✅ 接続中: {accountName}</p>}
           </div>
         </div>
 
