@@ -41,6 +41,10 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "📊", label: "スタッフ勤怠",  path: "/staff-attendance",  category: "スタッフ" },
   { icon: "👥", label: "スタッフ設定",  path: "/staff",  category: "スタッフ" },
 
+  // ── その他 ──
+  { icon: "📺", label: "カメラ・ロック管理", path: "/camera",        category: "その他" },
+  { icon: "📡", label: "IoTデバイス設定",   path: "/iot-settings",  category: "その他" },
+
   // ── 登録・設定 ──
   { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
   { icon: "🔑", label: "利用場所登録",  path: "/rooms",             category: "登録・設定" },
