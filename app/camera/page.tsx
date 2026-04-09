@@ -24,6 +24,10 @@ export default function CameraPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [streamLoaded, setStreamLoaded] = useState(false);
 
+  // Operation logs
+  type LogEntry = { id: string; device_type: string; action: string; result: string; created_at: string };
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+
   useEffect(() => {
     const check = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -31,7 +35,40 @@ export default function CameraPage() {
     };
     check();
     loadSettings();
+    loadLogs();
   }, [router]);
+
+  const loadLogs = async () => {
+    const { data } = await supabase
+      .from("iot_logs")
+      .select("id, device_type, action, result, created_at")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (data) setLogs(data);
+  };
+
+  // Check lock status via SwitchBot API
+  const checkLockStatus = async (token: string, secret: string, lockId: string) => {
+    if (!token || !secret || !lockId) return;
+    try {
+      const t = Date.now().toString();
+      const nonce = crypto.randomUUID();
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(token + t + nonce));
+      const sign = btoa(String.fromCharCode(...new Uint8Array(signature)));
+
+      const res = await fetch(`https://api.switch-bot.com/v1.1/devices/${lockId}/status`, {
+        headers: { "Authorization": token, "sign": sign, "nonce": nonce, "t": t, "Content-Type": "application/json" },
+      });
+      const result = await res.json();
+      if (result.statusCode === 100 && result.body) {
+        const state = result.body.lockState;
+        if (state === "locked") setLockStatus("locked");
+        else if (state === "unlocked") setLockStatus("unlocked");
+      }
+    } catch { /* ignore */ }
+  };
 
   const loadSettings = async () => {
     const keys = ["iot_cf_tunnel_url", "iot_cam_name", "iot_sb_token", "iot_sb_secret", "iot_sb_lock_id", "iot_sb_lock_name", "iot_gdrive_folder"];
@@ -46,6 +83,11 @@ export default function CameraPage() {
         if (s.key === "iot_sb_lock_name") setSbLockName(s.value || "スマートロック");
         if (s.key === "iot_gdrive_folder") setGdriveFolder(s.value);
       }
+      // Auto-check lock status
+      const token = data.find(s => s.key === "iot_sb_token")?.value;
+      const secret = data.find(s => s.key === "iot_sb_secret")?.value;
+      const lockId = data.find(s => s.key === "iot_sb_lock_id")?.value;
+      if (token && secret && lockId) checkLockStatus(token, secret, lockId);
     }
   };
 
@@ -94,6 +136,7 @@ export default function CameraPage() {
           result: "success",
           detail: JSON.stringify(result),
         });
+        loadLogs();
       } else {
         setLockMsg(`⚠️ エラー: ${result.message || "不明なエラー"}`);
       }
@@ -246,10 +289,40 @@ export default function CameraPage() {
 
         {/* ── 操作ログ ── */}
         <div style={{ padding: 16, borderRadius: 12, backgroundColor: T.card }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>📋 最近の操作ログ</h3>
-          <p style={{ fontSize: 12, color: T.textSub, textAlign: "center", padding: 16 }}>
-            ロック操作を行うと、ここに履歴が表示されます
-          </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700 }}>📋 最近の操作ログ</h3>
+            <button onClick={loadLogs} style={{ background: "none", border: "none", fontSize: 12, color: T.textSub, cursor: "pointer" }}>🔄 更新</button>
+          </div>
+          {logs.length === 0 ? (
+            <p style={{ fontSize: 12, color: T.textSub, textAlign: "center", padding: 16 }}>
+              ロック操作を行うと、ここに履歴が表示されます
+            </p>
+          ) : (
+            <div style={{ maxHeight: 300, overflowY: "auto" }}>
+              {logs.map(log => {
+                const dt = new Date(log.created_at);
+                const timeStr = `${dt.getMonth()+1}/${dt.getDate()} ${dt.getHours().toString().padStart(2,"0")}:${dt.getMinutes().toString().padStart(2,"0")}`;
+                const actionIcon = log.action === "unlock" ? "🔓" : log.action === "lock" ? "🔒" : log.action === "record_start" ? "⏺" : log.action === "record_stop" ? "⏹" : "📡";
+                const actionLabel = log.action === "unlock" ? "解錠" : log.action === "lock" ? "施錠" : log.action === "record_start" ? "録画開始" : log.action === "record_stop" ? "録画停止" : log.action;
+                return (
+                  <div key={log.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+                    <span style={{ fontSize: 16 }}>{actionIcon}</span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{actionLabel}</span>
+                      <span style={{
+                        marginLeft: 8, fontSize: 10, padding: "2px 6px", borderRadius: 8,
+                        backgroundColor: log.result === "success" ? "rgba(76,175,80,0.1)" : "rgba(244,67,54,0.1)",
+                        color: log.result === "success" ? "#4caf50" : "#f44336",
+                      }}>
+                        {log.result === "success" ? "成功" : "エラー"}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap" }}>{timeStr}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
