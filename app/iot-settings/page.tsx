@@ -46,6 +46,40 @@ export default function IotSettings() {
   // Guide step tracking
   const [guideStep, setGuideStep] = useState(0);
 
+  // SwitchBot device discovery
+  type SBDevice = { deviceId: string; deviceName: string; deviceType: string };
+  const [sbDevices, setSbDevices] = useState<SBDevice[]>([]);
+  const [sbDiscovering, setSbDiscovering] = useState(false);
+  const [sbDiscoverMsg, setSbDiscoverMsg] = useState("");
+
+  const discoverDevices = async () => {
+    if (!sbToken || !sbSecret) { setSbDiscoverMsg("⚠️ APIトークンとシークレットを先に入力してください"); return; }
+    setSbDiscovering(true); setSbDiscoverMsg("");
+    try {
+      const t = Date.now().toString();
+      const nonce = crypto.randomUUID();
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey("raw", encoder.encode(sbSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(sbToken + t + nonce));
+      const sign = btoa(String.fromCharCode(...new Uint8Array(signature)));
+
+      const res = await fetch("https://api.switch-bot.com/v1.1/devices", {
+        headers: { "Authorization": sbToken, "sign": sign, "nonce": nonce, "t": t, "Content-Type": "application/json" },
+      });
+      const result = await res.json();
+      if (result.statusCode === 100 && result.body?.deviceList) {
+        setSbDevices(result.body.deviceList);
+        setSbDiscoverMsg(`✅ ${result.body.deviceList.length}台のデバイスを検出しました`);
+      } else {
+        setSbDiscoverMsg(`⚠️ ${result.message || "デバイスが見つかりませんでした"}`);
+      }
+    } catch (err: unknown) {
+      setSbDiscoverMsg(`❌ ${err instanceof Error ? err.message : "通信エラー"}`);
+    } finally {
+      setSbDiscovering(false);
+    }
+  };
+
   useEffect(() => {
     const check = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -272,9 +306,38 @@ export default function IotSettings() {
 
               <div style={{ marginBottom: 12 }}>
                 <label style={labelStyle}>ロック デバイスID</label>
-                <input style={inputStyle} value={sbLockId} onChange={e => setSbLockId(e.target.value)} placeholder="SwitchBotアプリのデバイス情報から取得" />
-                <p style={{ fontSize: 10, color: T.textSub, marginTop: 4 }}>※ スマートロックの設定 → デバイス情報 → BLE MAC（コロンを除外）</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input style={{ ...inputStyle, flex: 1 }} value={sbLockId} onChange={e => setSbLockId(e.target.value)} placeholder="下の「デバイス検出」で自動取得できます" />
+                  <button onClick={discoverDevices} disabled={sbDiscovering || !sbToken} style={{
+                    ...btnStyle, background: "linear-gradient(135deg, #2196f3, #1976d2)", whiteSpace: "nowrap", padding: "10px 16px",
+                    opacity: (!sbToken || sbDiscovering) ? 0.5 : 1,
+                  }}>
+                    {sbDiscovering ? "検索中..." : "🔍 デバイス検出"}
+                  </button>
+                </div>
+                {sbDiscoverMsg && <p style={{ fontSize: 11, color: sbDiscoverMsg.startsWith("✅") ? "#4caf50" : "#ff9800", marginTop: 4 }}>{sbDiscoverMsg}</p>}
               </div>
+
+              {/* Discovered devices list */}
+              {sbDevices.length > 0 && (
+                <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, backgroundColor: dark ? "#1a1a2e" : "#f8f6f0" }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 8 }}>検出されたデバイス（タップで選択）</p>
+                  {sbDevices.map(d => (
+                    <button key={d.deviceId} onClick={() => { setSbLockId(d.deviceId); setSbLockName(d.deviceName); setSbDiscoverMsg(`✅ ${d.deviceName} を選択しました`); }} style={{
+                      width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "8px 10px", marginBottom: 4, borderRadius: 6, border: `1px solid ${sbLockId === d.deviceId ? "#c3a782" : T.border}`,
+                      backgroundColor: sbLockId === d.deviceId ? (dark ? "rgba(195,167,130,0.1)" : "rgba(195,167,130,0.05)") : "transparent",
+                      cursor: "pointer", textAlign: "left", color: T.text, fontSize: 12,
+                    }}>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{d.deviceName}</span>
+                        <span style={{ marginLeft: 8, fontSize: 10, color: T.textSub, padding: "1px 6px", borderRadius: 4, backgroundColor: dark ? "#2a2a3e" : "#e8e8e8" }}>{d.deviceType}</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: T.textSub, fontFamily: "monospace" }}>{d.deviceId.slice(0, 12)}...</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div style={{ marginBottom: 12 }}>
                 <label style={labelStyle}>ロック名（任意）</label>
