@@ -12,16 +12,32 @@ type Reservation = { id: number; customer_name: string; therapist_id: number; da
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Shift = { id: number; therapist_id: number; store_id: number; date: string; start_time: string; end_time: string; status: string };
 
-const HOUR_WIDTH = 120;
+const DEFAULT_HOUR_WIDTH = 120;
+const DEFAULT_START_HOUR = 11;
+const DEFAULT_DISPLAY_HOURS = 17;
+const DEFAULT_ROW_HEIGHT = 52;
+const DEFAULT_NAME_SIZE = 10;
+const DEFAULT_BAR_FONT_SIZE = 10;
+const DEFAULT_COLORS = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4", "#85c4b8", "#c4a685", "#8599c4"];
+
+// These use defaults for module-level usage (TIMES_10MIN etc)
+const HOUR_WIDTH = DEFAULT_HOUR_WIDTH;
 const MIN_10_WIDTH = HOUR_WIDTH / 6;
-const START_HOUR = 11;
-const DISPLAY_HOURS = 17;
+const START_HOUR = DEFAULT_START_HOUR;
+const DISPLAY_HOURS = DEFAULT_DISPLAY_HOURS;
 const HOURS_RAW = Array.from({ length: DISPLAY_HOURS }, (_, i) => i + START_HOUR);
 const HOURS_DISPLAY = Array.from({ length: DISPLAY_HOURS }, (_, i) => { const h = i + START_HOUR; return h >= 24 ? h - 24 : h; });
 
-function timeToMinutes(time: string): number { const [h, m] = time.split(":").map(Number); const adj = h < START_HOUR ? h + 24 : h; return (adj - START_HOUR) * 60 + m; }
-function minutesToTime(min: number): string { const t = min + START_HOUR * 60; const h = Math.floor(t / 60) % 24; const m = t % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; }
-function minutesToDisplay(min: number): string { const t = min + START_HOUR * 60; const h = Math.floor(t / 60); const dh = h >= 24 ? h - 24 : h; const m = t % 60; return `${dh}:${String(m).padStart(2, "0")}`; }
+function timeToMinutes(time: string, startH = START_HOUR): number { const [h, m] = time.split(":").map(Number); const adj = h < startH ? h + 24 : h; return (adj - startH) * 60 + m; }
+function minutesToTime(min: number, startH = START_HOUR): string { const t = min + startH * 60; const h = Math.floor(t / 60) % 24; const m = t % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; }
+function minutesToDisplay(min: number, startH = START_HOUR): string { const t = min + startH * 60; const h = Math.floor(t / 60); const dh = h >= 24 ? h - 24 : h; const m = t % 60; return `${dh}:${String(m).padStart(2, "0")}`; }
+
+type TcConfig = {
+  hourWidth: number; startHour: number; displayHours: number; rowHeight: number;
+  nameSize: number; barFontSize: number; colors: string[];
+  hideNoRoom: boolean;
+  statusColors: Record<string, string>;
+};
 
 const TIMES_10MIN: string[] = [];
 for (let m = 0; m <= 18 * 60; m += 10) TIMES_10MIN.push(minutesToTime(m));
@@ -38,6 +54,18 @@ export default function TimeChart() {
   const [clockedOut, setClockedOut] = useState<Set<number>>(new Set());
   const [webReservations, setWebReservations] = useState<{ id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; status: string; customer_status: string; created_at: string }[]>([]);
   const [showWebRes, setShowWebRes] = useState(false);
+  const [showTcSettings, setShowTcSettings] = useState(false);
+  const [tcConfig, setTcConfig] = useState<TcConfig>({
+    hourWidth: DEFAULT_HOUR_WIDTH, startHour: DEFAULT_START_HOUR, displayHours: DEFAULT_DISPLAY_HOURS,
+    rowHeight: DEFAULT_ROW_HEIGHT, nameSize: DEFAULT_NAME_SIZE, barFontSize: DEFAULT_BAR_FONT_SIZE,
+    colors: DEFAULT_COLORS, hideNoRoom: false,
+    statusColors: { web_reservation: "#a855f7", summary_unread: "#3b82f6", summary_read: "#2563eb", detail_unread: "#4a7c59", detail_read: "#16a34a", serving: "#22c55e", completed: "#c3a782" },
+  });
+  // Cancel states
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelType, setCancelType] = useState<"store" | "customer">("customer");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [showCustSearch, setShowCustSearch] = useState(false);
   const [custSearchQ, setCustSearchQ] = useState("");
@@ -254,8 +282,8 @@ export default function TimeChart() {
   const currentTimePos = (() => {
     const now = currentTime; const h = now.getHours(); const m = now.getMinutes();
     const adjH = h < 9 ? h + 24 : h;
-    if (adjH < 9 || adjH >= 27) return -1;
-    return ((adjH - START_HOUR) * 60 + m) * (HOUR_WIDTH / 60);
+    if (adjH < tcConfig.startHour || adjH >= tcConfig.startHour + tcConfig.displayHours) return -1;
+    return ((adjH - tcConfig.startHour) * 60 + m) * (tcConfig.hourWidth / 60);
   })();
 
   const fetchData = useCallback(async () => {
@@ -287,6 +315,17 @@ export default function TimeChart() {
   }, [selectedDate]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
+  // タイムチャート設定読み込み
+  useEffect(() => {
+    supabase.from("store_settings").select("value").eq("key", "timechart_config").maybeSingle().then(({ data }) => {
+      if (data?.value) { try { const cfg = JSON.parse(data.value); setTcConfig(prev => ({ ...prev, ...cfg })); } catch {} }
+    });
+  }, []);
+  const saveTcConfig = async (cfg: TcConfig) => {
+    setTcConfig(cfg);
+    await supabase.from("store_settings").upsert({ key: "timechart_config", value: JSON.stringify(cfg) }, { onConflict: "key" });
+    toast.show("設定を保存しました", "success");
+  };
 
   // リアルタイム同期
   useEffect(() => {
@@ -349,7 +388,10 @@ export default function TimeChart() {
   });
   const activeTherapists = sortByBuildingAndTime(therapists.filter((t) => shiftTherapistIds.has(t.id) && !clockedOut.has(t.id)));
   const clockedOutTherapists = sortByBuildingAndTime(therapists.filter((t) => shiftTherapistIds.has(t.id) && clockedOut.has(t.id)));
-  const displayTherapists = [...activeTherapists, ...clockedOutTherapists];
+  const displayTherapists = [...activeTherapists, ...clockedOutTherapists].filter(t => {
+    if (tcConfig.hideNoRoom && !roomAssigns.some(ra => ra.therapist_id === t.id)) return false;
+    return true;
+  });
 
   const toggleClockOut = (id: number) => {
     setClockedOut((prev) => {
@@ -366,10 +408,10 @@ export default function TimeChart() {
   useEffect(() => {
     if (!dragInfo) return;
     const hm = (e: MouseEvent) => {
-      const dx = e.clientX - dragInfo.initX; const dMin = Math.round(dx / MIN_10_WIDTH) * 10;
-      if (dragInfo.edge === "end") { const ne = Math.max(dragInfo.initEndMin + dMin, dragInfo.initMin + 10); supabase.from("reservations").update({ end_time: minutesToTime(ne) }).eq("id", dragInfo.resId).then(() => fetchData()); }
-      else if (dragInfo.edge === "start") { const ns = Math.min(dragInfo.initMin + dMin, dragInfo.initEndMin - 10); supabase.from("reservations").update({ start_time: minutesToTime(Math.max(0, ns)) }).eq("id", dragInfo.resId).then(() => fetchData()); }
-      else { const ns = Math.max(0, dragInfo.initMin + dMin); const dur = dragInfo.initEndMin - dragInfo.initMin; if (ns + dur <= 18 * 60) { supabase.from("reservations").update({ start_time: minutesToTime(ns), end_time: minutesToTime(ns + dur) }).eq("id", dragInfo.resId).then(() => fetchData()); } }
+      const dx = e.clientX - dragInfo.initX; const dMin = Math.round(dx / (TC_HW / 6)) * 10;
+      if (dragInfo.edge === "end") { const ne = Math.max(dragInfo.initEndMin + dMin, dragInfo.initMin + 10); supabase.from("reservations").update({ end_time: minutesToTime(ne, TC_SH) }).eq("id", dragInfo.resId).then(() => fetchData()); }
+      else if (dragInfo.edge === "start") { const ns = Math.min(dragInfo.initMin + dMin, dragInfo.initEndMin - 10); supabase.from("reservations").update({ start_time: minutesToTime(Math.max(0, ns), TC_SH) }).eq("id", dragInfo.resId).then(() => fetchData()); }
+      else { const ns = Math.max(0, dragInfo.initMin + dMin); const dur = dragInfo.initEndMin - dragInfo.initMin; if (ns + dur <= TC_DH * 60) { supabase.from("reservations").update({ start_time: minutesToTime(ns, TC_SH), end_time: minutesToTime(ns + dur, TC_SH) }).eq("id", dragInfo.resId).then(() => fetchData()); } }
     };
     const hu = () => setDragInfo(null);
     window.addEventListener("mousemove", hm); window.addEventListener("mouseup", hu);
@@ -603,8 +645,14 @@ export default function TimeChart() {
   const nextDay = () => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split("T")[0]); };
   const dateDisplay = (() => { const d = new Date(selectedDate + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${days[d.getDay()]}）`; })();
 
-  const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4", "#85c4b8", "#c4a685", "#8599c4"];
-  const totalWidth = DISPLAY_HOURS * HOUR_WIDTH;
+  const colors = tcConfig.colors;
+  const TC_HW = tcConfig.hourWidth;
+  const TC_SH = tcConfig.startHour;
+  const TC_DH = tcConfig.displayHours;
+  const TC_RH = tcConfig.rowHeight;
+  const tcHoursRaw = Array.from({ length: TC_DH }, (_, i) => i + TC_SH);
+  const tcHoursDisplay = Array.from({ length: TC_DH }, (_, i) => { const h = i + TC_SH; return h >= 24 ? h - 24 : h; });
+  const totalWidth = TC_DH * TC_HW;
   const getResForTherapist = (tid: number) => reservations.filter((r) => r.therapist_id === tid);
 
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
@@ -631,6 +679,7 @@ export default function TimeChart() {
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
           <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
+          <button onClick={() => setShowTcSettings(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>⚙️ 設定</button>
           <button onClick={() => setShowNewTherapist(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>+ セラピスト追加</button>
           <button onClick={() => { setNewDate(selectedDate); setNewCourseId(0); setNewStart("12:00"); setNewEnd("13:00"); setMsg(""); setNewTherapistId(0); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)}); }}
             className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 予約追加</button>
@@ -638,7 +687,7 @@ export default function TimeChart() {
       </div>
 
       {/* Date Nav */}
-      <div className="h-[52px] border-b flex items-center justify-center gap-4 flex-shrink-0" style={{ backgroundColor: T.card, borderColor: T.border }}>
+      <div className="border-b flex items-center justify-center gap-4 flex-shrink-0" style={{ height: TC_RH, backgroundColor: T.card, borderColor: T.border }}>
         <button onClick={prevDay} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6"/></svg></button>
         <button onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])} className="px-3 py-1 text-[11px] border rounded-lg cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>今日</button>
         <span className="text-[14px] font-medium min-w-[200px] text-center">{dateDisplay}</span>
@@ -701,10 +750,10 @@ export default function TimeChart() {
                 const isCO = clockedOut.has(t.id);
                 const origIdx = therapists.findIndex((x) => x.id === t.id);
                 return (
-                  <div key={t.id} className="h-[52px] border-b border-r flex items-center px-2 gap-1.5" style={{ backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.5 : 1 }}>
+                  <div key={t.id} className="border-b border-r flex items-center px-2 gap-1.5" style={{ height: TC_RH, backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.5 : 1 }}>
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] text-white font-medium flex-shrink-0" style={{ backgroundColor: isCO ? "#888" : colors[origIdx % colors.length] }}>{t.name.charAt(0)}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); setEditTherapist(t); setEtNotes((t as any).notes || ""); }} className="text-[10px] font-medium truncate cursor-pointer flex items-center gap-0.5" style={{ textDecoration: isCO ? "line-through" : "none", background: "none", border: "none", padding: 0, color: T.text, textAlign: "left" }}>{t.name}<span style={{ fontSize: 8, opacity: 0.4 }}>✏️</span></button>
+                      <div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); setEditTherapist(t); setEtNotes((t as any).notes || ""); }} className="font-medium truncate cursor-pointer flex items-center gap-0.5" style={{ fontSize: tcConfig.nameSize, textDecoration: isCO ? "line-through" : "none", background: "none", border: "none", padding: 0, color: T.text, textAlign: "left" }}>{t.name}<span style={{ fontSize: 8, opacity: 0.4 }}>✏️</span></button>
                         {(t as any).age > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).age}歳</span>}
                         {(t as any).height_cm > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).height_cm}cm</span>}
                         {(t as any).cup && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).cup}</span>}
@@ -734,10 +783,10 @@ export default function TimeChart() {
             {/* Grid */}
             <div className="flex-1 relative">
               <div className="h-[32px] flex border-b sticky top-0 z-10" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
-                {HOURS_RAW.map((rawH, i) => (
-                  <div key={rawH} className="flex-shrink-0 border-r flex items-end pb-1 px-1 relative" style={{ width: HOUR_WIDTH, borderColor: T.border }}>
-                    <span className="text-[11px] font-medium" style={{ color: rawH >= 24 ? "#85a8c4" : T.textSub }}>{HOURS_DISPLAY[i]}:00</span>
-                    {[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, height: tick === 3 ? 8 : 4, backgroundColor: tick === 3 ? T.textFaint : T.border }} />))}
+                {tcHoursRaw.map((rawH, i) => (
+                  <div key={rawH} className="flex-shrink-0 border-r flex items-end pb-1 px-1 relative" style={{ width: TC_HW, borderColor: T.border }}>
+                    <span className="text-[11px] font-medium" style={{ color: rawH >= 24 ? "#85a8c4" : T.textSub }}>{tcHoursDisplay[i]}:00</span>
+                    {[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute bottom-0" style={{ left: tick * TC_HW/6, width: 1, height: tick === 3 ? 8 : 4, backgroundColor: tick === 3 ? T.textFaint : T.border }} />))}
                   </div>
                 ))}
               </div>
@@ -754,32 +803,32 @@ export default function TimeChart() {
                 const isCO = clockedOut.has(t.id);
                 const origIdx = therapists.findIndex((x) => x.id === t.id);
                 return (
-                  <div key={t.id} className="h-[52px] border-b relative transition-colors"
-                    style={{ backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.4 : 1 }}
+                  <div key={t.id} className="border-b relative transition-colors"
+                    style={{ height: TC_RH, backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.4 : 1 }}
                     onClick={(e) => {
                       if ((e.target as HTMLElement).closest(".res-block") || isCO) return;
-                      const rect = e.currentTarget.getBoundingClientRect(); const x = e.clientX - rect.left; const min = Math.round(x / MIN_10_WIDTH) * 10;
+                      const rect = e.currentTarget.getBoundingClientRect(); const x = e.clientX - rect.left; const min = Math.round(x / TC_HW/6) * 10;
                       if (panMoved.current) return;
                       setNewTherapistId(t.id); setNewStart(minutesToTime(min)); setNewEnd(minutesToTime(min + 60)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
                     }}>
-                    {(() => { const sh = shifts.find(s => s.therapist_id === t.id); if (sh) { const shStart = timeToMinutes(sh.start_time); const shEnd = timeToMinutes(sh.end_time); const left = shStart * MIN_10_WIDTH / 10; const w = (shEnd - shStart) * MIN_10_WIDTH / 10; return <div className="absolute top-0 bottom-0" style={{ left, width: w, backgroundColor: dark ? "#c3a78208" : "#c3a78210", borderLeft: "2px solid #c3a78233", borderRight: "2px solid #c3a78233", zIndex: 1 }} />; } return null; })()}
-                    {HOURS_RAW.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - START_HOUR) * HOUR_WIDTH, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
+                    {(() => { const sh = shifts.find(s => s.therapist_id === t.id); if (sh) { const shStart = timeToMinutes(sh.start_time); const shEnd = timeToMinutes(sh.end_time); const left = shStart * TC_HW/6 / 10; const w = (shEnd - shStart) * TC_HW/6 / 10; return <div className="absolute top-0 bottom-0" style={{ left, width: w, backgroundColor: dark ? "#c3a78208" : "#c3a78210", borderLeft: "2px solid #c3a78233", borderRight: "2px solid #c3a78233", zIndex: 1 }} />; } return null; })()}
+                    {tcHoursRaw.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - TC_SH) * TC_HW, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * TC_HW/6, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
                     {tRes.map((r, ri) => {
                       const sM = timeToMinutes(r.start_time); const eM = timeToMinutes(r.end_time);
-                      const left = sM * (HOUR_WIDTH / 60); const width = (eM - sM) * (HOUR_WIDTH / 60);
-                      const course = getCourseByName(r.course); const custSt = (r as any).customer_status || "unsent"; const therSt = (r as any).therapist_status || "unsent"; const dualStatusColors: Record<string,string> = { unsent: "#888780", web_reservation: "#a855f7", summary_unread: "#3b82f6", summary_read: "#2563eb", detail_unread: "#4a7c59", detail_read: "#16a34a", detail_sent: "#4a7c59", serving: "#22c55e", completed: "#c3a782" }; const color = dualStatusColors[custSt] || colors[origIdx % colors.length];
+                      const left = sM * (TC_HW / 60); const width = (eM - sM) * (TC_HW / 60);
+                      const course = getCourseByName(r.course); const custSt = (r as any).customer_status || "unsent"; const therSt = (r as any).therapist_status || "unsent"; const dualStatusColors: Record<string,string> = { unsent: "#888780", ...tcConfig.statusColors, detail_sent: tcConfig.statusColors.detail_unread || "#4a7c59" }; const color = dualStatusColors[custSt] || colors[origIdx % colors.length];
                       const custLabel: Record<string,string> = { unsent: "", web_reservation: "WEB", summary_unread: "概要未読", summary_read: "概要既読", detail_unread: "詳細未読", detail_read: "詳細既読", serving: "接客中", completed: "終了" }; const therLabel: Record<string,string> = { unsent: "", detail_sent: "セ送信済", serving: "接客中", completed: "終了" };
                       const cBadge = custLabel[custSt] || ""; const tBadge = therLabel[therSt] || "";
                       return (
                         <div key={`res-${r.id}-${ri}`} className="res-block absolute top-[4px] bottom-[4px] rounded-lg cursor-pointer group"
-                          style={{ left, width: Math.max(width, MIN_10_WIDTH), backgroundColor: color + "20", borderLeft: `3px solid ${color}`, zIndex: 5 }}
+                          style={{ left, width: Math.max(width, TC_HW/6), backgroundColor: color + "20", borderLeft: `3px solid ${color}`, zIndex: 5 }}
                           onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
                           <div className="absolute left-0 top-0 bottom-0 w-[6px] cursor-ew-resize opacity-0 group-hover:opacity-100 hover:bg-black/10 rounded-l-lg"
                             onMouseDown={(e) => { e.stopPropagation(); setDragInfo({ resId: r.id, edge: "start", initX: e.clientX, initMin: sM, initEndMin: eM }); }} />
                           <div className="px-2 py-1 overflow-hidden h-full"
                             onMouseDown={(e) => { if ((e.target as HTMLElement).closest(".drag-handle")) return; e.stopPropagation(); setDragInfo({ resId: r.id, edge: "move", initX: e.clientX, initMin: sM, initEndMin: eM }); }}>
-                            <p className="text-[11px] font-medium truncate" style={{ color: T.text }}>{r.customer_name}{cBadge && <span style={{ marginLeft: 4, fontSize: 7, padding: "1px 4px", borderRadius: 4, backgroundColor: color + "22", color }}>{cBadge}</span>}{tBadge && custSt !== therSt && <span style={{ marginLeft: 2, fontSize: 7, padding: "1px 4px", borderRadius: 4, backgroundColor: (dualStatusColors[therSt] || "#888780") + "22", color: dualStatusColors[therSt] || "#888780" }}>{tBadge}</span>}</p>
-                            <p className="text-[9px] truncate" style={{ color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}{r.course ? ` / ${r.course}` : ""}{(r as any).staff_name ? ` 👤${(r as any).staff_name}` : ""}</p>
+                            <p className="font-medium truncate" style={{ fontSize: tcConfig.barFontSize, color: T.text }}>{r.customer_name}{cBadge && <span style={{ marginLeft: 4, fontSize: 7, padding: "1px 4px", borderRadius: 4, backgroundColor: color + "22", color }}>{cBadge}</span>}{tBadge && custSt !== therSt && <span style={{ marginLeft: 2, fontSize: 7, padding: "1px 4px", borderRadius: 4, backgroundColor: (dualStatusColors[therSt] || "#888780") + "22", color: dualStatusColors[therSt] || "#888780" }}>{tBadge}</span>}</p>
+                            <p className="truncate" style={{ fontSize: Math.max(tcConfig.barFontSize - 2, 7), color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}{r.course ? ` / ${r.course}` : ""}{(r as any).staff_name ? ` 👤${(r as any).staff_name}` : ""}</p>
                             {((r as any).card_billing > 0 || (r as any).paypay_amount > 0) && <p className="text-[8px] truncate" style={{ color: "#85a8c4" }}>{(r as any).card_billing > 0 ? `💳${fmt((r as any).card_billing)}` : ""}{(r as any).card_billing > 0 && (r as any).paypay_amount > 0 ? " " : ""}{(r as any).paypay_amount > 0 ? `📱${fmt((r as any).paypay_amount)}` : ""}</p>}
                             {r.notes && <div style={{ overflow: "hidden", maxHeight: 20, lineHeight: "10px", marginTop: 2, position: "relative" }}><p className="text-[8px]" style={{ color: "#f59e0b", whiteSpace: "pre-wrap", animation: r.notes.length > 20 ? `scrollNote ${Math.max(4, r.notes.length * 0.15)}s linear infinite` : "none" }}>📝 {r.notes}</p></div>}
                             
@@ -791,7 +840,7 @@ export default function TimeChart() {
                     })}
                     {breaks.filter(b => b.therapist_id === t.id).map((b) => {
                       const bsM = timeToMinutes(b.start); const beM = timeToMinutes(b.end);
-                      const bLeft = bsM * (HOUR_WIDTH / 60); const bWidth = (beM - bsM) * (HOUR_WIDTH / 60);
+                      const bLeft = bsM * (TC_HW / 60); const bWidth = (beM - bsM) * (TC_HW / 60);
                       return (
                         <div key={`brk-${b.id}`} className="absolute top-[2px] bottom-[2px] rounded-lg cursor-pointer" style={{ left: bLeft, width: bWidth, backgroundColor: dark ? "#a855f715" : "#a855f710", borderLeft: `2px dashed #a855f7`, zIndex: 4 }}
                           onClick={(e) => { e.stopPropagation(); if (confirm("この休憩を削除しますか？")) setBreaks(prev => prev.filter(x => x.id !== b.id)); }}>
@@ -803,8 +852,8 @@ export default function TimeChart() {
                       const intervalMin = (t as any).interval_minutes || 0;
                       if (intervalMin <= 0) return null;
                       const eM = timeToMinutes(r.end_time);
-                      const iLeft = eM * (HOUR_WIDTH / 60);
-                      const iWidth = intervalMin * (HOUR_WIDTH / 60);
+                      const iLeft = eM * (TC_HW / 60);
+                      const iWidth = intervalMin * (TC_HW / 60);
                       return (
                         <div key={`int-${r.id}-${ri}`} className="absolute top-[8px] bottom-[8px] rounded" style={{ left: iLeft, width: iWidth, backgroundColor: dark ? "#ffffff08" : "#00000008", borderLeft: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, borderRight: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, zIndex: 2 }}>
                           <span className="text-[7px] absolute top-0.5 left-1" style={{ color: T.textFaint }}>{intervalMin}分</span>
@@ -1086,9 +1135,49 @@ export default function TimeChart() {
                   const eTotal = (editSelectedCourse?.price || 0) + editNomFee + eOptTotal + editExtPrice - eDiscTotal;
                   setNotifyInfo({ resId: editRes.id, custName: editCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: editRes.date, startTime: editStart, endTime: editEnd, course: courseWithExt, therapistName: thName, total: eTotal, nomination: editNomination || "指名なし", discountName: editDiscounts.map(d => d.name).join(",") || "なし", extensionName: editExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
                 }} className="px-5 py-2.5 text-[12px] rounded-xl cursor-pointer" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f44" }}>📩 通知</button>
-                <button onClick={() => deleteReservation(editRes.id)} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer">削除</button>
+                <button onClick={() => { setShowCancelModal(true); setCancelReason(""); setCancelType("customer"); }} className="px-5 py-2.5 text-[12px] rounded-xl cursor-pointer" style={{ backgroundColor: "#f59e0b18", color: "#b45309", border: "1px solid #f59e0b44" }}>🚫 キャンセル</button>
+                <button onClick={() => setShowDeleteConfirm(true)} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer">削除</button>
                 <button onClick={() => setEditRes(null)} className="px-6 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
               </div>
+
+              {/* キャンセル確認モーダル */}
+              {showCancelModal && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-50 rounded-2xl" onClick={() => setShowCancelModal(false)}>
+                  <div className="rounded-xl border p-5 w-full max-w-[380px] mx-4" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={e => e.stopPropagation()}>
+                    <h4 className="text-[14px] font-medium mb-3">🚫 予約キャンセル</h4>
+                    <p className="text-[11px] mb-3" style={{ color: T.textSub }}>{editCustName} / {editRes.date} {editStart}〜</p>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>キャンセル原因</label>
+                    <div className="flex gap-2 mb-3">
+                      <button onClick={() => setCancelType("customer")} className="flex-1 py-2 rounded-lg text-[12px] font-medium cursor-pointer" style={{ backgroundColor: cancelType === "customer" ? "#c4555518" : T.cardAlt, color: cancelType === "customer" ? "#c45555" : T.textMuted, border: cancelType === "customer" ? "2px solid #c45555" : `1px solid ${T.border}` }}>👤 お客様都合</button>
+                      <button onClick={() => setCancelType("store")} className="flex-1 py-2 rounded-lg text-[12px] font-medium cursor-pointer" style={{ backgroundColor: cancelType === "store" ? "#3d6b9f18" : T.cardAlt, color: cancelType === "store" ? "#3d6b9f" : T.textMuted, border: cancelType === "store" ? "2px solid #3d6b9f" : `1px solid ${T.border}` }}>🏠 お店都合</button>
+                    </div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>キャンセル理由（任意）</label>
+                    <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="理由を入力（任意）" rows={2} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none resize-none mb-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} />
+                    <div className="flex gap-2">
+                      <button onClick={async () => {
+                        await supabase.from("reservations").update({ status: "cancelled", notes: (editRes.notes || "") + (cancelReason ? `\n【${cancelType === "customer" ? "お客様都合" : "お店都合"}キャンセル】${cancelReason}` : `\n【${cancelType === "customer" ? "お客様都合" : "お店都合"}キャンセル】`) }).eq("id", editRes.id);
+                        setShowCancelModal(false); setEditRes(null); fetchData(); toast.show("キャンセルしました", "info");
+                      }} className="flex-1 py-2.5 rounded-lg text-[12px] font-medium cursor-pointer text-white" style={{ backgroundColor: "#c45555" }}>キャンセル確定</button>
+                      <button onClick={() => setShowCancelModal(false)} className="flex-1 py-2.5 rounded-lg text-[12px] font-medium cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>戻る</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 削除確認モーダル */}
+              {showDeleteConfirm && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-50 rounded-2xl" onClick={() => setShowDeleteConfirm(false)}>
+                  <div className="rounded-xl border p-5 w-full max-w-[340px] mx-4 text-center" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={e => e.stopPropagation()}>
+                    <p className="text-[28px] mb-2">⚠️</p>
+                    <h4 className="text-[14px] font-medium mb-2">本当に削除しますか？</h4>
+                    <p className="text-[11px] mb-4" style={{ color: T.textSub }}>この予約を完全に削除します。この操作は取り消せません。</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setShowDeleteConfirm(false); deleteReservation(editRes.id); }} className="flex-1 py-2.5 rounded-lg text-[12px] font-medium cursor-pointer text-white" style={{ backgroundColor: "#c45555" }}>削除する</button>
+                      <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-2.5 rounded-lg text-[12px] font-medium cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>戻る</button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>);
@@ -1986,6 +2075,119 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
           </div>
         </div>
       )}
+
+      {/* ═══ タイムチャート設定モーダル ═══ */}
+      {showTcSettings && (() => {
+        const cfg = { ...tcConfig };
+        const updateCfg = (key: keyof TcConfig, val: unknown) => setTcConfig(prev => ({ ...prev, [key]: val }));
+        const updateColor = (idx: number, val: string) => { const c = [...tcConfig.colors]; c[idx] = val; updateCfg("colors", c); };
+        const updateStatusColor = (key: string, val: string) => { updateCfg("statusColors", { ...tcConfig.statusColors, [key]: val }); };
+        return (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowTcSettings(false)}>
+            <div className="rounded-2xl border w-full max-w-[520px] max-h-[85vh] overflow-y-auto mx-4 animate-[fadeIn_0.2s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={e => e.stopPropagation()}>
+              <div className="px-6 py-4 flex items-center justify-between sticky top-0 z-10" style={{ backgroundColor: T.card, borderBottom: `1px solid ${T.border}` }}>
+                <h3 className="text-[16px] font-medium">⚙️ タイムチャート設定</h3>
+                <button onClick={() => setShowTcSettings(false)} className="text-[14px] cursor-pointer p-1" style={{ color: T.textMuted, background: "none", border: "none" }}>✕</button>
+              </div>
+              <div className="px-6 py-4 space-y-6">
+
+                {/* 時間範囲 */}
+                <div>
+                  <h4 className="text-[13px] font-medium mb-3">🕐 表示時間範囲</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label>
+                      <select value={tcConfig.startHour} onChange={e => updateCfg("startHour", Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}>
+                        {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i}:00</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>表示時間数</label>
+                      <select value={tcConfig.displayHours} onChange={e => updateCfg("displayHours", Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}>
+                        {[12,14,16,17,18,20,22,24].map(h => <option key={h} value={h}>{h}時間（{((tcConfig.startHour + h) % 24)}:00まで）</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* サイズ設定 */}
+                <div>
+                  <h4 className="text-[13px] font-medium mb-3">📐 サイズ設定</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-[10px] mb-1"><span style={{ color: T.textSub }}>予約バーの高さ（太さ）</span><span style={{ color: T.accent }}>{tcConfig.rowHeight}px</span></div>
+                      <input type="range" min={36} max={80} value={tcConfig.rowHeight} onChange={e => updateCfg("rowHeight", Number(e.target.value))} className="w-full" />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[10px] mb-1"><span style={{ color: T.textSub }}>1時間あたりの横幅</span><span style={{ color: T.accent }}>{tcConfig.hourWidth}px</span></div>
+                      <input type="range" min={60} max={200} value={tcConfig.hourWidth} onChange={e => updateCfg("hourWidth", Number(e.target.value))} className="w-full" />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[10px] mb-1"><span style={{ color: T.textSub }}>セラピスト名のサイズ</span><span style={{ color: T.accent }}>{tcConfig.nameSize}px</span></div>
+                      <input type="range" min={8} max={16} value={tcConfig.nameSize} onChange={e => updateCfg("nameSize", Number(e.target.value))} className="w-full" />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[10px] mb-1"><span style={{ color: T.textSub }}>予約バー内の文字サイズ</span><span style={{ color: T.accent }}>{tcConfig.barFontSize}px</span></div>
+                      <input type="range" min={7} max={14} value={tcConfig.barFontSize} onChange={e => updateCfg("barFontSize", Number(e.target.value))} className="w-full" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 表示設定 */}
+                <div>
+                  <h4 className="text-[13px] font-medium mb-3">🔧 表示設定</h4>
+                  <label className="flex items-center gap-3 py-2 cursor-pointer">
+                    <input type="checkbox" checked={tcConfig.hideNoRoom} onChange={e => updateCfg("hideNoRoom", e.target.checked)} className="w-4 h-4 accent-[#c3a782]" />
+                    <span className="text-[12px]">ルーム未割当のセラピストを非表示</span>
+                  </label>
+                </div>
+
+                {/* セラピストカラー */}
+                <div>
+                  <h4 className="text-[13px] font-medium mb-3">🎨 セラピスト バーの色</h4>
+                  <div className="grid grid-cols-4 gap-2">
+                    {tcConfig.colors.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input type="color" value={c} onChange={e => updateColor(i, e.target.value)} className="w-7 h-7 rounded cursor-pointer" style={{ border: "none", padding: 0 }} />
+                        <span className="text-[9px]" style={{ color: T.textMuted }}>#{i+1}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => { const newColors = [...tcConfig.colors, "#888888"]; updateCfg("colors", newColors); }} className="mt-2 text-[10px] cursor-pointer" style={{ color: T.accent, background: "none", border: "none" }}>+ 色を追加</button>
+                </div>
+
+                {/* ステータスカラー */}
+                <div>
+                  <h4 className="text-[13px] font-medium mb-3">🏷️ ステータスの色</h4>
+                  <div className="space-y-2">
+                    {[
+                      ["web_reservation", "WEB予約"],
+                      ["summary_unread", "概要未読"],
+                      ["summary_read", "概要既読"],
+                      ["detail_unread", "詳細未読"],
+                      ["detail_read", "詳細既読"],
+                      ["serving", "接客中"],
+                      ["completed", "完了"],
+                    ].map(([key, label]) => (
+                      <div key={key} className="flex items-center gap-3">
+                        <input type="color" value={tcConfig.statusColors[key] || "#888888"} onChange={e => updateStatusColor(key, e.target.value)} className="w-6 h-6 rounded cursor-pointer" style={{ border: "none", padding: 0 }} />
+                        <span className="text-[11px]">{label}</span>
+                        <span className="text-[9px]" style={{ color: T.textMuted }}>{tcConfig.statusColors[key]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+              {/* 保存ボタン */}
+              <div className="px-6 py-4 flex gap-3 sticky bottom-0" style={{ backgroundColor: T.card, borderTop: `1px solid ${T.border}` }}>
+                <button onClick={() => saveTcConfig(tcConfig)} className="flex-1 py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #c3a782, #b09672)" }}>💾 設定を保存</button>
+                <button onClick={() => { setTcConfig({ hourWidth: DEFAULT_HOUR_WIDTH, startHour: DEFAULT_START_HOUR, displayHours: DEFAULT_DISPLAY_HOURS, rowHeight: DEFAULT_ROW_HEIGHT, nameSize: DEFAULT_NAME_SIZE, barFontSize: DEFAULT_BAR_FONT_SIZE, colors: DEFAULT_COLORS, hideNoRoom: false, statusColors: { web_reservation: "#a855f7", summary_unread: "#3b82f6", summary_read: "#2563eb", detail_unread: "#4a7c59", detail_read: "#16a34a", serving: "#22c55e", completed: "#c3a782" } }); toast.show("デフォルトに戻しました", "info"); }} className="px-6 py-3 rounded-xl text-[12px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>リセット</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } } @keyframes ngFlash { 0% { opacity: 0; } 30% { opacity: 1; } 50% { opacity: 0.7; } 70% { opacity: 1; } 100% { opacity: 1; } } @keyframes ngBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } } @keyframes ngShake { 0%, 100% { transform: rotate(0deg); } 20% { transform: rotate(-15deg); } 40% { transform: rotate(15deg); } 60% { transform: rotate(-10deg); } 80% { transform: rotate(10deg); } }`}</style>
     </div>
