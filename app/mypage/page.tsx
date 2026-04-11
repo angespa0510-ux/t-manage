@@ -57,6 +57,9 @@ export default function TherapistMyPage() {
   const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
   const [todayOrders, setTodayOrders] = useState<Reservation[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [allRooms, setAllRooms] = useState<{id:number;name:string;store_id:number;building_id:number}[]>([]);
+  const [buildings, setBuildings] = useState<{id:number;name:string}[]>([]);
+  const [roomAssigns, setRoomAssigns] = useState<{therapist_id:number;room_id:number;date:string}[]>([]);
   const [coursesMaster, setCoursesMaster] = useState<{ id: number; name: string; therapist_back: number }[]>([]);
 const [nomsMaster, setNomsMaster] = useState<{ id: number; name: string; back_amount: number }[]>([]);
 const [extsMaster, setExtsMaster] = useState<{ id: number; name: string; therapist_back: number }[]>([]);
@@ -110,6 +113,10 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const fetchData = useCallback(async () => {
     if (!therapist) return; const tid = therapist.id;
     const { data: st } = await supabase.from("stores").select("*"); if (st) setStores(st);
+    const { data: rms } = await supabase.from("rooms").select("id,name,store_id,building_id"); if (rms) setAllRooms(rms);
+    const { data: blds } = await supabase.from("buildings").select("id,name"); if (blds) setBuildings(blds);
+    const todayStr2 = new Date().toISOString().split("T")[0];
+    const { data: ras } = await supabase.from("room_assignments").select("therapist_id,room_id,date").eq("therapist_id", tid).gte("date", todayStr2); if (ras) setRoomAssigns(ras);
     const { data: crsM } = await supabase.from("courses").select("id,name,therapist_back"); if (crsM) setCoursesMaster(crsM);
     const { data: nm } = await supabase.from("nominations").select("id,name,back_amount"); if (nm) setNomsMaster(nm);
     const { data: em } = await supabase.from("extensions").select("id,name,therapist_back"); if (em) setExtsMaster(em);
@@ -136,6 +143,15 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   }, [therapist, salaryMonth, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  // リアルタイム同期
+  useEffect(() => {
+    const ch = supabase.channel("mypage-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_assignments" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, () => fetchData())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [fetchData]);
 
   const targetWeekStart = getWeekStart(new Date(Date.now() + weekOffset * 7 * 86400000));
   const weekDates = getWeekDates(targetWeekStart);
@@ -178,6 +194,20 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const logout = () => { localStorage.removeItem("therapist_session"); setLoggedIn(false); setTherapist(null); setTab("home"); };
   const chipStyle = (active: boolean, color: string) => ({ backgroundColor: active ? color + "20" : "transparent", color: active ? color : T.textMuted, borderColor: active ? color : T.border });
   const getStoreName = (id: number) => stores.find(s => s.id === id)?.name || "";
+  const getBuildingForDate = (date: string) => {
+    const ra = roomAssigns.find(a => a.date === date);
+    if (!ra) return "";
+    const rm = allRooms.find(r => r.id === ra.room_id);
+    if (!rm) return "";
+    const bl = buildings.find(b => b.id === rm.building_id);
+    return bl?.name || "";
+  };
+  const getRoomForDate = (date: string) => {
+    const ra = roomAssigns.find(a => a.date === date);
+    if (!ra) return "";
+    const rm = allRooms.find(r => r.id === ra.room_id);
+    return rm?.name || "";
+  };
   const getStoreShort = (id: number) => stores.find(s => s.id === id)?.name?.replace(/ルーム$/, "") || "";
 
   if (!loggedIn) return (
@@ -240,7 +270,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       <div className="flex-1 overflow-y-auto"><div className="max-w-[600px] mx-auto p-4">
 
         {tab === "home" && (<div className="space-y-4">
-          {todayShift ? (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p>{todayShift.store_id > 0 && <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>{getStoreName(todayShift.store_id)}</p>}</div>) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
+          {todayShift ? ((() => { const bldName = getBuildingForDate(today); const rmName = getRoomForDate(today); return (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: T.textMuted }}>{todayShift.store_id > 0 && <span>🏠 {getStoreName(todayShift.store_id)}</span>}{bldName && <span>🏢 {bldName}</span>}{rmName && <span>🚪 {rmName}</span>}</div></div>); })()) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
           <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
 
           {/* 本日のオーダー */}
@@ -269,7 +299,14 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <p className="text-[14px] font-medium">{r.start_time?.slice(0,5)} 〜 {r.end_time?.slice(0,5)}</p>
-                          <p className="text-[11px] mt-0.5" style={{ color: T.textSub }}>{r.customer_name} / {r.course}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: T.textSub }}>👤 {r.customer_name}</p>
+                          <div className="flex flex-wrap gap-x-3 mt-1 text-[10px]" style={{ color: T.textMuted }}>
+                            <span>📋 {r.course}</span>
+                            {(r as any).nomination && (r as any).nomination !== "フリー" && <span>⭐ {(r as any).nomination}</span>}
+                            {(r as any).extension_name && <span>⏱ +{(r as any).extension_name}</span>}
+                            {(r as any).options_text && <span>🎁 {(r as any).options_text}</span>}
+                          </div>
+                          {r.notes && <p className="text-[9px] mt-1" style={{ color: "#f59e0b" }}>📝 {r.notes.split("\n")[0]}</p>}
                         </div>
                         <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: statusColor + "18", color: statusColor }}>{statusLabel}</span>
                       </div>
@@ -408,6 +445,14 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
         {tab === "shift" && (<div className="space-y-4">
           <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">📝 シフト希望提出</h2><div className="flex items-center gap-2"><button onClick={() => setWeekOffset(Math.max(1, weekOffset - 1))} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button><span className="text-[11px] font-medium min-w-[120px] text-center">{formatDate(weekDates[0])} 〜 {formatDate(weekDates[6])}</span><button onClick={() => setWeekOffset(weekOffset + 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button></div></div>
+          {/* 説明テキスト */}
+          <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+            <p className="text-[10px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+              出勤希望の日にチェックを入れ、時間と店舗を選択してください。<br />
+              希望シフトが決まったら<strong style={{ color: T.text }}>「シフト希望を提出」ボタン</strong>を押してお店に提出してください。<br />
+              提出後、<strong style={{ color: "#e091a8" }}>LINEでお店にもご報告をお願いします</strong>。（📋 LINE用コピーで簡単に送れます）
+            </p>
+          </div>
           <div className="space-y-2">{weekDates.map(d => { const draft = reqDrafts[d]; if (!draft) return null; const dt = new Date(d + "T00:00:00"); const dow = ["日","月","火","水","木","金","土"][dt.getDay()]; const isSun = dt.getDay() === 0; const isSat = dt.getDay() === 6; const existing = shiftRequests.find(r => r.date === d);
             return (<div key={d} className="rounded-xl border p-3" style={{ backgroundColor: draft.enabled ? "#e8849a10" : T.card, borderColor: draft.enabled ? "#e8849a44" : T.border }}>
               <div className="flex items-center gap-2 mb-1"><button onClick={() => setReqDrafts({ ...reqDrafts, [d]: { ...draft, enabled: !draft.enabled } })} className="text-[14px] cursor-pointer flex-shrink-0" style={{ background: "none", border: "none" }}>{draft.enabled ? "✅" : "⬜"}</button><span className="text-[13px] font-medium min-w-[70px]" style={{ color: isSun ? "#c45555" : isSat ? "#3d6b9f" : T.text }}>{dt.getDate()}日 ({dow})</span>{existing && <span className="text-[8px] px-1.5 py-0.5 rounded ml-auto" style={{ backgroundColor: existing.status === "approved" ? "#22c55e18" : existing.status === "rejected" ? "#c4555518" : "#f59e0b18", color: existing.status === "approved" ? "#22c55e" : existing.status === "rejected" ? "#c45555" : "#f59e0b" }}>{existing.status === "approved" ? "承認済" : existing.status === "rejected" ? "却下" : "提出済"}</span>}</div>
@@ -420,7 +465,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
         {tab === "schedule" && (<div className="space-y-4">
           <h2 className="text-[14px] font-medium">📅 確定シフト</h2>
-          {shifts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>確定シフトがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{shifts.map(s => (<div key={s.id} className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center gap-3"><span className="text-[12px] font-medium min-w-[80px]">{formatDate(s.date)}</span>{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f8bbd018", color: "#e091a8" }}>{getStoreShort(s.store_id)}</span>}<span className="text-[12px]">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div>{s.date === today && <span className="text-[9px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: "#e8849a" }}>今日</span>}</div>))}</div>)}
+          {shifts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>確定シフトがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{shifts.map(s => { const bld = getBuildingForDate(s.date); return (<div key={s.id} className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center gap-3 flex-wrap"><span className="text-[12px] font-medium min-w-[80px]">{formatDate(s.date)}</span>{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f8bbd018", color: "#e091a8" }}>{getStoreShort(s.store_id)}</span>}{bld && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>🏢 {bld}</span>}<span className="text-[12px]">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div>{s.date === today && <span className="text-[9px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: "#e8849a" }}>今日</span>}</div>); })}</div>)}
           {shiftRequests.filter(r => r.status === "pending").length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: "#f59e0b10", borderColor: "#f59e0b33" }}><p className="text-[11px] font-medium mb-2" style={{ color: "#f59e0b" }}>⏳ 承認待ちのシフト希望</p>{shiftRequests.filter(r => r.status === "pending").map(r => (<div key={r.id} className="flex items-center justify-between py-1 text-[11px]"><span>{formatDate(r.date)}</span><div className="flex items-center gap-2">{r.store_id > 0 && <span className="text-[9px]" style={{ color: "#e091a8" }}>{getStoreShort(r.store_id)}</span>}<span>{r.start_time} 〜 {r.end_time}</span></div></div>))}</div>)}
         </div>)}
 
