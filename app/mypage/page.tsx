@@ -245,7 +245,15 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
           {/* 本日のオーダー */}
           <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <p className="text-[11px] font-medium mb-3" style={{ color: T.textSub }}>📋 本日のオーダー（{todayOrders.length}件）</p>
+            <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>📋 本日のオーダー（{todayOrders.length}件）</p>
+            {/* 説明テキスト */}
+            <div className="rounded-lg p-3 mb-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+              <p className="text-[10px] m-0" style={{ color: T.textMuted, lineHeight: 1.7 }}>
+                🔔 お客様が<strong style={{ color: T.text }}>来店されたら「入室」ボタン</strong>を押してください。<br />
+                🚪 お客様が<strong style={{ color: T.text }}>退室されたら「退室」ボタン</strong>を押してください。<br />
+                <span style={{ color: T.textFaint }}>※ 間違えた場合は「取り消し」で元に戻せます。</span>
+              </p>
+            </div>
             {todayOrders.length === 0 ? (
               <p className="text-[11px] text-center py-4" style={{ color: T.textFaint }}>本日のオーダーはありません</p>
             ) : (
@@ -265,26 +273,41 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                         </div>
                         <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: statusColor + "18", color: statusColor }}>{statusLabel}</span>
                       </div>
-                      {!isCompleted && (
-                        <div className="flex gap-2 mt-2">
-                          {!isServing ? (
-                            <button onClick={async () => {
-                              await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving" }).eq("id", r.id);
-                              setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving" } as any : o));
-                            }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4708a)" }}>
-                              🔔 来店（接客開始）
-                            </button>
-                          ) : (
-                            <button onClick={async () => {
-                              await supabase.from("reservations").update({ customer_status: "completed", therapist_status: "completed", status: "completed" }).eq("id", r.id);
-                              setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "completed", therapist_status: "completed", status: "completed" } as any : o));
-                              fetchData();
-                            }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}>
-                              🚪 退室（接客終了）
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      {/* ボタンエリア */}
+                      <div className="flex gap-2 mt-2">
+                        {!isServing && !isCompleted && (
+                          <button onClick={async () => {
+                            await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving" }).eq("id", r.id);
+                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving" } as any : o));
+                          }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4708a)" }}>
+                            🔔 入室（接客開始）
+                          </button>
+                        )}
+                        {isServing && (<>
+                          <button onClick={async () => {
+                            await supabase.from("reservations").update({ customer_status: "completed", therapist_status: "completed", status: "completed" }).eq("id", r.id);
+                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "completed", therapist_status: "completed", status: "completed" } as any : o));
+                            fetchData();
+                          }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}>
+                            🚪 退室（接客終了）
+                          </button>
+                          <button onClick={async () => {
+                            await supabase.from("reservations").update({ customer_status: "detail_read", therapist_status: "detail_sent" }).eq("id", r.id);
+                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "detail_read", therapist_status: "detail_sent" } as any : o));
+                          }} className="px-3 py-2.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}>
+                            ↩ 取消
+                          </button>
+                        </>)}
+                        {isCompleted && (
+                          <button onClick={async () => {
+                            await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving", status: "unprocessed" }).eq("id", r.id);
+                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving", status: "unprocessed" } as any : o));
+                            fetchData();
+                          }} className="px-4 py-2 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}>
+                            ↩ 退室を取り消す
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
