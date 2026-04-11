@@ -285,6 +285,53 @@ export default function TimeChart() {
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(timer); }, []);
 
+  // 5分超過アラート
+  const [overdueAlerts, setOverdueAlerts] = useState<{id:number;type:"start"|"end";customerName:string;therapistName:string;time:string}[]>([]);
+  const [showOverduePopup, setShowOverduePopup] = useState(false);
+  const overdueAudioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    const check = () => {
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const today = now.toISOString().split("T")[0];
+      if (selectedDate !== today) return;
+      const alerts: typeof overdueAlerts = [];
+      for (const r of reservations) {
+        if ((r as any).status === "cancelled") continue;
+        const cs = (r as any).customer_status || "unsent";
+        const [sh, sm] = (r.start_time || "12:00").split(":").map(Number);
+        const startMin = sh * 60 + sm;
+        const [eh, em] = (r.end_time || "13:00").split(":").map(Number);
+        const endMin = eh * 60 + em;
+        const tName = therapists.find(t => t.id === r.therapist_id)?.name || "";
+        // 開始5分超過で接客中になっていない
+        if (nowMin >= startMin + 5 && cs !== "serving" && cs !== "completed") {
+          alerts.push({ id: r.id, type: "start", customerName: r.customer_name, therapistName: tName, time: r.start_time });
+        }
+        // 終了5分超過で終了になっていない
+        if (nowMin >= endMin + 5 && cs !== "completed" && (cs === "serving")) {
+          alerts.push({ id: r.id, type: "end", customerName: r.customer_name, therapistName: tName, time: r.end_time });
+        }
+      }
+      if (alerts.length > 0 && alerts.length !== overdueAlerts.length) {
+        setOverdueAlerts(alerts);
+        setShowOverduePopup(true);
+        // 音を鳴らす
+        try {
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator(); const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 880; gain.gain.value = 0.3;
+          osc.start(); setTimeout(() => { osc.stop(); ctx.close(); }, 500);
+        } catch {}
+      }
+      if (alerts.length === 0) { setOverdueAlerts([]); setShowOverduePopup(false); }
+    };
+    const timer = setInterval(check, 30000);
+    check();
+    return () => clearInterval(timer);
+  }, [reservations, therapists, selectedDate, overdueAlerts.length]);
+
   const currentTimePos = (() => {
     const now = currentTime; const h = now.getHours(); const m = now.getMinutes();
     const adjH = h < 9 ? h + 24 : h;
@@ -2117,6 +2164,28 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
             </div>
             <p className="text-[13px] mb-5" style={{ color: "#ff9999" }}>このセラピストにこのお客様を割り当てないでください</p>
             <button onClick={() => setNgWarning(null)} className="px-10 py-3 rounded-xl text-[16px] font-bold cursor-pointer" style={{ backgroundColor: "#ff3333", color: "white", border: "none", boxShadow: "0 4px 20px rgba(255,50,50,0.4)" }}>確認しました</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ 5分超過アラート ═══ */}
+      {showOverduePopup && overdueAlerts.length > 0 && (
+        <div className="fixed top-4 right-4 z-[9999] animate-[fadeIn_0.3s]" style={{ maxWidth: 360 }}>
+          <div className="rounded-2xl border shadow-2xl p-4" style={{ backgroundColor: dark ? "#2a1a1a" : "#fff5f5", borderColor: "#c4555566", boxShadow: "0 0 30px rgba(196,85,85,0.3)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[14px] font-medium" style={{ color: "#c45555" }}>🚨 ステータス未更新</span>
+              <button onClick={() => setShowOverduePopup(false)} className="text-[12px] cursor-pointer px-2 py-1 rounded" style={{ color: T.textMuted, background: "none", border: "none" }}>✕</button>
+            </div>
+            <div className="space-y-2">
+              {overdueAlerts.map(a => (
+                <div key={`${a.id}-${a.type}`} className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]" style={{ backgroundColor: "#c4555510", border: "1px solid #c4555520" }}>
+                  <span style={{ color: "#c45555", fontWeight: 600 }}>{a.type === "start" ? "🔔 来店未確認" : "🚪 退室未確認"}</span>
+                  <span style={{ color: T.text }}>{a.customerName}</span>
+                  <span style={{ color: T.textMuted }}>({a.therapistName} / {a.time}〜)</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[9px] mt-2" style={{ color: T.textMuted }}>5分以上ステータスが更新されていません</p>
           </div>
         </div>
       )}

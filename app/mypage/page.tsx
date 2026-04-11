@@ -55,6 +55,7 @@ export default function TherapistMyPage() {
   const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
+  const [todayOrders, setTodayOrders] = useState<Reservation[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [coursesMaster, setCoursesMaster] = useState<{ id: number; name: string; therapist_back: number }[]>([]);
 const [nomsMaster, setNomsMaster] = useState<{ id: number; name: string; back_amount: number }[]>([]);
@@ -122,13 +123,16 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     const d30 = new Date(); d30.setDate(d30.getDate() - 30);
     const { data: res } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", d30.toISOString().split("T")[0]).eq("status", "completed").order("date", { ascending: false }); if (res) setReservations(res);
     const { data: allRes } = await supabase.from("reservations").select("*").eq("therapist_id", tid).eq("status", "completed").order("date", { ascending: false }); if (allRes) setAllReservations(allRes);
+    // 本日の全オーダー（キャンセル以外）
+    const todayStr = new Date().toISOString().split("T")[0];
+    const { data: todayR } = await supabase.from("reservations").select("*").eq("therapist_id", tid).eq("date", todayStr).neq("status", "cancelled").order("start_time"); if (todayR) setTodayOrders(todayR);
     const { data: cn } = await supabase.from("therapist_customer_notes").select("*").eq("therapist_id", tid).order("customer_name"); if (cn) setCustomerNotes(cn);
     const [cy, cm] = calMonth.split("-").map(Number);
     const calDim = new Date(cy, cm, 0).getDate();
     const calStart = `${calMonth}-01`; const calEnd = `${calMonth}-${String(calDim).padStart(2, "0")}`;
     const { data: csh } = await supabase.from("shifts").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("status", "confirmed"); if (csh) setCalShifts(csh);
     const { data: cstl } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("is_settled", true); if (cstl) setCalSettlements(cstl);
-    const { data: cres } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("status", "completed"); if (cres) setCalReservations(cres);
+    const { data: cres } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).neq("status", "cancelled"); if (cres) setCalReservations(cres);
   }, [therapist, salaryMonth, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -238,6 +242,55 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         {tab === "home" && (<div className="space-y-4">
           {todayShift ? (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p>{todayShift.store_id > 0 && <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>{getStoreName(todayShift.store_id)}</p>}</div>) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
           <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
+
+          {/* 本日のオーダー */}
+          <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <p className="text-[11px] font-medium mb-3" style={{ color: T.textSub }}>📋 本日のオーダー（{todayOrders.length}件）</p>
+            {todayOrders.length === 0 ? (
+              <p className="text-[11px] text-center py-4" style={{ color: T.textFaint }}>本日のオーダーはありません</p>
+            ) : (
+              <div className="space-y-3">
+                {todayOrders.map(r => {
+                  const custSt = (r as any).customer_status || "unsent";
+                  const isServing = custSt === "serving";
+                  const isCompleted = custSt === "completed" || (r as any).status === "completed";
+                  const statusLabel = isCompleted ? "✅ 終了" : isServing ? "💆 接客中" : "⏳ 予約済";
+                  const statusColor = isCompleted ? "#22c55e" : isServing ? "#e8849a" : T.textMuted;
+                  return (
+                    <div key={r.id} className="rounded-xl p-4 border" style={{ borderColor: isServing ? "#e8849a44" : isCompleted ? "#22c55e33" : T.border, backgroundColor: isServing ? "#e8849a08" : isCompleted ? "#22c55e08" : T.cardAlt }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="text-[14px] font-medium">{r.start_time?.slice(0,5)} 〜 {r.end_time?.slice(0,5)}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: T.textSub }}>{r.customer_name} / {r.course}</p>
+                        </div>
+                        <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: statusColor + "18", color: statusColor }}>{statusLabel}</span>
+                      </div>
+                      {!isCompleted && (
+                        <div className="flex gap-2 mt-2">
+                          {!isServing ? (
+                            <button onClick={async () => {
+                              await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving" }).eq("id", r.id);
+                              setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving" } as any : o));
+                            }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4708a)" }}>
+                              🔔 来店（接客開始）
+                            </button>
+                          ) : (
+                            <button onClick={async () => {
+                              await supabase.from("reservations").update({ customer_status: "completed", therapist_status: "completed", status: "completed" }).eq("id", r.id);
+                              setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "completed", therapist_status: "completed", status: "completed" } as any : o));
+                              fetchData();
+                            }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}>
+                              🚪 退室（接客終了）
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* カレンダー */}
           {(() => {
