@@ -340,7 +340,7 @@ export default function TimeChart() {
       }
       if (alerts.length === 0) { setOverdueAlerts([]); setShowOverduePopup(false); }
     };
-    const timer = setInterval(check, 30000);
+    const timer = setInterval(check, 60000);
     check();
     return () => clearInterval(timer);
   }, [reservations, therapists, selectedDate, overdueAlerts.length]);
