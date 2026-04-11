@@ -194,6 +194,7 @@ export default function Dashboard() {
     })();
   }, [activePage]);
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [cancelledRes, setCancelledRes] = useState<{id:number;date:string;start_time:string;end_time:string;course:string;therapist_id:number;total_price:number;notes:string;customer_name:string}[]>([]);
   const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
   const [showAddVisit, setShowAddVisit] = useState(false);
   const [vDate, setVDate] = useState(""); const [vStart, setVStart] = useState("12:00"); const [vEnd, setVEnd] = useState("13:00");
@@ -539,7 +540,7 @@ export default function Dashboard() {
     const { data } = await supabase.from("therapist_customer_notes").select("*").eq("customer_name", customerName).order("id", { ascending: false });
     if (data) setCustomerNotes(data);
   };
-  const openDetail = (c: Customer) => { setDetailCustomer(c); fetchVisits(c.id); fetchCustomerNotes(c.name); supabase.from("customer_points").select("*").eq("customer_id", c.id).order("created_at", { ascending: false }).then(({ data }) => { if (data) setCustPoints(data); }); };
+  const openDetail = (c: Customer) => { setDetailCustomer(c); fetchVisits(c.id); fetchCustomerNotes(c.name); supabase.from("customer_points").select("*").eq("customer_id", c.id).order("created_at", { ascending: false }).then(({ data }) => { if (data) setCustPoints(data); }); supabase.from("reservations").select("id,date,start_time,end_time,course,therapist_id,total_price,notes,customer_name").eq("customer_name", c.name).eq("status", "cancelled").order("date", { ascending: false }).then(({ data }) => { if (data) setCancelledRes(data); }); };
   const deleteCustomerNote = async (noteId: number) => {
     if (!confirm("このセラピストメモを削除しますか？")) return;
     await supabase.from("therapist_customer_notes").delete().eq("id", noteId);
@@ -1205,6 +1206,35 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* キャンセル履歴 */}
+              {cancelledRes.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-[14px] font-medium mb-3" style={{ color: "#c45555" }}>🚫 キャンセル履歴（{cancelledRes.length}件）</h3>
+                  <div className="space-y-2">
+                    {cancelledRes.map(cr => {
+                      const cancelMatch = cr.notes?.match(/【(お客様都合|お店都合)キャンセル】(.*)?$/m);
+                      const cancelTypeLabel = cancelMatch?.[1] || "";
+                      const cancelReasonText = cancelMatch?.[2]?.trim() || "";
+                      return (
+                        <div key={cr.id} className="rounded-xl p-4 border" style={{ borderColor: "#c4555530", backgroundColor: "#c4555508" }}>
+                          <div className="flex items-center gap-3 mb-1.5">
+                            <span className="text-[13px] font-medium" style={{ color: "#c45555" }}>{cr.date}</span>
+                            {cr.start_time && <span className="text-[11px]" style={{ color: T.textSub }}>{cr.start_time}〜{cr.end_time}</span>}
+                            {cancelTypeLabel && <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: cancelTypeLabel === "お客様都合" ? "#c4555518" : "#3d6b9f18", color: cancelTypeLabel === "お客様都合" ? "#c45555" : "#3d6b9f" }}>{cancelTypeLabel}</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]" style={{ color: T.textSub }}>
+                            {cr.therapist_id > 0 && <span>💆 {getTherapistName(cr.therapist_id)}</span>}
+                            {cr.course && <span>📋 {cr.course}</span>}
+                            {cr.total_price > 0 && <span style={{ color: T.textMuted }}>料金: {fmt(cr.total_price)}</span>}
+                          </div>
+                          {cancelReasonText && <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>📝 理由: {cancelReasonText}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
