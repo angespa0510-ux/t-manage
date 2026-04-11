@@ -86,6 +86,7 @@ export default function TimeChart() {
   const [ncName, setNcName] = useState(""); const [ncPhone, setNcPhone] = useState("");
   const [showNewRes, setShowNewRes] = useState(false);
   const [newCustName, setNewCustName] = useState("");
+  const [newPhoneConfirm, setNewPhoneConfirm] = useState(false);
   const [newCustPhone, setNewCustPhone] = useState("");
   const [newTherapistId, setNewTherapistId] = useState<number>(0);
   const [newDate, setNewDate] = useState("");
@@ -499,7 +500,7 @@ export default function TimeChart() {
     if (!newCourseId) { setSaving(false); setMsg("コースを選択してください"); return; }
     const optText = newOptions.map(o => o.name).join(","); const optTotal = newOptions.reduce((s, o) => s + o.price, 0);
     const coursePrice = selectedCourse?.price || 0; const discText = newDiscounts.map(d => d.name).join(","); const discTotal = newDiscounts.reduce((s, d) => s + d.amount, 0); const total = coursePrice + newNomFee + optTotal + newExtPrice - discTotal;
-    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: discText, discount_amount: discTotal, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", customer_status: "unsent", therapist_status: "unsent", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0), staff_name: newStaffName });
+    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: discText, discount_amount: discTotal, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", customer_status: "unsent", therapist_status: "unsent", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0), staff_name: newStaffName, phone_confirm: newPhoneConfirm });
     if (!error) {
       const { data: cust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle();
       if (cust) {
@@ -521,7 +522,7 @@ export default function TimeChart() {
       const st = rm ? stores.find(s => s.id === rm.store_id) : null;
       const courseWithExt = (selectedCourse?.name || "") + (newExtension ? `＋${newExtension}` : "");
       setNotifyInfo({ custName: newCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: newDate || selectedDate, startTime: newStart, endTime: newEnd, course: courseWithExt, therapistName: thName, total: coursePrice + newNomFee + optTotal + newExtPrice - discTotal, nomination: newNomination || "指名なし", discountName: newDiscounts.map(d => d.name).join(",") || "なし", extensionName: newExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
-      toast.show("予約を登録しました！", "success"); /* 電話番号・名前・ランクを顧客テーブルに反映 */ if (newCustPhone.trim()) { const ph = newCustPhone.trim().replace(/[-\s　()（）]/g, ""); const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ phone: ph, rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), phone: ph, rank: newCustRank }); } } else { const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), rank: newCustRank }); } } /* NG自動ランク判定 */ const autoRank = await autoCalcRank(newCustName.trim()); if (autoRank) { const { data: cust2 } = await supabase.from("customers").select("id,rank").eq("name", newCustName.trim()).maybeSingle(); if (cust2 && cust2.rank !== "banned") { await supabase.from("customers").update({ rank: autoRank }).eq("id", cust2.id); } } setNewCustName(""); setNewCustPhone(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewCustRank("normal"); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
+      toast.show("予約を登録しました！", "success"); /* 電話番号・名前・ランクを顧客テーブルに反映 */ if (newCustPhone.trim()) { const ph = newCustPhone.trim().replace(/[-\s　()（）]/g, ""); const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ phone: ph, rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), phone: ph, rank: newCustRank }); } } else { const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), rank: newCustRank }); } } /* NG自動ランク判定 */ const autoRank = await autoCalcRank(newCustName.trim()); if (autoRank) { const { data: cust2 } = await supabase.from("customers").select("id,rank").eq("name", newCustName.trim()).maybeSingle(); if (cust2 && cust2.rank !== "banned") { await supabase.from("customers").update({ rank: autoRank }).eq("id", cust2.id); } } setNewCustName(""); setNewCustPhone(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewCustRank("normal"); setNewPhoneConfirm(false); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
     }
   };
 
@@ -1012,6 +1013,13 @@ export default function TimeChart() {
             <p className="text-[11px] mb-5" style={{ color: T.textFaint }}>{newCustName} 様の予約</p>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
+                {/* 📞 電話確認 */}
+                <label className="flex items-center gap-3 cursor-pointer px-3 py-2.5 rounded-xl" style={{ backgroundColor: newPhoneConfirm ? "#3d6b9f10" : T.cardAlt, border: `1px solid ${newPhoneConfirm ? "#3d6b9f44" : T.border}` }}>
+                  <input type="checkbox" checked={newPhoneConfirm} onChange={e => setNewPhoneConfirm(e.target.checked)} className="w-4 h-4 accent-[#3d6b9f]" />
+                  <span className="text-[12px] font-medium">📞 電話確認</span>
+                  <span className="text-[9px]" style={{ color: T.textMuted }}>予約{tcConfig.alertPhoneMin}分前に通知</span>
+                  {newPhoneConfirm && <span className="text-[8px] px-1.5 py-0.5 rounded-full ml-auto" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f" }}>ON</span>}
+                </label>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={newCustName} onChange={(e) => setNewCustName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📞 電話番号</label><input type="tel" value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} placeholder="090-xxxx-xxxx" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               </div>
@@ -1111,8 +1119,15 @@ export default function TimeChart() {
               </div>
             </div>
             <p className="text-[11px] mb-3" style={{ color: T.textFaint }}>{editCustName} 様の予約を編集</p>
-            {/* ── デュアルステータス ── */}
+            {/* ── 電話確認 + デュアルステータス ── */}
             <div className="mb-4 space-y-3">
+              {/* 📞 電話確認 */}
+              <label className="flex items-center gap-3 cursor-pointer px-3 py-2.5 rounded-xl" style={{ backgroundColor: editPhoneConfirm ? "#3d6b9f10" : T.cardAlt, border: `1px solid ${editPhoneConfirm ? "#3d6b9f44" : T.border}` }}>
+                <input type="checkbox" checked={editPhoneConfirm} onChange={e => setEditPhoneConfirm(e.target.checked)} className="w-4 h-4 accent-[#3d6b9f]" />
+                <span className="text-[12px] font-medium">📞 電話確認</span>
+                <span className="text-[9px]" style={{ color: T.textMuted }}>予約{tcConfig.alertPhoneMin}分前に通知</span>
+                {editPhoneConfirm && <span className="text-[8px] px-1.5 py-0.5 rounded-full ml-auto" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f" }}>ON</span>}
+              </label>
               {/* 👤 お客様の状態 */}
               <div>
                 <p className="text-[10px] mb-1.5" style={{ color: T.textSub }}>👤 お客様の状態</p>
@@ -1152,11 +1167,6 @@ export default function TimeChart() {
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト</label><select value={editTherapistId} onChange={(e) => { const tid = Number(e.target.value); setEditTherapistId(tid); if (tid && editCustName) checkNgWarning(editCustName, tid); }} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, borderColor: ngTherapistIdsForCust.has(editTherapistId) ? "#c45555" : "transparent", backgroundColor: ngTherapistIdsForCust.has(editTherapistId) ? "#c4555512" : T.cardAlt }}>{therapists.map((t) => (<option key={t.id} value={t.id} style={{ color: ngTherapistIdsForCust.has(t.id) ? "#c45555" : undefined }}>{t.name}{ngTherapistIdsForCust.has(t.id) ? " ⚠️NG" : ""}</option>))}</select>{ngTherapistIdsForCust.has(editTherapistId) && <p className="text-[10px] mt-1 font-bold" style={{ color: "#c45555" }}>⚠️ このセラピストはこのお客様をNGにしています！</p>}</div>
                 <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={editStaffName} onChange={(e) => setEditStaffName(e.target.value)} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
-                <div><label className="flex items-center gap-2 cursor-pointer py-2">
-                  <input type="checkbox" checked={editPhoneConfirm} onChange={e => setEditPhoneConfirm(e.target.checked)} className="w-4 h-4 accent-[#3d6b9f]" />
-                  <span className="text-[12px] font-medium">📞 電話確認</span>
-                  <span className="text-[9px]" style={{ color: T.textMuted }}>予約{tcConfig.alertPhoneMin}分前に通知</span>
-                </label></div>
               </div>
               <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={editCourseId} onChange={(e) => handleCourseChange(Number(e.target.value), true)} className="w-full px-3 py-2 rounded-xl text-[11px] outline-none cursor-pointer" style={inputStyle}><option value={0}>— コースを選択 —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
               <div className="grid grid-cols-2 gap-3">
