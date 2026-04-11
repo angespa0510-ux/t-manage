@@ -94,6 +94,8 @@ export default function Dashboard() {
   // NG登録
   const [showNgRegister, setShowNgRegister] = useState(false);
   const [showCustImport, setShowCustImport] = useState(false);
+  const [custListView, setCustListView] = useState<"list" | "cancelHistory">("list");
+  const [allCancelledRes, setAllCancelledRes] = useState<{id:number;date:string;start_time:string;end_time:string;course:string;therapist_id:number;total_price:number;notes:string;customer_name:string}[]>([]);
   const [showNgImport, setShowNgImport] = useState(false);
   const [ngCustSearch, setNgCustSearch] = useState("");
   const [ngSelectedCust, setNgSelectedCust] = useState<Customer | null>(null);
@@ -404,11 +406,15 @@ export default function Dashboard() {
   const fetchVisits = useCallback(async (custId: number) => {
     const { data } = await supabase.from("customer_visits").select("*").eq("customer_id", custId).order("date", { ascending: false }); if (data) setVisits(data);
   }, []);
+  const fetchAllCancelled = useCallback(async () => {
+    const { data } = await supabase.from("reservations").select("id,date,start_time,end_time,course,therapist_id,total_price,notes,customer_name").eq("status", "cancelled").order("date", { ascending: false }).limit(100);
+    if (data) setAllCancelledRes(data);
+  }, []);
 
   useEffect(() => {
     const checkUser = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) { router.push("/"); } else { setUserEmail(user.email || ""); setUserId(user.id); } };
-    checkUser(); fetchCustomers(); fetchMaster();
-  }, [router, fetchCustomers, fetchMaster]);
+    checkUser(); fetchCustomers(); fetchMaster(); fetchAllCancelled();
+  }, [router, fetchCustomers, fetchMaster, fetchAllCancelled]);
 
   // Register
   const handleRegister = async () => {
@@ -680,6 +686,12 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="px-6 py-4" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
+                  {/* サブタブ */}
+                  <div className="flex gap-2 mb-3">
+                    <button onClick={() => setCustListView("list")} className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer" style={{ backgroundColor: custListView === "list" ? T.accent + "18" : "transparent", color: custListView === "list" ? T.accent : T.textMuted, border: custListView === "list" ? `1px solid ${T.accent}44` : `1px solid ${T.border}` }}>👥 顧客一覧</button>
+                    <button onClick={() => setCustListView("cancelHistory")} className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer relative" style={{ backgroundColor: custListView === "cancelHistory" ? "#c4555518" : "transparent", color: custListView === "cancelHistory" ? "#c45555" : T.textMuted, border: custListView === "cancelHistory" ? "1px solid #c4555544" : `1px solid ${T.border}` }}>🚫 キャンセル履歴{allCancelledRes.length > 0 && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>{allCancelledRes.length}</span>}</button>
+                  </div>
+                  {custListView === "list" && (
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="relative max-w-sm flex-1">
                       <input type="text" placeholder="名前・電話番号で検索" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
@@ -690,8 +702,9 @@ export default function Dashboard() {
                       {Object.entries(RANKS).map(([key, val]) => (<button key={key} onClick={() => setFilterRank(filterRank === key ? "all" : key)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ borderColor: filterRank === key ? val.color : T.border, backgroundColor: filterRank === key ? val.bg : "transparent", color: filterRank === key ? val.color : T.textMuted, fontWeight: filterRank === key ? 600 : 400 }}>{val.label} {filterRank === "all" ? customers.filter((c) => (c.rank || "normal") === key).length : ""}</button>))}
                     </div>
                   </div>
+                  )}
                 </div>
-                <div className="overflow-x-auto">
+                {custListView === "list" && (<div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead><tr style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
                       {["ランク", "名前", "電話番号", "利用回数", "最終利用日", "ポイント", "メモ", "備考", "操作"].map((h) => (<th key={h} className="text-left py-3.5 px-4 font-normal text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
@@ -728,7 +741,42 @@ export default function Dashboard() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </div>)}
+                {/* キャンセル履歴ビュー */}
+                {custListView === "cancelHistory" && (
+                  <div className="px-6 py-4">
+                    {allCancelledRes.length === 0 ? (
+                      <p className="text-[12px] text-center py-16" style={{ color: T.textFaint }}>キャンセル履歴がありません</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {allCancelledRes.map(cr => {
+                          const m = cr.notes?.match(/【(お客様都合|お店都合)キャンセル】(.*)?$/m);
+                          const cancelTypeLabel = m?.[1] || "";
+                          const cancelReasonText = m?.[2]?.trim() || "";
+                          return (
+                            <div key={cr.id} className="rounded-xl p-4 border flex items-start justify-between" style={{ borderColor: "#c4555525", backgroundColor: "#c4555506" }}>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-1">
+                                  <span className="text-[13px] font-medium" style={{ color: "#c45555" }}>{cr.date}</span>
+                                  {cr.start_time && <span className="text-[11px]" style={{ color: T.textSub }}>{cr.start_time}〜{cr.end_time}</span>}
+                                  {cancelTypeLabel && <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: cancelTypeLabel === "お客様都合" ? "#c4555518" : "#3d6b9f18", color: cancelTypeLabel === "お客様都合" ? "#c45555" : "#3d6b9f" }}>{cancelTypeLabel}</span>}
+                                </div>
+                                <div className="flex flex-wrap gap-x-4 text-[11px]" style={{ color: T.textSub }}>
+                                  <span>👤 {cr.customer_name}</span>
+                                  {cr.therapist_id > 0 && <span>💆 {getTherapistName(cr.therapist_id)}</span>}
+                                  {cr.course && <span>📋 {cr.course}</span>}
+                                  {cr.total_price > 0 && <span style={{ color: T.textMuted }}>{fmt(cr.total_price)}</span>}
+                                </div>
+                                {cancelReasonText && <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>📝 {cancelReasonText}</p>}
+                              </div>
+                              <button onClick={async () => { await supabase.from("reservations").update({ status: "unprocessed" }).eq("id", cr.id); fetchAllCancelled(); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer flex-shrink-0" style={{ color: "#4a7c59", backgroundColor: "#4a7c5910", border: "1px solid #4a7c5925" }}>↩ 復元</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1219,7 +1267,8 @@ export default function Dashboard() {
                       const cancelTypeLabel = cancelMatch?.[1] || "";
                       const cancelReasonText = cancelMatch?.[2]?.trim() || "";
                       return (
-                        <div key={cr.id} className="rounded-xl p-4 border" style={{ borderColor: "#c4555530", backgroundColor: "#c4555508" }}>
+                        <div key={cr.id} className="rounded-xl p-4 border flex items-start justify-between" style={{ borderColor: "#c4555530", backgroundColor: "#c4555508" }}>
+                          <div className="flex-1">
                           <div className="flex items-center gap-3 mb-1.5">
                             <span className="text-[13px] font-medium" style={{ color: "#c45555" }}>{cr.date}</span>
                             {cr.start_time && <span className="text-[11px]" style={{ color: T.textSub }}>{cr.start_time}〜{cr.end_time}</span>}
@@ -1231,6 +1280,8 @@ export default function Dashboard() {
                             {cr.total_price > 0 && <span style={{ color: T.textMuted }}>料金: {fmt(cr.total_price)}</span>}
                           </div>
                           {cancelReasonText && <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>📝 理由: {cancelReasonText}</p>}
+                          </div>
+                          <button onClick={async () => { await supabase.from("reservations").update({ status: "unprocessed" }).eq("id", cr.id); if (detailCustomer) { supabase.from("reservations").select("id,date,start_time,end_time,course,therapist_id,total_price,notes,customer_name").eq("customer_name", detailCustomer.name).eq("status", "cancelled").order("date", { ascending: false }).then(({ data }) => { if (data) setCancelledRes(data); }); } fetchAllCancelled(); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer flex-shrink-0" style={{ color: "#4a7c59", backgroundColor: "#4a7c5910", border: "1px solid #4a7c5925" }}>↩ 復元</button>
                         </div>
                       );
                     })}

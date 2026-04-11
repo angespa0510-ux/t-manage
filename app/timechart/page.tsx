@@ -66,6 +66,7 @@ export default function TimeChart() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelType, setCancelType] = useState<"store" | "customer">("customer");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [custCancelHistory, setCustCancelHistory] = useState<{id:number;date:string;start_time:string;end_time:string;course:string;therapist_id:number;total_price:number;notes:string}[]>([]);
 
   const [showCustSearch, setShowCustSearch] = useState(false);
   const [custSearchQ, setCustSearchQ] = useState("");
@@ -151,6 +152,11 @@ export default function TimeChart() {
       const { data: cust } = await supabase.from("customers").select("rank").eq("name", cleanName).maybeSingle();
       setNgWarning({ therapistName: thName, customerName: cleanName, ngReason: data.ng_reason || "", custRank: cust?.rank || "normal" });
     }
+  };
+  const fetchCancelHistory = async (custName: string) => {
+    if (!custName) { setCustCancelHistory([]); return; }
+    const { data } = await supabase.from("reservations").select("id,date,start_time,end_time,course,therapist_id,total_price,notes").eq("customer_name", custName).eq("status", "cancelled").order("date", { ascending: false }).limit(10);
+    setCustCancelHistory(data || []);
   };
 
   const [showNewTherapist, setShowNewTherapist] = useState(false);
@@ -454,7 +460,7 @@ export default function TimeChart() {
     }
   };
 
-  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCustomerStatus((r as any).customer_status || "unsent"); setEditTherapistStatus((r as any).therapist_status || "unsent"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); supabase.from("customers").select("phone,rank").eq("name", r.customer_name).maybeSingle().then(({ data }) => { setEditCustPhone(data?.phone || ""); setEditCustRank(data?.rank || "normal"); }); fetchNgForCustomer(r.customer_name); checkNgWarning(r.customer_name, r.therapist_id); };
+  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCustomerStatus((r as any).customer_status || "unsent"); setEditTherapistStatus((r as any).therapist_status || "unsent"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); supabase.from("customers").select("phone,rank").eq("name", r.customer_name).maybeSingle().then(({ data }) => { setEditCustPhone(data?.phone || ""); setEditCustRank(data?.rank || "normal"); }); fetchNgForCustomer(r.customer_name); checkNgWarning(r.customer_name, r.therapist_id); fetchCancelHistory(r.customer_name); };
   // ===== ポイント自動付与（completed時） =====
   const awardPoints = async (resId: number, customerName: string, totalPrice: number, resDate: string) => {
     try {
@@ -890,7 +896,7 @@ export default function TimeChart() {
             <input type="text" placeholder="名前・電話番号で検索" value={custSearchQ} onChange={(e) => setCustSearchQ(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[12px] outline-none mb-3" style={{ backgroundColor: T.cardAlt, color: T.text }} />
             <div className="space-y-1 max-h-[300px] overflow-y-auto mb-4">
               {custList.filter(c => { const q = custSearchQ.toLowerCase(); return !q || c.name?.toLowerCase().includes(q) || c.phone?.includes(q); }).map(c => (
-                <button key={c.id} onClick={async () => { setNewCustName(c.name); setNewCustPhone((c as any).phone || ""); setNewCustRank((c as any).rank || "normal"); setShowCustSearch(false); setShowNewRes(true); fetchNgForCustomer(c.name); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); if (newTherapistId) { checkNgWarning(c.name, newTherapistId); const { data: prevRes } = await supabase.from("reservations").select("id").eq("customer_name", c.name).eq("therapist_id", newTherapistId).limit(1); const { data: noms } = await supabase.from("nominations").select("*"); if (prevRes && prevRes.length > 0 && noms) { const honNom = noms.find((n: { name: string }) => n.name === "本指名"); if (honNom) { setNewNomination(honNom.name); setNewNomFee(honNom.price); } } } }} className="w-full text-left px-4 py-3 rounded-xl flex items-center justify-between cursor-pointer" style={{ backgroundColor: T.cardAlt }}>
+                <button key={c.id} onClick={async () => { setNewCustName(c.name); setNewCustPhone((c as any).phone || ""); setNewCustRank((c as any).rank || "normal"); setShowCustSearch(false); setShowNewRes(true); fetchNgForCustomer(c.name); fetchCancelHistory(c.name); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); if (newTherapistId) { checkNgWarning(c.name, newTherapistId); const { data: prevRes } = await supabase.from("reservations").select("id").eq("customer_name", c.name).eq("therapist_id", newTherapistId).limit(1); const { data: noms } = await supabase.from("nominations").select("*"); if (prevRes && prevRes.length > 0 && noms) { const honNom = noms.find((n: { name: string }) => n.name === "本指名"); if (honNom) { setNewNomination(honNom.name); setNewNomFee(honNom.price); } } } }} className="w-full text-left px-4 py-3 rounded-xl flex items-center justify-between cursor-pointer" style={{ backgroundColor: T.cardAlt }}>
                   <div><p className="text-[13px] font-medium">{c.name}</p><p className="text-[10px]" style={{ color: T.textMuted }}>{c.phone || "電話番号なし"}</p></div>
                   <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: c.rank === "good" ? "#7ab88f18" : c.rank === "caution" ? "#f59e0b18" : c.rank === "banned" ? "#c4555518" : "#88878018", color: c.rank === "good" ? "#7ab88f" : c.rank === "caution" ? "#f59e0b" : c.rank === "banned" ? "#c45555" : "#888780" }}>{c.rank === "good" ? "優良" : c.rank === "caution" ? "要注意" : c.rank === "banned" ? "出禁" : "普通"}</span>
                 </button>
@@ -981,6 +987,24 @@ export default function TimeChart() {
                   </>)}
                 </div>
               </div>
+              {/* キャンセル履歴 */}
+              {custCancelHistory.length > 0 && (
+                <div className="rounded-xl p-3" style={{ backgroundColor: "#c4555508", border: "1px solid #c4555520" }}>
+                  <p className="text-[10px] font-medium mb-1.5" style={{ color: "#c45555" }}>🚫 この顧客のキャンセル履歴（{custCancelHistory.length}件）</p>
+                  <div className="space-y-1 max-h-[80px] overflow-y-auto">
+                    {custCancelHistory.map(cr => {
+                      const m = cr.notes?.match(/【(お客様都合|お店都合)キャンセル】/);
+                      return (
+                        <div key={cr.id} className="flex items-center gap-2 text-[9px] px-2 py-1 rounded" style={{ backgroundColor: "#c4555508" }}>
+                          <span style={{ color: "#c45555" }}>{cr.date}</span>
+                          <span style={{ color: T.textMuted }}>{cr.course}</span>
+                          {m?.[1] && <span className="px-1 py-0.5 rounded" style={{ backgroundColor: m[1] === "お客様都合" ? "#c4555518" : "#3d6b9f18", color: m[1] === "お客様都合" ? "#c45555" : "#3d6b9f", fontSize: 8 }}>{m[1]}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {msg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: msg.includes("失敗") || msg.includes("選択") ? "#c4988518" : "#7ab88f18", color: msg.includes("失敗") || msg.includes("選択") ? "#c49885" : "#5a9e6f" }}>{msg}</div>}
               <div className="flex gap-3 pt-2">
                 <button onClick={addReservation} disabled={saving} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{saving ? "登録中..." : "予約する"}</button>
@@ -1117,6 +1141,27 @@ export default function TimeChart() {
                   </div>
                 </div>);
               })()}
+              {/* キャンセル履歴 */}
+              {custCancelHistory.length > 0 && (
+                <div className="rounded-xl p-4" style={{ backgroundColor: "#c4555508", border: "1px solid #c4555520" }}>
+                  <p className="text-[11px] font-medium mb-2" style={{ color: "#c45555" }}>🚫 キャンセル履歴（{custCancelHistory.length}件）</p>
+                  <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
+                    {custCancelHistory.map(cr => {
+                      const m = cr.notes?.match(/【(お客様都合|お店都合)キャンセル】(.*)?$/m);
+                      return (
+                        <div key={cr.id} className="flex items-center justify-between text-[10px] px-2 py-1.5 rounded-lg" style={{ backgroundColor: "#c4555508" }}>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <span style={{ color: "#c45555" }}>{cr.date}</span>
+                            <span style={{ color: T.textMuted }}>{cr.course}</span>
+                            {m?.[1] && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: m[1] === "お客様都合" ? "#c4555518" : "#3d6b9f18", color: m[1] === "お客様都合" ? "#c45555" : "#3d6b9f" }}>{m[1]}</span>}
+                          </div>
+                          <button onClick={async () => { await supabase.from("reservations").update({ status: "unprocessed" }).eq("id", cr.id); fetchCancelHistory(editCustName); fetchData(); toast.show("キャンセルを取り消しました", "info"); }} className="text-[8px] px-2 py-1 rounded cursor-pointer" style={{ color: "#4a7c59", backgroundColor: "#4a7c5910", border: "1px solid #4a7c5925" }}>↩ 復元</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
               <div className="flex gap-3 pt-2">
                 <button onClick={updateReservation} disabled={editSaving} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
