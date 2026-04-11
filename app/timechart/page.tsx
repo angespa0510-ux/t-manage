@@ -293,17 +293,23 @@ export default function TimeChart() {
   useEffect(() => {
     const check = () => {
       const now = new Date();
-      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const nowH = now.getHours();
+      const adjNowH = nowH < 9 ? nowH + 24 : nowH; // 深夜帯補正
+      const nowMin = adjNowH * 60 + now.getMinutes();
       const today = now.toISOString().split("T")[0];
-      if (selectedDate !== today) return;
+      // 深夜0〜8時台は前日のタイムチャートを見る
+      const checkDate = nowH < 9 ? (() => { const d = new Date(now); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; })() : today;
+      if (selectedDate !== checkDate && selectedDate !== today) return;
       const alerts: typeof overdueAlerts = [];
       for (const r of reservations) {
         if ((r as any).status === "cancelled") continue;
         const cs = (r as any).customer_status || "unsent";
         const [sh, sm] = (r.start_time || "12:00").split(":").map(Number);
-        const startMin = sh * 60 + sm;
+        const adjSh = sh < 9 ? sh + 24 : sh; // 深夜帯補正
+        const startMin = adjSh * 60 + sm;
         const [eh, em] = (r.end_time || "13:00").split(":").map(Number);
-        const endMin = eh * 60 + em;
+        const adjEh = eh < 9 ? eh + 24 : eh; // 深夜帯補正
+        const endMin = adjEh * 60 + em;
         const tName = therapists.find(t => t.id === r.therapist_id)?.name || "";
         // 開始5分超過で接客中になっていない
         if (nowMin >= startMin + 5 && cs !== "serving" && cs !== "completed") {
