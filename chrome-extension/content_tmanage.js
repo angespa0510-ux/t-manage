@@ -270,5 +270,19 @@
     });
   });
 
+  // 5分超過 自動LINE送信
+  window.addEventListener('TMANAGE_LINE_OVERDUE_SEND', (e) => {
+    const detail = e.detail || {};
+    const name = detail.name || '';
+    const message = detail.message || '';
+    if (!name || !message) return;
+    showToast(`🚨 ${name} に超過通知を自動送信します...`, 'warning');
+    safeSendMessage({
+      type: 'SEARCH_LINE_THERAPIST',
+      name: name,
+      template: message
+    });
+  });
+
   console.log('[T-MANAGE] content_tmanage.js v3.0 loaded');
 })();
