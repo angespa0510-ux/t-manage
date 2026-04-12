@@ -36,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "📢", label: "セラピストお知らせ投稿", path: "/therapist-notification-post",  category: "セラピスト" },
   { icon: "👤", label: "セラピストマイページ",  path: "/mypage",                       category: "セラピスト" },
   { icon: "🎬", label: "AI動画生成",           path: "/video-generator",              category: "セラピスト" },
+  { icon: "📖", label: "マニュアル管理",       path: "/manual",                       category: "セラピスト" },
 
   // ── スタッフ ──
   { icon: "📊", label: "スタッフ勤怠",  path: "/staff-attendance",  category: "スタッフ" },

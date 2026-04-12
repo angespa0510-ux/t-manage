@@ -1,0 +1,602 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { supabase } from "../../lib/supabase";
+import { useRouter } from "next/navigation";
+import { useTheme } from "../../lib/theme";
+import { NavMenu } from "../../lib/nav-menu";
+import { useStaffSession } from "../../lib/staff-session";
+
+type Category = { id: number; name: string; icon: string; color: string; description: string; sort_order: number };
+type Article = {
+  id: number; title: string; category_id: number | null; content: string; cover_image: string;
+  tags: string[]; is_published: boolean; is_pinned: boolean; view_count: number;
+  sort_order: number; created_at: string; updated_at: string;
+};
+type QA = { id?: number; article_id?: number; question: string; answer: string; sort_order: number };
+type Update = { id: number; article_id: number; summary: string; updated_by: string; created_at: string };
+
+const TAG_COLORS = [
+  { bg: "#FBEAF0", color: "#72243E" }, { bg: "#EEEDFE", color: "#3C3489" },
+  { bg: "#E1F5EE", color: "#085041" }, { bg: "#FAEEDA", color: "#633806" },
+  { bg: "#E6F1FB", color: "#0C447C" }, { bg: "#FAECE7", color: "#712B13" },
+  { bg: "#F1EFE8", color: "#444441" }, { bg: "#EAF3DE", color: "#27500A" },
+];
+
+function tagColor(tag: string) {
+  let h = 0; for (let i = 0; i < tag.length; i++) h = tag.charCodeAt(i) + ((h << 5) - h);
+  return TAG_COLORS[Math.abs(h) % TAG_COLORS.length];
+}
+
+export default function ManualPage() {
+  const router = useRouter();
+  const { dark, toggle, T } = useTheme();
+  const { activeStaff } = useStaffSession();
+  // NavMenu manages its own state
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [updates, setUpdates] = useState<Update[]>([]);
+  const [selectedCat, setSelectedCat] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterTag, setFilterTag] = useState("");
+
+  // Editor state
+  const [view, setView] = useState<"list" | "edit" | "categories">("list");
+  const [editArticle, setEditArticle] = useState<Article | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editCoverImage, setEditCoverImage] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editTagInput, setEditTagInput] = useState("");
+  const [editPublished, setEditPublished] = useState(false);
+  const [editPinned, setEditPinned] = useState(false);
+  const [editQAs, setEditQAs] = useState<QA[]>([]);
+  const [editUpdateMemo, setEditUpdateMemo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  // Category editor
+  const [editCat, setEditCat] = useState<Category | null>(null);
+  const [catName, setCatName] = useState("");
+  const [catIcon, setCatIcon] = useState("");
+  const [catColor, setCatColor] = useState("");
+  const [catDesc, setCatDesc] = useState("");
+
+  const fetchData = useCallback(async () => {
+    const { data: c } = await supabase.from("manual_categories").select("*").order("sort_order");
+    if (c) setCategories(c);
+    const { data: a } = await supabase.from("manual_articles").select("*").order("sort_order").order("created_at", { ascending: false });
+    if (a) setArticles(a);
+    const { data: u } = await supabase.from("manual_updates").select("*").order("created_at", { ascending: false }).limit(20);
+    if (u) setUpdates(u);
+  }, []);
+
+  useEffect(() => {
+    const check = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) router.push("/");
+    };
+    check(); fetchData();
+  }, [router, fetchData]);
+
+  // ── Filtered articles ──
+  const filteredArticles = articles.filter(a => {
+    if (selectedCat !== null && a.category_id !== selectedCat) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!a.title.toLowerCase().includes(q) && !a.tags.some(t => t.toLowerCase().includes(q))) return false;
+    }
+    if (filterTag && !a.tags.includes(filterTag)) return false;
+    return true;
+  });
+
+  const allTags = Array.from(new Set(articles.flatMap(a => a.tags))).sort();
+  const getCatName = (id: number | null) => categories.find(c => c.id === id);
+
+  // ── Image upload ──
+  const uploadImage = async (file: File): Promise<string> => {
+    const ext = file.name.split(".").pop() || "jpg";
+    const name = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from("manual-images").upload(name, file, { contentType: file.type });
+    if (error) { alert("画像アップロード失敗: " + error.message); return ""; }
+    const { data } = supabase.storage.from("manual-images").getPublicUrl(name);
+    return data.publicUrl;
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = await uploadImage(file);
+    if (url) setEditCoverImage(url);
+  };
+
+  const handleInlineImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = await uploadImage(file);
+    if (url && editorRef.current) {
+      const img = `\n![画像](${url})\n`;
+      setEditContent(prev => prev + img);
+    }
+  };
+
+  // ── Tag management ──
+  const addTag = () => {
+    const t = editTagInput.trim();
+    if (t && !editTags.includes(t)) { setEditTags([...editTags, t]); setEditTagInput(""); }
+  };
+
+  // ── QA management ──
+  const addQA = () => setEditQAs([...editQAs, { question: "", answer: "", sort_order: editQAs.length }]);
+  const updateQA = (idx: number, field: "question" | "answer", val: string) => {
+    const qa = [...editQAs]; qa[idx] = { ...qa[idx], [field]: val }; setEditQAs(qa);
+  };
+  const removeQA = (idx: number) => setEditQAs(editQAs.filter((_, i) => i !== idx));
+
+  // ── Open editor ──
+  const openNewArticle = () => {
+    setEditArticle(null); setEditTitle(""); setEditCategoryId(selectedCat);
+    setEditContent(""); setEditCoverImage(""); setEditTags([]); setEditTagInput("");
+    setEditPublished(false); setEditPinned(false); setEditQAs([]); setEditUpdateMemo("");
+    setMsg(""); setView("edit");
+  };
+
+  const openEditArticle = async (a: Article) => {
+    setEditArticle(a); setEditTitle(a.title); setEditCategoryId(a.category_id);
+    setEditContent(a.content); setEditCoverImage(a.cover_image);
+    setEditTags(a.tags || []); setEditTagInput("");
+    setEditPublished(a.is_published); setEditPinned(a.is_pinned);
+    setEditUpdateMemo(""); setMsg("");
+    // Load QAs
+    const { data: qa } = await supabase.from("manual_qa").select("*").eq("article_id", a.id).order("sort_order");
+    setEditQAs(qa || []);
+    setView("edit");
+  };
+
+  // ── Save article ──
+  const saveArticle = async () => {
+    if (!editTitle.trim()) { setMsg("タイトルを入力してください"); return; }
+    setSaving(true); setMsg("");
+
+    const payload = {
+      title: editTitle.trim(), category_id: editCategoryId, content: editContent,
+      cover_image: editCoverImage, tags: editTags, is_published: editPublished,
+      is_pinned: editPinned, updated_at: new Date().toISOString(),
+    };
+
+    let articleId: number;
+
+    if (editArticle) {
+      // Update
+      const { error } = await supabase.from("manual_articles").update(payload).eq("id", editArticle.id);
+      if (error) { setMsg("保存失敗: " + error.message); setSaving(false); return; }
+      articleId = editArticle.id;
+      // Record update
+      if (editUpdateMemo.trim()) {
+        await supabase.from("manual_updates").insert({
+          article_id: articleId, summary: editUpdateMemo.trim(),
+          updated_by: activeStaff?.name || "スタッフ",
+        });
+      }
+    } else {
+      // Create
+      const { data, error } = await supabase.from("manual_articles").insert(payload).select().single();
+      if (error || !data) { setMsg("作成失敗: " + (error?.message || "")); setSaving(false); return; }
+      articleId = data.id;
+    }
+
+    // Save QAs
+    // Delete existing and re-insert
+    await supabase.from("manual_qa").delete().eq("article_id", articleId);
+    if (editQAs.length > 0) {
+      const qaPayload = editQAs.filter(q => q.question.trim()).map((q, i) => ({
+        article_id: articleId, question: q.question.trim(), answer: q.answer.trim(), sort_order: i,
+      }));
+      if (qaPayload.length > 0) await supabase.from("manual_qa").insert(qaPayload);
+    }
+
+    setSaving(false); setMsg("✅ 保存しました");
+    await fetchData();
+    setTimeout(() => setView("list"), 800);
+  };
+
+  // ── Delete article ──
+  const deleteArticle = async (id: number) => {
+    if (!confirm("この記事を削除しますか？")) return;
+    await supabase.from("manual_articles").delete().eq("id", id);
+    fetchData();
+  };
+
+  // ── Category save ──
+  const saveCat = async () => {
+    if (!catName.trim()) return;
+    if (editCat) {
+      await supabase.from("manual_categories").update({
+        name: catName, icon: catIcon, color: catColor, description: catDesc,
+      }).eq("id", editCat.id);
+    } else {
+      await supabase.from("manual_categories").insert({
+        name: catName, icon: catIcon, color: catColor, description: catDesc,
+        sort_order: categories.length + 1,
+      });
+    }
+    setEditCat(null); fetchData();
+  };
+
+  // ── Styles ──
+  const S = {
+    page: { minHeight: "100vh", background: T.bg, color: T.text } as React.CSSProperties,
+    header: { height: 56, display: "flex", alignItems: "center", padding: "0 16px", borderBottom: `1px solid ${T.border}`, background: T.card, gap: 12 } as React.CSSProperties,
+    headerTitle: { fontSize: 16, fontWeight: 600, flex: 1 } as React.CSSProperties,
+    btn: { padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontSize: 13, cursor: "pointer" } as React.CSSProperties,
+    btnAccent: { padding: "6px 14px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", fontSize: 13, cursor: "pointer", fontWeight: 500 } as React.CSSProperties,
+    content: { padding: 16, maxWidth: 960, margin: "0 auto" } as React.CSSProperties,
+    card: { background: T.card, borderRadius: 12, border: `1px solid ${T.border}`, padding: 16, marginBottom: 12 } as React.CSSProperties,
+    input: { width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const } as React.CSSProperties,
+    textarea: { width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 14, outline: "none", minHeight: 200, resize: "vertical" as const, fontFamily: "inherit", boxSizing: "border-box" as const } as React.CSSProperties,
+    label: { fontSize: 12, color: T.textSub, marginBottom: 4, display: "block", fontWeight: 500 } as React.CSSProperties,
+    tag: (t: string) => {
+      const c = tagColor(t);
+      return { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, padding: "2px 10px", borderRadius: 12, background: dark ? `${c.color}30` : c.bg, color: dark ? c.bg : c.color, fontWeight: 500 } as React.CSSProperties;
+    },
+  };
+
+  // ── Category tabs ──
+  const renderCategoryTabs = () => (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+      <button
+        style={{ ...S.btn, fontWeight: selectedCat === null ? 600 : 400, background: selectedCat === null ? T.accent : T.card, color: selectedCat === null ? "#fff" : T.text }}
+        onClick={() => setSelectedCat(null)}
+      >すべて ({articles.length})</button>
+      {categories.map(c => {
+        const cnt = articles.filter(a => a.category_id === c.id).length;
+        return (
+          <button key={c.id}
+            style={{ ...S.btn, fontWeight: selectedCat === c.id ? 600 : 400, background: selectedCat === c.id ? c.color : T.card, color: selectedCat === c.id ? "#333" : T.text, borderColor: c.color }}
+            onClick={() => setSelectedCat(c.id)}
+          >{c.icon} {c.name} ({cnt})</button>
+        );
+      })}
+    </div>
+  );
+
+  // ── Tag filter bar ──
+  const renderTagFilter = () => allTags.length > 0 ? (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12 }}>
+      <span style={{ fontSize: 11, color: T.textSub, lineHeight: "22px" }}>🏷️タグ:</span>
+      {filterTag && <button style={{ ...S.tag("×"), cursor: "pointer", border: "none" }} onClick={() => setFilterTag("")}>× クリア</button>}
+      {allTags.map(t => (
+        <button key={t} style={{ ...S.tag(t), cursor: "pointer", border: "none", opacity: filterTag && filterTag !== t ? 0.4 : 1 }}
+          onClick={() => setFilterTag(filterTag === t ? "" : t)}>{t}</button>
+      ))}
+    </div>
+  ) : null;
+
+  // ── Article card ──
+  const renderArticleCard = (a: Article) => {
+    const cat = getCatName(a.category_id);
+    const latestUpdate = updates.find(u => u.article_id === a.id);
+    return (
+      <div key={a.id} style={{ ...S.card, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", transition: "box-shadow 0.2s" }}
+        onClick={() => openEditArticle(a)}>
+        {/* Cover image */}
+        {a.cover_image ? (
+          <div style={{ width: 80, height: 80, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bg }}>
+            <img src={a.cover_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
+        ) : (
+          <div style={{ width: 80, height: 80, borderRadius: 8, flexShrink: 0, background: cat?.color || T.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>
+            {cat?.icon || "📄"}
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{a.title}</span>
+            {a.is_pinned && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "#FAEEDA", color: "#633806" }}>📌ピン</span>}
+            {!a.is_published && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: T.bg, color: T.textSub }}>下書き</span>}
+            {latestUpdate && (
+              <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "#FAEEDA", color: "#854F0B" }}>
+                ✏️{new Date(latestUpdate.created_at).toLocaleDateString("ja")}更新
+              </span>
+            )}
+          </div>
+          {cat && <span style={{ fontSize: 11, color: T.textSub }}>{cat.icon} {cat.name}</span>}
+          {/* Tags */}
+          {a.tags.length > 0 && (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+              {a.tags.map(t => <span key={t} style={S.tag(t)}>{t}</span>)}
+            </div>
+          )}
+          {latestUpdate && <div style={{ fontSize: 11, color: T.textSub, marginTop: 4 }}>💬 {latestUpdate.summary}</div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 11, color: T.textMuted }}>
+            <span>👁 {a.view_count}</span>
+            <span>{new Date(a.created_at).toLocaleDateString("ja")} 作成</span>
+          </div>
+        </div>
+        <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11, flexShrink: 0 }}
+          onClick={(e) => { e.stopPropagation(); deleteArticle(a.id); }}>🗑</button>
+      </div>
+    );
+  };
+
+  // ── Update timeline ──
+  const renderTimeline = () => updates.length > 0 ? (
+    <div style={{ ...S.card, marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: T.text }}>📝 最近の更新</div>
+      {updates.slice(0, 5).map(u => {
+        const art = articles.find(a => a.id === u.article_id);
+        return (
+          <div key={u.id} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent, marginTop: 5, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{art?.title || "削除された記事"}</div>
+              <div style={{ fontSize: 12, color: T.textSub }}>{u.summary}</div>
+              <div style={{ fontSize: 11, color: T.textMuted }}>{u.updated_by} · {new Date(u.created_at).toLocaleString("ja")}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
+
+  // ── EDITOR VIEW ──
+  const renderEditor = () => (
+    <div style={S.content}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <button style={S.btn} onClick={() => setView("list")}>← 戻る</button>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>{editArticle ? "📝 記事を編集" : "✨ 新しい記事"}</div>
+        <button style={S.btnAccent} onClick={saveArticle} disabled={saving}>{saving ? "保存中..." : "💾 保存"}</button>
+      </div>
+      {msg && <div style={{ padding: 10, borderRadius: 8, background: msg.includes("✅") ? "#E1F5EE" : "#FBEAF0", color: msg.includes("✅") ? "#085041" : "#72243E", marginBottom: 12, fontSize: 13 }}>{msg}</div>}
+
+      {/* Title */}
+      <div style={S.card}>
+        <label style={S.label}>タイトル</label>
+        <input style={S.input} value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="記事タイトルを入力..." />
+      </div>
+
+      {/* Category + Publish + Pin */}
+      <div style={{ ...S.card, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <label style={S.label}>カテゴリ</label>
+          <select style={{ ...S.input, cursor: "pointer" }} value={editCategoryId || ""} onChange={e => setEditCategoryId(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">未分類</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+          </select>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer", marginTop: 16 }}>
+          <input type="checkbox" checked={editPublished} onChange={e => setEditPublished(e.target.checked)} />
+          公開
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer", marginTop: 16 }}>
+          <input type="checkbox" checked={editPinned} onChange={e => setEditPinned(e.target.checked)} />
+          📌 ピン留め
+        </label>
+      </div>
+
+      {/* Cover image */}
+      <div style={S.card}>
+        <label style={S.label}>📸 カバー画像</label>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {editCoverImage ? (
+            <div style={{ position: "relative" }}>
+              <img src={editCoverImage} alt="" style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 8 }} />
+              <button style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#c45555", color: "#fff", border: "none", cursor: "pointer", fontSize: 10 }}
+                onClick={() => setEditCoverImage("")}>×</button>
+            </div>
+          ) : (
+            <div style={{ width: 120, height: 80, borderRadius: 8, border: `2px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.textMuted, cursor: "pointer" }}
+              onClick={() => coverInputRef.current?.click()}>
+              + 画像を追加
+            </div>
+          )}
+          <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverUpload} />
+          {editCoverImage && <button style={{ ...S.btn, fontSize: 11 }} onClick={() => coverInputRef.current?.click()}>変更</button>}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={S.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <label style={{ ...S.label, margin: 0 }}>📝 本文</label>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
+              onClick={() => setEditContent(prev => prev + "\n**太字テキスト**")}>B</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
+              onClick={() => setEditContent(prev => prev + "\n- リスト項目")}>・</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
+              onClick={() => setEditContent(prev => prev + "\n## 見出し")}>H</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
+              onClick={() => fileInputRef.current?.click()}>🖼</button>
+          </div>
+        </div>
+        <textarea ref={editorRef as any} style={S.textarea} value={editContent} onChange={e => setEditContent(e.target.value)}
+          placeholder="マークダウン形式で記述できます。&#10;&#10;## 見出し&#10;**太字** / - リスト&#10;![画像](URL)" />
+        <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>💡 マークダウン対応: ## 見出し / **太字** / - リスト / ![画像](URL)</div>
+      </div>
+
+      {/* Tags */}
+      <div style={S.card}>
+        <label style={S.label}>🏷️ タグ</label>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+          {editTags.map(t => (
+            <span key={t} style={{ ...S.tag(t), cursor: "pointer" }} onClick={() => setEditTags(editTags.filter(x => x !== t))}>
+              {t} ×
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input style={{ ...S.input, flex: 1 }} value={editTagInput}
+            onChange={e => setEditTagInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+            placeholder="タグを入力してEnter..." />
+          <button style={S.btn} onClick={addTag}>追加</button>
+        </div>
+        {allTags.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <span style={{ fontSize: 11, color: T.textMuted }}>既存タグ: </span>
+            {allTags.filter(t => !editTags.includes(t)).map(t => (
+              <button key={t} style={{ ...S.tag(t), cursor: "pointer", border: "none", marginRight: 4 }}
+                onClick={() => setEditTags([...editTags, t])}>{t}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Q&A */}
+      <div style={S.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <label style={{ ...S.label, margin: 0 }}>❓ Q&A ({editQAs.length}件)</label>
+          <button style={S.btn} onClick={addQA}>+ Q&A追加</button>
+        </div>
+        {editQAs.map((qa, i) => (
+          <div key={i} style={{ padding: 12, borderRadius: 8, border: `1px solid ${T.border}`, marginBottom: 8, background: T.bg }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: T.accent }}>Q{i + 1}</span>
+              <button style={{ fontSize: 11, color: "#c45555", background: "none", border: "none", cursor: "pointer" }}
+                onClick={() => removeQA(i)}>削除</button>
+            </div>
+            <input style={{ ...S.input, marginBottom: 6 }} value={qa.question}
+              onChange={e => updateQA(i, "question", e.target.value)} placeholder="質問を入力..." />
+            <textarea style={{ ...S.textarea, minHeight: 60 }} value={qa.answer}
+              onChange={e => updateQA(i, "answer", e.target.value)} placeholder="回答を入力..." />
+          </div>
+        ))}
+      </div>
+
+      {/* Update memo (edit mode only) */}
+      {editArticle && (
+        <div style={S.card}>
+          <label style={S.label}>✏️ 更新メモ（セラピストに表示されます）</label>
+          <input style={S.input} value={editUpdateMemo}
+            onChange={e => setEditUpdateMemo(e.target.value)}
+            placeholder="例：トイレ掃除の手順を追加しました" />
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>入力すると更新タイムラインに記録され、セラピストに更新バッジが表示されます</div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+        <button style={S.btn} onClick={() => setView("list")}>キャンセル</button>
+        <button style={S.btnAccent} onClick={saveArticle} disabled={saving}>{saving ? "保存中..." : "💾 保存"}</button>
+      </div>
+    </div>
+  );
+
+  // ── CATEGORY MANAGER ──
+  const renderCategoryManager = () => (
+    <div style={S.content}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <button style={S.btn} onClick={() => setView("list")}>← 戻る</button>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>📂 カテゴリ管理</div>
+        <button style={S.btnAccent} onClick={() => {
+          setEditCat(null); setCatName(""); setCatIcon("📄"); setCatColor("#FBEAF0"); setCatDesc("");
+        }}>+ 追加</button>
+      </div>
+
+      {/* Category edit form */}
+      {(editCat !== null || catName !== undefined) && (
+        <div style={{ ...S.card, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={S.label}>アイコン</label>
+              <input style={S.input} value={catIcon} onChange={e => setCatIcon(e.target.value)} placeholder="🌸" />
+            </div>
+            <div>
+              <label style={S.label}>カラー</label>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="color" value={catColor} onChange={e => setCatColor(e.target.value)} style={{ width: 36, height: 36, border: "none", cursor: "pointer" }} />
+                <input style={{ ...S.input, flex: 1 }} value={catColor} onChange={e => setCatColor(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <label style={S.label}>名前</label>
+            <input style={S.input} value={catName} onChange={e => setCatName(e.target.value)} placeholder="カテゴリ名" />
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <label style={S.label}>説明</label>
+            <input style={S.input} value={catDesc} onChange={e => setCatDesc(e.target.value)} placeholder="カテゴリの説明" />
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+            <button style={S.btn} onClick={() => setEditCat(null)}>キャンセル</button>
+            <button style={S.btnAccent} onClick={saveCat}>保存</button>
+          </div>
+        </div>
+      )}
+
+      {/* Category list */}
+      {categories.map(c => (
+        <div key={c.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: c.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{c.icon}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
+            <div style={{ fontSize: 12, color: T.textSub }}>{c.description}</div>
+          </div>
+          <span style={{ fontSize: 12, color: T.textMuted }}>{articles.filter(a => a.category_id === c.id).length}件</span>
+          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} onClick={() => {
+            setEditCat(c); setCatName(c.name); setCatIcon(c.icon); setCatColor(c.color); setCatDesc(c.description);
+          }}>✏️</button>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── MAIN LIST VIEW ──
+  const renderList = () => (
+    <div style={S.content}>
+      {/* Top actions */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <input style={{ ...S.input, flex: 1, minWidth: 150 }} value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)} placeholder="🔍 記事を検索..." />
+        <button style={S.btn} onClick={() => setView("categories")}>📂 カテゴリ管理</button>
+        <button style={S.btnAccent} onClick={openNewArticle}>✨ 新規記事</button>
+      </div>
+
+      {/* Category tabs */}
+      {renderCategoryTabs()}
+
+      {/* Tag filter */}
+      {renderTagFilter()}
+
+      {/* Update timeline */}
+      {renderTimeline()}
+
+      {/* Articles */}
+      <div style={{ fontSize: 13, color: T.textSub, marginBottom: 8 }}>
+        {filteredArticles.length}件の記事
+        {selectedCat !== null && ` (${getCatName(selectedCat)?.icon} ${getCatName(selectedCat)?.name})`}
+      </div>
+
+      {/* Pinned first */}
+      {filteredArticles.filter(a => a.is_pinned).map(renderArticleCard)}
+      {filteredArticles.filter(a => !a.is_pinned).map(renderArticleCard)}
+
+      {filteredArticles.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: T.textMuted }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>📖</div>
+          <div style={{ fontSize: 14 }}>記事がありません</div>
+          <button style={{ ...S.btnAccent, marginTop: 12 }} onClick={openNewArticle}>✨ 最初の記事を作成</button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={S.page}>
+      <div style={S.header}>
+        <NavMenu T={T} />
+        <span style={S.headerTitle}>📖 マニュアル管理</span>
+        <button style={{ ...S.btn, padding: "4px 8px" }} onClick={toggle}>{dark ? "☀️" : "🌙"}</button>
+      </div>
+      {view === "list" && renderList()}
+      {view === "edit" && renderEditor()}
+      {view === "categories" && renderCategoryManager()}
+    </div>
+  );
+}
