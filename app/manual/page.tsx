@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
@@ -37,6 +37,9 @@ export default function ManualPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [updates, setUpdates] = useState<Update[]>([]);
+  const [therapists, setTherapists] = useState<{ id: number; name: string; status: string }[]>([]);
+  const [allReads, setAllReads] = useState<{ article_id: number; therapist_id: number; read_at: string }[]>([]);
+  const [showReadsFor, setShowReadsFor] = useState<number | null>(null);
   const [selectedCat, setSelectedCat] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTag, setFilterTag] = useState("");
@@ -75,6 +78,10 @@ export default function ManualPage() {
     if (a) setArticles(a);
     const { data: u } = await supabase.from("manual_updates").select("*").order("created_at", { ascending: false }).limit(20);
     if (u) setUpdates(u);
+    const { data: th } = await supabase.from("therapists").select("id,name,status").eq("status", "active").order("name");
+    if (th) setTherapists(th);
+    const { data: rd } = await supabase.from("manual_reads").select("article_id,therapist_id,read_at");
+    if (rd) setAllReads(rd);
   }, []);
 
   useEffect(() => {
@@ -282,8 +289,8 @@ export default function ManualPage() {
   const renderArticleCard = (a: Article) => {
     const cat = getCatName(a.category_id);
     const latestUpdate = updates.find(u => u.article_id === a.id);
-    return (
-      <div key={a.id} style={{ ...S.card, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", transition: "box-shadow 0.2s" }}
+    return (<React.Fragment key={a.id}>
+      <div style={{ ...S.card, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", transition: "box-shadow 0.2s" }}
         onClick={() => openEditArticle(a)}>
         {/* Cover image */}
         {a.cover_image ? (
@@ -314,15 +321,50 @@ export default function ManualPage() {
             </div>
           )}
           {latestUpdate && <div style={{ fontSize: 11, color: T.textSub, marginTop: 4 }}>💬 {latestUpdate.summary}</div>}
-          <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 11, color: T.textMuted }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 11, color: T.textMuted, alignItems: "center" }}>
             <span>👁 {a.view_count}</span>
             <span>{new Date(a.created_at).toLocaleDateString("ja")} 作成</span>
+            {therapists.length > 0 && a.is_published && (() => {
+              const readCount = allReads.filter(r => r.article_id === a.id).length;
+              const total = therapists.length;
+              const pct = total > 0 ? Math.round(readCount / total * 100) : 0;
+              return (
+                <span style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
+                  onClick={(e) => { e.stopPropagation(); setShowReadsFor(showReadsFor === a.id ? null : a.id); }}>
+                  <span style={{ width: 40, height: 6, borderRadius: 3, background: T.border, overflow: "hidden", display: "inline-block" }}>
+                    <span style={{ width: `${pct}%`, height: "100%", display: "block", borderRadius: 3, background: pct === 100 ? "#4a7c59" : "#e8849a" }} />
+                  </span>
+                  <span style={{ color: pct === 100 ? "#4a7c59" : T.textMuted }}>{readCount}/{total}人読了</span>
+                </span>
+              );
+            })()}
           </div>
         </div>
         <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11, flexShrink: 0 }}
           onClick={(e) => { e.stopPropagation(); deleteArticle(a.id); }}>🗑</button>
       </div>
-    );
+      {/* 閲覧状況パネル */}
+      {showReadsFor === a.id && therapists.length > 0 && (
+        <div style={{ ...S.card, marginTop: -8, borderTop: "none", borderTopLeftRadius: 0, borderTopRightRadius: 0, padding: "10px 16px" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: T.text }}>📊 閲覧状況</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {therapists.map(th => {
+              const read = allReads.find(r => r.article_id === a.id && r.therapist_id === th.id);
+              return (
+                <span key={th.id} style={{
+                  fontSize: 11, padding: "3px 10px", borderRadius: 12,
+                  background: read ? "#E1F5EE" : (dark ? "#3a3a42" : "#f8f6f3"),
+                  color: read ? "#085041" : T.textMuted, fontWeight: read ? 500 : 400,
+                }}>
+                  {read ? "✅" : "⬜"} {th.name}
+                  {read && <span style={{ fontSize: 9, marginLeft: 4, opacity: 0.7 }}>{new Date(read.read_at).toLocaleDateString("ja")}</span>}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </React.Fragment>);
   };
 
   // ── Update timeline ──
