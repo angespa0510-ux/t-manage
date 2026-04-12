@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 
@@ -228,6 +228,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       setManualHistory([]);
     }
     setManualViewArticle(article); setManualOpenQA(null);
+    // ブラウザ履歴に追加（スワイプバック対応）
+    window.history.pushState({ manualArticleId: article.id, fromLink }, "");
     // Q&A取得
     const { data: qa } = await supabase.from("manual_qa").select("*").eq("article_id", article.id).order("sort_order");
     if (qa) setManualViewQAs(qa);
@@ -240,18 +242,58 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     }
   };
 
-  // 1つ前の記事に戻る
+  // 1つ前の記事に戻る（ボタン用）
   const goBackManual = () => {
-    if (manualHistory.length > 0) {
-      const prev = manualHistory[manualHistory.length - 1];
-      setManualHistory(h => h.slice(0, -1));
-      setManualViewArticle(prev); setManualOpenQA(null);
-      // Q&A再取得
-      supabase.from("manual_qa").select("*").eq("article_id", prev.id).order("sort_order").then(({ data }) => { if (data) setManualViewQAs(data); });
-    } else {
-      setManualViewArticle(null);
-    }
+    // ブラウザ履歴を戻す → popstateで処理される
+    window.history.back();
   };
+
+  // ブラウザのスワイプバック・戻るボタン対応
+  const manualHistoryRef = useRef(manualHistory);
+  manualHistoryRef.current = manualHistory;
+  const manualViewRef = useRef(manualViewArticle);
+  manualViewRef.current = manualViewArticle;
+  const manualArticlesRef = useRef(manualArticles);
+  manualArticlesRef.current = manualArticles;
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+
+  // タブ切替時にブラウザ履歴ガード追加
+  useEffect(() => {
+    if (tab === "manual") {
+      window.history.pushState({ manualTab: true }, "");
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      // マニュアル記事を表示中の場合
+      if (manualViewRef.current) {
+        const history = manualHistoryRef.current;
+        if (history.length > 0) {
+          // 前の記事に戻る
+          const prev = history[history.length - 1];
+          setManualHistory(h => h.slice(0, -1));
+          setManualViewArticle(prev); setManualOpenQA(null);
+          supabase.from("manual_qa").select("*").eq("article_id", prev.id).order("sort_order").then(({ data }) => { if (data) setManualViewQAs(data); });
+        } else {
+          // 記事一覧に戻る
+          setManualViewArticle(null);
+          // 一覧に戻った後のガード
+          window.history.pushState({ manualTab: true }, "");
+        }
+        return;
+      }
+      // マニュアルタブ（一覧表示中）からスワイプバック → ホームタブへ
+      if (tabRef.current === "manual" && !manualViewRef.current) {
+        setTab("home");
+        window.history.pushState({ homeTab: true }, "");
+        return;
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 記事内リンク処理 ──
   const renderInlineLinks = (text: string): React.ReactNode => {
