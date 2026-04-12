@@ -404,6 +404,46 @@ export default function ManualPage() {
     </div>
   ) : null;
 
+  // ── Ranking ──
+  const renderRanking = () => {
+    const published = articles.filter(a => a.is_published && a.view_count > 0);
+    if (published.length === 0) return null;
+    const ranked = [...published].sort((a, b) => b.view_count - a.view_count).slice(0, 5);
+    const medals = ["🥇", "🥈", "🥉", "4", "5"];
+    // 読まれていない記事
+    const unread = articles.filter(a => a.is_published).sort((a, b) => a.view_count - b.view_count).slice(0, 3).filter(a => a.view_count < 3);
+
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: unread.length > 0 ? "1fr 1fr" : "1fr", gap: 12, marginBottom: 16 }}>
+        <div style={S.card}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: T.text }}>🏆 よく読まれている記事</div>
+          {ranked.map((a, i) => (
+            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: i < ranked.length - 1 ? `1px solid ${T.border}` : "none" }}>
+              <span style={{ fontSize: i < 3 ? 16 : 12, width: 24, textAlign: "center", color: i >= 3 ? T.textMuted : undefined }}>{medals[i]}</span>
+              <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{a.title}</span>
+              <span style={{ fontSize: 11, color: T.textMuted }}>👁{a.view_count}</span>
+            </div>
+          ))}
+        </div>
+        {unread.length > 0 && (
+          <div style={S.card}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#c45555" }}>⚠️ あまり読まれていない記事</div>
+            {unread.map(a => {
+              const readCount = allReads.filter(r => r.article_id === a.id).length;
+              return (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: `1px solid ${T.border}` }}>
+                  <span style={{ flex: 1, fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{a.title}</span>
+                  <span style={{ fontSize: 11, color: "#c45555" }}>{readCount}/{therapists.length}人</span>
+                </div>
+              );
+            })}
+            <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>📌 ピン留めや更新通知で閲覧を促しましょう</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // ── EDITOR VIEW ──
   const renderEditor = () => (
     <div style={S.content}>
@@ -738,6 +778,9 @@ export default function ManualPage() {
 
       {/* Update timeline */}
       {renderTimeline()}
+
+      {/* Ranking */}
+      {renderRanking()}
 
       {/* Articles */}
       <div style={{ fontSize: 13, color: T.textSub, marginBottom: 8 }}>
