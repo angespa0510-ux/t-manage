@@ -62,6 +62,9 @@ export default function ManualPage() {
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState<"" | "cleanup" | "tags">("");
   const [msg, setMsg] = useState("");
+  const [dragOverCover, setDragOverCover] = useState(false);
+  const [dragOverEditor, setDragOverEditor] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -121,18 +124,69 @@ export default function ManualPage() {
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploading(true);
     const url = await uploadImage(file);
     if (url) setEditCoverImage(url);
+    setUploading(false);
   };
 
   const handleInlineImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploading(true);
     const url = await uploadImage(file);
     if (url && editorRef.current) {
       const img = `\n![画像](${url})\n`;
       setEditContent(prev => prev + img);
     }
+    setUploading(false);
+  };
+
+  // ── Drag & Drop helpers ──
+  const preventDefaults = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); };
+  const isImageFile = (file: File) => file.type.startsWith("image/");
+
+  const handleCoverDrop = async (e: React.DragEvent) => {
+    preventDefaults(e); setDragOverCover(false);
+    const file = e.dataTransfer.files[0];
+    if (!file || !isImageFile(file)) return;
+    setUploading(true);
+    const url = await uploadImage(file);
+    if (url) setEditCoverImage(url);
+    setUploading(false);
+  };
+
+  const handleEditorDrop = async (e: React.DragEvent) => {
+    preventDefaults(e); setDragOverEditor(false);
+    const files = Array.from(e.dataTransfer.files).filter(isImageFile);
+    if (files.length === 0) return;
+    setUploading(true);
+    let inserted = "";
+    for (const file of files) {
+      const url = await uploadImage(file);
+      if (url) inserted += `\n![画像](${url})\n`;
+    }
+    if (inserted) setEditContent(prev => prev + inserted);
+    setUploading(false);
+  };
+
+  // ── Clipboard paste (Ctrl+V) ──
+  const handleEditorPaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItems = Array.from(items).filter(item => item.type.startsWith("image/"));
+    if (imageItems.length === 0) return;
+    e.preventDefault();
+    setUploading(true);
+    let inserted = "";
+    for (const item of imageItems) {
+      const file = item.getAsFile();
+      if (!file) continue;
+      const url = await uploadImage(file);
+      if (url) inserted += `\n![画像](${url})\n`;
+    }
+    if (inserted) setEditContent(prev => prev + inserted);
+    setUploading(false);
   };
 
   // ── Tag management ──
@@ -483,20 +537,41 @@ export default function ManualPage() {
       <div style={S.card}>
         <label style={S.label}>📸 カバー画像</label>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {editCoverImage ? (
-            <div style={{ position: "relative" }}>
-              <img src={editCoverImage} alt="" style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 8 }} />
-              <button style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#c45555", color: "#fff", border: "none", cursor: "pointer", fontSize: 10 }}
-                onClick={() => setEditCoverImage("")}>×</button>
-            </div>
-          ) : (
-            <div style={{ width: 120, height: 80, borderRadius: 8, border: `2px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.textMuted, cursor: "pointer" }}
-              onClick={() => coverInputRef.current?.click()}>
-              + 画像を追加
-            </div>
-          )}
+          <div
+            onDragOver={e => { preventDefaults(e); setDragOverCover(true); }}
+            onDragEnter={e => { preventDefaults(e); setDragOverCover(true); }}
+            onDragLeave={e => { preventDefaults(e); setDragOverCover(false); }}
+            onDrop={handleCoverDrop}
+            style={{ position: "relative" }}
+          >
+            {editCoverImage ? (
+              <div style={{ position: "relative" }}>
+                <img src={editCoverImage} alt="" style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 8, border: dragOverCover ? "2px solid #e8849a" : "2px solid transparent" }} />
+                <button style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#c45555", color: "#fff", border: "none", cursor: "pointer", fontSize: 10 }}
+                  onClick={() => setEditCoverImage("")}>×</button>
+                {dragOverCover && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(232,132,154,0.5)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 11, color: "#fff", fontWeight: 600 }}>変更</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{
+                width: 120, height: 80, borderRadius: 8,
+                border: dragOverCover ? "2px solid #e8849a" : `2px dashed ${T.border}`,
+                background: dragOverCover ? "rgba(232,132,154,0.08)" : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, color: dragOverCover ? "#e8849a" : T.textMuted, cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+                onClick={() => coverInputRef.current?.click()}>
+                {dragOverCover ? "📸 ドロップ!" : "+ 画像を追加"}
+              </div>
+            )}
+          </div>
           <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverUpload} />
           {editCoverImage && <button style={{ ...S.btn, fontSize: 11 }} onClick={() => coverInputRef.current?.click()}>変更</button>}
+          <span style={{ fontSize: 10, color: T.textMuted }}>D&D対応</span>
         </div>
       </div>
 
@@ -564,11 +639,44 @@ export default function ManualPage() {
             }) : <span style={{ color: T.textMuted, fontSize: 13 }}>プレビューする本文がありません</span>}
           </div>
         ) : (
-          <textarea ref={editorRef as any} style={S.textarea} value={editContent} onChange={e => setEditContent(e.target.value)}
-            placeholder={"マークダウン形式で記述できます。\n\n## 見出し\n**太字** / - リスト / 1. 番号リスト\n> 引用 / --- 区切り線\n![画像](URL) / [youtube:動画ID]"} />
+          <div style={{ position: "relative" }}
+            onDragOver={e => { preventDefaults(e); setDragOverEditor(true); }}
+            onDragEnter={e => { preventDefaults(e); setDragOverEditor(true); }}
+            onDragLeave={e => { preventDefaults(e); setDragOverEditor(false); }}
+            onDrop={handleEditorDrop}
+          >
+            <textarea ref={editorRef as any} style={{
+              ...S.textarea,
+              border: dragOverEditor ? "2px solid #e8849a" : S.textarea.border,
+              background: dragOverEditor ? "rgba(232,132,154,0.05)" : S.textarea.background,
+              transition: "border 0.2s, background 0.2s",
+            }} value={editContent} onChange={e => setEditContent(e.target.value)}
+              onPaste={handleEditorPaste}
+              placeholder={"マークダウン形式で記述できます。\n\n## 見出し\n**太字** / - リスト / 1. 番号リスト\n> 引用 / --- 区切り線\n![画像](URL) / [youtube:動画ID]\n\n📸 画像をドラッグ&ドロップ or Ctrl+Vで貼り付けできます"} />
+            {dragOverEditor && (
+              <div style={{
+                position: "absolute", inset: 0, borderRadius: 8,
+                background: "rgba(232,132,154,0.12)", border: "2px dashed #e8849a",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                pointerEvents: "none", zIndex: 10,
+              }}>
+                <span style={{ fontSize: 32 }}>📸</span>
+                <span style={{ fontSize: 14, color: "#e8849a", fontWeight: 600, marginTop: 4 }}>画像をここにドロップ</span>
+                <span style={{ fontSize: 11, color: "#c87a8a", marginTop: 2 }}>複数ファイルOK</span>
+              </div>
+            )}
+          </div>
         )}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{"💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬 / [gdrive:ID] 📁"}</div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{"📸 画像: ドラッグ&ドロップ / Ctrl+V貼り付け / 🖼ボタン に対応"}</div>
+        {uploading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, padding: "6px 12px", background: "rgba(232,132,154,0.1)", borderRadius: 8, fontSize: 12, color: "#e8849a" }}>
+            <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #e8849a", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            画像をアップロード中...
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
           <button style={{ ...S.btn, fontSize: 11, opacity: aiLoading ? 0.5 : 1 }} disabled={!!aiLoading || !editContent.trim()}
             onClick={async () => {
