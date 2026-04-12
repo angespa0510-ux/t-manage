@@ -538,8 +538,10 @@ export default function ManualPage() {
                 const url = prompt("Google DriveのURLを貼り付けてください\n例: https://drive.google.com/file/d/XXXXX/view");
                 if (url) {
                   const m = url.match(/\/d\/([\w-]+)/);
-                  if (m) setEditContent(prev => prev + `\n[gdrive:${m[1]}]\n`);
-                  else alert("Google DriveのURLが正しくありません");
+                  if (m) {
+                    const desc = prompt("動画の説明を入力してください\n例: タオルの畳み方の手順") || "";
+                    setEditContent(prev => prev + `\n[gdrive:${m[1]}:${desc}]\n`);
+                  } else alert("Google DriveのURLが正しくありません");
                 }
               }}>📁</button>
           </div>
@@ -555,7 +557,7 @@ export default function ManualPage() {
               if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "12px 0" }} />;
               if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" style={{ maxWidth: "100%", borderRadius: 8, margin: "8px 0" }} />; }
               if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 8, overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
-              if (line.match(/^\[gdrive:([\w-]+)\]$/)) { const fid = line.match(/^\[gdrive:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 8, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>; }
+              if (line.match(/^\[gdrive:([\w-]+)(:.*)?\]$/)) { const gm = line.match(/^\[gdrive:([\w-]+)(?::(.+))?\]$/); const fid = gm?.[1]; const gdesc = gm?.[2] || ""; return <div key={i} style={{ margin: "12px 0" }}><div style={{ position: "relative", paddingBottom: "56.25%", height: 0, borderRadius: 8, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>{gdesc && <p style={{ fontSize: 12, color: "#e8849a", marginTop: 6, textAlign: "center", fontWeight: 500 }}>🎬 {gdesc}</p>}</div>; }
               if (line.match(/\*\*(.*?)\*\*/)) { const parts = line.split(/(\*\*.*?\*\*)/g); return <p key={i} style={{ fontSize: 13 }}>{parts.map((p, j) => p.startsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{p.slice(2, -2)}</strong> : p)}</p>; }
               if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
               return <p key={i} style={{ fontSize: 13 }}>{line}</p>;
