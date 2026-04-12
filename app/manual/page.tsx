@@ -60,6 +60,7 @@ export default function ManualPage() {
   const [editResetReads, setEditResetReads] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [aiLoading, setAiLoading] = useState<"" | "cleanup" | "tags">("");
   const [msg, setMsg] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -516,6 +517,24 @@ export default function ManualPage() {
         )}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬</div>
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          <button style={{ ...S.btn, fontSize: 11, opacity: aiLoading ? 0.5 : 1 }} disabled={!!aiLoading || !editContent.trim()}
+            onClick={async () => {
+              setAiLoading("cleanup");
+              try {
+                const res = await fetch("/api/manual-ai", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "cleanup", content: editContent }),
+                });
+                const data = await res.json();
+                if (data.cleaned) { setEditContent(data.cleaned); setMsg("🤖 AI整理が完了しました！プレビューで確認してください"); setShowPreview(true); }
+                else setMsg("⚠️ " + (data.error || "AI整理に失敗しました"));
+              } catch (e) { setMsg("⚠️ AI通信エラー"); }
+              setAiLoading("");
+            }}>
+            {aiLoading === "cleanup" ? "🤖 整理中..." : "🤖 AI整理"}
+          </button>
+        </div>
       </div>
 
       {/* Tags */}
@@ -534,6 +553,25 @@ export default function ManualPage() {
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
             placeholder="タグを入力してEnter..." />
           <button style={S.btn} onClick={addTag}>追加</button>
+          <button style={{ ...S.btn, fontSize: 11, opacity: aiLoading ? 0.5 : 1 }} disabled={!!aiLoading || !editContent.trim()}
+            onClick={async () => {
+              setAiLoading("tags");
+              try {
+                const res = await fetch("/api/manual-ai", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "tags", content: editTitle + "\n" + editContent }),
+                });
+                const data = await res.json();
+                if (data.tags) {
+                  const newTags = data.tags.filter((t: string) => !editTags.includes(t));
+                  setEditTags([...editTags, ...newTags]);
+                  setMsg(`🏷️ ${newTags.length}個のタグを提案しました`);
+                } else setMsg("⚠️ " + (data.error || "タグ生成に失敗"));
+              } catch (e) { setMsg("⚠️ AI通信エラー"); }
+              setAiLoading("");
+            }}>
+            {aiLoading === "tags" ? "🏷️ 生成中..." : "🏷️ AI提案"}
+          </button>
         </div>
         {allTags.length > 0 && (
           <div style={{ marginTop: 8 }}>

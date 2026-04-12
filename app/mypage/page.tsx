@@ -92,6 +92,10 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [manualViewArticle, setManualViewArticle] = useState<ManualArticle | null>(null);
   const [manualViewQAs, setManualViewQAs] = useState<ManualQA[]>([]);
   const [manualOpenQA, setManualOpenQA] = useState<number | null>(null);
+  const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [aiChatMessages, setAiChatMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+  const [aiChatInput, setAiChatInput] = useState("");
+  const [aiChatLoading, setAiChatLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
@@ -656,6 +660,96 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
               </div>);
             })()}
           </div>)}
+
+          {/* 🤖 AIチャット */}
+          {!manualViewArticle && (
+            <div>
+              {!aiChatOpen ? (
+                <button onClick={() => setAiChatOpen(true)}
+                  className="w-full py-3 rounded-2xl text-[13px] font-medium cursor-pointer border"
+                  style={{ background: "linear-gradient(135deg, #e8849a20, #d4687e10)", borderColor: "#e8849a44", color: "#e8849a" }}>
+                  🤖 AIに質問する
+                </button>
+              ) : (
+                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: "#e8849a44" }}>
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: T.border, background: "linear-gradient(135deg, #e8849a15, #d4687e08)" }}>
+                    <span className="text-[12px] font-medium" style={{ color: "#e8849a" }}>🤖 マニュアルAI</span>
+                    <button onClick={() => setAiChatOpen(false)} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>✕ 閉じる</button>
+                  </div>
+                  <div style={{ maxHeight: 300, overflowY: "auto", padding: 12 }}>
+                    {aiChatMessages.length === 0 && (
+                      <div className="text-center py-4">
+                        <p className="text-[11px]" style={{ color: T.textMuted }}>マニュアルの内容について何でも聞いてね！</p>
+                        <div className="flex flex-wrap gap-1.5 justify-center mt-2">
+                          {["掃除の仕方は？", "シフトの出し方は？", "精算方法を教えて"].map(q => (
+                            <button key={q} onClick={() => { setAiChatInput(q); }}
+                              className="text-[9px] px-2 py-1 rounded-lg cursor-pointer border" style={{ borderColor: "#e8849a33", color: "#e8849a", background: "transparent" }}>{q}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {aiChatMessages.map((m, i) => (
+                      <div key={i} className={`flex mb-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div className="rounded-xl px-3 py-2 text-[12px] leading-relaxed" style={{
+                          maxWidth: "85%",
+                          background: m.role === "user" ? "#e8849a" : (dark ? "#3a3a42" : "#f8f6f3"),
+                          color: m.role === "user" ? "#fff" : T.text,
+                        }}>{m.content}</div>
+                      </div>
+                    ))}
+                    {aiChatLoading && (
+                      <div className="flex justify-start mb-2">
+                        <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: dark ? "#3a3a42" : "#f8f6f3", color: T.textMuted }}>🤖 考え中...</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2 p-3 border-t" style={{ borderColor: T.border }}>
+                    <input type="text" value={aiChatInput} onChange={e => setAiChatInput(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter" && aiChatInput.trim() && !aiChatLoading) {
+                          const q = aiChatInput.trim();
+                          setAiChatInput("");
+                          setAiChatMessages(prev => [...prev, { role: "user", content: q }]);
+                          setAiChatLoading(true);
+                          try {
+                            const res = await fetch("/api/manual-ai", {
+                              method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages }),
+                            });
+                            const data = await res.json();
+                            setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー" }]);
+                          } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
+                          setAiChatLoading(false);
+                        }
+                      }}
+                      placeholder="質問を入力..."
+                      className="flex-1 px-3 py-2 rounded-xl text-[12px] outline-none"
+                      style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                    <button disabled={!aiChatInput.trim() || aiChatLoading}
+                      onClick={async () => {
+                        const q = aiChatInput.trim();
+                        if (!q) return;
+                        setAiChatInput("");
+                        setAiChatMessages(prev => [...prev, { role: "user", content: q }]);
+                        setAiChatLoading(true);
+                        try {
+                          const res = await fetch("/api/manual-ai", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages }),
+                          });
+                          const data = await res.json();
+                          setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー" }]);
+                        } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
+                        setAiChatLoading(false);
+                      }}
+                      className="px-3 py-2 rounded-xl text-[11px] text-white cursor-pointer disabled:opacity-40"
+                      style={{ background: "#e8849a", border: "none" }}>送信</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
         </div>)}
 
       </div></div>
