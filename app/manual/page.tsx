@@ -533,6 +533,15 @@ export default function ManualPage() {
                   else alert("YouTubeのURLが正しくありません");
                 }
               }}>▶</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="Google Drive動画"
+              onClick={() => {
+                const url = prompt("Google DriveのURLを貼り付けてください\n例: https://drive.google.com/file/d/XXXXX/view");
+                if (url) {
+                  const m = url.match(/\/d\/([\w-]+)/);
+                  if (m) setEditContent(prev => prev + `\n[gdrive:${m[1]}]\n`);
+                  else alert("Google DriveのURLが正しくありません");
+                }
+              }}>📁</button>
           </div>
         </div>
         {showPreview ? (
@@ -546,6 +555,7 @@ export default function ManualPage() {
               if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "12px 0" }} />;
               if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" style={{ maxWidth: "100%", borderRadius: 8, margin: "8px 0" }} />; }
               if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 8, overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
+              if (line.match(/^\[gdrive:([\w-]+)\]$/)) { const fid = line.match(/^\[gdrive:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 8, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>; }
               if (line.match(/\*\*(.*?)\*\*/)) { const parts = line.split(/(\*\*.*?\*\*)/g); return <p key={i} style={{ fontSize: 13 }}>{parts.map((p, j) => p.startsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{p.slice(2, -2)}</strong> : p)}</p>; }
               if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
               return <p key={i} style={{ fontSize: 13 }}>{line}</p>;
@@ -556,7 +566,7 @@ export default function ManualPage() {
             placeholder={"マークダウン形式で記述できます。\n\n## 見出し\n**太字** / - リスト / 1. 番号リスト\n> 引用 / --- 区切り線\n![画像](URL) / [youtube:動画ID]"} />
         )}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{"💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬"}</div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{"💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬 / [gdrive:ID] 📁"}</div>
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
           <button style={{ ...S.btn, fontSize: 11, opacity: aiLoading ? 0.5 : 1 }} disabled={!!aiLoading || !editContent.trim()}
             onClick={async () => {
