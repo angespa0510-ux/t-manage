@@ -135,15 +135,53 @@
     markdown += processNode(main);
   }
   
-  // 画像URLを別途収集（見逃し防止）
-  const allImages = main.querySelectorAll('img');
+  // 画像URLを別途収集（Google Sites専用の複数パターンで検索）
   const imageUrls = [];
-  allImages.forEach(img => {
-    const src = img.src || '';
-    if (src && src.includes('googleusercontent.com') && !imageUrls.includes(src)) {
+  
+  // パターン1: 通常のimgタグ
+  main.querySelectorAll('img').forEach(img => {
+    const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-image') || '';
+    if (src && src.length > 50 && !imageUrls.includes(src)) {
       imageUrls.push(src);
     }
   });
+  
+  // パターン2: background-imageスタイル
+  main.querySelectorAll('[style*="background"]').forEach(el => {
+    const style = el.getAttribute('style') || '';
+    const match = style.match(/url\(['"]?(https?:\/\/[^'")\s]+)['"]?\)/);
+    if (match && match[1] && !imageUrls.includes(match[1])) {
+      imageUrls.push(match[1]);
+    }
+  });
+  
+  // パターン3: data属性にある画像URL
+  main.querySelectorAll('[data-image-url], [data-src], [data-original-src]').forEach(el => {
+    const src = el.getAttribute('data-image-url') || el.getAttribute('data-src') || el.getAttribute('data-original-src') || '';
+    if (src && src.length > 50 && !imageUrls.includes(src)) {
+      imageUrls.push(src);
+    }
+  });
+  
+  // パターン4: Google Sites特有の画像コンテナ（全属性からURL検索）
+  main.querySelectorAll('*').forEach(el => {
+    for (const attr of el.attributes || []) {
+      if (attr.value && attr.value.includes('googleusercontent.com') && !imageUrls.includes(attr.value)) {
+        const urlMatch = attr.value.match(/(https:\/\/lh[0-9]*\.googleusercontent\.com\/[^\s'"<>]+)/);
+        if (urlMatch) imageUrls.push(urlMatch[1]);
+      }
+    }
+  });
+  
+  // パターン5: ページ全体のHTMLソースからgoogleusercontent URLを検索
+  const htmlSource = main.innerHTML;
+  const googleImgRegex = /https:\/\/lh[0-9]*\.googleusercontent\.com\/[^"'\s<>)]+/g;
+  let urlMatch;
+  while ((urlMatch = googleImgRegex.exec(htmlSource)) !== null) {
+    if (!imageUrls.includes(urlMatch[0]) && urlMatch[0].length > 60) {
+      imageUrls.push(urlMatch[0]);
+    }
+  }
   
   if (imageUrls.length > 0) {
     markdown += '\n\n---\n## 📸 このページの画像URL一覧\n\n';
