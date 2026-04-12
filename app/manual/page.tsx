@@ -57,6 +57,7 @@ export default function ManualPage() {
   const [editPinned, setEditPinned] = useState(false);
   const [editQAs, setEditQAs] = useState<QA[]>([]);
   const [editUpdateMemo, setEditUpdateMemo] = useState("");
+  const [editResetReads, setEditResetReads] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -150,7 +151,7 @@ export default function ManualPage() {
   const openNewArticle = () => {
     setEditArticle(null); setEditTitle(""); setEditCategoryId(selectedCat);
     setEditContent(""); setEditCoverImage(""); setEditTags([]); setEditTagInput("");
-    setEditPublished(false); setEditPinned(false); setEditQAs([]); setEditUpdateMemo("");
+    setEditPublished(false); setEditPinned(false); setEditQAs([]); setEditUpdateMemo(""); setEditResetReads(false);
     setMsg(""); setView("edit");
   };
 
@@ -190,6 +191,10 @@ export default function ManualPage() {
           article_id: articleId, summary: editUpdateMemo.trim(),
           updated_by: activeStaff?.name || "スタッフ",
         });
+      }
+      // Reset reads if requested
+      if (editResetReads) {
+        await supabase.from("manual_reads").delete().eq("article_id", articleId);
       }
     } else {
       // Create
@@ -340,8 +345,19 @@ export default function ManualPage() {
             })()}
           </div>
         </div>
-        <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11, flexShrink: 0 }}
-          onClick={(e) => { e.stopPropagation(); deleteArticle(a.id); }}>🗑</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="複製"
+            onClick={async (e) => {
+              e.stopPropagation();
+              const { data } = await supabase.from("manual_articles").insert({
+                title: a.title + "（コピー）", category_id: a.category_id, content: a.content,
+                cover_image: a.cover_image, tags: a.tags, is_published: false, is_pinned: false,
+              }).select().single();
+              if (data) { fetchData(); setMsg("📋 記事を複製しました"); }
+            }}>📋</button>
+          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="削除"
+            onClick={(e) => { e.stopPropagation(); deleteArticle(a.id); }}>🗑</button>
+        </div>
       </div>
       {/* 閲覧状況パネル */}
       {showReadsFor === a.id && therapists.length > 0 && (
@@ -445,31 +461,50 @@ export default function ManualPage() {
 
       {/* Content */}
       <div style={S.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
           <label style={{ ...S.label, margin: 0 }}>📝 本文</label>
-          <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
             <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11, background: !showPreview ? T.accent : T.card, color: !showPreview ? "#fff" : T.text }}
               onClick={() => setShowPreview(false)}>編集</button>
             <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11, background: showPreview ? T.accent : T.card, color: showPreview ? "#fff" : T.text }}
               onClick={() => setShowPreview(true)}>👁 プレビュー</button>
             <span style={{ borderLeft: `1px solid ${T.border}`, margin: "0 2px" }} />
-            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="太字"
               onClick={() => setEditContent(prev => prev + "\n**太字テキスト**")}>B</button>
-            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
-              onClick={() => setEditContent(prev => prev + "\n- リスト項目")}>・</button>
-            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="見出し"
               onClick={() => setEditContent(prev => prev + "\n## 見出し")}>H</button>
-            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="リスト"
+              onClick={() => setEditContent(prev => prev + "\n- リスト項目")}>・</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="番号リスト"
+              onClick={() => setEditContent(prev => prev + "\n1. 項目")}>1.</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="引用"
+              onClick={() => setEditContent(prev => prev + "\n> 引用テキスト")}>❝</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="区切り線"
+              onClick={() => setEditContent(prev => prev + "\n---\n")}>―</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="画像挿入"
               onClick={() => fileInputRef.current?.click()}>🖼</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="YouTube"
+              onClick={() => {
+                const url = prompt("YouTubeのURLを貼り付けてください\n例: https://www.youtube.com/watch?v=XXXXX");
+                if (url) {
+                  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]+)/);
+                  if (m) setEditContent(prev => prev + `\n[youtube:${m[1]}]\n`);
+                  else alert("YouTubeのURLが正しくありません");
+                }
+              }}>▶</button>
           </div>
         </div>
         {showPreview ? (
-          <div style={{ ...S.textarea, minHeight: 200, padding: 16, lineHeight: 1.8 }}>
+          <div style={{ ...S.textarea, minHeight: 200, padding: 16, lineHeight: 1.8, overflow: "auto" }}>
             {editContent ? editContent.split("\n").map((line, i) => {
               if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 16, fontWeight: 600, marginTop: 12, marginBottom: 4, color: "#e8849a" }}>{line.slice(3)}</h3>;
               if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 14, fontWeight: 500, marginTop: 8, marginBottom: 4, color: T.accent }}>{line.slice(4)}</h4>;
               if (line.startsWith("- ")) return <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, marginLeft: 8 }}><span style={{ color: "#e8849a" }}>●</span><span>{line.slice(2)}</span></div>;
+              if (line.match(/^\d+\.\s/)) return <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, marginLeft: 8 }}><span style={{ color: "#e8849a", fontWeight: 600, minWidth: 18 }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{line.replace(/^\d+\.\s/, "")}</span></div>;
+              if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: "3px solid #e8849a", paddingLeft: 12, margin: "6px 0", fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{line.slice(2)}</div>;
+              if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "12px 0" }} />;
               if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" style={{ maxWidth: "100%", borderRadius: 8, margin: "8px 0" }} />; }
+              if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 8, overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
               if (line.match(/\*\*(.*?)\*\*/)) { const parts = line.split(/(\*\*.*?\*\*)/g); return <p key={i} style={{ fontSize: 13 }}>{parts.map((p, j) => p.startsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{p.slice(2, -2)}</strong> : p)}</p>; }
               if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
               return <p key={i} style={{ fontSize: 13 }}>{line}</p>;
@@ -477,10 +512,10 @@ export default function ManualPage() {
           </div>
         ) : (
           <textarea ref={editorRef as any} style={S.textarea} value={editContent} onChange={e => setEditContent(e.target.value)}
-            placeholder={"マークダウン形式で記述できます。\n\n## 見出し\n**太字** / - リスト\n![画像](URL)"} />
+            placeholder={"マークダウン形式で記述できます。\n\n## 見出し\n**太字** / - リスト / 1. 番号リスト\n> 引用 / --- 区切り線\n![画像](URL) / [youtube:動画ID]"} />
         )}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>💡 マークダウン対応: ## 見出し / **太字** / - リスト / ![画像](URL)</div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬</div>
       </div>
 
       {/* Tags */}
@@ -539,7 +574,13 @@ export default function ManualPage() {
           <input style={S.input} value={editUpdateMemo}
             onChange={e => setEditUpdateMemo(e.target.value)}
             placeholder="例：トイレ掃除の手順を追加しました" />
-          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>入力すると更新タイムラインに記録され、セラピストに更新バッジが表示されます</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", color: editResetReads ? "#c45555" : T.textSub }}>
+              <input type="checkbox" checked={editResetReads} onChange={e => setEditResetReads(e.target.checked)} />
+              🔄 既読をリセット（全員に再度「更新」バッジを表示）
+            </label>
+          </div>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>更新メモを入力するとタイムラインに記録されます。大きな変更の場合は既読リセットを推奨。</div>
         </div>
       )}
 
