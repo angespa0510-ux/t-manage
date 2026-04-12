@@ -556,7 +556,7 @@ export default function ManualPage() {
             placeholder={"マークダウン形式で記述できます。\n\n## 見出し\n**太字** / - リスト / 1. 番号リスト\n> 引用 / --- 区切り線\n![画像](URL) / [youtube:動画ID]"} />
         )}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬</div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{"💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬"}</div>
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
           <button style={{ ...S.btn, fontSize: 11, opacity: aiLoading ? 0.5 : 1 }} disabled={!!aiLoading || !editContent.trim()}
             onClick={async () => {
