@@ -651,8 +651,39 @@ export default function ManualPage() {
   );
 
   // ── MAIN LIST VIEW ──
-  const renderList = () => (
+  const renderList = () => {
+    const publishedArticles = articles.filter(a => a.is_published);
+    const totalReadPairs = therapists.length * publishedArticles.length;
+    const actualReads = totalReadPairs > 0 ? allReads.length : 0;
+    const overallPct = totalReadPairs > 0 ? Math.round(actualReads / totalReadPairs * 100) : 0;
+
+    return (
     <div style={S.content}>
+      {/* 既読率サマリー */}
+      {therapists.length > 0 && publishedArticles.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 16 }}>
+          <div style={{ background: T.card, borderRadius: 12, padding: "12px 16px", border: `1px solid ${T.border}`, textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>公開記事</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: T.accent }}>{publishedArticles.length}</div>
+          </div>
+          <div style={{ background: T.card, borderRadius: 12, padding: "12px 16px", border: `1px solid ${T.border}`, textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>セラピスト</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: T.text }}>{therapists.length}名</div>
+          </div>
+          <div style={{ background: T.card, borderRadius: 12, padding: "12px 16px", border: `1px solid ${T.border}`, textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>全体既読率</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: overallPct >= 80 ? "#4a7c59" : overallPct >= 50 ? "#f59e0b" : "#c45555" }}>{overallPct}%</div>
+            <div style={{ width: "100%", height: 4, borderRadius: 2, background: T.border, marginTop: 4, overflow: "hidden" }}>
+              <div style={{ width: `${overallPct}%`, height: "100%", borderRadius: 2, background: overallPct >= 80 ? "#4a7c59" : overallPct >= 50 ? "#f59e0b" : "#c45555", transition: "width 0.5s" }} />
+            </div>
+          </div>
+          <div style={{ background: T.card, borderRadius: 12, padding: "12px 16px", border: `1px solid ${T.border}`, textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>総閲覧数</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: T.text }}>{articles.reduce((s, a) => s + a.view_count, 0)}</div>
+          </div>
+        </div>
+      )}
+
       {/* Top actions */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <input style={{ ...S.input, flex: 1, minWidth: 150 }} value={searchQuery}
@@ -688,7 +719,8 @@ export default function ManualPage() {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   return (
     <div style={S.page}>
