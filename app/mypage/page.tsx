@@ -51,7 +51,7 @@ export default function TherapistMyPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers">("home");
+  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual">("home");
   const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
@@ -76,6 +76,22 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 　const [calSettlements, setCalSettlements] = useState<Settlement[]>([]);
 　const [calReservations, setCalReservations] = useState<Reservation[]>([]);
 　const [calDetailDate, setCalDetailDate] = useState<string | null>(null);
+
+  // ── マニュアル関連 ──
+  type ManualCategory = { id: number; name: string; icon: string; color: string; description: string; sort_order: number };
+  type ManualArticle = { id: number; title: string; category_id: number | null; content: string; cover_image: string; tags: string[]; is_published: boolean; is_pinned: boolean; view_count: number; sort_order: number; created_at: string; updated_at: string };
+  type ManualQA = { id: number; article_id: number; question: string; answer: string; sort_order: number };
+  type ManualUpdate = { id: number; article_id: number; summary: string; updated_by: string; created_at: string };
+  const [manualCats, setManualCats] = useState<ManualCategory[]>([]);
+  const [manualArticles, setManualArticles] = useState<ManualArticle[]>([]);
+  const [manualReads, setManualReads] = useState<number[]>([]);
+  const [manualUpdates, setManualUpdates] = useState<ManualUpdate[]>([]);
+  const [manualSelCat, setManualSelCat] = useState<number | null>(null);
+  const [manualSearch, setManualSearch] = useState("");
+  const [manualFilterTag, setManualFilterTag] = useState("");
+  const [manualViewArticle, setManualViewArticle] = useState<ManualArticle | null>(null);
+  const [manualViewQAs, setManualViewQAs] = useState<ManualQA[]>([]);
+  const [manualOpenQA, setManualOpenQA] = useState<number | null>(null);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
@@ -140,6 +156,11 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     const { data: csh } = await supabase.from("shifts").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("status", "confirmed"); if (csh) setCalShifts(csh);
     const { data: cstl } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("is_settled", true); if (cstl) setCalSettlements(cstl);
     const { data: cres } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).neq("status", "cancelled"); if (cres) setCalReservations(cres);
+    // マニュアルデータ
+    const { data: mc } = await supabase.from("manual_categories").select("*").order("sort_order"); if (mc) setManualCats(mc);
+    const { data: ma } = await supabase.from("manual_articles").select("*").eq("is_published", true).order("sort_order").order("created_at", { ascending: false }); if (ma) setManualArticles(ma);
+    const { data: mr } = await supabase.from("manual_reads").select("article_id").eq("therapist_id", tid); if (mr) setManualReads(mr.map((r: any) => r.article_id));
+    const { data: mu } = await supabase.from("manual_updates").select("*").order("created_at", { ascending: false }).limit(10); if (mu) setManualUpdates(mu);
   }, [therapist, salaryMonth, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -193,6 +214,21 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
   const logout = () => { localStorage.removeItem("therapist_session"); setLoggedIn(false); setTherapist(null); setTab("home"); };
   const chipStyle = (active: boolean, color: string) => ({ backgroundColor: active ? color + "20" : "transparent", color: active ? color : T.textMuted, borderColor: active ? color : T.border });
+
+  // マニュアル記事を開く
+  const openManualArticle = async (article: ManualArticle) => {
+    setManualViewArticle(article); setManualOpenQA(null);
+    // Q&A取得
+    const { data: qa } = await supabase.from("manual_qa").select("*").eq("article_id", article.id).order("sort_order");
+    if (qa) setManualViewQAs(qa);
+    // 既読記録
+    if (therapist && !manualReads.includes(article.id)) {
+      await supabase.from("manual_reads").upsert({ article_id: article.id, therapist_id: therapist.id }, { onConflict: "article_id,therapist_id" });
+      setManualReads(prev => [...prev, article.id]);
+      // view_count++
+      await supabase.from("manual_articles").update({ view_count: (article.view_count || 0) + 1 }).eq("id", article.id);
+    }
+  };
   const getStoreName = (id: number) => stores.find(s => s.id === id)?.name || "";
   const getBuildingForDate = (date: string) => {
     const ra = roomAssigns.find(a => a.date === date);
@@ -263,7 +299,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         <div className="flex items-center gap-2"><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#fce4ec", color: "#d4687e" }}>ログアウト</button></div>
       </div>
       <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        {[{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }].map((t) => (
+        {[{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: "📖 マニュアル" }].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#e8849a")}>{t.label}</button>
         ))}
       </div>
@@ -486,6 +522,115 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><div className="px-4 py-2.5 border-b" style={{ borderColor: T.border }}><p className="text-[11px] font-medium">登録済みメモ（{customerNotes.length}件）</p><p className="text-[8px]" style={{ color: T.textFaint }}>※ メモの削除はスタッフにお申し付けください</p></div>
             {customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>メモがありません</p> : customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).map(n => (<div key={n.id} className="px-4 py-3 cursor-pointer" style={{ borderBottom: `1px solid ${T.border}` }} onClick={() => setNoteViewTarget(n)}><div className="flex items-center gap-2"><span className="text-[12px] font-medium">{n.customer_name}</span>{n.is_ng && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}</div>{n.note && <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textSub }}>{n.note}</p>}</div>))}
           </div>
+        </div>)}
+
+        {tab === "manual" && (<div className="space-y-4">
+          {/* マニュアル詳細表示 */}
+          {manualViewArticle ? (() => {
+            const cat = manualCats.find(c => c.id === manualViewArticle.category_id);
+            const latestUpd = manualUpdates.find(u => u.article_id === manualViewArticle.id);
+            return (<div>
+              <button onClick={() => setManualViewArticle(null)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border mb-3" style={{ borderColor: T.border, color: T.textSub }}>← 一覧に戻る</button>
+              {manualViewArticle.cover_image && <div className="rounded-xl overflow-hidden mb-3" style={{ maxHeight: 200 }}><img src={manualViewArticle.cover_image} alt="" style={{ width: "100%", objectFit: "cover" }} /></div>}
+              <h2 className="text-[18px] font-semibold mb-2">{manualViewArticle.title}</h2>
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                {cat && <span className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: cat.color, color: "#333" }}>{cat.icon} {cat.name}</span>}
+                {manualViewArticle.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: dark ? "#3a3a42" : "#f0eee8", color: T.textSub }}>{t}</span>)}
+              </div>
+              {latestUpd && <div className="rounded-xl p-3 mb-3" style={{ background: "#FAEEDA", border: "1px solid #f59e0b33" }}><span className="text-[11px]" style={{ color: "#854F0B" }}>✏️ {new Date(latestUpd.created_at).toLocaleDateString("ja")} 更新: {latestUpd.summary}</span></div>}
+              {/* 本文レンダリング */}
+              <div className="rounded-2xl border p-4 mb-3" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                {manualViewArticle.content.split("\n").map((line, i) => {
+                  if (line.startsWith("## ")) return <h3 key={i} className="text-[15px] font-semibold mt-3 mb-1" style={{ color: "#e8849a" }}>{line.slice(3)}</h3>;
+                  if (line.startsWith("### ")) return <h4 key={i} className="text-[13px] font-medium mt-2 mb-1" style={{ color: T.accent }}>{line.slice(4)}</h4>;
+                  if (line.startsWith("- ")) return <div key={i} className="flex gap-2 text-[13px] leading-relaxed ml-2"><span style={{ color: "#e8849a" }}>●</span><span>{line.slice(2)}</span></div>;
+                  if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" className="rounded-xl my-2" style={{ maxWidth: "100%" }} />; }
+                  if (line.match(/\*\*(.*?)\*\*/)) { const parts = line.split(/(\*\*.*?\*\*)/g); return <p key={i} className="text-[13px] leading-relaxed">{parts.map((p, j) => p.startsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{p.slice(2, -2)}</strong> : p)}</p>; }
+                  if (line.trim() === "") return <div key={i} className="h-2" />;
+                  return <p key={i} className="text-[13px] leading-relaxed">{line}</p>;
+                })}
+              </div>
+              {/* Q&A */}
+              {manualViewQAs.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <h3 className="text-[13px] font-semibold mb-3" style={{ color: "#e8849a" }}>❓ よくある質問（{manualViewQAs.length}件）</h3>
+                {manualViewQAs.map((qa, i) => (
+                  <div key={i} className="rounded-xl border mb-2" style={{ borderColor: T.border, overflow: "hidden" }}>
+                    <button className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-[12px] font-medium cursor-pointer" style={{ background: manualOpenQA === i ? (dark ? "#3a3a42" : "#fef9f0") : "transparent" }} onClick={() => setManualOpenQA(manualOpenQA === i ? null : i)}>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#e8849a20", color: "#e8849a" }}>Q</span>
+                      <span style={{ flex: 1, color: T.text }}>{qa.question}</span>
+                      <span style={{ color: T.textMuted, fontSize: 10, transition: "transform 0.2s", transform: manualOpenQA === i ? "rotate(90deg)" : "none" }}>▶</span>
+                    </button>
+                    {manualOpenQA === i && <div className="px-3 pb-3 pt-1 text-[12px] leading-relaxed" style={{ color: T.textSub, borderTop: `1px solid ${T.border}` }}><span className="text-[10px] px-1.5 py-0.5 rounded mr-1" style={{ background: "#4a7c5920", color: "#4a7c59" }}>A</span>{qa.answer}</div>}
+                  </div>
+                ))}
+              </div>)}
+            </div>);
+          })() : (<div>
+            {/* 更新タイムライン */}
+            {manualUpdates.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h3 className="text-[13px] font-semibold mb-2">📝 最近の更新</h3>
+              {manualUpdates.slice(0, 3).map(u => {
+                const art = manualArticles.find(a => a.id === u.article_id);
+                return (<div key={u.id} className="flex gap-2 py-1.5" style={{ borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#e8849a", marginTop: 5, flexShrink: 0 }} />
+                  <div><span className="text-[12px] font-medium cursor-pointer" style={{ color: "#e8849a" }} onClick={() => { if (art) openManualArticle(art); }}>{art?.title || "?"}</span><span className="text-[10px] ml-1" style={{ color: T.textMuted }}>{u.summary}</span><div className="text-[9px]" style={{ color: T.textFaint }}>{new Date(u.created_at).toLocaleDateString("ja")}</div></div>
+                </div>);
+              })}
+            </div>)}
+            {/* 検索 */}
+            <input type="text" value={manualSearch} onChange={e => setManualSearch(e.target.value)} placeholder="🔍 マニュアルを検索..." className="w-full px-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+            {/* カテゴリフィルタ */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
+              <button onClick={() => setManualSelCat(null)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer whitespace-nowrap border" style={chipStyle(manualSelCat === null, "#e8849a")}>すべて</button>
+              {manualCats.map(c => (<button key={c.id} onClick={() => setManualSelCat(c.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer whitespace-nowrap border" style={{ ...chipStyle(manualSelCat === c.id, "#e8849a"), ...(manualSelCat !== c.id ? { borderColor: c.color } : {}) }}>{c.icon} {c.name}</button>))}
+            </div>
+            {/* タグフィルタ */}
+            {(() => { const allT = Array.from(new Set(manualArticles.flatMap(a => a.tags))).sort(); return allT.length > 0 ? (
+              <div className="flex gap-1 flex-wrap">
+                <span className="text-[9px] leading-[22px]" style={{ color: T.textMuted }}>🏷️</span>
+                {manualFilterTag && <button onClick={() => setManualFilterTag("")} className="text-[9px] px-2 py-0.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>× クリア</button>}
+                {allT.map(t => <button key={t} onClick={() => setManualFilterTag(manualFilterTag === t ? "" : t)} className="text-[9px] px-2 py-0.5 rounded-lg cursor-pointer" style={{ background: manualFilterTag === t ? "#e8849a" : (dark ? "#3a3a42" : "#f0eee8"), color: manualFilterTag === t ? "#fff" : T.textSub, border: "none", opacity: manualFilterTag && manualFilterTag !== t ? 0.4 : 1 }}>{t}</button>)}
+              </div>
+            ) : null; })()}
+            {/* 記事一覧 */}
+            {(() => {
+              const filtered = manualArticles.filter(a => {
+                if (manualSelCat !== null && a.category_id !== manualSelCat) return false;
+                if (manualSearch) { const q = manualSearch.toLowerCase(); if (!a.title.toLowerCase().includes(q) && !a.tags.some(t => t.toLowerCase().includes(q))) return false; }
+                if (manualFilterTag && !a.tags.includes(manualFilterTag)) return false;
+                return true;
+              });
+              const pinned = filtered.filter(a => a.is_pinned);
+              const unpinned = filtered.filter(a => !a.is_pinned);
+              const renderCard = (a: ManualArticle) => {
+                const cat = manualCats.find(c => c.id === a.category_id);
+                const isRead = manualReads.includes(a.id);
+                const latestUpd = manualUpdates.find(u => u.article_id === a.id);
+                const isNew = (Date.now() - new Date(a.created_at).getTime()) < 7 * 86400000;
+                const isUpdated = latestUpd && !isRead;
+                return (<div key={a.id} className="rounded-2xl border p-3 cursor-pointer" style={{ backgroundColor: T.card, borderColor: isNew && !isRead ? "#e8849a55" : T.border, transition: "transform 0.15s" }} onClick={() => openManualArticle(a)}>
+                  <div className="flex gap-3">
+                    {a.cover_image ? <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0"><img src={a.cover_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div> : <div className="w-16 h-16 rounded-xl flex-shrink-0 flex items-center justify-center text-[24px]" style={{ background: cat?.color || T.bg }}>{cat?.icon || "📄"}</div>}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        {a.is_pinned && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#FAEEDA", color: "#854F0B" }}>📌</span>}
+                        {isNew && !isRead && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#e8849a", color: "#fff", animation: "pulse 2s infinite" }}>🆕 NEW</span>}
+                        {isUpdated && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#FAEEDA", color: "#854F0B" }}>✏️更新</span>}
+                        {isRead && <span className="text-[8px]" style={{ color: "#4a7c59" }}>✅</span>}
+                      </div>
+                      <h4 className="text-[13px] font-semibold truncate" style={{ color: T.text }}>{a.title}</h4>
+                      {a.tags.length > 0 && <div className="flex gap-1 flex-wrap mt-1">{a.tags.slice(0, 3).map(t => <span key={t} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: dark ? "#3a3a42" : "#f0eee8", color: T.textSub }}>{t}</span>)}</div>}
+                    </div>
+                  </div>
+                </div>);
+              };
+              return (<div className="space-y-2">
+                {pinned.map(renderCard)}
+                {unpinned.map(renderCard)}
+                {filtered.length === 0 && <div className="text-center py-8"><div className="text-[32px] mb-2">📖</div><p className="text-[12px]" style={{ color: T.textMuted }}>該当する記事がありません</p></div>}
+              </div>);
+            })()}
+          </div>)}
         </div>)}
 
       </div></div>
