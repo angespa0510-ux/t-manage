@@ -82,7 +82,17 @@ CREATE POLICY "manual_reads_all" ON manual_reads FOR ALL USING (true) WITH CHECK
 CREATE POLICY "manual_updates_all" ON manual_updates FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "manual_qa_all" ON manual_qa FOR ALL USING (true) WITH CHECK (true);
 
--- 8. Supabase Storage バケット（手動作成が必要な場合のメモ）
+-- 8. Supabase Storage バケット作成
+-- ダッシュボード > Storage > New Bucket で作成してください
 -- バケット名: manual-images
--- パブリック: はい
+-- パブリック: はい（ON）
 -- 許可MIME: image/jpeg, image/png, image/gif, image/webp
+
+-- Storageバケットが作成された後、以下のポリシーを実行:
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('manual-images', 'manual-images', true) ON CONFLICT DO NOTHING;
+
+-- Storage RLSポリシー（バケット作成後に実行）
+-- CREATE POLICY "manual_images_public_read" ON storage.objects FOR SELECT USING (bucket_id = 'manual-images');
+-- CREATE POLICY "manual_images_auth_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'manual-images');
+-- CREATE POLICY "manual_images_auth_update" ON storage.objects FOR UPDATE USING (bucket_id = 'manual-images');
+-- CREATE POLICY "manual_images_auth_delete" ON storage.objects FOR DELETE USING (bucket_id = 'manual-images');

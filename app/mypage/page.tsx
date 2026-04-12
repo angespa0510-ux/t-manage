@@ -299,15 +299,36 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         <div className="flex items-center gap-2"><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#fce4ec", color: "#d4687e" }}>ログアウト</button></div>
       </div>
       <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        {[{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: "📖 マニュアル" }].map((t) => (
+        {(() => {
+          const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
+          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#e8849a")}>{t.label}</button>
-        ))}
+        ));
+        })()}
       </div>
       <div className="flex-1 overflow-y-auto"><div className="max-w-[600px] mx-auto p-4">
 
         {tab === "home" && (<div className="space-y-4">
           {todayShift ? ((() => { const bldName = getBuildingForDate(today); const rmName = getRoomForDate(today); return (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: T.textMuted }}>{todayShift.store_id > 0 && <span>🏠 {getStoreName(todayShift.store_id)}</span>}{bldName && <span>🏢 {bldName}</span>}{rmName && <span>🚪 {rmName}</span>}</div></div>); })()) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
           <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
+
+          {/* マニュアル未読通知 */}
+          {(() => {
+            const unreadArticles = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id));
+            const recentUpdates = manualUpdates.slice(0, 2);
+            if (unreadArticles.length === 0 && recentUpdates.length === 0) return null;
+            return (<div className="rounded-2xl border p-4 cursor-pointer" style={{ backgroundColor: "#FBEAF020", borderColor: "#e8849a44" }} onClick={() => setTab("manual")}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[12px] font-medium" style={{ color: "#e8849a" }}>📖 マニュアル</p>
+                {unreadArticles.length > 0 && <span className="manual-new-badge text-[9px] px-2 py-0.5 rounded-full text-white" style={{ background: "#e8849a" }}>{unreadArticles.length}件 未読</span>}
+              </div>
+              {recentUpdates.map(u => {
+                const art = manualArticles.find(a => a.id === u.article_id);
+                return <p key={u.id} className="text-[10px] truncate" style={{ color: T.textSub }}>✏️ {art?.title}: {u.summary}</p>;
+              })}
+              <p className="text-[9px] mt-1" style={{ color: "#e8849a" }}>タップして確認 →</p>
+            </div>);
+          })()}
 
           {/* 本日のオーダー */}
           <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
@@ -614,8 +635,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="flex items-center gap-1.5 flex-wrap mb-1">
                         {a.is_pinned && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#FAEEDA", color: "#854F0B" }}>📌</span>}
-                        {isNew && !isRead && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#e8849a", color: "#fff", animation: "pulse 2s infinite" }}>🆕 NEW</span>}
-                        {isUpdated && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#FAEEDA", color: "#854F0B" }}>✏️更新</span>}
+                        {isNew && !isRead && <span className="manual-new-badge text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#e8849a", color: "#fff" }}>🆕 NEW</span>}
+                        {isUpdated && <span className="manual-updated-badge text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#FAEEDA", color: "#854F0B" }}>✏️更新</span>}
                         {isRead && <span className="text-[8px]" style={{ color: "#4a7c59" }}>✅</span>}
                       </div>
                       <h4 className="text-[13px] font-semibold truncate" style={{ color: T.text }}>{a.title}</h4>

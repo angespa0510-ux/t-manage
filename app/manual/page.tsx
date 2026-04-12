@@ -54,6 +54,7 @@ export default function ManualPage() {
   const [editPinned, setEditPinned] = useState(false);
   const [editQAs, setEditQAs] = useState<QA[]>([]);
   const [editUpdateMemo, setEditUpdateMemo] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
@@ -405,6 +406,11 @@ export default function ManualPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <label style={{ ...S.label, margin: 0 }}>📝 本文</label>
           <div style={{ display: "flex", gap: 4 }}>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11, background: !showPreview ? T.accent : T.card, color: !showPreview ? "#fff" : T.text }}
+              onClick={() => setShowPreview(false)}>編集</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11, background: showPreview ? T.accent : T.card, color: showPreview ? "#fff" : T.text }}
+              onClick={() => setShowPreview(true)}>👁 プレビュー</button>
+            <span style={{ borderLeft: `1px solid ${T.border}`, margin: "0 2px" }} />
             <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
               onClick={() => setEditContent(prev => prev + "\n**太字テキスト**")}>B</button>
             <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }}
@@ -415,8 +421,22 @@ export default function ManualPage() {
               onClick={() => fileInputRef.current?.click()}>🖼</button>
           </div>
         </div>
-        <textarea ref={editorRef as any} style={S.textarea} value={editContent} onChange={e => setEditContent(e.target.value)}
-          placeholder="マークダウン形式で記述できます。&#10;&#10;## 見出し&#10;**太字** / - リスト&#10;![画像](URL)" />
+        {showPreview ? (
+          <div style={{ ...S.textarea, minHeight: 200, padding: 16, lineHeight: 1.8 }}>
+            {editContent ? editContent.split("\n").map((line, i) => {
+              if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 16, fontWeight: 600, marginTop: 12, marginBottom: 4, color: "#e8849a" }}>{line.slice(3)}</h3>;
+              if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 14, fontWeight: 500, marginTop: 8, marginBottom: 4, color: T.accent }}>{line.slice(4)}</h4>;
+              if (line.startsWith("- ")) return <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, marginLeft: 8 }}><span style={{ color: "#e8849a" }}>●</span><span>{line.slice(2)}</span></div>;
+              if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" style={{ maxWidth: "100%", borderRadius: 8, margin: "8px 0" }} />; }
+              if (line.match(/\*\*(.*?)\*\*/)) { const parts = line.split(/(\*\*.*?\*\*)/g); return <p key={i} style={{ fontSize: 13 }}>{parts.map((p, j) => p.startsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{p.slice(2, -2)}</strong> : p)}</p>; }
+              if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
+              return <p key={i} style={{ fontSize: 13 }}>{line}</p>;
+            }) : <span style={{ color: T.textMuted, fontSize: 13 }}>プレビューする本文がありません</span>}
+          </div>
+        ) : (
+          <textarea ref={editorRef as any} style={S.textarea} value={editContent} onChange={e => setEditContent(e.target.value)}
+            placeholder={"マークダウン形式で記述できます。\n\n## 見出し\n**太字** / - リスト\n![画像](URL)"} />
+        )}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>💡 マークダウン対応: ## 見出し / **太字** / - リスト / ![画像](URL)</div>
       </div>

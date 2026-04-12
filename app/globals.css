@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* マニュアル NEW バッジアニメーション */
+@keyframes manual-shimmer {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+@keyframes manual-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(232, 132, 154, 0.3); }
+  50% { box-shadow: 0 0 8px rgba(232, 132, 154, 0.6); }
+}
+.manual-new-badge {
+  animation: manual-shimmer 2s ease-in-out infinite, manual-glow 2s ease-in-out infinite;
+}
+.manual-updated-badge {
+  animation: manual-shimmer 3s ease-in-out infinite;
+}
