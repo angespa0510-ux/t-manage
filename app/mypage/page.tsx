@@ -92,6 +92,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [manualViewArticle, setManualViewArticle] = useState<ManualArticle | null>(null);
   const [manualViewQAs, setManualViewQAs] = useState<ManualQA[]>([]);
   const [manualOpenQA, setManualOpenQA] = useState<number | null>(null);
+  const [manualHistory, setManualHistory] = useState<ManualArticle[]>([]);
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [aiChatMessages, setAiChatMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
   const [aiChatInput, setAiChatInput] = useState("");
@@ -219,8 +220,13 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const logout = () => { localStorage.removeItem("therapist_session"); setLoggedIn(false); setTherapist(null); setTab("home"); };
   const chipStyle = (active: boolean, color: string) => ({ backgroundColor: active ? color + "20" : "transparent", color: active ? color : T.textMuted, borderColor: active ? color : T.border });
 
-  // マニュアル記事を開く
-  const openManualArticle = async (article: ManualArticle) => {
+  // マニュアル記事を開く（fromLink=true のとき履歴に追加）
+  const openManualArticle = async (article: ManualArticle, fromLink = false) => {
+    if (fromLink && manualViewArticle) {
+      setManualHistory(prev => [...prev, manualViewArticle]);
+    } else if (!fromLink) {
+      setManualHistory([]);
+    }
     setManualViewArticle(article); setManualOpenQA(null);
     // Q&A取得
     const { data: qa } = await supabase.from("manual_qa").select("*").eq("article_id", article.id).order("sort_order");
@@ -231,6 +237,19 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       setManualReads(prev => [...prev, article.id]);
       // view_count++
       await supabase.from("manual_articles").update({ view_count: (article.view_count || 0) + 1 }).eq("id", article.id);
+    }
+  };
+
+  // 1つ前の記事に戻る
+  const goBackManual = () => {
+    if (manualHistory.length > 0) {
+      const prev = manualHistory[manualHistory.length - 1];
+      setManualHistory(h => h.slice(0, -1));
+      setManualViewArticle(prev); setManualOpenQA(null);
+      // Q&A再取得
+      supabase.from("manual_qa").select("*").eq("article_id", prev.id).order("sort_order").then(({ data }) => { if (data) setManualViewQAs(data); });
+    } else {
+      setManualViewArticle(null);
     }
   };
 
@@ -245,7 +264,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         const title = linkMatch[1];
         const target = manualArticles.find(a => a.title === title || a.title.includes(title));
         if (target) {
-          return <span key={idx} onClick={(e) => { e.stopPropagation(); openManualArticle(target); }}
+          return <span key={idx} onClick={(e) => { e.stopPropagation(); openManualArticle(target, true); }}
             style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>📖 {title}</span>;
         }
         return <span key={idx} style={{ color: "#e8849a" }}>📖 {title}</span>;
@@ -255,7 +274,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         const catName = catMatch[1];
         const target = manualCats.find(c => c.name === catName || c.name.includes(catName));
         if (target) {
-          return <span key={idx} onClick={(e) => { e.stopPropagation(); setManualViewArticle(null); setManualSelCat(target.id); }}
+          return <span key={idx} onClick={(e) => { e.stopPropagation(); setManualViewArticle(null); setManualHistory([]); setManualSelCat(target.id); }}
             style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{target.icon} {target.name}</span>;
         }
         return <span key={idx} style={{ color: "#e8849a" }}>{catName}</span>;
@@ -598,7 +617,16 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             const cat = manualCats.find(c => c.id === manualViewArticle.category_id);
             const latestUpd = manualUpdates.find(u => u.article_id === manualViewArticle.id);
             return (<div>
-              <button onClick={() => setManualViewArticle(null)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border mb-3" style={{ borderColor: T.border, color: T.textSub }}>← 一覧に戻る</button>
+              <div className="flex gap-2 mb-3">
+                <button onClick={goBackManual} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>
+                  {manualHistory.length > 0 ? `← ${manualHistory[manualHistory.length - 1].title.slice(0, 12)}${manualHistory[manualHistory.length - 1].title.length > 12 ? '...' : ''} に戻る` : '← 一覧に戻る'}
+                </button>
+                {manualHistory.length > 0 && (
+                  <button onClick={() => { setManualViewArticle(null); setManualHistory([]); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textMuted }}>
+                    📋 一覧へ
+                  </button>
+                )}
+              </div>
               {manualViewArticle.cover_image && <div className="rounded-xl overflow-hidden mb-3" style={{ maxHeight: 200 }}><img src={manualViewArticle.cover_image} alt="" style={{ width: "100%", objectFit: "cover" }} /></div>}
               <h2 className="text-[18px] font-semibold mb-2">{manualViewArticle.title}</h2>
               <div className="flex items-center gap-2 flex-wrap mb-3">
