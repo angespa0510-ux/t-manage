@@ -233,6 +233,49 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       await supabase.from("manual_articles").update({ view_count: (article.view_count || 0) + 1 }).eq("id", article.id);
     }
   };
+
+  // ── 記事内リンク処理 ──
+  const renderInlineLinks = (text: string): React.ReactNode => {
+    // [link:記事タイトル] と [catlink:カテゴリ名] をパース
+    const parts = text.split(/(\[link:[^\]]+\]|\[catlink:[^\]]+\])/g);
+    if (parts.length === 1) return text;
+    return parts.map((part, idx) => {
+      const linkMatch = part.match(/^\[link:(.+)\]$/);
+      if (linkMatch) {
+        const title = linkMatch[1];
+        const target = manualArticles.find(a => a.title === title || a.title.includes(title));
+        if (target) {
+          return <span key={idx} onClick={(e) => { e.stopPropagation(); openManualArticle(target); }}
+            style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>📖 {title}</span>;
+        }
+        return <span key={idx} style={{ color: "#e8849a" }}>📖 {title}</span>;
+      }
+      const catMatch = part.match(/^\[catlink:(.+)\]$/);
+      if (catMatch) {
+        const catName = catMatch[1];
+        const target = manualCats.find(c => c.name === catName || c.name.includes(catName));
+        if (target) {
+          return <span key={idx} onClick={(e) => { e.stopPropagation(); setManualViewArticle(null); setManualSelCat(target.id); }}
+            style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{target.icon} {target.name}</span>;
+        }
+        return <span key={idx} style={{ color: "#e8849a" }}>{catName}</span>;
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  };
+
+  // テキスト行のインライン処理（太字+リンク）
+  const renderInlineContent = (text: string): React.ReactNode => {
+    // まず太字を処理、その結果をリンク処理
+    if (text.match(/\*\*(.*?)\*\*/)) {
+      const parts = text.split(/(\*\*.*?\*\*)/g);
+      return parts.map((p, j) => {
+        if (p.startsWith("**") && p.endsWith("**")) return <strong key={j} style={{ color: "#e8849a" }}>{renderInlineLinks(p.slice(2, -2))}</strong>;
+        return <span key={j}>{renderInlineLinks(p)}</span>;
+      });
+    }
+    return renderInlineLinks(text);
+  };
   const getStoreName = (id: number) => stores.find(s => s.id === id)?.name || "";
   const getBuildingForDate = (date: string) => {
     const ra = roomAssigns.find(a => a.date === date);
@@ -566,18 +609,18 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
               {/* 本文レンダリング */}
               <div className="rounded-2xl border p-4 mb-3" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 {manualViewArticle.content.split("\n").map((line, i) => {
-                  if (line.startsWith("## ")) return <h3 key={i} className="text-[15px] font-semibold mt-3 mb-1" style={{ color: "#e8849a" }}>{line.slice(3)}</h3>;
-                  if (line.startsWith("### ")) return <h4 key={i} className="text-[13px] font-medium mt-2 mb-1" style={{ color: T.accent }}>{line.slice(4)}</h4>;
-                  if (line.startsWith("- ")) return <div key={i} className="flex gap-2 text-[13px] leading-relaxed ml-2"><span style={{ color: "#e8849a" }}>●</span><span>{line.slice(2)}</span></div>;
-                  if (line.match(/^\d+\.\s/)) return <div key={i} className="flex gap-2 text-[13px] leading-relaxed ml-2"><span style={{ color: "#e8849a", fontWeight: 600, minWidth: 18 }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{line.replace(/^\d+\.\s/, "")}</span></div>;
-                  if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: "3px solid #e8849a", paddingLeft: 12, margin: "6px 0", fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{line.slice(2)}</div>;
+                  if (line.startsWith("## ")) return <h3 key={i} className="text-[15px] font-semibold mt-3 mb-1" style={{ color: "#e8849a" }}>{renderInlineLinks(line.slice(3))}</h3>;
+                  if (line.startsWith("### ")) return <h4 key={i} className="text-[13px] font-medium mt-2 mb-1" style={{ color: T.accent }}>{renderInlineLinks(line.slice(4))}</h4>;
+                  if (line.startsWith("- ")) return <div key={i} className="flex gap-2 text-[13px] leading-relaxed ml-2"><span style={{ color: "#e8849a" }}>●</span><span>{renderInlineContent(line.slice(2))}</span></div>;
+                  if (line.match(/^\d+\.\s/)) return <div key={i} className="flex gap-2 text-[13px] leading-relaxed ml-2"><span style={{ color: "#e8849a", fontWeight: 600, minWidth: 18 }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{renderInlineContent(line.replace(/^\d+\.\s/, ""))}</span></div>;
+                  if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: "3px solid #e8849a", paddingLeft: 12, margin: "6px 0", fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{renderInlineContent(line.slice(2))}</div>;
                   if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "12px 0" }} />;
                   if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" className="rounded-xl my-2" style={{ maxWidth: "100%" }} />; }
                   if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 12, overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
                   if (line.match(/^\[gdrive:([\w-]+)(:.*)?\]$/)) { const gm = line.match(/^\[gdrive:([\w-]+)(?::(.+))?\]$/); const fid = gm?.[1]; const gdesc = gm?.[2] || ""; return <div key={i} style={{ margin: "12px 0" }}><div style={{ position: "relative", paddingBottom: "56.25%", height: 0, borderRadius: 12, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>{gdesc && <p className="text-[11px] font-medium mt-1 text-center" style={{ color: "#e8849a" }}>🎬 {gdesc}</p>}</div>; }
-                  if (line.match(/\*\*(.*?)\*\*/)) { const parts = line.split(/(\*\*.*?\*\*)/g); return <p key={i} className="text-[13px] leading-relaxed">{parts.map((p, j) => p.startsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{p.slice(2, -2)}</strong> : p)}</p>; }
+                  if (line.match(/\*\*(.*?)\*\*/)) { return <p key={i} className="text-[13px] leading-relaxed">{renderInlineContent(line)}</p>; }
                   if (line.trim() === "") return <div key={i} className="h-2" />;
-                  return <p key={i} className="text-[13px] leading-relaxed">{line}</p>;
+                  return <p key={i} className="text-[13px] leading-relaxed">{renderInlineContent(line)}</p>;
                 })}
               </div>
               {/* Q&A */}

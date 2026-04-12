@@ -189,6 +189,29 @@ export default function ManualPage() {
     setUploading(false);
   };
 
+  // ── 記事内リンク プレビュー表示 ──
+  const renderAdminInlineLinks = (text: string): React.ReactNode => {
+    const parts = text.split(/(\[link:[^\]]+\]|\[catlink:[^\]]+\])/g);
+    if (parts.length === 1) return text;
+    return parts.map((part, idx) => {
+      const linkMatch = part.match(/^\[link:(.+)\]$/);
+      if (linkMatch) return <span key={idx} style={{ color: "#e8849a", fontWeight: 600, borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>📖 {linkMatch[1]}</span>;
+      const catMatch = part.match(/^\[catlink:(.+)\]$/);
+      if (catMatch) {
+        const cat = categories.find(c => c.name === catMatch[1] || c.name.includes(catMatch[1]));
+        return <span key={idx} style={{ color: "#e8849a", fontWeight: 600, borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{cat ? `${cat.icon} ${cat.name}` : catMatch[1]}</span>;
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  };
+  const renderAdminInline = (text: string): React.ReactNode => {
+    if (text.match(/\*\*(.*?)\*\*/)) {
+      const parts = text.split(/(\*\*.*?\*\*)/g);
+      return parts.map((p, j) => p.startsWith("**") && p.endsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{renderAdminInlineLinks(p.slice(2, -2))}</strong> : <span key={j}>{renderAdminInlineLinks(p)}</span>);
+    }
+    return renderAdminInlineLinks(text);
+  };
+
   // ── Tag management ──
   const addTag = () => {
     const t = editTagInput.trim();
@@ -619,23 +642,46 @@ export default function ManualPage() {
                   } else alert("Google DriveのURLが正しくありません");
                 }
               }}>📁</button>
+            <span style={{ borderLeft: `1px solid ${T.border}`, margin: "0 2px" }} />
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="記事リンク"
+              onClick={() => {
+                const list = articles.map((a, i) => `${i + 1}. ${a.title}`).join("\n");
+                const pick = prompt(`リンクする記事の番号を選んでください:\n\n${list}`);
+                if (pick) {
+                  const idx = parseInt(pick) - 1;
+                  if (idx >= 0 && idx < articles.length) {
+                    setEditContent(prev => prev + `[link:${articles[idx].title}]`);
+                  }
+                }
+              }}>🔗</button>
+            <button style={{ ...S.btn, padding: "2px 8px", fontSize: 11 }} title="カテゴリリンク"
+              onClick={() => {
+                const list = categories.map((c, i) => `${i + 1}. ${c.icon} ${c.name}`).join("\n");
+                const pick = prompt(`リンクするカテゴリの番号を選んでください:\n\n${list}`);
+                if (pick) {
+                  const idx = parseInt(pick) - 1;
+                  if (idx >= 0 && idx < categories.length) {
+                    setEditContent(prev => prev + `[catlink:${categories[idx].name}]`);
+                  }
+                }
+              }}>📂🔗</button>
           </div>
         </div>
         {showPreview ? (
           <div style={{ ...S.textarea, minHeight: 200, padding: 16, lineHeight: 1.8, overflow: "auto" }}>
             {editContent ? editContent.split("\n").map((line, i) => {
-              if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 16, fontWeight: 600, marginTop: 12, marginBottom: 4, color: "#e8849a" }}>{line.slice(3)}</h3>;
-              if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 14, fontWeight: 500, marginTop: 8, marginBottom: 4, color: T.accent }}>{line.slice(4)}</h4>;
-              if (line.startsWith("- ")) return <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, marginLeft: 8 }}><span style={{ color: "#e8849a" }}>●</span><span>{line.slice(2)}</span></div>;
-              if (line.match(/^\d+\.\s/)) return <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, marginLeft: 8 }}><span style={{ color: "#e8849a", fontWeight: 600, minWidth: 18 }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{line.replace(/^\d+\.\s/, "")}</span></div>;
-              if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: "3px solid #e8849a", paddingLeft: 12, margin: "6px 0", fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{line.slice(2)}</div>;
+              if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 16, fontWeight: 600, marginTop: 12, marginBottom: 4, color: "#e8849a" }}>{renderAdminInlineLinks(line.slice(3))}</h3>;
+              if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 14, fontWeight: 500, marginTop: 8, marginBottom: 4, color: T.accent }}>{renderAdminInlineLinks(line.slice(4))}</h4>;
+              if (line.startsWith("- ")) return <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, marginLeft: 8 }}><span style={{ color: "#e8849a" }}>●</span><span>{renderAdminInline(line.slice(2))}</span></div>;
+              if (line.match(/^\d+\.\s/)) return <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, marginLeft: 8 }}><span style={{ color: "#e8849a", fontWeight: 600, minWidth: 18 }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{renderAdminInline(line.replace(/^\d+\.\s/, ""))}</span></div>;
+              if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: "3px solid #e8849a", paddingLeft: 12, margin: "6px 0", fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{renderAdminInline(line.slice(2))}</div>;
               if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "12px 0" }} />;
               if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" style={{ maxWidth: "100%", borderRadius: 8, margin: "8px 0" }} />; }
               if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 8, overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
               if (line.match(/^\[gdrive:([\w-]+)(:.*)?\]$/)) { const gm = line.match(/^\[gdrive:([\w-]+)(?::(.+))?\]$/); const fid = gm?.[1]; const gdesc = gm?.[2] || ""; return <div key={i} style={{ margin: "12px 0" }}><div style={{ position: "relative", paddingBottom: "56.25%", height: 0, borderRadius: 8, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>{gdesc && <p style={{ fontSize: 12, color: "#e8849a", marginTop: 6, textAlign: "center", fontWeight: 500 }}>🎬 {gdesc}</p>}</div>; }
-              if (line.match(/\*\*(.*?)\*\*/)) { const parts = line.split(/(\*\*.*?\*\*)/g); return <p key={i} style={{ fontSize: 13 }}>{parts.map((p, j) => p.startsWith("**") ? <strong key={j} style={{ color: "#e8849a" }}>{p.slice(2, -2)}</strong> : p)}</p>; }
+              if (line.match(/\*\*(.*?)\*\*/)) { return <p key={i} style={{ fontSize: 13 }}>{renderAdminInline(line)}</p>; }
               if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
-              return <p key={i} style={{ fontSize: 13 }}>{line}</p>;
+              return <p key={i} style={{ fontSize: 13 }}>{renderAdminInline(line)}</p>;
             }) : <span style={{ color: T.textMuted, fontSize: 13 }}>プレビューする本文がありません</span>}
           </div>
         ) : (
@@ -670,6 +716,7 @@ export default function ManualPage() {
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInlineImage} />
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{"💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬 / [gdrive:ID] 📁"}</div>
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{"📸 画像: ドラッグ&ドロップ / Ctrl+V貼り付け / 🖼ボタン に対応"}</div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{"🔗 [link:記事タイトル] で記事リンク / [catlink:カテゴリ名] でカテゴリリンク"}</div>
         {uploading && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, padding: "6px 12px", background: "rgba(232,132,154,0.1)", borderRadius: 8, fontSize: 12, color: "#e8849a" }}>
             <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #e8849a", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
