@@ -971,11 +971,11 @@ const generatePassword = () => {
       {/* 一括リンク発行モーダル */}
       {showBulkLinks && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowBulkLinks(false)}>
-          <div className="rounded-2xl border w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-2xl border w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
               <div>
                 <h2 className="text-[15px] font-medium">📨 一括リンク発行</h2>
-                <p className="text-[10px]" style={{ color: T.textMuted }}>未提出の書類リンクをLINEで各セラピストに送ってください</p>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>「📋 LINE用メッセージをコピー」でそのままLINEに貼り付けて送れます</p>
               </div>
               <button onClick={() => setShowBulkLinks(false)} className="text-[18px] cursor-pointer p-1" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
             </div>
@@ -987,19 +987,31 @@ const generatePassword = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {bulkLinks.map((link, idx) => (
-                    <div key={idx} className="rounded-xl border p-3" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
-                      <p className="text-[13px] font-medium mb-2" style={{ color: T.text }}>👤 {link.name}</p>
-                      <div className="space-y-1.5">
-                        {link.contract && <div className="flex items-center gap-2"><span className="text-[10px]" style={{ color: "#c45555" }}>📝 契約書:</span><button onClick={() => { navigator.clipboard.writeText(link.contract!); toast.show(`${link.name}の契約書URLをコピー`, "success"); }} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "none" }}>📋 コピー</button></div>}
-                        {link.license && <div className="flex items-center gap-2"><span className="text-[10px]" style={{ color: "#c45555" }}>🪪 身分証:</span><button onClick={() => { navigator.clipboard.writeText(link.license!); toast.show(`${link.name}の身分証URLをコピー`, "success"); }} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "none" }}>📋 コピー</button></div>}
-                        {link.invoice && <div className="flex items-center gap-2"><span className="text-[10px]" style={{ color: "#c45555" }}>📋 適格事業者:</span><button onClick={() => { navigator.clipboard.writeText(link.invoice!); toast.show(`${link.name}の適格URLをコピー`, "success"); }} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "none" }}>📋 コピー</button></div>}
+                  {bulkLinks.map((link, idx) => {
+                    const buildMessage = () => {
+                      let msg = `${link.name}さん\n\nお疲れ様です🌸\nチョップです。\n\n入店にあたりまして、下記の書類のご提出をお願いしております。\nお手数をおかけしますが、それぞれURLを開いて、署名・写真のアップロードをお願いいたします✨\n\nお預かりした個人情報は適切に管理いたしますので、ご安心ください。\n`;
+                      if (link.contract) msg += `\n📝 業務委託契約書（署名）\n${link.contract}\n`;
+                      if (link.license) msg += `\n🪪 身分証明書（写真アップロード）\n${link.license}\n`;
+                      if (link.invoice) msg += `\n📋 適格事業者登録通知書（※任意）\n登録番号の入力＋写真アップロード\n${link.invoice}\n`;
+                      msg += `\nご不明な点がございましたら、お気軽にご連絡くださいね😊\nよろしくお願いいたします🙏`;
+                      return msg;
+                    };
+                    return (
+                      <div key={idx} className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+                        <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+                          <p className="text-[13px] font-medium" style={{ color: T.text }}>👤 {link.name}</p>
+                          <button onClick={() => { navigator.clipboard.writeText(buildMessage()); toast.show(`${link.name}さんへのメッセージをコピーしました`, "success"); }}
+                            className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer font-medium"
+                            style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)", color: "#fff", border: "none" }}>
+                            📋 LINE用メッセージをコピー
+                          </button>
+                        </div>
+                        <div className="px-4 py-3 text-[11px] whitespace-pre-wrap leading-relaxed" style={{ color: T.textSub, fontFamily: "var(--font-mono, monospace)", maxHeight: 150, overflowY: "auto" }}>
+                          {buildMessage()}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <div className="rounded-xl p-3 text-[11px] leading-relaxed" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33", color: "#92700c" }}>
-                    💡 <strong>送り方:</strong> 各セラピストのLINEに「📋コピー」したURLを貼り付けて送ってください。セラピストはURLを開くだけで提出できます（ログイン不要）。
-                  </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
