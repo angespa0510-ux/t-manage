@@ -40,6 +40,8 @@ export default function ManualPage() {
   const [therapists, setTherapists] = useState<{ id: number; name: string; status: string }[]>([]);
   const [allReads, setAllReads] = useState<{ article_id: number; therapist_id: number; read_at: string }[]>([]);
   const [showReadsFor, setShowReadsFor] = useState<number | null>(null);
+  const [dragArticleId, setDragArticleId] = useState<number | null>(null);
+  const [dragOverArticleId, setDragOverArticleId] = useState<number | null>(null);
   const [selectedCat, setSelectedCat] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTag, setFilterTag] = useState("");
@@ -307,20 +309,24 @@ export default function ManualPage() {
     fetchData();
   };
 
-  // ── 記事並び替え ──
-  const moveArticle = async (articleId: number, direction: "up" | "down") => {
-    const sameCatArticles = (selectedCat !== null
-      ? articles.filter(a => a.category_id === selectedCat)
-      : articles
-    ).sort((a, b) => a.sort_order - b.sort_order);
-    const idx = sameCatArticles.findIndex(a => a.id === articleId);
-    if (idx < 0) return;
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sameCatArticles.length) return;
-    const current = sameCatArticles[idx];
-    const target = sameCatArticles[swapIdx];
-    await supabase.from("manual_articles").update({ sort_order: target.sort_order }).eq("id", current.id);
-    await supabase.from("manual_articles").update({ sort_order: current.sort_order }).eq("id", target.id);
+  // ── 記事ドラッグ&ドロップ並び替え ──
+  const handleArticleDrop = async (targetId: number) => {
+    if (!dragArticleId || dragArticleId === targetId) { setDragArticleId(null); setDragOverArticleId(null); return; }
+    const list = (selectedCat !== null ? articles.filter(a => a.category_id === selectedCat) : articles)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const fromIdx = list.findIndex(a => a.id === dragArticleId);
+    const toIdx = list.findIndex(a => a.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) { setDragArticleId(null); setDragOverArticleId(null); return; }
+    const reordered = [...list];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    // DB一括更新
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i].sort_order !== i) {
+        await supabase.from("manual_articles").update({ sort_order: i }).eq("id", reordered[i].id);
+      }
+    }
+    setDragArticleId(null); setDragOverArticleId(null);
     fetchData();
   };
 
@@ -393,8 +399,22 @@ export default function ManualPage() {
   const renderArticleCard = (a: Article) => {
     const cat = getCatName(a.category_id);
     const latestUpdate = updates.find(u => u.article_id === a.id);
+    const isDragging = dragArticleId === a.id;
+    const isDragOver = dragOverArticleId === a.id && dragArticleId !== a.id;
     return (<React.Fragment key={a.id}>
-      <div style={{ ...S.card, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", transition: "box-shadow 0.2s" }}
+      <div
+        draggable
+        onDragStart={(e) => { setDragArticleId(a.id); e.dataTransfer.effectAllowed = "move"; }}
+        onDragEnd={() => { setDragArticleId(null); setDragOverArticleId(null); }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverArticleId(a.id); }}
+        onDragLeave={() => { if (dragOverArticleId === a.id) setDragOverArticleId(null); }}
+        onDrop={(e) => { e.preventDefault(); handleArticleDrop(a.id); }}
+        style={{
+          ...S.card, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", transition: "all 0.2s",
+          opacity: isDragging ? 0.4 : 1,
+          borderTop: isDragOver ? "3px solid #e8849a" : undefined,
+          marginTop: isDragOver ? -3 : undefined,
+        }}
         onClick={() => openEditArticle(a)}>
         {/* Cover image */}
         {a.cover_image ? (
@@ -444,11 +464,9 @@ export default function ManualPage() {
             })()}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
-          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="上に移動"
-            onClick={(e) => { e.stopPropagation(); moveArticle(a.id, "up"); }}>⬆</button>
-          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="下に移動"
-            onClick={(e) => { e.stopPropagation(); moveArticle(a.id, "down"); }}>⬇</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0, alignItems: "center" }}>
+          <div style={{ cursor: "grab", fontSize: 18, color: T.textMuted, padding: "4px 8px", userSelect: "none" }}
+            onMouseDown={(e) => e.stopPropagation()} title="ドラッグで並び替え">☰</div>
           <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="複製"
             onClick={async (e) => {
               e.stopPropagation();
