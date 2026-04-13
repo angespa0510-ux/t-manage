@@ -20,6 +20,7 @@ type VideoLog = {
   video_filename: string; gdrive_path: string;
   rating_motion: number; rating_consistency: number; rating_quality: number; rating_safety: number;
   rating_comment: string; original_image_url: string;
+  error_message?: string; all_image_urls?: string[];
 };
 type MotionCategory = { id: string; label: string; emoji: string; description: string };
 
@@ -258,6 +259,16 @@ export default function VideoGenerator() {
       .in("result", ["queued", "pending", "processing"])
       .order("created_at", { ascending: true });
 
+    // 最近の失敗（直近24時間）
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60000).toISOString();
+    const { data: failed } = await supabase
+      .from("video_generation_logs")
+      .select("*")
+      .in("result", ["failed", "safety_rejected"])
+      .gte("created_at", oneDayAgo)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
     // 今日の完了数
     const { data: done } = await supabase
       .from("video_generation_logs")
@@ -266,7 +277,7 @@ export default function VideoGenerator() {
       .gte("created_at", `${todayStr}T00:00:00+09:00`)
       .lt("created_at", `${todayStr}T23:59:59+09:00`);
 
-    if (active) setQueue(active);
+    setQueue([...(active || []), ...(failed || [])]);
     setTodayCount(done?.length || 0);
   }, []);
 
@@ -387,6 +398,20 @@ export default function VideoGenerator() {
       .update({ result: "cancelled" })
       .eq("id", id);
     toast.show("キャンセルしました");
+    fetchQueue();
+  };
+
+  /* ─── 失敗アイテムをリトライ ─── */
+  const retryQueueItem = async (id: number) => {
+    await supabase.from("video_generation_logs").update({ result: "queued", error_message: null, retry_count: 0 }).eq("id", id);
+    toast.show("🔄 キューに再追加しました");
+    fetchQueue();
+  };
+
+  /* ─── 失敗アイテムを削除 ─── */
+  const deleteQueueItem = async (id: number) => {
+    await supabase.from("video_generation_logs").delete().eq("id", id);
+    toast.show("削除しました");
     fetchQueue();
   };
 
@@ -604,6 +629,9 @@ export default function VideoGenerator() {
               <div className="flex items-center gap-2">
                 <span style={{ fontSize: 11, color: T.textSub }}>待機: {queue.filter(q => q.result === "queued").length}</span>
                 <span style={{ fontSize: 11, color: "#a78bc4" }}>制作中: {queue.filter(q => q.result === "processing").length}</span>
+                {queue.filter(q => q.result === "failed" || q.result === "safety_rejected").length > 0 && (
+                  <span style={{ fontSize: 11, color: "#c45555" }}>❌失敗: {queue.filter(q => q.result === "failed" || q.result === "safety_rejected").length}</span>
+                )}
               </div>
             </div>
 
@@ -878,35 +906,59 @@ export default function VideoGenerator() {
                 <div className="flex flex-col gap-2">
                   {queue.map((item, idx) => {
                     const sc = statusConfig[item.result] || statusConfig.queued;
+                    const isFailed = item.result === "failed" || item.result === "safety_rejected";
                     return (
                       <div key={item.id}
                         style={{
-                          display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
-                          borderRadius: 10, backgroundColor: sc.bg, border: `1px solid ${T.border}`,
+                          borderRadius: 10, backgroundColor: sc.bg, border: `1px solid ${isFailed ? "rgba(196,85,85,0.4)" : T.border}`,
+                          overflow: "hidden",
                         }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, width: 20, textAlign: "center" }}>{idx + 1}</span>
-                        <div style={{ width: 40, height: 40, borderRadius: 6, overflow: "hidden", flexShrink: 0, backgroundColor: T.cardAlt }}>
-                          {item.image_url && !item.image_url.startsWith("data:") ? (
-                            <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          ) : (
-                            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>👤</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, width: 20, textAlign: "center" }}>{idx + 1}</span>
+                          <div style={{ width: 40, height: 40, borderRadius: 6, overflow: "hidden", flexShrink: 0, backgroundColor: T.cardAlt }}>
+                            {item.image_url && !item.image_url.startsWith("data:") ? (
+                              <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>👤</div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p style={{ fontSize: 12, fontWeight: 600, color: T.text, margin: 0 }}>{item.therapist_name}</p>
+                            <p style={{ fontSize: 10, color: T.textSub, margin: 0 }}>🎭 {item.motion_category}</p>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                            <span className={sc.spin ? "vg-spin" : ""} style={{ fontSize: sc.spin ? 18 : 14 }}>{sc.icon}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: sc.color }}>{sc.label}</span>
+                          </div>
+                          {(item.result === "queued" || item.result === "pending") && (
+                            <button onClick={() => cancelQueueItem(item.id)}
+                              style={{
+                                background: "none", border: "1px solid rgba(196,85,85,0.3)",
+                                borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer",
+                                color: "#c45555", flexShrink: 0,
+                              }}>取消</button>
+                          )}
+                          {isFailed && (
+                            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                              <button onClick={() => retryQueueItem(item.id)}
+                                style={{
+                                  background: "none", border: "1px solid rgba(122,184,143,0.5)",
+                                  borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer",
+                                  color: "#7ab88f", flexShrink: 0,
+                                }}>🔄 再試行</button>
+                              <button onClick={() => deleteQueueItem(item.id)}
+                                style={{
+                                  background: "none", border: "1px solid rgba(136,136,136,0.3)",
+                                  borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer",
+                                  color: "#888", flexShrink: 0,
+                                }}>✕</button>
+                            </div>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p style={{ fontSize: 12, fontWeight: 600, color: T.text, margin: 0 }}>{item.therapist_name}</p>
-                          <p style={{ fontSize: 10, color: T.textSub, margin: 0 }}>🎭 {item.motion_category}</p>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                          <span className={sc.spin ? "vg-spin" : ""} style={{ fontSize: sc.spin ? 18 : 14 }}>{sc.icon}</span>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: sc.color }}>{sc.label}</span>
-                        </div>
-                        {(item.result === "queued" || item.result === "pending") && (
-                          <button onClick={() => cancelQueueItem(item.id)}
-                            style={{
-                              background: "none", border: "1px solid rgba(196,85,85,0.3)",
-                              borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer",
-                              color: "#c45555", flexShrink: 0,
-                            }}>取消</button>
+                        {isFailed && item.error_message && (
+                          <div style={{ padding: "0 12px 10px 82px", fontSize: 10, color: "#c45555", lineHeight: 1.5 }}>
+                            ⚠️ {item.error_message.slice(0, 150)}{(item.error_message.length || 0) > 150 ? "..." : ""}
+                          </div>
                         )}
                       </div>
                     );
