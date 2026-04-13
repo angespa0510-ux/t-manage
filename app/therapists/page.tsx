@@ -89,6 +89,8 @@ const [editLoginPassword, setEditLoginPassword] = useState("");
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null); const [deleting, setDeleting] = useState(false);
+  const [contractInfo, setContractInfo] = useState<{ status: string; signature_url?: string; signed_at?: string; token?: string } | null>(null);
+  const [contractUrl, setContractUrl] = useState("");
   const [newcomerMonths, setNewcomerMonths] = useState(2);
 
   // NG登録
@@ -169,6 +171,21 @@ const generatePassword = () => {
     await supabase.from("therapists").delete().eq("id", id);
     toast.show("完全に削除しました");
     fetchTrash();
+  };
+
+  const loadContract = async (therapistId: number) => {
+    const { data } = await supabase.from("contracts").select("*").eq("therapist_id", therapistId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (data) { setContractInfo(data); setContractUrl(`${window.location.origin}/contract-sign/${data.token}`); }
+    else { setContractInfo(null); setContractUrl(""); }
+  };
+
+  const generateContractLink = async (therapistId: number) => {
+    const token = `c_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    await supabase.from("contracts").insert({ therapist_id: therapistId, token, status: "pending" });
+    const url = `${window.location.origin}/contract-sign/${token}`;
+    setContractInfo({ status: "pending", token });
+    setContractUrl(url);
+    toast.show("📝 契約書リンクを発行しました", "success");
   };
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); const fetchStore = async () => { const { data } = await supabase.from("stores").select("company_name, company_address, company_phone, invoice_number"); if (data?.[0]) setStoreInfo(data[0]); }; fetchStore(); const fetchNewcomer = async () => { const { data } = await supabase.from("store_settings").select("value").eq("key", "newcomer_duration_months").maybeSingle(); if (data) setNewcomerMonths(parseInt(data.value) || 2); }; fetchNewcomer(); }, [router, fetchTherapists]);
@@ -522,7 +539,7 @@ const generatePassword = () => {
             {filtered.map((t, i) => {
               const st = statusMap[t.status] || statusMap.active;
               return (
-                <div key={t.id} draggable onDragStart={(e) => { e.dataTransfer.setData("therapistId", String(t.id)); e.dataTransfer.setData("sortOrder", String(t.sort_order || i)); }} onDragOver={(e) => e.preventDefault()} onDrop={async (e) => { e.preventDefault(); const fromId = Number(e.dataTransfer.getData("therapistId")); if (fromId === t.id) return; const fromIdx = filtered.findIndex(x => x.id === fromId); const toIdx = filtered.findIndex(x => x.id === t.id); if (fromIdx < 0 || toIdx < 0) return; const reordered = [...filtered]; const [moved] = reordered.splice(fromIdx, 1); reordered.splice(toIdx, 0, moved); for (let j = 0; j < reordered.length; j++) { await supabase.from("therapists").update({ sort_order: j }).eq("id", reordered[j].id); } fetchTherapists(); }} className="rounded-xl border p-2.5 transition-all duration-200 cursor-grab active:cursor-grabbing hover:shadow-md" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={() => setDetailTarget(t)}>
+                <div key={t.id} draggable onDragStart={(e) => { e.dataTransfer.setData("therapistId", String(t.id)); e.dataTransfer.setData("sortOrder", String(t.sort_order || i)); }} onDragOver={(e) => e.preventDefault()} onDrop={async (e) => { e.preventDefault(); const fromId = Number(e.dataTransfer.getData("therapistId")); if (fromId === t.id) return; const fromIdx = filtered.findIndex(x => x.id === fromId); const toIdx = filtered.findIndex(x => x.id === t.id); if (fromIdx < 0 || toIdx < 0) return; const reordered = [...filtered]; const [moved] = reordered.splice(fromIdx, 1); reordered.splice(toIdx, 0, moved); for (let j = 0; j < reordered.length; j++) { await supabase.from("therapists").update({ sort_order: j }).eq("id", reordered[j].id); } fetchTherapists(); }} className="rounded-xl border p-2.5 transition-all duration-200 cursor-grab active:cursor-grabbing hover:shadow-md" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={() => { setDetailTarget(t); loadContract(t.id); }}>
                   <div className="flex items-center gap-2 mb-1.5">
                     {t.photo_url ? (
                       <img src={t.photo_url} alt={t.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
@@ -592,6 +609,32 @@ const generatePassword = () => {
                 {(detailTarget.bust > 0 || detailTarget.waist > 0 || detailTarget.hip > 0) && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>スリーサイズ</span><span>B{detailTarget.bust} W{detailTarget.waist} H{detailTarget.hip}</span></div>}
                 {detailTarget.cup && <div className="flex justify-between text-[12px]"><span style={{ color: T.textMuted }}>カップ</span><span>{detailTarget.cup}カップ</span></div>}
                 {detailTarget.notes && <div className="pt-2" style={{ borderTop: `1px solid ${T.cardAlt}` }}><p className="text-[11px] mb-1" style={{ color: T.textMuted }}>📝 備考・メモ</p><p className="text-[12px] whitespace-pre-wrap" style={{ color: T.textSub }}>{detailTarget.notes}</p></div>}
+
+                {/* 契約書 */}
+                <div className="pt-3 mt-2" style={{ borderTop: `1px solid ${T.cardAlt}` }}>
+                  <p className="text-[11px] mb-2" style={{ color: T.textMuted }}>📝 業務委託契約書</p>
+                  {contractInfo?.status === "signed" ? (
+                    <div className="flex items-center gap-3">
+                      {contractInfo.signature_url && <img src={contractInfo.signature_url} alt="署名" style={{ width: 80, height: 40, objectFit: "contain", borderRadius: 6, border: `1px solid ${T.border}`, backgroundColor: "#fefefe" }} />}
+                      <div>
+                        <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 契約済み</span>
+                        <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>{contractInfo.signed_at ? new Date(contractInfo.signed_at).toLocaleDateString("ja") + " 署名" : ""}</p>
+                      </div>
+                    </div>
+                  ) : contractInfo?.status === "pending" ? (
+                    <div>
+                      <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⏳ 署名待ち</span>
+                      {contractUrl && (
+                        <div className="mt-2 flex gap-2">
+                          <button onClick={() => { navigator.clipboard.writeText(contractUrl); toast.show("URLをコピーしました", "success"); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📋 URLコピー</button>
+                          <button onClick={() => { loadContract(detailTarget.id); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>🔄 状態確認</button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button onClick={() => generateContractLink(detailTarget.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>📝 契約書リンクを発行</button>
+                  )}
+                </div>
               </div>
               <div className="flex gap-3 mt-6 flex-wrap">
                 <button onClick={() => { setDetailTarget(null); startEdit(detailTarget); }} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">編集する</button>
