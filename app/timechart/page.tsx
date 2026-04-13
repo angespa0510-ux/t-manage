@@ -1048,17 +1048,22 @@ export default function TimeChart() {
                       const sM = timeToMinutes(r.start_time); const eM = timeToMinutes(r.end_time);
                       const left = sM * (TC_HW / 60); const width = (eM - sM) * (TC_HW / 60);
                       const subRowIdx = (() => { let idx = 0; for (let j = 0; j < ri; j++) { if (timeToMinutes(fRes[j].start_time) < eM && sM < timeToMinutes(fRes[j].end_time)) idx++; } return idx; })();
+                      const custSt = (r as any).customer_status || "unsent";
+                      const dualSC: Record<string,string> = { unsent: "#888780", ...tcConfig.statusColors, detail_sent: tcConfig.statusColors.detail_unread || "#4a7c59" };
+                      const stColor = dualSC[custSt] || "#378ADD";
+                      const custLabel: Record<string,string> = { unsent: "", web_reservation: "WEB", summary_unread: "概要未読", summary_read: "概要既読", detail_unread: "詳細未読", detail_read: "詳細既読", serving: "接客中", completed: "終了" };
+                      const cBadge = custLabel[custSt] || "";
                       return (
                         <div key={`fres-${r.id}`} className="res-block absolute rounded-lg cursor-grab"
                           draggable
                           onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(r.id)); e.dataTransfer.effectAllowed = "move"; setDragFreeRes(r.id); }}
                           onDragEnd={() => { setDragFreeRes(null); setDragOverTherapist(null); }}
-                          style={{ left, width: Math.max(width, TC_HW/6), top: 4 + subRowIdx * 28, height: 24, backgroundColor: dragFreeRes === r.id ? "#378ADD55" : "#378ADD30", borderLeft: "3px solid #378ADD", zIndex: 5 }}
+                          style={{ left, width: Math.max(width, TC_HW/6), top: 4 + subRowIdx * 28, height: 24, backgroundColor: dragFreeRes === r.id ? stColor + "55" : stColor + "20", borderLeft: `3px solid ${stColor}`, zIndex: 5 }}
                           onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
                           <div className="px-2 py-0.5 overflow-hidden h-full flex items-center gap-1">
                             <span style={{ fontSize: 8 }}>↕️</span>
                             <div className="overflow-hidden">
-                              <p className="font-medium truncate" style={{ fontSize: 10, color: T.text }}>{r.customer_name}</p>
+                              <p className="font-medium truncate" style={{ fontSize: 10, color: T.text }}>{r.customer_name}{cBadge && <span style={{ marginLeft: 3, fontSize: 7, padding: "1px 4px", borderRadius: 4, backgroundColor: stColor + "22", color: stColor }}>{cBadge}</span>}</p>
                               <p className="truncate" style={{ fontSize: 8, color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)} {r.course}</p>
                             </div>
                           </div>
