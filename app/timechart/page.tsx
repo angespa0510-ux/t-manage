@@ -89,6 +89,7 @@ export default function TimeChart() {
   const [newPhoneConfirm, setNewPhoneConfirm] = useState(false);
   const [newCustPhone, setNewCustPhone] = useState("");
   const [newTherapistId, setNewTherapistId] = useState<number>(0);
+  const [newFreeBuildingId, setNewFreeBuildingId] = useState<number | null>(null);
   const [newDate, setNewDate] = useState("");
   const [newStart, setNewStart] = useState("12:00");
   const [newEnd, setNewEnd] = useState("13:00");
@@ -494,13 +495,15 @@ export default function TimeChart() {
   const handleStartChange = (s: string, isEdit = false) => { if (isEdit) { setEditStart(s); if (editSelectedCourse) setEditEnd(minutesToTime(timeToMinutes(s) + editSelectedCourse.duration)); } else { setNewStart(s); if (selectedCourse) setNewEnd(minutesToTime(timeToMinutes(s) + selectedCourse.duration)); } };
 
   const addReservation = async () => {
-    if (!newCustName.trim() || !newTherapistId) { setMsg("顧客名とセラピストを選択してください"); return; }
+    if (!newCustName.trim() || (!newTherapistId && !newFreeBuildingId)) { setMsg("顧客名とセラピスト（またはフリー枠）を選択してください"); return; }
     setSaving(true); setMsg("");
     const { data: { user } } = await supabase.auth.getUser();
     if (!newCourseId) { setSaving(false); setMsg("コースを選択してください"); return; }
     const optText = newOptions.map(o => o.name).join(","); const optTotal = newOptions.reduce((s, o) => s + o.price, 0);
     const coursePrice = selectedCourse?.price || 0; const discText = newDiscounts.map(d => d.name).join(","); const discTotal = newDiscounts.reduce((s, d) => s + d.amount, 0); const total = coursePrice + newNomFee + optTotal + newExtPrice - discTotal;
-    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: discText, discount_amount: discTotal, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", customer_status: "unsent", therapist_status: "unsent", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0), staff_name: newStaffName, phone_confirm: newPhoneConfirm });
+    const insertData: any = { customer_name: newCustName.trim(), therapist_id: newTherapistId || 0, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: discText, discount_amount: discTotal, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", customer_status: "unsent", therapist_status: "unsent", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0), staff_name: newStaffName, phone_confirm: newPhoneConfirm };
+    if (newFreeBuildingId) insertData.free_building_id = newFreeBuildingId;
+    const { error } = await supabase.from("reservations").insert(insertData);
     if (!error) {
       const { data: cust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle();
       if (cust) {
@@ -522,7 +525,7 @@ export default function TimeChart() {
       const st = rm ? stores.find(s => s.id === rm.store_id) : null;
       const courseWithExt = (selectedCourse?.name || "") + (newExtension ? `＋${newExtension}` : "");
       setNotifyInfo({ custName: newCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: newDate || selectedDate, startTime: newStart, endTime: newEnd, course: courseWithExt, therapistName: thName, total: coursePrice + newNomFee + optTotal + newExtPrice - discTotal, nomination: newNomination || "指名なし", discountName: newDiscounts.map(d => d.name).join(",") || "なし", extensionName: newExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
-      toast.show("予約を登録しました！", "success"); /* 電話番号・名前・ランクを顧客テーブルに反映 */ if (newCustPhone.trim()) { const ph = newCustPhone.trim().replace(/[-\s　()（）]/g, ""); const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ phone: ph, rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), phone: ph, rank: newCustRank }); } } else { const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), rank: newCustRank }); } } /* NG自動ランク判定 */ const autoRank = await autoCalcRank(newCustName.trim()); if (autoRank) { const { data: cust2 } = await supabase.from("customers").select("id,rank").eq("name", newCustName.trim()).maybeSingle(); if (cust2 && cust2.rank !== "banned") { await supabase.from("customers").update({ rank: autoRank }).eq("id", cust2.id); } } setNewCustName(""); setNewCustPhone(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewCustRank("normal"); setNewPhoneConfirm(false); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
+      toast.show("予約を登録しました！", "success"); /* 電話番号・名前・ランクを顧客テーブルに反映 */ if (newCustPhone.trim()) { const ph = newCustPhone.trim().replace(/[-\s　()（）]/g, ""); const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ phone: ph, rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), phone: ph, rank: newCustRank }); } } else { const { data: existCust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle(); if (existCust) { await supabase.from("customers").update({ rank: newCustRank }).eq("id", existCust.id); } else { await supabase.from("customers").insert({ name: newCustName.trim(), rank: newCustRank }); } } /* NG自動ランク判定 */ const autoRank = await autoCalcRank(newCustName.trim()); if (autoRank) { const { data: cust2 } = await supabase.from("customers").select("id,rank").eq("name", newCustName.trim()).maybeSingle(); if (cust2 && cust2.rank !== "banned") { await supabase.from("customers").update({ rank: autoRank }).eq("id", cust2.id); } } setNewCustName(""); setNewCustPhone(""); setNewTherapistId(0); setNewFreeBuildingId(null); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); setNewCustRank("normal"); setNewPhoneConfirm(false); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
     }
   };
 
@@ -727,6 +730,31 @@ export default function TimeChart() {
   const totalWidth = TC_DH * TC_HW;
   const getResForTherapist = (tid: number) => reservations.filter((r) => r.therapist_id === tid && (r as any).status !== "cancelled");
 
+  // ── フリー枠関連 ──
+  const getFreeResForBuilding = (buildingId: number) => reservations.filter((r) => (r as any).free_building_id === buildingId && (r as any).status !== "cancelled");
+  const freeBuildingIds = [...new Set(buildings.filter(b => {
+    // この建物にシフト中のセラピストがいるかチェック
+    return roomAssigns.some(ra => {
+      const rm = allRooms.find(r => r.id === ra.room_id);
+      return rm && rm.building_id === b.id;
+    });
+  }).map(b => b.id))];
+  const freeBuildings = buildings.filter(b => freeBuildingIds.includes(b.id));
+  // フリー予約の重なり計算（サブロウ数）
+  const getFreeSubRows = (buildingId: number) => {
+    const fRes = getFreeResForBuilding(buildingId);
+    if (fRes.length <= 1) return 1;
+    let maxOverlap = 1;
+    for (let i = 0; i < fRes.length; i++) {
+      let overlap = 1;
+      for (let j = i + 1; j < fRes.length; j++) {
+        if (timeToMinutes(fRes[i].start_time) < timeToMinutes(fRes[j].end_time) && timeToMinutes(fRes[j].start_time) < timeToMinutes(fRes[i].end_time)) overlap++;
+      }
+      maxOverlap = Math.max(maxOverlap, overlap);
+    }
+    return maxOverlap;
+  };
+
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
 
   return (
@@ -853,9 +881,25 @@ export default function TimeChart() {
                   </div>
                 );
               })}
+              {/* フリー枠 建物行 */}
+              {freeBuildings.map(bl => {
+                const subRows = getFreeSubRows(bl.id);
+                const freeCount = getFreeResForBuilding(bl.id).length;
+                return (
+                  <div key={`free-name-${bl.id}`} className="border-b border-r flex items-center px-2 gap-1.5"
+                    style={{ height: Math.max(TC_RH, subRows * 28 + 8), backgroundColor: dark ? "#1a2a3a" : "#E6F1FB44", borderColor: T.border }}>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] text-white font-medium flex-shrink-0" style={{ backgroundColor: "#378ADD" }}>F</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium text-[11px]" style={{ color: "#185FA5" }}>{bl.name}</span>
+                        <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD22", color: "#378ADD" }}>フリー</span>
+                        {freeCount > 0 && <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD33", color: "#185FA5" }}>{freeCount}件</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-
-            {/* Grid */}
             <div className="flex-1 relative">
               <div className="h-[32px] flex border-b sticky top-0 z-10" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
                 {tcHoursRaw.map((rawH, i) => (
@@ -884,7 +928,7 @@ export default function TimeChart() {
                       if ((e.target as HTMLElement).closest(".res-block") || isCO) return;
                       const rect = e.currentTarget.getBoundingClientRect(); const x = e.clientX - rect.left; const min = Math.round(x / (TC_HW / 6)) * 10;
                       if (panMoved.current) return;
-                      setNewTherapistId(t.id); setNewStart(minutesToTime(min, TC_SH)); setNewEnd(minutesToTime(min + 60, TC_SH)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
+                      setNewTherapistId(t.id); setNewFreeBuildingId(null); setNewStart(minutesToTime(min, TC_SH)); setNewEnd(minutesToTime(min + 60, TC_SH)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
                     }}>
                     {(() => { const sh = shifts.find(s => s.therapist_id === t.id); if (sh) { const shStart = timeToMinutes(sh.start_time); const shEnd = timeToMinutes(sh.end_time); const left = shStart * (TC_HW / 60); const w = (shEnd - shStart) * (TC_HW / 60); return <div className="absolute top-0 bottom-0" style={{ left, width: w, backgroundColor: dark ? "#c3a78208" : "#c3a78210", borderLeft: "2px solid #c3a78233", borderRight: "2px solid #c3a78233", zIndex: 1 }} />; } return null; })()}
                     {tcHoursRaw.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - TC_SH) * TC_HW, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * TC_HW/6, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
@@ -932,6 +976,39 @@ export default function TimeChart() {
                       return (
                         <div key={`int-${r.id}-${ri}`} className="absolute top-[8px] bottom-[8px] rounded" style={{ left: iLeft, width: iWidth, backgroundColor: dark ? "#ffffff08" : "#00000008", borderLeft: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, borderRight: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, zIndex: 2 }}>
                           <span className="text-[7px] absolute top-0.5 left-1" style={{ color: T.textFaint }}>{intervalMin}分</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {/* フリー枠 建物グリッド行 */}
+              {freeBuildings.map(bl => {
+                const fRes = getFreeResForBuilding(bl.id);
+                const subRows = getFreeSubRows(bl.id);
+                const rowH = Math.max(TC_RH, subRows * 28 + 8);
+                return (
+                  <div key={`free-grid-${bl.id}`} className="border-b relative"
+                    style={{ height: rowH, backgroundColor: dark ? "#1a2a3a44" : "#E6F1FB22", borderColor: T.border }}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest(".res-block")) return;
+                      const rect = e.currentTarget.getBoundingClientRect(); const x = e.clientX - rect.left; const min = Math.round(x / (TC_HW / 6)) * 10;
+                      if (panMoved.current) return;
+                      setNewTherapistId(0); setNewFreeBuildingId(bl.id); setNewStart(minutesToTime(min, TC_SH)); setNewEnd(minutesToTime(min + 60, TC_SH)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
+                      }}>
+                    {tcHoursRaw.map((rawH) => (<div key={`fg-${bl.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - TC_SH) * TC_HW, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * TC_HW/6, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
+                    {fRes.map((r, ri) => {
+                      const sM = timeToMinutes(r.start_time); const eM = timeToMinutes(r.end_time);
+                      const left = sM * (TC_HW / 60); const width = (eM - sM) * (TC_HW / 60);
+                      const subRowIdx = (() => { let idx = 0; for (let j = 0; j < ri; j++) { if (timeToMinutes(fRes[j].start_time) < eM && sM < timeToMinutes(fRes[j].end_time)) idx++; } return idx; })();
+                      return (
+                        <div key={`fres-${r.id}`} className="res-block absolute rounded-lg cursor-pointer"
+                          style={{ left, width: Math.max(width, TC_HW/6), top: 4 + subRowIdx * 28, height: 24, backgroundColor: "#378ADD30", borderLeft: "3px solid #378ADD", zIndex: 5 }}
+                          onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
+                          <div className="px-2 py-0.5 overflow-hidden h-full">
+                            <p className="font-medium truncate" style={{ fontSize: 10, color: T.text }}>{r.customer_name}</p>
+                            <p className="truncate" style={{ fontSize: 8, color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)} {r.course}</p>
+                          </div>
                         </div>
                       );
                     })}
