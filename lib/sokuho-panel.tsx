@@ -232,13 +232,20 @@ export function SokuhoPanel({
   const [postResult, setPostResult] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [editableText, setEditableText] = useState("");
+  const [autoPostMikawa, setAutoPostMikawa] = useState(0);
+  const [autoPostToyohashi, setAutoPostToyohashi] = useState(0);
+  const [templateMikawa, setTemplateMikawa] = useState("");
+  const [templateToyohashi, setTemplateToyohashi] = useState("");
+  const autoPostRef = useRef<NodeJS.Timeout | null>(null);
   const dragOverIdx = useRef<number | null>(null);
 
   // Load credentials from store_settings
   useEffect(() => {
     const loadCredentials = async () => {
       const { data } = await supabase.from("store_settings").select("key,value").in("key", [
-        "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi"
+        "bsky_id", "bsky_pw", "estama_id_mikawa", "estama_pw_mikawa", "estama_id_toyohashi", "estama_pw_toyohashi",
+        "sokuho_autopost_mikawa", "sokuho_autopost_toyohashi", "sokuho_template_mikawa", "sokuho_template_toyohashi"
       ]);
       if (data) {
         for (const s of data) {
@@ -248,6 +255,10 @@ export function SokuhoPanel({
           if (s.key === "estama_pw_mikawa") setEstamaPwMikawa(s.value);
           if (s.key === "estama_id_toyohashi") setEstamaIdToyohashi(s.value);
           if (s.key === "estama_pw_toyohashi") setEstamaPwToyohashi(s.value);
+          if (s.key === "sokuho_autopost_mikawa") setAutoPostMikawa(parseInt(s.value) || 0);
+          if (s.key === "sokuho_autopost_toyohashi") setAutoPostToyohashi(parseInt(s.value) || 0);
+          if (s.key === "sokuho_template_mikawa") setTemplateMikawa(s.value);
+          if (s.key === "sokuho_template_toyohashi") setTemplateToyohashi(s.value);
         }
       }
     };
@@ -395,6 +406,20 @@ export function SokuhoPanel({
     const dateStr = `${d.getMonth() + 1}月${d.getDate()}日(${days[d.getDay()]})`;
 
     const lines = slots.map((s) => `${s.emoji}${s.name} ${s.nextSlot}`);
+    const therapistList = lines.join("\n");
+
+    // カスタムテンプレートがあればそれを使用
+    const template = currentRoom === "mikawa" ? templateMikawa : templateToyohashi;
+    if (template) {
+      return template
+        .replace(/\{date\}/g, dateStr)
+        .replace(/\{room_name\}/g, config.name)
+        .replace(/\{area\}/g, config.area)
+        .replace(/\{therapists\}/g, therapistList)
+        .replace(/\{tel\}/g, CONTACT.tel)
+        .replace(/\{line\}/g, CONTACT.line)
+        .replace(/\{web\}/g, CONTACT.web);
+    }
 
     const text = [
       `☀️ ${dateStr} ${config.name} ☀️`,
@@ -411,7 +436,12 @@ export function SokuhoPanel({
     ].join("\n");
 
     return text;
-  }, [slots, currentRoom, selectedDate]);
+  }, [slots, currentRoom, selectedDate, templateMikawa, templateToyohashi]);
+
+  // editableText を generateText に同期
+  useEffect(() => {
+    setEditableText(generateText());
+  }, [generateText]);
 
   // ========================================
   // Post to Bluesky
@@ -421,7 +451,7 @@ export function SokuhoPanel({
       setPostResult({ type: "error", msg: "Bluesky IDとパスワードを設定してください（⚙️ボタン）" });
       return;
     }
-    const text = generateText();
+    const text = editableText;
     // Blueskyのグラフェム制限（300文字）チェック
     const segmenter = typeof Intl !== "undefined" && Intl.Segmenter
       ? new Intl.Segmenter("ja", { granularity: "grapheme" })
@@ -449,8 +479,12 @@ export function SokuhoPanel({
   const saveCredentials = async () => {
     await supabase.from("store_settings").upsert({ key: "bsky_id", value: bskyId }, { onConflict: "key" });
     await supabase.from("store_settings").upsert({ key: "bsky_pw", value: bskyPw }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "sokuho_autopost_mikawa", value: String(autoPostMikawa) }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "sokuho_autopost_toyohashi", value: String(autoPostToyohashi) }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "sokuho_template_mikawa", value: templateMikawa }, { onConflict: "key" });
+    await supabase.from("store_settings").upsert({ key: "sokuho_template_toyohashi", value: templateToyohashi }, { onConflict: "key" });
     setShowSettings(false);
-    setPostResult({ type: "success", msg: "認証情報を保存しました" });
+    setPostResult({ type: "success", msg: "設定を保存しました" });
   };
 
   // ========================================
@@ -474,7 +508,7 @@ export function SokuhoPanel({
     }
 
     const title = getEstamaTitle();
-    const content = generateText();
+    const content = editableText;
 
     // セラピスト画像をランダム3枚取得
     const imageUrls: string[] = [];
@@ -499,9 +533,28 @@ export function SokuhoPanel({
     setPostResult({ type: "success", msg: "エステ魂ブリッジを開きました" });
   };
 
+  // ── Bluesky自動投稿タイマー ──
+  useEffect(() => {
+    if (autoPostRef.current) clearInterval(autoPostRef.current);
+    const interval = currentRoom === "mikawa" ? autoPostMikawa : autoPostToyohashi;
+    if (!show || interval <= 0 || !bskyId || !bskyPw || slots.length === 0) return;
+    
+    autoPostRef.current = setInterval(async () => {
+      const text = generateText();
+      console.log(`🤖 Bluesky自動投稿 (${currentRoom}, ${interval}分毎)`);
+      const result = await postToBluesky(bskyId, bskyPw, text);
+      if (result.success) {
+        setPostResult({ type: "success", msg: `🤖 自動投稿完了 (${new Date().toLocaleTimeString("ja")})` });
+      } else {
+        setPostResult({ type: "error", msg: `🤖 自動投稿失敗: ${result.error}` });
+      }
+    }, interval * 60 * 1000);
+
+    return () => { if (autoPostRef.current) clearInterval(autoPostRef.current); };
+  }, [show, currentRoom, autoPostMikawa, autoPostToyohashi, bskyId, bskyPw, slots, generateText]);
+
   if (!show) return null;
 
-  const previewText = generateText();
   const roomConfig = ROOMS_CONFIG[currentRoom];
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` };
 
@@ -563,7 +616,8 @@ export function SokuhoPanel({
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
           {/* Settings (collapsible) */}
           {showSettings && (
-            <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+            <div className="rounded-xl p-4 space-y-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+              {/* Bluesky認証 */}
               <p className="text-[12px] font-medium" style={{ color: T.text }}>🔑 Bluesky認証設定</p>
               <div>
                 <label className="block text-[10px] mb-1" style={{ color: T.textFaint }}>Bluesky ID</label>
@@ -587,12 +641,54 @@ export function SokuhoPanel({
                   style={inputStyle}
                 />
               </div>
+
+              {/* Bluesky自動投稿 */}
+              <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+                <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>🤖 Bluesky自動投稿設定</p>
+                <p className="text-[10px] mb-3" style={{ color: T.textFaint }}>0 = 自動投稿OFF。速報パネルを開いている間、指定間隔で自動投稿します。</p>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textFaint }}>🏠 三河安城（分毎）</label>
+                    <input type="number" min={0} max={120} value={autoPostMikawa}
+                      onChange={(e) => setAutoPostMikawa(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-[10px] mb-1" style={{ color: T.textFaint }}>🏢 豊橋（分毎）</label>
+                    <input type="number" min={0} max={120} value={autoPostToyohashi}
+                      onChange={(e) => setAutoPostToyohashi(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                </div>
+              </div>
+
+              {/* テンプレート編集 */}
+              <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+                <p className="text-[12px] font-medium mb-1" style={{ color: T.text }}>📝 投稿テンプレート編集</p>
+                <p className="text-[10px] mb-3" style={{ color: T.textFaint }}>
+                  使える変数: {"{date}"} {"{room_name}"} {"{area}"} {"{therapists}"} {"{tel}"} {"{line}"} {"{web}"}
+                  <br />空欄の場合はデフォルトテンプレートが使われます。
+                </p>
+                <div className="mb-3">
+                  <label className="block text-[10px] mb-1" style={{ color: T.textFaint }}>🏠 三河安城テンプレート</label>
+                  <textarea value={templateMikawa} onChange={(e) => setTemplateMikawa(e.target.value)}
+                    placeholder={"☀️ {date} {room_name} ☀️\n\n{area}\n本日の出勤セラピストはこちらです。\n\n{therapists}\n\n📞 {room_name}のご予約\n📟 TEL: {tel}\n💬 公式LINE: {line}\n💻 WEB予約: {web}"}
+                    className="w-full px-3 py-2 rounded-lg text-[11px] outline-none" style={{ ...inputStyle, minHeight: 120, fontFamily: "monospace", lineHeight: 1.6, resize: "vertical" as const }} />
+                </div>
+                <div>
+                  <label className="block text-[10px] mb-1" style={{ color: T.textFaint }}>🏢 豊橋テンプレート</label>
+                  <textarea value={templateToyohashi} onChange={(e) => setTemplateToyohashi(e.target.value)}
+                    placeholder={"☀️ {date} {room_name} ☀️\n\n{area}\n本日の出勤セラピストはこちらです。\n\n{therapists}\n\n📞 {room_name}のご予約\n📟 TEL: {tel}\n💬 公式LINE: {line}\n💻 WEB予約: {web}"}
+                    className="w-full px-3 py-2 rounded-lg text-[11px] outline-none" style={{ ...inputStyle, minHeight: 120, fontFamily: "monospace", lineHeight: 1.6, resize: "vertical" as const }} />
+                </div>
+              </div>
+
               <button
                 onClick={saveCredentials}
                 className="px-4 py-2 rounded-lg text-[11px] font-medium cursor-pointer"
                 style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}
               >
-                💾 保存
+                💾 すべて保存
               </button>
             </div>
           )}
@@ -697,30 +793,34 @@ export function SokuhoPanel({
             )}
           </div>
 
-          {/* Text preview */}
+          {/* Text preview (editable) */}
           {(() => {
             const segmenter = typeof Intl !== "undefined" && Intl.Segmenter
               ? new Intl.Segmenter("ja", { granularity: "grapheme" }) : null;
-            const charCount = segmenter ? [...segmenter.segment(previewText)].length : previewText.length;
+            const charCount = segmenter ? [...segmenter.segment(editableText)].length : editableText.length;
             const isOver = charCount > 300;
             return (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[10px]" style={{ color: T.textFaint }}>📋 投稿プレビュー</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px]" style={{ color: T.textFaint }}>📝 投稿テキスト（編集可能）</p>
+                  <button onClick={() => setEditableText(generateText())} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, border: `1px solid ${T.border}`, background: "none" }}>🔄 リセット</button>
+                </div>
                 <span className="text-[10px]" style={{ color: isOver ? "#ef4444" : T.textFaint }}>
                   {charCount}/300文字{isOver ? " ⚠️ Bluesky上限超過" : ""}
                 </span>
               </div>
-              <div
-                className="rounded-xl p-4 text-[11px] whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto"
+              <textarea
+                value={editableText}
+                onChange={(e) => setEditableText(e.target.value)}
+                className="rounded-xl p-4 text-[11px] leading-relaxed w-full outline-none"
                 style={{
                   backgroundColor: T.cardAlt, color: T.textSub,
                   fontFamily: "var(--font-mono, monospace)",
                   border: `1px solid ${isOver ? "#ef444444" : T.border}`,
+                  minHeight: 200, resize: "vertical",
                 }}
-              >
-                {previewText}
-              </div>
+              />
             </div>);
           })()}
 
@@ -766,7 +866,7 @@ export function SokuhoPanel({
 
           <button
             onClick={() => {
-              navigator.clipboard.writeText(previewText);
+              navigator.clipboard.writeText(editableText);
               setPostResult({ type: "success", msg: "テキストをコピーしました" });
             }}
             disabled={slots.length === 0}
