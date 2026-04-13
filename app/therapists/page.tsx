@@ -18,6 +18,7 @@ type Therapist = {
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
   real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string;
+  deleted_at?: string | null;
 };
 
 export default function TherapistManagement() {
@@ -140,10 +141,35 @@ const generatePassword = () => {
     return pw;
   };
 
+  const [showTrash, setShowTrash] = useState(false);
+  const [trashItems, setTrashItems] = useState<Therapist[]>([]);
+
   const fetchTherapists = useCallback(async () => {
-    const { data } = await supabase.from("therapists").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
+    const { data } = await supabase.from("therapists").select("*").is("deleted_at", null).order("sort_order", { ascending: true }).order("created_at", { ascending: false });
     if (data) setTherapists(data);
   }, []);
+
+  const fetchTrash = async () => {
+    // 30日超過分を自動削除
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from("therapists").delete().not("deleted_at", "is", null).lt("deleted_at", cutoff);
+    // 残りを取得
+    const { data } = await supabase.from("therapists").select("*").not("deleted_at", "is", null).order("deleted_at", { ascending: false });
+    if (data) setTrashItems(data);
+  };
+
+  const restoreTherapist = async (id: number) => {
+    await supabase.from("therapists").update({ deleted_at: null }).eq("id", id);
+    toast.show("復元しました！", "success");
+    fetchTrash(); fetchTherapists();
+  };
+
+  const permanentDelete = async (id: number) => {
+    if (!confirm("完全に削除しますか？この操作は元に戻せません。")) return;
+    await supabase.from("therapists").delete().eq("id", id);
+    toast.show("完全に削除しました");
+    fetchTrash();
+  };
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); const fetchStore = async () => { const { data } = await supabase.from("stores").select("company_name, company_address, company_phone, invoice_number"); if (data?.[0]) setStoreInfo(data[0]); }; fetchStore(); const fetchNewcomer = async () => { const { data } = await supabase.from("store_settings").select("value").eq("key", "newcomer_duration_months").maybeSingle(); if (data) setNewcomerMonths(parseInt(data.value) || 2); }; fetchNewcomer(); }, [router, fetchTherapists]);
 
@@ -382,7 +408,7 @@ const generatePassword = () => {
       fetchTherapists();
     }
 
-  const handleDelete = async () => { if (!deleteTarget) return; setDeleting(true); await supabase.from("therapists").delete().eq("id", deleteTarget.id); setDeleting(false); setDeleteTarget(null); fetchTherapists(); };
+  const handleDelete = async () => { if (!deleteTarget) return; setDeleting(true); await supabase.from("therapists").update({ deleted_at: new Date().toISOString() }).eq("id", deleteTarget.id); setDeleting(false); setDeleteTarget(null); fetchTherapists(); toast.show("🗑️ ゴミ箱に移動しました（30日後に自動削除）", "success"); };
 
   const sendConfirmEmail = async (t: Therapist) => {
     let token = t.email_token;
@@ -462,6 +488,7 @@ const generatePassword = () => {
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
           <button onClick={openNgRegister} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
           <button onClick={() => setShowThImport(true)} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📥 インポート</button>
+          <button onClick={() => { setShowTrash(true); fetchTrash(); }} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#88888818", color: "#888", border: "1px solid #88888844" }}>🗑️ ゴミ箱</button>
           <button onClick={() => { setShowAdd(true); setMsg(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 新規登録</button>
         </div>
       </div>
@@ -786,11 +813,60 @@ const generatePassword = () => {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteTarget(null)}>
           <div className="rounded-2xl border p-8 w-full max-w-sm text-center animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: "#c4555518" }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c45555" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
-            <h3 className="text-[15px] font-medium mb-2">セラピストを削除しますか？</h3>
-            <p className="text-[12px] mb-6" style={{ color: T.textMuted }}>「{deleteTarget.name}」を削除すると元に戻せません</p>
+            <h3 className="text-[15px] font-medium mb-2">セラピストをゴミ箱に移動しますか？</h3>
+            <p className="text-[12px] mb-6" style={{ color: T.textMuted }}>「{deleteTarget.name}」をゴミ箱に移動します。30日以内なら復元できます。</p>
             <div className="flex gap-3 justify-center">
-              <button onClick={handleDelete} disabled={deleting} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{deleting ? "削除中..." : "削除する"}</button>
+              <button onClick={handleDelete} disabled={deleting} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{deleting ? "移動中..." : "🗑️ ゴミ箱に移動"}</button>
               <button onClick={() => setDeleteTarget(null)} className="px-6 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NG登録モーダル */}
+
+      {/* ゴミ箱モーダル */}
+      {showTrash && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowTrash(false)}>
+          <div className="rounded-2xl border w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <div>
+                <h2 className="text-[15px] font-medium">🗑️ ゴミ箱</h2>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>削除から30日後に自動的に完全削除されます</p>
+              </div>
+              <button onClick={() => setShowTrash(false)} className="text-[18px] cursor-pointer p-1" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {trashItems.length === 0 ? (
+                <div className="text-center py-10" style={{ color: T.textMuted }}>
+                  <div className="text-[40px] mb-2">🗑️</div>
+                  <p className="text-[13px]">ゴミ箱は空です</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {trashItems.map(t => {
+                    const deletedDate = t.deleted_at ? new Date(t.deleted_at) : new Date();
+                    const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - deletedDate.getTime()) / (1000 * 60 * 60 * 24)));
+                    return (
+                      <div key={t.id} className="rounded-xl border p-3 flex items-center gap-3" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+                        <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0" style={{ backgroundColor: T.bg }}>
+                          {t.photo_url ? <img src={t.photo_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[14px]">👤</div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium" style={{ color: T.text }}>{t.name}</p>
+                          <p className="text-[10px]" style={{ color: T.textMuted }}>
+                            削除日: {deletedDate.toLocaleDateString("ja")} ・ 残り{daysLeft}日で完全削除
+                          </p>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button onClick={() => restoreTherapist(t.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "1px solid #22c55e44" }}>🔄 復元</button>
+                          <button onClick={() => permanentDelete(t.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>完全削除</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
