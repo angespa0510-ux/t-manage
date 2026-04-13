@@ -16,6 +16,8 @@ type Nomination = { id: number; name: string; price: number };
 type Discount = { id: number; name: string; amount: number; type: string };
 type Extension = { id: number; name: string; duration: number; price: number };
 type Option = { id: number; name: string; price: number };
+type Building = { id: number; store_id: number; name: string };
+type Room = { id: number; store_id: number; building_id: number; name: string };
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 const normPhone = (p: string) => p.replace(/[-\s\u3000()（）\u2010-\u2015\uff0d]/g, "");
@@ -93,6 +95,10 @@ export default function CustomerMypage() {
   const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null);
   const [cancelMsg, setCancelMsg] = useState("");
   const [cancelPhone, setCancelPhone] = useState("070-1675-5900");
+  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [freeMode, setFreeMode] = useState(false); // フリー予約モード
+  const [bookFreeBuildingId, setBookFreeBuildingId] = useState<number | null>(null);
 
   useEffect(() => { const saved = localStorage.getItem("customer_mypage_id"); if (saved) { supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) { setCustomer(data); setSetEmail(data.login_email || ""); setSetBday(data.birthday || ""); setSetSelfN(data.self_name || data.name || ""); } }); } }, []);
   useEffect(() => { supabase.from("store_settings").select("value").eq("key", "cancel_phone").maybeSingle().then(({ data }) => { if (data?.value) setCancelPhone(data.value); }); }, []);
@@ -116,6 +122,8 @@ export default function CustomerMypage() {
     const { data: disc } = await supabase.from("discounts").select("id,name,amount,type,web_available,newcomer_only,valid_from,valid_until,combinable").order("id"); if (disc) setDiscounts(disc.filter(d => d.web_available !== false));
     const { data: ext } = await supabase.from("extensions").select("id,name,duration,price").order("duration"); if (ext) setExtensions(ext);
     const { data: opts } = await supabase.from("options").select("id,name,price").order("id"); if (opts) setOptionsList(opts);
+    const { data: bl } = await supabase.from("buildings").select("*"); if (bl) setBuildings(bl);
+    const { data: rm } = await supabase.from("rooms").select("*"); if (rm) setRooms(rm);
     // NGセラピスト取得（このお客様をNGにしたセラピスト）
     const { data: ngNotes } = await supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", customer.name).eq("is_ng", true);
     if (ngNotes) setNgTherapistIdsForMe(new Set(ngNotes.map(n => n.therapist_id)));
@@ -144,12 +152,63 @@ export default function CustomerMypage() {
     const shift = schedShifts.find(s => s.therapist_id === tid && s.date === date) || weekShifts.find(s => s.therapist_id === tid && s.date === date);
     setBookDate(date); setBookTime(time); setBookTherapistId(tid); setBookCourseId(0);
     setBookStoreId(shift?.store_id || (stores.length > 0 ? stores[0].id : 0));
-    setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setSchedView("form");
+    setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setFreeMode(false); setBookFreeBuildingId(null); setSchedView("form");
+  };
+  const openFreeBookForm = (date: string, time: string) => {
+    // フリー予約: building_idを決定（出勤セラピストのいる建物）
+    const roomAssignBuildings = new Set<number>();
+    schedShifts.forEach(sh => {
+      const st = stores.find(s => s.id === sh.store_id);
+      if (st) {
+        const bls = buildings.filter(b => b.store_id === sh.store_id);
+        bls.forEach(b => roomAssignBuildings.add(b.id));
+      }
+    });
+    const freeBId = roomAssignBuildings.size > 0 ? [...roomAssignBuildings][0] : (buildings.length > 0 ? buildings[0].id : null);
+    setBookDate(date); setBookTime(time); setBookTherapistId(0); setBookCourseId(0);
+    setBookStoreId(stores.length > 0 ? stores[0].id : 0);
+    setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setFreeMode(true); setBookFreeBuildingId(freeBId); setSchedView("form");
+  };
+
+  // フリー枠の空き判定: その時間に空いているセラピストがいるかチェック
+  const getFreeSlots = () => {
+    if (schedShifts.length === 0) return [];
+    const now = new Date();
+    const isToday = schedDate === new Date().toISOString().split("T")[0];
+    const nowPlus30 = isToday ? now.getHours() * 60 + now.getMinutes() + 30 : 0;
+    // 全シフトの最早開始〜最遅終了
+    let minStart = 9999, maxEnd = 0;
+    schedShifts.forEach(sh => {
+      if (ngTherapistIdsForMe.has(sh.therapist_id)) return;
+      const s = timeToMin(sh.start_time); const e = timeToMin(sh.end_time);
+      if (s < minStart) minStart = s;
+      if (e > maxEnd) maxEnd = e;
+    });
+    if (minStart >= maxEnd) return [];
+    const slots: { time: string; available: boolean }[] = [];
+    for (let m = minStart; m < maxEnd; m += 15) {
+      // 30分ルール: 当日は現在時刻+30分以内は不可
+      if (isToday && m < nowPlus30) { slots.push({ time: minToTime(m), available: false }); continue; }
+      const onShift = schedShifts.filter(sh => {
+        if (ngTherapistIdsForMe.has(sh.therapist_id)) return false;
+        const ss = timeToMin(sh.start_time); const se = timeToMin(sh.end_time);
+        return m >= ss && m < se;
+      });
+      const busyIds = new Set<number>();
+      schedRes.forEach(r => {
+        if (r.status === "cancelled") return;
+        const rs = timeToMin(r.start_time); const re = timeToMin(r.end_time);
+        if (m >= rs && m < re && r.therapist_id > 0) busyIds.add(r.therapist_id);
+      });
+      const availableCount = onShift.filter(sh => !busyIds.has(sh.therapist_id)).length;
+      slots.push({ time: minToTime(m), available: availableCount > 0 });
+    }
+    return slots;
   };
 
   // 指名判定
   const getNominationType = (tid: number): { name: string; label: string; price: number } => {
-    if (tid === 0) return { name: "", label: "", price: 0 };
+    if (tid === 0) return { name: "フリー", label: "🎲 おまかせフリー", price: 0 };
     const pastWithTherapist = reservations.some(r => r.therapist_id === tid && r.status === "completed");
     if (pastWithTherapist) { const n = nominations.find(n => n.name.includes("本指名")); return { name: n?.name || "本指名", label: "⭐ 本指名（リピーター）", price: n?.price || 0 }; }
     else { const n = nominations.find(n => n.name.includes("P指名") || n.name.includes("パネル")); return { name: n?.name || "P指名", label: "✨ P指名（初めて）", price: n?.price || 0 }; }
@@ -230,7 +289,7 @@ export default function CustomerMypage() {
     const optTotal = selOpts.reduce((s, o) => s + o.price, 0);
     const totalPrice = Math.max(0, (course?.price || 0) + nom.price + optTotal + (ext?.price || 0) - (disc?.amount || 0) - bookPointUse);
     if (bookPointUse > 0 && bookPointUse < 1000) { alert("ポイントは1,000pt以上からご利用いただけます"); setBookSaving(false); return; }
-    const { data: newRes, error } = await supabase.from("reservations").insert({ customer_name: customer.name, therapist_id: bookTherapistId || null, date: bookDate, start_time: bookTime, end_time: endTime, course: course?.name || "", total_price: totalPrice, status: "unprocessed", customer_status: "web_reservation", notes: bookNotes, nomination: nom.name, nomination_fee: nom.price, options_text: optText, options_total: optTotal, extension_name: ext?.name || "", extension_price: ext?.price || 0, extension_duration: ext?.duration || 0, discount_name: disc?.name || "", discount_amount: disc?.amount || 0, point_used: bookPointUse }).select("id").single();
+    const { data: newRes, error } = await supabase.from("reservations").insert({ customer_name: customer.name, therapist_id: bookTherapistId || 0, date: bookDate, start_time: bookTime, end_time: endTime, course: course?.name || "", total_price: totalPrice, status: "unprocessed", customer_status: "web_reservation", notes: bookNotes, nomination: nom.name, nomination_fee: nom.price, options_text: optText, options_total: optTotal, extension_name: ext?.name || "", extension_price: ext?.price || 0, extension_duration: ext?.duration || 0, discount_name: disc?.name || "", discount_amount: disc?.amount || 0, point_used: bookPointUse, ...(freeMode && bookFreeBuildingId ? { free_building_id: bookFreeBuildingId } : {}) }).select("id").single();
     setBookSaving(false);
     if (error) { setBookMsg("予約に失敗しました: " + error.message); } else { if (bookPointUse > 0 && newRes) { await supabase.from("customer_points").insert({ customer_id: customer.id, amount: -bookPointUse, type: "use", description: `予約利用（仮押さえ）${dateFmt(bookDate)}`, status: "pending", reservation_id: newRes.id }); } setBookDone(true); fetchData(); fetchDaySchedule(bookDate); }
   };
@@ -381,7 +440,41 @@ export default function CustomerMypage() {
           </div>
 
           {/* セラピスト個別スロット表示（選択時） */}
-          {selectedSchedTid > 0 ? (() => {
+          {freeMode && selectedSchedTid === 0 ? (() => {
+            // フリー枠スロット表示
+            const freeSlots = getFreeSlots();
+            return (
+              <div className="animate-[fadeIn_0.2s]">
+                <button onClick={() => { setFreeMode(false); setSelectedSchedTid(0); }} className="flex items-center gap-1.5 mb-3 text-[13px] cursor-pointer" style={{ color: C.accent }}>← 一覧に戻る</button>
+                <div className="rounded-2xl border overflow-hidden mb-3" style={{ backgroundColor: C.card, borderColor: C.border }}>
+                  <div className="flex items-center gap-4 p-4" style={{ borderBottom: `1px solid ${C.border}`, background: "linear-gradient(135deg, #E6F1FB, #D4E8F9)" }}>
+                    <div className="w-20 h-20 rounded-xl flex items-center justify-center text-[32px] flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2070C0)" }}>🎲</div>
+                    <div>
+                      <p className="text-[16px] font-medium" style={{ color: "#185FA5" }}>おまかせフリー</p>
+                      <p className="text-[11px] mt-1" style={{ color: "#4A90C4" }}>セラピストはお店におまかせ</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "#4A90C4" }}>指名料がかからずお得です♪</p>
+                    </div>
+                  </div>
+                  {/* スロット一覧 */}
+                  <div className="px-4 py-2 space-y-1">
+                    <p className="text-[10px] mb-1 font-medium" style={{ color: C.textSub }}>{dateFmt(schedDate)} の空き状況</p>
+                    {freeSlots.length === 0 ? (
+                      <p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>この日のフリー枠はありません</p>
+                    ) : freeSlots.map((sl, i) => (
+                      <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg" style={{ backgroundColor: sl.available ? "transparent" : "#c4555506" }}>
+                        <span className="text-[12px] font-mono w-[44px] flex-shrink-0" style={{ color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
+                        {sl.available ? (
+                          <button onClick={() => openFreeBookForm(schedDate, sl.time)} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#378ADD12", color: "#378ADD", border: "1px solid #378ADD30" }}>◯ フリー空き — タップで予約</button>
+                        ) : (
+                          <span className="flex-1 py-1.5 rounded-lg text-[11px] text-center" style={{ color: C.textFaint }}>✕ 満員</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })() : selectedSchedTid > 0 ? (() => {
             const shift = schedShifts.find(s => s.therapist_id === selectedSchedTid);
             const t = therapists.find(th => th.id === selectedSchedTid);
             if (!shift || !t) return null;
@@ -439,6 +532,25 @@ export default function CustomerMypage() {
                   <>
                     <p className="text-[11px] mb-2 px-1" style={{ color: C.textMuted }}>{dateFmt(schedDate)} の出勤 — {filtered.length}名</p>
                     <div className="grid grid-cols-2 gap-3">
+                      {/* 🎲 おまかせフリー カード */}
+                      {(() => {
+                        const freeSlots = getFreeSlots();
+                        const freeAvail = freeSlots.filter(s => s.available).length;
+                        return (
+                          <button onClick={() => { setSelectedSchedTid(0); setFreeMode(true); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all col-span-2" style={{ backgroundColor: "#E6F1FB", borderColor: "#378ADD44" }}>
+                            <div className="p-4 flex items-center gap-4">
+                              <div className="w-16 h-16 rounded-xl flex items-center justify-center text-[28px] flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2070C0)" }}>🎲</div>
+                              <div className="flex-1">
+                                <p className="text-[15px] font-medium" style={{ color: "#185FA5" }}>おまかせフリー</p>
+                                <p className="text-[11px] mt-0.5" style={{ color: "#4A90C4" }}>セラピストはお店におまかせ！指名料なし</p>
+                                <div className="mt-1.5">
+                                  <span className="text-[10px] px-2.5 py-0.5 rounded-full" style={{ backgroundColor: freeAvail > 0 ? "#4a7c5918" : "#c4555518", color: freeAvail > 0 ? C.green : C.red }}>{freeAvail > 0 ? `空き${freeAvail}枠` : "空きなし"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })()}
                       {filtered.map(shift => {
                         const t = therapists.find(th => th.id === shift.therapist_id);
                         if (!t) return null;
@@ -446,7 +558,7 @@ export default function CustomerMypage() {
                         const slots = makeSlots(shift, tRes);
                         const freeCount = slots.filter(s => s.available).length;
                         return (
-                          <button key={shift.id} onClick={() => setSelectedSchedTid(shift.therapist_id)} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all" style={{ backgroundColor: C.card, borderColor: C.border }}>
+                          <button key={shift.id} onClick={() => { setSelectedSchedTid(shift.therapist_id); setFreeMode(false); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all" style={{ backgroundColor: C.card, borderColor: C.border }}>
                             {/* 写真 */}
                             {t.photo_url ? (
                               <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover" />
@@ -533,9 +645,9 @@ export default function CustomerMypage() {
           <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: C.card, borderColor: C.border }}>
             {/* 選択済み情報 */}
             <div className="rounded-xl p-4" style={{ backgroundColor: C.accentBg, border: `1px solid ${C.accent}30` }}>
-              <p className="text-[13px] font-medium" style={{ color: C.accent }}>{dateFmt(bookDate)} {bookTime}〜</p>
-              {bookTherapistId > 0 && <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: C.textSub }}>👤 {getTherapistName(bookTherapistId)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getNominationType(bookTherapistId).name.includes("本") ? "#c3a78220" : "#85a8c420", color: getNominationType(bookTherapistId).name.includes("本") ? C.accent : C.blue }}>{getNominationType(bookTherapistId).label}</span></div>}
-              {bookTherapistId > 0 && getNominationType(bookTherapistId).price > 0 && <p className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>指名料: {fmt(getNominationType(bookTherapistId).price)}</p>}
+              <p className="text-[13px] font-medium" style={{ color: freeMode ? "#378ADD" : C.accent }}>{dateFmt(bookDate)} {bookTime}〜</p>
+              {freeMode ? <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: "#378ADD" }}>🎲 おまかせフリー</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD20", color: "#378ADD" }}>指名料なし</span></div> : bookTherapistId > 0 && <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: C.textSub }}>👤 {getTherapistName(bookTherapistId)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getNominationType(bookTherapistId).name.includes("本") ? "#c3a78220" : "#85a8c420", color: getNominationType(bookTherapistId).name.includes("本") ? C.accent : C.blue }}>{getNominationType(bookTherapistId).label}</span></div>}
+              {!freeMode && bookTherapistId > 0 && getNominationType(bookTherapistId).price > 0 && <p className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>指名料: {fmt(getNominationType(bookTherapistId).price)}</p>}
             </div>
 
             {/* コース */}
@@ -588,7 +700,7 @@ export default function CustomerMypage() {
             <div className="text-center mb-6">
               <span className="text-[48px]">✅</span>
               <h2 className="text-[20px] font-medium mt-3">予約リクエストを送信しました！</h2>
-              <p className="text-[12px] mt-1" style={{ color: C.textMuted }}>{dateFmt(bookDate)} {bookTime}〜 {getTherapistName(bookTherapistId)}</p>
+              <p className="text-[12px] mt-1" style={{ color: C.textMuted }}>{dateFmt(bookDate)} {bookTime}〜 {freeMode ? "🎲 おまかせフリー" : getTherapistName(bookTherapistId)}</p>
             </div>
             <div className="rounded-2xl border p-5 space-y-5" style={{ backgroundColor: C.card, borderColor: C.border }}>
               <h3 className="text-[14px] font-medium text-center" style={{ color: C.accent }}>📋 ご予約の流れ</h3>

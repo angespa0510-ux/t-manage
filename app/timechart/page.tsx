@@ -304,6 +304,18 @@ export default function TimeChart() {
   const [showOverduePopup, setShowOverduePopup] = useState(false);
   const overdueSentRef = useRef<Set<string>>(new Set());
   const overdueDismissedRef = useRef<Set<string>>(new Set());
+
+  // WEB予約 CTI風通知
+  const [webResAlert, setWebResAlert] = useState<{id:number;customerName:string;date:string;startTime:string;endTime:string;course:string;isFree:boolean;therapistName:string}|null>(null);
+  const seenResIdsRef = useRef<Set<number>>(new Set());
+  const webResAudioRef = useRef<HTMLAudioElement|null>(null);
+
+  // フリー枠ドラッグ割り当て
+  const [dragFreeRes, setDragFreeRes] = useState<number|null>(null);
+  const [dragOverTherapist, setDragOverTherapist] = useState<number|null>(null);
+
+  // therapistsをrealtime callback内で参照
+  const therapistsRef = useRef<Therapist[]>([]);
   useEffect(() => {
     const check = () => {
       const now = new Date();
@@ -360,8 +372,8 @@ export default function TimeChart() {
   })();
 
   const fetchData = useCallback(async () => {
-    const { data: t } = await supabase.from("therapists").select("*").order("id"); if (t) setTherapists(t);
-    const { data: r } = await supabase.from("reservations").select("*").eq("date", selectedDate).order("start_time"); if (r) setReservations(r);
+    const { data: t } = await supabase.from("therapists").select("*").order("id"); if (t) { setTherapists(t); therapistsRef.current = t; }
+    const { data: r } = await supabase.from("reservations").select("*").eq("date", selectedDate).order("start_time"); if (r) { setReservations(r); r.forEach(res => seenResIdsRef.current.add(res.id)); }
     const { data: c } = await supabase.from("courses").select("*").order("duration"); if (c) setCourses(c);
     const { data: sh } = await supabase.from("shifts").select("*").eq("date", selectedDate).eq("status", "confirmed"); if (sh) setShifts(sh);
     const { data: nm } = await supabase.from("nominations").select("*"); if (nm) setNominations(nm);
@@ -403,7 +415,21 @@ export default function TimeChart() {
   // リアルタイム同期
   useEffect(() => {
     const channel = supabase.channel("timechart-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, (payload) => {
+        fetchData();
+        // WEB予約 CTI風通知: INSERT + web_reservation
+        if (payload.eventType === "INSERT") {
+          const nr = payload.new as any;
+          if (nr.customer_status === "web_reservation" && !seenResIdsRef.current.has(nr.id)) {
+            seenResIdsRef.current.add(nr.id);
+            const isFree = !!nr.free_building_id || nr.therapist_id === 0;
+            const thName = nr.therapist_id > 0 ? (therapistsRef.current.find(t => t.id === nr.therapist_id)?.name || "") : "";
+            setWebResAlert({ id: nr.id, customerName: nr.customer_name, date: nr.date, startTime: nr.start_time, endTime: nr.end_time, course: nr.course || "", isFree, therapistName: thName });
+            // 通知音
+            try { if (!webResAudioRef.current) { webResAudioRef.current = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkpKOi4eDfXl3eX+Fh4WBfX59g4eLjIqHhIB9e3p6fIGFh4eFgn9+f4KGiYqJh4OAfnx7fH6ChYeHhYJ/fn+ChoiKiYeDgH58e3x+goWHh4WCf35/goaIiomHg4B+fHt8foKFh4eFgn9+f4KGiIqJh4OAfnx7fH4="); } webResAudioRef.current.play().catch(()=>{}); } catch(e) {}
+          }
+        }
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "room_assignments" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "therapist_daily_settlements" }, () => fetchData())
@@ -853,7 +879,17 @@ export default function TimeChart() {
                 const isCO = clockedOut.has(t.id);
                 const origIdx = therapists.findIndex((x) => x.id === t.id);
                 return (
-                  <div key={t.id} className="border-b border-r flex items-center px-2 gap-1.5" style={{ height: TC_RH, backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.5 : 1 }}>
+                  <div key={t.id} className="border-b border-r flex items-center px-2 gap-1.5" style={{ height: TC_RH, backgroundColor: dragOverTherapist === t.id ? (dark ? "#1a2a3a" : "#E6F1FB") : isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: dragOverTherapist === t.id ? "#378ADD" : T.border, opacity: isCO ? 0.5 : 1 }}
+                    onDragOver={(e) => { if (dragFreeRes && !isCO) { e.preventDefault(); setDragOverTherapist(t.id); } }}
+                    onDragLeave={() => { if (dragOverTherapist === t.id) setDragOverTherapist(null); }}
+                    onDrop={async (e) => {
+                      e.preventDefault(); setDragOverTherapist(null);
+                      const resId = parseInt(e.dataTransfer.getData("text/plain"));
+                      if (!resId || isCO) return;
+                      const { error } = await supabase.from("reservations").update({ therapist_id: t.id, free_building_id: null, nomination: "フリー→指名" }).eq("id", resId);
+                      if (error) { toast.show("割り当て失敗: " + error.message, "error"); } else { toast.show(`${t.name}に割り当てました`, "success"); fetchData(); }
+                      setDragFreeRes(null);
+                    }}>
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] text-white font-medium flex-shrink-0" style={{ backgroundColor: isCO ? "#888" : colors[origIdx % colors.length] }}>{t.name.charAt(0)}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); setEditTherapist(t); setEtNotes((t as any).notes || ""); }} className="font-medium truncate cursor-pointer flex items-center gap-0.5" style={{ fontSize: tcConfig.nameSize, textDecoration: isCO ? "line-through" : "none", background: "none", border: "none", padding: 0, color: T.text, textAlign: "left" }}>{t.name}<span style={{ fontSize: 8, opacity: 0.4 }}>✏️</span></button>
@@ -923,7 +959,18 @@ export default function TimeChart() {
                 const origIdx = therapists.findIndex((x) => x.id === t.id);
                 return (
                   <div key={t.id} className="border-b relative transition-colors"
-                    style={{ height: TC_RH, backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.4 : 1 }}
+                    style={{ height: TC_RH, backgroundColor: dragOverTherapist === t.id ? (dark ? "#1a2a3a" : "#E6F1FB") : isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: dragOverTherapist === t.id ? "#378ADD" : T.border, opacity: isCO ? 0.4 : 1 }}
+                    onDragOver={(e) => { if (dragFreeRes && !isCO) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverTherapist(t.id); } }}
+                    onDragLeave={() => { if (dragOverTherapist === t.id) setDragOverTherapist(null); }}
+                    onDrop={async (e) => {
+                      e.preventDefault(); setDragOverTherapist(null);
+                      const resId = parseInt(e.dataTransfer.getData("text/plain"));
+                      if (!resId || isCO) return;
+                      // フリー予約をセラピストに割り当て
+                      const { error } = await supabase.from("reservations").update({ therapist_id: t.id, free_building_id: null, nomination: "フリー→指名" }).eq("id", resId);
+                      if (error) { toast.show("割り当て失敗: " + error.message, "error"); } else { toast.show(`${t.name}に割り当てました`, "success"); fetchData(); }
+                      setDragFreeRes(null);
+                    }}
                     onClick={(e) => {
                       if ((e.target as HTMLElement).closest(".res-block") || isCO) return;
                       const rect = e.currentTarget.getBoundingClientRect(); const x = e.clientX - rect.left; const min = Math.round(x / (TC_HW / 6)) * 10;
@@ -1002,12 +1049,18 @@ export default function TimeChart() {
                       const left = sM * (TC_HW / 60); const width = (eM - sM) * (TC_HW / 60);
                       const subRowIdx = (() => { let idx = 0; for (let j = 0; j < ri; j++) { if (timeToMinutes(fRes[j].start_time) < eM && sM < timeToMinutes(fRes[j].end_time)) idx++; } return idx; })();
                       return (
-                        <div key={`fres-${r.id}`} className="res-block absolute rounded-lg cursor-pointer"
-                          style={{ left, width: Math.max(width, TC_HW/6), top: 4 + subRowIdx * 28, height: 24, backgroundColor: "#378ADD30", borderLeft: "3px solid #378ADD", zIndex: 5 }}
+                        <div key={`fres-${r.id}`} className="res-block absolute rounded-lg cursor-grab"
+                          draggable
+                          onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(r.id)); e.dataTransfer.effectAllowed = "move"; setDragFreeRes(r.id); }}
+                          onDragEnd={() => { setDragFreeRes(null); setDragOverTherapist(null); }}
+                          style={{ left, width: Math.max(width, TC_HW/6), top: 4 + subRowIdx * 28, height: 24, backgroundColor: dragFreeRes === r.id ? "#378ADD55" : "#378ADD30", borderLeft: "3px solid #378ADD", zIndex: 5 }}
                           onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
-                          <div className="px-2 py-0.5 overflow-hidden h-full">
-                            <p className="font-medium truncate" style={{ fontSize: 10, color: T.text }}>{r.customer_name}</p>
-                            <p className="truncate" style={{ fontSize: 8, color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)} {r.course}</p>
+                          <div className="px-2 py-0.5 overflow-hidden h-full flex items-center gap-1">
+                            <span style={{ fontSize: 8 }}>↕️</span>
+                            <div className="overflow-hidden">
+                              <p className="font-medium truncate" style={{ fontSize: 10, color: T.text }}>{r.customer_name}</p>
+                              <p className="truncate" style={{ fontSize: 8, color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)} {r.course}</p>
+                            </div>
                           </div>
                         </div>
                       );
@@ -2281,6 +2334,57 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
             </div>
             <p className="text-[13px] mb-5" style={{ color: "#ff9999" }}>このセラピストにこのお客様を割り当てないでください</p>
             <button onClick={() => setNgWarning(null)} className="px-10 py-3 rounded-xl text-[16px] font-bold cursor-pointer" style={{ backgroundColor: "#ff3333", color: "white", border: "none", boxShadow: "0 4px 20px rgba(255,50,50,0.4)" }}>確認しました</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ WEB予約 CTI風通知 ═══ */}
+      {webResAlert && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setWebResAlert(null)}>
+          <div className="rounded-2xl border w-full max-w-sm mx-4 overflow-hidden animate-[fadeIn_0.2s]" style={{ backgroundColor: dark ? "#1a2233" : "#ffffff", borderColor: "#378ADD66", boxShadow: "0 0 40px rgba(55,138,221,0.4)" }} onClick={e => e.stopPropagation()}>
+            {/* ヘッダー（着信風） */}
+            <div className="px-5 py-4 text-center" style={{ background: "linear-gradient(135deg, #378ADD, #2060B0)" }}>
+              <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center text-[24px] mb-2" style={{ backgroundColor: "rgba(255,255,255,0.2)", animation: "pulse 1.5s ease-in-out infinite" }}>
+                {webResAlert.isFree ? "🎲" : "📱"}
+              </div>
+              <p className="text-white text-[16px] font-medium">WEB予約が入りました！</p>
+              <p className="text-[11px] mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>{webResAlert.isFree ? "🎲 おまかせフリー" : `👤 ${webResAlert.therapistName}指名`}</p>
+            </div>
+            {/* 予約情報 */}
+            <div className="px-5 py-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-[20px]">👤</span>
+                <div>
+                  <p className="text-[14px] font-medium" style={{ color: dark ? "#fff" : "#2d2a24" }}>{webResAlert.customerName} 様</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[20px]">📅</span>
+                <div>
+                  <p className="text-[13px]" style={{ color: dark ? "#ddd" : "#6b6860" }}>{(() => { const dt = new Date(webResAlert.date + "T00:00:00"); const days = ["日","月","火","水","木","金","土"]; return `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})`; })()} {webResAlert.startTime?.slice(0,5)}〜{webResAlert.endTime?.slice(0,5)}</p>
+                </div>
+              </div>
+              {webResAlert.course && (
+                <div className="flex items-center gap-3">
+                  <span className="text-[20px]">💆</span>
+                  <p className="text-[13px]" style={{ color: dark ? "#ddd" : "#6b6860" }}>{webResAlert.course}</p>
+                </div>
+              )}
+              {webResAlert.isFree && (
+                <div className="rounded-lg p-2.5" style={{ backgroundColor: "#378ADD12", border: "1px solid #378ADD30" }}>
+                  <p className="text-[11px]" style={{ color: "#378ADD" }}>🎲 フリー予約です。タイムチャートのフリー行に表示されます。セラピストを割り当ててください。</p>
+                </div>
+              )}
+            </div>
+            {/* ボタン */}
+            <div className="px-5 pb-4 flex gap-2">
+              <button onClick={() => {
+                setWebResAlert(null);
+                const res = reservations.find(r => r.id === webResAlert.id);
+                if (res) openEdit(res);
+              }} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #378ADD, #2060B0)" }}>📋 予約を確認</button>
+              <button onClick={() => setWebResAlert(null)} className="px-4 py-2.5 rounded-xl text-[13px] cursor-pointer" style={{ backgroundColor: dark ? "#333" : "#f5f2ed", color: dark ? "#aaa" : "#9e9a91", border: `1px solid ${dark ? "#444" : "#e8e3db"}` }}>閉じる</button>
+            </div>
           </div>
         </div>
       )}
