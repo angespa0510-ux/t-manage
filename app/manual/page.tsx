@@ -45,7 +45,7 @@ export default function ManualPage() {
   const [filterTag, setFilterTag] = useState("");
 
   // Editor state
-  const [view, setView] = useState<"list" | "edit" | "categories">("list");
+  const [view, setView] = useState<"list" | "edit" | "categories" | "logs">("list");
   const [editArticle, setEditArticle] = useState<Article | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editCategoryId, setEditCategoryId] = useState<number | null>(null);
@@ -65,6 +65,7 @@ export default function ManualPage() {
   const [dragOverCover, setDragOverCover] = useState(false);
   const [dragOverEditor, setDragOverEditor] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [aiLogs, setAiLogs] = useState<{ id: number; question: string; answer: string; therapist_name: string; created_at: string }[]>([]);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +88,8 @@ export default function ManualPage() {
     if (th) setTherapists(th);
     const { data: rd } = await supabase.from("manual_reads").select("article_id,therapist_id,read_at");
     if (rd) setAllReads(rd);
+    const { data: logs } = await supabase.from("manual_ai_logs").select("*").order("created_at", { ascending: false }).limit(100);
+    if (logs) setAiLogs(logs);
   }, []);
 
   useEffect(() => {
@@ -303,6 +306,23 @@ export default function ManualPage() {
     fetchData();
   };
 
+  // ── 記事並び替え ──
+  const moveArticle = async (articleId: number, direction: "up" | "down") => {
+    const sameCatArticles = (selectedCat !== null
+      ? articles.filter(a => a.category_id === selectedCat)
+      : articles
+    ).sort((a, b) => a.sort_order - b.sort_order);
+    const idx = sameCatArticles.findIndex(a => a.id === articleId);
+    if (idx < 0) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sameCatArticles.length) return;
+    const current = sameCatArticles[idx];
+    const target = sameCatArticles[swapIdx];
+    await supabase.from("manual_articles").update({ sort_order: target.sort_order }).eq("id", current.id);
+    await supabase.from("manual_articles").update({ sort_order: current.sort_order }).eq("id", target.id);
+    fetchData();
+  };
+
   // ── Category save ──
   const saveCat = async () => {
     if (!catName.trim()) return;
@@ -424,6 +444,10 @@ export default function ManualPage() {
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="上に移動"
+            onClick={(e) => { e.stopPropagation(); moveArticle(a.id, "up"); }}>⬆</button>
+          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="下に移動"
+            onClick={(e) => { e.stopPropagation(); moveArticle(a.id, "down"); }}>⬇</button>
           <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} title="複製"
             onClick={async (e) => {
               e.stopPropagation();
@@ -934,6 +958,7 @@ export default function ManualPage() {
         <input style={{ ...S.input, flex: 1, minWidth: 150 }} value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)} placeholder="🔍 記事を検索..." />
         <button style={S.btn} onClick={() => setView("categories")}>📂 カテゴリ管理</button>
+        <button style={S.btn} onClick={() => setView("logs")}>🤖 AI質問ログ{aiLogs.length > 0 ? `(${aiLogs.length})` : ""}</button>
         <button style={S.btnAccent} onClick={openNewArticle}>✨ 新規記事</button>
       </div>
 
@@ -980,6 +1005,76 @@ export default function ManualPage() {
       {view === "list" && renderList()}
       {view === "edit" && renderEditor()}
       {view === "categories" && renderCategoryManager()}
+      {view === "logs" && (
+        <div style={S.content}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>🤖 AI質問ログ</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={S.btn} onClick={async () => {
+                if (confirm("全ログを削除しますか？")) {
+                  await supabase.from("manual_ai_logs").delete().neq("id", 0);
+                  fetchData();
+                }
+              }}>🗑️ 全削除</button>
+              <button style={S.btn} onClick={() => setView("list")}>← 戻る</button>
+            </div>
+          </div>
+          {/* 統計 */}
+          {aiLogs.length > 0 && (
+            <div style={{ ...S.card, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>📊 質問統計</div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12 }}>
+                <span>📝 総質問数: <strong>{aiLogs.length}</strong></span>
+                <span>👤 質問者数: <strong>{new Set(aiLogs.map(l => l.therapist_name).filter(Boolean)).size}</strong>人</span>
+                <span>📅 直近: {aiLogs[0] ? new Date(aiLogs[0].created_at).toLocaleDateString("ja") : "-"}</span>
+              </div>
+              {/* よく聞かれるキーワード */}
+              {(() => {
+                const words: Record<string, number> = {};
+                aiLogs.forEach(l => {
+                  const q = l.question.toLowerCase();
+                  ["精算", "清掃", "シフト", "給料", "施術", "予約", "鍵", "釣銭", "タオル", "ベッド", "LAST", "NG", "遅刻", "外出", "音楽", "喫煙", "コース", "マイページ"].forEach(w => {
+                    if (q.includes(w.toLowerCase())) words[w] = (words[w] || 0) + 1;
+                  });
+                });
+                const sorted = Object.entries(words).sort((a, b) => b[1] - a[1]);
+                if (sorted.length === 0) return null;
+                return (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>🔥 よく聞かれるキーワード</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {sorted.slice(0, 8).map(([w, c]) => (
+                        <span key={w} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 12, background: "#e8849a20", color: "#e8849a", fontWeight: 600 }}>{w} ({c})</span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          {/* ログ一覧 */}
+          {aiLogs.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: T.textMuted }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>🤖</div>
+              <div style={{ fontSize: 14 }}>まだ質問ログがありません</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>セラピストがAIチャットで質問すると、ここに記録されます</div>
+            </div>
+          ) : (
+            <div>
+              {aiLogs.map(l => (
+                <div key={l.id} style={{ ...S.card, marginBottom: 8, padding: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#e8849a" }}>👤 {l.therapist_name || "不明"}</span>
+                    <span style={{ fontSize: 10, color: T.textMuted }}>{new Date(l.created_at).toLocaleString("ja")}</span>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 4 }}>Q: {l.question}</div>
+                  <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, maxHeight: 80, overflow: "hidden" }}>A: {l.answer?.slice(0, 200)}{(l.answer?.length || 0) > 200 ? "..." : ""}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

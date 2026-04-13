@@ -97,6 +97,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [aiChatMessages, setAiChatMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatLoading, setAiChatLoading] = useState(false);
+  const [aiListening, setAiListening] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
@@ -843,7 +844,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                     )}
                   </div>
                   {/* 入力エリア */}
-                  <div className="flex gap-2 p-3 border-t" style={{ borderColor: T.border, background: dark ? "#1a1a22" : "#faf9f7" }}>
+                  <div className="flex gap-2 p-3 border-t items-center" style={{ borderColor: T.border, background: dark ? "#1a1a22" : "#faf9f7" }}>
                     <input type="text" value={aiChatInput} onChange={e => setAiChatInput(e.target.value)}
                       onKeyDown={async (e) => {
                         if (e.key === "Enter" && aiChatInput.trim() && !aiChatLoading) {
@@ -862,9 +863,39 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                           setAiChatLoading(false);
                         }
                       }}
-                      placeholder="質問を入力..."
+                      placeholder={aiListening ? "🎤 話してください..." : "質問を入力..."}
                       className="flex-1 px-3.5 py-2.5 rounded-xl text-[12px] outline-none"
-                      style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                      style={{ backgroundColor: T.cardAlt, color: T.text, border: aiListening ? "1px solid #e8849a" : `1px solid ${T.border}` }} />
+                    <button
+                      onClick={() => {
+                        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                        if (!SpeechRecognition) { alert("お使いのブラウザは音声入力に対応していません"); return; }
+                        if (aiListening) return;
+                        const recognition = new SpeechRecognition();
+                        recognition.lang = "ja-JP";
+                        recognition.interimResults = false;
+                        recognition.maxAlternatives = 1;
+                        setAiListening(true);
+                        recognition.onresult = (event: any) => {
+                          const text = event.results[0][0].transcript;
+                          setAiChatInput(prev => prev + text);
+                          setAiListening(false);
+                        };
+                        recognition.onerror = () => setAiListening(false);
+                        recognition.onend = () => setAiListening(false);
+                        recognition.start();
+                      }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
+                      style={{
+                        background: aiListening ? "#e8849a" : "transparent",
+                        border: aiListening ? "none" : `1px solid ${T.border}`,
+                        color: aiListening ? "#fff" : "#e8849a",
+                        fontSize: 16,
+                        animation: aiListening ? "pulse 1s ease-in-out infinite" : "none",
+                      }}
+                      title="音声入力">
+                      🎤
+                    </button>
                     <button disabled={!aiChatInput.trim() || aiChatLoading}
                       onClick={async () => {
                         const q = aiChatInput.trim();

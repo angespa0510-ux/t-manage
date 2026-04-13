@@ -106,6 +106,16 @@ ${articleTitles.join(" / ")}
 ${manualContext}${historyContext}`;
 
       const answer = await callClaude(systemPrompt, question.trim());
+
+      // 質問ログを保存
+      try {
+        await supabase.from("manual_ai_logs").insert({
+          question: question.trim(),
+          answer: answer,
+          therapist_name: therapistName || null,
+        });
+      } catch (e) { console.error("Log save error:", e); }
+
       return NextResponse.json({ answer });
     }
 
