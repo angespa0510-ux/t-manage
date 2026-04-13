@@ -154,31 +154,24 @@ export default function CustomerMypage() {
     setBookStoreId(shift?.store_id || (stores.length > 0 ? stores[0].id : 0));
     setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setFreeMode(false); setBookFreeBuildingId(null); setSchedView("form");
   };
-  const openFreeBookForm = (date: string, time: string) => {
-    // フリー予約: building_idを決定（出勤セラピストのいる建物）
-    const roomAssignBuildings = new Set<number>();
-    schedShifts.forEach(sh => {
-      const st = stores.find(s => s.id === sh.store_id);
-      if (st) {
-        const bls = buildings.filter(b => b.store_id === sh.store_id);
-        bls.forEach(b => roomAssignBuildings.add(b.id));
-      }
-    });
-    const freeBId = roomAssignBuildings.size > 0 ? [...roomAssignBuildings][0] : (buildings.length > 0 ? buildings[0].id : null);
+  const openFreeBookForm = (date: string, time: string, storeId: number) => {
+    // フリー予約: storeのbuildingを取得
+    const bl = buildings.find(b => b.store_id === storeId);
+    const freeBId = bl ? bl.id : (buildings.length > 0 ? buildings[0].id : null);
     setBookDate(date); setBookTime(time); setBookTherapistId(0); setBookCourseId(0);
-    setBookStoreId(stores.length > 0 ? stores[0].id : 0);
+    setBookStoreId(storeId);
     setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setFreeMode(true); setBookFreeBuildingId(freeBId); setSchedView("form");
   };
 
-  // フリー枠の空き判定: その時間に空いているセラピストがいるかチェック
-  const getFreeSlots = () => {
-    if (schedShifts.length === 0) return [];
+  // フリー枠の空き判定: 店舗ごとにセラピストの空きをチェック
+  const getFreeSlots = (storeId: number) => {
+    const storeShifts = schedShifts.filter(sh => sh.store_id === storeId);
+    if (storeShifts.length === 0) return [];
     const now = new Date();
     const isToday = schedDate === new Date().toISOString().split("T")[0];
     const nowPlus30 = isToday ? now.getHours() * 60 + now.getMinutes() + 30 : 0;
-    // 全シフトの最早開始〜最遅終了
     let minStart = 9999, maxEnd = 0;
-    schedShifts.forEach(sh => {
+    storeShifts.forEach(sh => {
       if (ngTherapistIdsForMe.has(sh.therapist_id)) return;
       const s = timeToMin(sh.start_time); const e = timeToMin(sh.end_time);
       if (s < minStart) minStart = s;
@@ -187,9 +180,8 @@ export default function CustomerMypage() {
     if (minStart >= maxEnd) return [];
     const slots: { time: string; available: boolean }[] = [];
     for (let m = minStart; m < maxEnd; m += 15) {
-      // 30分ルール: 当日は現在時刻+30分以内は不可
       if (isToday && m < nowPlus30) { slots.push({ time: minToTime(m), available: false }); continue; }
-      const onShift = schedShifts.filter(sh => {
+      const onShift = storeShifts.filter(sh => {
         if (ngTherapistIdsForMe.has(sh.therapist_id)) return false;
         const ss = timeToMin(sh.start_time); const se = timeToMin(sh.end_time);
         return m >= ss && m < se;
@@ -205,6 +197,9 @@ export default function CustomerMypage() {
     }
     return slots;
   };
+
+  // 出勤中の店舗リスト（フリー枠表示用）
+  const freeStoreIds = [...new Set(schedShifts.map(sh => sh.store_id).filter(sid => sid > 0))];
 
   // 指名判定
   const getNominationType = (tid: number): { name: string; label: string; price: number } => {
@@ -442,7 +437,8 @@ export default function CustomerMypage() {
           {/* セラピスト個別スロット表示（選択時） */}
           {freeMode && selectedSchedTid === 0 ? (() => {
             // フリー枠スロット表示
-            const freeSlots = getFreeSlots();
+            const freeSlots = getFreeSlots(bookStoreId);
+            const storeName = getStoreName(bookStoreId);
             return (
               <div className="animate-[fadeIn_0.2s]">
                 <button onClick={() => { setFreeMode(false); setSelectedSchedTid(0); }} className="flex items-center gap-1.5 mb-3 text-[13px] cursor-pointer" style={{ color: C.accent }}>← 一覧に戻る</button>
@@ -451,7 +447,7 @@ export default function CustomerMypage() {
                     <div className="w-20 h-20 rounded-xl flex items-center justify-center text-[32px] flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2070C0)" }}>🎲</div>
                     <div>
                       <p className="text-[16px] font-medium" style={{ color: "#185FA5" }}>おまかせフリー</p>
-                      <p className="text-[11px] mt-1" style={{ color: "#4A90C4" }}>セラピストはお店におまかせ</p>
+                      <p className="text-[11px] mt-1" style={{ color: "#4A90C4" }}>📍 {storeName}</p>
                       <p className="text-[10px] mt-0.5" style={{ color: "#4A90C4" }}>指名料がかからずお得です♪</p>
                     </div>
                   </div>
@@ -464,7 +460,7 @@ export default function CustomerMypage() {
                       <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg" style={{ backgroundColor: sl.available ? "transparent" : "#c4555506" }}>
                         <span className="text-[12px] font-mono w-[44px] flex-shrink-0" style={{ color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
                         {sl.available ? (
-                          <button onClick={() => openFreeBookForm(schedDate, sl.time)} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#378ADD12", color: "#378ADD", border: "1px solid #378ADD30" }}>◯ フリー空き — タップで予約</button>
+                          <button onClick={() => openFreeBookForm(schedDate, sl.time, bookStoreId)} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#378ADD12", color: "#378ADD", border: "1px solid #378ADD30" }}>◯ フリー空き — タップで予約</button>
                         ) : (
                           <span className="flex-1 py-1.5 rounded-lg text-[11px] text-center" style={{ color: C.textFaint }}>✕ 満員</span>
                         )}
@@ -532,17 +528,18 @@ export default function CustomerMypage() {
                   <>
                     <p className="text-[11px] mb-2 px-1" style={{ color: C.textMuted }}>{dateFmt(schedDate)} の出勤 — {filtered.length}名</p>
                     <div className="grid grid-cols-2 gap-3">
-                      {/* 🎲 おまかせフリー カード */}
-                      {(() => {
-                        const freeSlots = getFreeSlots();
+                      {/* 🎲 おまかせフリー カード（店舗ごと） */}
+                      {freeStoreIds.map(storeId => {
+                        const storeName = getStoreName(storeId);
+                        const freeSlots = getFreeSlots(storeId);
                         const freeAvail = freeSlots.filter(s => s.available).length;
                         return (
-                          <button onClick={() => { setSelectedSchedTid(0); setFreeMode(true); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all col-span-2" style={{ backgroundColor: "#E6F1FB", borderColor: "#378ADD44" }}>
+                          <button key={`free-${storeId}`} onClick={() => { setSelectedSchedTid(0); setFreeMode(true); setBookStoreId(storeId); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all col-span-2" style={{ backgroundColor: "#E6F1FB", borderColor: "#378ADD44" }}>
                             <div className="p-4 flex items-center gap-4">
                               <div className="w-16 h-16 rounded-xl flex items-center justify-center text-[28px] flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2070C0)" }}>🎲</div>
                               <div className="flex-1">
                                 <p className="text-[15px] font-medium" style={{ color: "#185FA5" }}>おまかせフリー</p>
-                                <p className="text-[11px] mt-0.5" style={{ color: "#4A90C4" }}>セラピストはお店におまかせ！指名料なし</p>
+                                <p className="text-[11px] mt-0.5" style={{ color: "#4A90C4" }}>📍 {storeName} ｜ 指名料なし</p>
                                 <div className="mt-1.5">
                                   <span className="text-[10px] px-2.5 py-0.5 rounded-full" style={{ backgroundColor: freeAvail > 0 ? "#4a7c5918" : "#c4555518", color: freeAvail > 0 ? C.green : C.red }}>{freeAvail > 0 ? `空き${freeAvail}枠` : "空きなし"}</span>
                                 </div>
@@ -550,7 +547,7 @@ export default function CustomerMypage() {
                             </div>
                           </button>
                         );
-                      })()}
+                      })}
                       {filtered.map(shift => {
                         const t = therapists.find(th => th.id === shift.therapist_id);
                         if (!t) return null;
@@ -646,7 +643,7 @@ export default function CustomerMypage() {
             {/* 選択済み情報 */}
             <div className="rounded-xl p-4" style={{ backgroundColor: C.accentBg, border: `1px solid ${C.accent}30` }}>
               <p className="text-[13px] font-medium" style={{ color: freeMode ? "#378ADD" : C.accent }}>{dateFmt(bookDate)} {bookTime}〜</p>
-              {freeMode ? <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: "#378ADD" }}>🎲 おまかせフリー</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD20", color: "#378ADD" }}>指名料なし</span></div> : bookTherapistId > 0 && <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: C.textSub }}>👤 {getTherapistName(bookTherapistId)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getNominationType(bookTherapistId).name.includes("本") ? "#c3a78220" : "#85a8c420", color: getNominationType(bookTherapistId).name.includes("本") ? C.accent : C.blue }}>{getNominationType(bookTherapistId).label}</span></div>}
+              {freeMode ? <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: "#378ADD" }}>🎲 おまかせフリー</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD20", color: "#378ADD" }}>📍 {getStoreName(bookStoreId)} ｜ 指名料なし</span></div> : bookTherapistId > 0 && <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: C.textSub }}>👤 {getTherapistName(bookTherapistId)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getNominationType(bookTherapistId).name.includes("本") ? "#c3a78220" : "#85a8c420", color: getNominationType(bookTherapistId).name.includes("本") ? C.accent : C.blue }}>{getNominationType(bookTherapistId).label}</span></div>}
               {!freeMode && bookTherapistId > 0 && getNominationType(bookTherapistId).price > 0 && <p className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>指名料: {fmt(getNominationType(bookTherapistId).price)}</p>}
             </div>
 

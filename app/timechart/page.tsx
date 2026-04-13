@@ -927,7 +927,7 @@ export default function TimeChart() {
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] text-white font-medium flex-shrink-0" style={{ backgroundColor: "#378ADD" }}>F</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
-                        <span className="font-medium text-[11px]" style={{ color: "#185FA5" }}>{bl.name}</span>
+                        <span className="font-medium text-[11px]" style={{ color: "#185FA5" }}>{(() => { const st = stores.find(s => s.id === bl.store_id); return st ? st.name : bl.name; })()}</span>
                         <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD22", color: "#378ADD" }}>フリー</span>
                         {freeCount > 0 && <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD33", color: "#185FA5" }}>{freeCount}件</span>}
                       </div>
