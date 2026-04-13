@@ -207,6 +207,44 @@ const generatePassword = () => {
     fetchTherapists();
   };
 
+  const generateInvoiceLink = async (therapistId: number) => {
+    const token = `i_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    await supabase.from("contracts").insert({ therapist_id: therapistId, token, status: "pending", type: "invoice" });
+    const url = `${window.location.origin}/invoice-upload/${token}`;
+    navigator.clipboard.writeText(url);
+    toast.show("📋 適格事業者リンクをコピーしました", "success");
+    fetchTherapists();
+  };
+
+  const [showBulkLinks, setShowBulkLinks] = useState(false);
+  const [bulkLinks, setBulkLinks] = useState<{ name: string; contract?: string; license?: string; invoice?: string }[]>([]);
+  const generateBulkLinks = async () => {
+    const links: typeof bulkLinks = [];
+    for (const t of therapists) {
+      const entry: typeof bulkLinks[0] = { name: t.name };
+      if (!contractsMap[t.id] || contractsMap[t.id].status !== "signed") {
+        const tk = `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        await supabase.from("contracts").insert({ therapist_id: t.id, token: tk, status: "pending", type: "contract" });
+        entry.contract = `${window.location.origin}/contract-sign/${tk}`;
+      }
+      if (!t.license_photo_url) {
+        const tk = `l_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        await supabase.from("contracts").insert({ therapist_id: t.id, token: tk, status: "pending", type: "license" });
+        entry.license = `${window.location.origin}/license-upload/${tk}`;
+      }
+      if (!t.has_invoice) {
+        const tk = `i_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        await supabase.from("contracts").insert({ therapist_id: t.id, token: tk, status: "pending", type: "invoice" });
+        entry.invoice = `${window.location.origin}/invoice-upload/${tk}`;
+      }
+      if (entry.contract || entry.license || entry.invoice) links.push(entry);
+    }
+    setBulkLinks(links);
+    setShowBulkLinks(true);
+    fetchTherapists();
+    toast.show(`${links.length}名分のリンクを発行しました`, "success");
+  };
+
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchTherapists(); const fetchStore = async () => { const { data } = await supabase.from("stores").select("company_name, company_address, company_phone, invoice_number"); if (data?.[0]) setStoreInfo(data[0]); }; fetchStore(); const fetchNewcomer = async () => { const { data } = await supabase.from("store_settings").select("value").eq("key", "newcomer_duration_months").maybeSingle(); if (data) setNewcomerMonths(parseInt(data.value) || 2); }; fetchNewcomer(); }, [router, fetchTherapists]);
 
     const fetchPayroll = async () => {
@@ -525,6 +563,7 @@ const generatePassword = () => {
           <button onClick={openNgRegister} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
           <button onClick={() => setShowThImport(true)} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📥 インポート</button>
           <button onClick={() => { setShowTrash(true); fetchTrash(); }} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#88888818", color: "#888", border: "1px solid #88888844" }}>🗑️ ゴミ箱</button>
+          <button onClick={generateBulkLinks} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>📨 一括リンク発行</button>
           <button onClick={() => { setShowAdd(true); setMsg(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 新規登録</button>
         </div>
       </div>
@@ -580,6 +619,11 @@ const generatePassword = () => {
                       <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>✅ 身分証</span>
                     ) : (
                       <button onClick={async () => { await generateLicenseLink(t.id); }} className="px-2 py-0.5 text-[9px] rounded-md font-medium cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>❌ 身分証</button>
+                    )}
+                    {t.has_invoice ? (
+                      <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>✅ 適格</span>
+                    ) : (
+                      <button onClick={async () => { await generateInvoiceLink(t.id); }} className="px-2 py-0.5 text-[9px] rounded-md font-medium cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>❌ 適格</button>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-x-2 text-[8px] mb-1" style={{ color: T.textSub }}>
@@ -677,6 +721,20 @@ const generatePassword = () => {
                     </div>
                   ) : (
                     <button onClick={() => generateLicenseLink(detailTarget.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6", border: "1px solid #8b5cf644" }}>🪪 身分証リンクを発行</button>
+                  )}
+                </div>
+
+                {/* 適格事業者 */}
+                <div className="pt-3 mt-2" style={{ borderTop: `1px solid ${T.cardAlt}` }}>
+                  <p className="text-[11px] mb-2" style={{ color: T.textMuted }}>📋 適格事業者登録通知書</p>
+                  {detailTarget.has_invoice ? (
+                    <div>
+                      <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>✅ 提出済み</span>
+                      {detailTarget.therapist_invoice_number && <p className="text-[12px] font-mono mt-1" style={{ color: T.text }}>{detailTarget.therapist_invoice_number}</p>}
+                      {detailTarget.invoice_photo_url && <img src={detailTarget.invoice_photo_url} alt="通知書" style={{ width: 100, height: 65, objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, marginTop: 4 }} />}
+                    </div>
+                  ) : (
+                    <button onClick={() => generateInvoiceLink(detailTarget.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>📋 適格事業者リンクを発行</button>
                   )}
                 </div>
               </div>
@@ -910,7 +968,44 @@ const generatePassword = () => {
         </div>
       )}
 
-      {/* NG登録モーダル */}
+      {/* 一括リンク発行モーダル */}
+      {showBulkLinks && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowBulkLinks(false)}>
+          <div className="rounded-2xl border w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <div>
+                <h2 className="text-[15px] font-medium">📨 一括リンク発行</h2>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>未提出の書類リンクをLINEで各セラピストに送ってください</p>
+              </div>
+              <button onClick={() => setShowBulkLinks(false)} className="text-[18px] cursor-pointer p-1" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {bulkLinks.length === 0 ? (
+                <div className="text-center py-10" style={{ color: T.textMuted }}>
+                  <div className="text-[40px] mb-2">✅</div>
+                  <p className="text-[13px]">全員の書類が提出済みです！</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {bulkLinks.map((link, idx) => (
+                    <div key={idx} className="rounded-xl border p-3" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+                      <p className="text-[13px] font-medium mb-2" style={{ color: T.text }}>👤 {link.name}</p>
+                      <div className="space-y-1.5">
+                        {link.contract && <div className="flex items-center gap-2"><span className="text-[10px]" style={{ color: "#c45555" }}>📝 契約書:</span><button onClick={() => { navigator.clipboard.writeText(link.contract!); toast.show(`${link.name}の契約書URLをコピー`, "success"); }} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "none" }}>📋 コピー</button></div>}
+                        {link.license && <div className="flex items-center gap-2"><span className="text-[10px]" style={{ color: "#c45555" }}>🪪 身分証:</span><button onClick={() => { navigator.clipboard.writeText(link.license!); toast.show(`${link.name}の身分証URLをコピー`, "success"); }} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "none" }}>📋 コピー</button></div>}
+                        {link.invoice && <div className="flex items-center gap-2"><span className="text-[10px]" style={{ color: "#c45555" }}>📋 適格事業者:</span><button onClick={() => { navigator.clipboard.writeText(link.invoice!); toast.show(`${link.name}の適格URLをコピー`, "success"); }} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "none" }}>📋 コピー</button></div>}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="rounded-xl p-3 text-[11px] leading-relaxed" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33", color: "#92700c" }}>
+                    💡 <strong>送り方:</strong> 各セラピストのLINEに「📋コピー」したURLを貼り付けて送ってください。セラピストはURLを開くだけで提出できます（ログイン不要）。
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ゴミ箱モーダル */}
       {showTrash && (
