@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 
 type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
-type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number };
+type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number };
 type Therapist = { id: number; name: string; age: number; height_cm: number; bust: number; waist: number; hip: number; cup: string; photo_url: string; status: string };
 type Course = { id: number; name: string; duration: number; price: number };
 type Store = { id: number; name: string };
@@ -187,12 +187,21 @@ export default function CustomerMypage() {
         return m >= ss && m < se;
       });
       const busyIds = new Set<number>();
+      // 指名予約で埋まっているセラピスト
       schedRes.forEach(r => {
         if (r.status === "cancelled") return;
         const rs = timeToMin(r.start_time); const re = timeToMin(r.end_time);
         if (m >= rs && m < re && r.therapist_id > 0) busyIds.add(r.therapist_id);
       });
-      const availableCount = onShift.filter(sh => !busyIds.has(sh.therapist_id)).length;
+      // 既存のフリー予約数（この店舗のbuildingに紐付くフリー予約）
+      const storeBuildingIds = new Set(buildings.filter(b => b.store_id === storeId).map(b => b.id));
+      let freeResCount = 0;
+      schedRes.forEach(r => {
+        if (r.status === "cancelled") return;
+        const rs = timeToMin(r.start_time); const re = timeToMin(r.end_time);
+        if (m >= rs && m < re && (r.therapist_id === 0 || r.free_building_id) && storeBuildingIds.has(r.free_building_id || 0)) freeResCount++;
+      });
+      const availableCount = onShift.filter(sh => !busyIds.has(sh.therapist_id)).length - freeResCount;
       slots.push({ time: minToTime(m), available: availableCount > 0 });
     }
     return slots;
