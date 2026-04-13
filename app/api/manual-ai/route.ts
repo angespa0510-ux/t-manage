@@ -39,7 +39,7 @@ async function callClaude(systemPrompt: string, userMessage: string, maxTokens =
 
 export async function POST(req: Request) {
   try {
-    const { action, question, content, chatHistory } = await req.json();
+    const { action, question, content, chatHistory, therapistName } = await req.json();
 
     // ── AIチャット（セラピスト向け） ──
     if (action === "chat") {
@@ -83,6 +83,7 @@ export async function POST(req: Request) {
 
       const systemPrompt = `あなたはアンジュスパのマニュアルAIアシスタントです。
 セラピストさんからの質問に、マニュアルの内容をもとに答えてください。
+${therapistName ? `\n相手のセラピストの名前は「${therapistName}」さんです。回答の最初に「${therapistName}さん、」と名前で呼びかけてください。` : ""}
 
 【ルール】
 - 親しみやすく、やさしい口調で答えてください（女性セラピスト向け）

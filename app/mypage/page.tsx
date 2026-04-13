@@ -854,7 +854,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                           try {
                             const res = await fetch("/api/manual-ai", {
                               method: "POST", headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages }),
+                              body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages, therapistName: therapist?.name || "" }),
                             });
                             const data = await res.json();
                             setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー" }]);
@@ -875,7 +875,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                         try {
                           const res = await fetch("/api/manual-ai", {
                             method: "POST", headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages }),
+                            body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages, therapistName: therapist?.name || "" }),
                           });
                           const data = await res.json();
                           setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー" }]);
