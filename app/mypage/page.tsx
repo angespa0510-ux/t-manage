@@ -780,44 +780,70 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             <div>
               {!aiChatOpen ? (
                 <button onClick={() => setAiChatOpen(true)}
-                  className="w-full py-3 rounded-2xl text-[13px] font-medium cursor-pointer border"
-                  style={{ background: "linear-gradient(135deg, #e8849a20, #d4687e10)", borderColor: "#e8849a44", color: "#e8849a" }}>
-                  🤖 AIに質問する
+                  className="w-full py-3.5 rounded-2xl text-[13px] font-medium cursor-pointer border flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg, #e8849a18, #d4687e08)", borderColor: "#e8849a44", color: "#e8849a" }}>
+                  <span style={{ fontSize: 18 }}>🤖</span>
+                  <span>マニュアルAIに質問する</span>
                 </button>
               ) : (
-                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: "#e8849a44" }}>
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: T.border, background: "linear-gradient(135deg, #e8849a15, #d4687e08)" }}>
-                    <span className="text-[12px] font-medium" style={{ color: "#e8849a" }}>🤖 マニュアルAI</span>
-                    <button onClick={() => setAiChatOpen(false)} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>✕ 閉じる</button>
+                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: "#e8849a44", boxShadow: "0 2px 12px rgba(232,132,154,0.08)" }}>
+                  {/* ヘッダー */}
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: T.border, background: "linear-gradient(135deg, #e8849a18, #d4687e08)" }}>
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: 16 }}>🤖</span>
+                      <span className="text-[12px] font-semibold" style={{ color: "#e8849a" }}>マニュアルAI</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "#4ade8033", color: "#22c55e" }}>● online</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {aiChatMessages.length > 0 && (
+                        <button onClick={() => setAiChatMessages([])} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: `1px solid ${T.border}` }}>🗑️ クリア</button>
+                      )}
+                      <button onClick={() => setAiChatOpen(false)} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>✕ 閉じる</button>
+                    </div>
                   </div>
-                  <div style={{ maxHeight: 300, overflowY: "auto", padding: 12 }}>
+                  {/* メッセージエリア */}
+                  <div style={{ maxHeight: 350, overflowY: "auto", padding: 12 }}>
                     {aiChatMessages.length === 0 && (
-                      <div className="text-center py-4">
-                        <p className="text-[11px]" style={{ color: T.textMuted }}>マニュアルの内容について何でも聞いてね！</p>
-                        <div className="flex flex-wrap gap-1.5 justify-center mt-2">
-                          {["掃除の仕方は？", "シフトの出し方は？", "精算方法を教えて"].map(q => (
+                      <div className="text-center py-6">
+                        <div style={{ fontSize: 36, marginBottom: 8 }}>🤖</div>
+                        <p className="text-[12px] font-medium" style={{ color: T.text }}>マニュアルAIアシスタント</p>
+                        <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>マニュアルの内容について何でも聞いてね！</p>
+                        <div className="flex flex-wrap gap-1.5 justify-center mt-4">
+                          {["掃除の手順を教えて", "精算方法は？", "シフトの出し方", "LAST勤務とは？", "お給料について"].map(q => (
                             <button key={q} onClick={() => { setAiChatInput(q); }}
-                              className="text-[9px] px-2 py-1 rounded-lg cursor-pointer border" style={{ borderColor: "#e8849a33", color: "#e8849a", background: "transparent" }}>{q}</button>
+                              className="text-[10px] px-3 py-1.5 rounded-full cursor-pointer border transition-all"
+                              style={{ borderColor: "#e8849a33", color: "#e8849a", background: "transparent" }}>{q}</button>
                           ))}
                         </div>
                       </div>
                     )}
                     {aiChatMessages.map((m, i) => (
-                      <div key={i} className={`flex mb-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                        <div className="rounded-xl px-3 py-2 text-[12px] leading-relaxed" style={{
-                          maxWidth: "85%",
-                          background: m.role === "user" ? "#e8849a" : (dark ? "#3a3a42" : "#f8f6f3"),
+                      <div key={i} className={`flex mb-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        {m.role === "ai" && <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5" style={{ background: "#e8849a20", fontSize: 12 }}>🤖</div>}
+                        <div className="rounded-2xl px-3.5 py-2.5 text-[12px] leading-[1.7]" style={{
+                          maxWidth: "80%",
+                          background: m.role === "user" ? "linear-gradient(135deg, #e8849a, #d4687e)" : (dark ? "#2a2a32" : "#f8f6f3"),
                           color: m.role === "user" ? "#fff" : T.text,
-                        }}>{m.content}</div>
+                          borderBottomRightRadius: m.role === "user" ? 4 : 16,
+                          borderBottomLeftRadius: m.role === "ai" ? 4 : 16,
+                        }}>
+                          {m.role === "ai" ? renderInlineContent(m.content) : m.content}
+                        </div>
                       </div>
                     ))}
                     {aiChatLoading && (
-                      <div className="flex justify-start mb-2">
-                        <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: dark ? "#3a3a42" : "#f8f6f3", color: T.textMuted }}>🤖 考え中...</div>
+                      <div className="flex justify-start mb-3">
+                        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5" style={{ background: "#e8849a20", fontSize: 12 }}>🤖</div>
+                        <div className="rounded-2xl px-3.5 py-2.5 text-[12px] flex items-center gap-2" style={{ background: dark ? "#2a2a32" : "#f8f6f3", color: T.textMuted, borderBottomLeftRadius: 4 }}>
+                          <span className="inline-block" style={{ animation: "pulse 1.5s ease-in-out infinite" }}>💭</span>
+                          考え中...
+                          <style>{`@keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
+                        </div>
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2 p-3 border-t" style={{ borderColor: T.border }}>
+                  {/* 入力エリア */}
+                  <div className="flex gap-2 p-3 border-t" style={{ borderColor: T.border, background: dark ? "#1a1a22" : "#faf9f7" }}>
                     <input type="text" value={aiChatInput} onChange={e => setAiChatInput(e.target.value)}
                       onKeyDown={async (e) => {
                         if (e.key === "Enter" && aiChatInput.trim() && !aiChatLoading) {
@@ -837,7 +863,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                         }
                       }}
                       placeholder="質問を入力..."
-                      className="flex-1 px-3 py-2 rounded-xl text-[12px] outline-none"
+                      className="flex-1 px-3.5 py-2.5 rounded-xl text-[12px] outline-none"
                       style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
                     <button disabled={!aiChatInput.trim() || aiChatLoading}
                       onClick={async () => {
@@ -856,8 +882,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                         } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
                         setAiChatLoading(false);
                       }}
-                      className="px-3 py-2 rounded-xl text-[11px] text-white cursor-pointer disabled:opacity-40"
-                      style={{ background: "#e8849a", border: "none" }}>送信</button>
+                      className="px-4 py-2.5 rounded-xl text-[11px] text-white cursor-pointer disabled:opacity-40 font-medium"
+                      style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", border: "none", boxShadow: "0 2px 6px rgba(232,132,154,0.25)" }}>送信</button>
                   </div>
                 </div>
               )}

@@ -59,17 +59,15 @@ export async function POST(req: Request) {
 
       // マニュアルコンテキストを構築
       let manualContext = "【マニュアル記事一覧】\n\n";
+      const articleTitles: string[] = [];
       (articles || []).forEach((a: any) => {
+        articleTitles.push(a.title);
         manualContext += `## ${a.title}\n${a.content}\n\n`;
       });
 
       if (qas && qas.length > 0) {
         manualContext += "\n【Q&A集】\n";
         qas.forEach((q: any) => {
-          const art = (articles || []).find((a: any, i: number) => {
-            // article_idでマッチ（簡易）
-            return true;
-          });
           manualContext += `Q: ${q.question}\nA: ${q.answer}\n\n`;
         });
       }
@@ -90,8 +88,19 @@ export async function POST(req: Request) {
 - 親しみやすく、やさしい口調で答えてください（女性セラピスト向け）
 - マニュアルに書いてある内容を中心に回答してください
 - マニュアルに載っていない内容の場合は「マニュアルにはこの情報がないので、スタッフに確認してくださいね！」と伝えてください
-- 回答は簡潔に（200文字以内を目安）
+- 回答は簡潔に（300文字以内を目安）
 - 絵文字を適度に使ってください
+- マークダウン記法は使わないでください（##、**、- リスト等は使わない）
+- 代わりに、普通の文章で読みやすく書いてください
+- 番号付きの手順は「①②③」のように丸数字を使ってください
+- 重要なポイントは「⚠️」や「💡」で強調してください
+
+【記事リンク機能】
+関連する記事がある場合は、回答の最後に以下の形式で記事リンクを付けてください：
+[link:記事タイトル]
+例: 詳しくは[link:精算の仕方]を見てね！
+※記事タイトルは以下の一覧から正確に選んでください：
+${articleTitles.join(" / ")}
 
 ${manualContext}${historyContext}`;
 
