@@ -94,10 +94,11 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [manualOpenQA, setManualOpenQA] = useState<number | null>(null);
   const [manualHistory, setManualHistory] = useState<ManualArticle[]>([]);
   const [aiChatOpen, setAiChatOpen] = useState(false);
-  const [aiChatMessages, setAiChatMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+  const [aiChatMessages, setAiChatMessages] = useState<{ role: "user" | "ai"; content: string; logId?: number; rating?: number }[]>([]);
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiListening, setAiListening] = useState(false);
+  const [aiSessionCount, setAiSessionCount] = useState(0);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
@@ -794,10 +795,11 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                       <span style={{ fontSize: 16 }}>🤖</span>
                       <span className="text-[12px] font-semibold" style={{ color: "#e8849a" }}>マニュアルAI</span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "#4ade8033", color: "#22c55e" }}>● online</span>
+                      {aiSessionCount > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: aiSessionCount >= 4 ? "#ef444420" : "#f59e0b20", color: aiSessionCount >= 4 ? "#ef4444" : "#f59e0b" }}>{aiSessionCount >= 4 ? "質問上限" : `残り${4 - aiSessionCount}回`}</span>}
                     </div>
                     <div className="flex items-center gap-2">
                       {aiChatMessages.length > 0 && (
-                        <button onClick={() => setAiChatMessages([])} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: `1px solid ${T.border}` }}>🗑️ クリア</button>
+                        <button onClick={() => { setAiChatMessages([]); setAiSessionCount(0); }} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: `1px solid ${T.border}` }}>🗑️ クリア</button>
                       )}
                       <button onClick={() => setAiChatOpen(false)} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>✕ 閉じる</button>
                     </div>
@@ -821,14 +823,43 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                     {aiChatMessages.map((m, i) => (
                       <div key={i} className={`flex mb-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                         {m.role === "ai" && <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5" style={{ background: "#e8849a20", fontSize: 12 }}>🤖</div>}
-                        <div className="rounded-2xl px-3.5 py-2.5 text-[12px] leading-[1.7]" style={{
-                          maxWidth: "80%",
-                          background: m.role === "user" ? "linear-gradient(135deg, #e8849a, #d4687e)" : (dark ? "#2a2a32" : "#f8f6f3"),
-                          color: m.role === "user" ? "#fff" : T.text,
-                          borderBottomRightRadius: m.role === "user" ? 4 : 16,
-                          borderBottomLeftRadius: m.role === "ai" ? 4 : 16,
-                        }}>
-                          {m.role === "ai" ? renderInlineContent(m.content) : m.content}
+                        <div style={{ maxWidth: "80%" }}>
+                          <div className="rounded-2xl px-3.5 py-2.5 text-[12px] leading-[1.7]" style={{
+                            background: m.role === "user" ? "linear-gradient(135deg, #e8849a, #d4687e)" : (dark ? "#2a2a32" : "#f8f6f3"),
+                            color: m.role === "user" ? "#fff" : T.text,
+                            borderBottomRightRadius: m.role === "user" ? 4 : 16,
+                            borderBottomLeftRadius: m.role === "ai" ? 4 : 16,
+                          }}>
+                            {m.role === "ai" ? renderInlineContent(m.content) : m.content}
+                          </div>
+                          {m.role === "ai" && m.logId && (
+                            <div className="flex gap-1.5 mt-1 ml-1">
+                              <button onClick={async () => {
+                                if (m.rating) return;
+                                try {
+                                  await fetch("/api/manual-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rate", logId: m.logId, rating: 1 }) });
+                                  setAiChatMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, rating: 1 } : msg));
+                                } catch {}
+                              }} className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer transition-all" style={{
+                                background: m.rating === 1 ? "#4ade8030" : "transparent",
+                                border: `1px solid ${m.rating === 1 ? "#4ade80" : T.border}`,
+                                color: m.rating === 1 ? "#22c55e" : T.textMuted,
+                                opacity: m.rating && m.rating !== 1 ? 0.3 : 1,
+                              }}>👍</button>
+                              <button onClick={async () => {
+                                if (m.rating) return;
+                                try {
+                                  await fetch("/api/manual-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rate", logId: m.logId, rating: -1 }) });
+                                  setAiChatMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, rating: -1 } : msg));
+                                } catch {}
+                              }} className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer transition-all" style={{
+                                background: m.rating === -1 ? "#ef444430" : "transparent",
+                                border: `1px solid ${m.rating === -1 ? "#ef4444" : T.border}`,
+                                color: m.rating === -1 ? "#ef4444" : T.textMuted,
+                                opacity: m.rating && m.rating !== -1 ? 0.3 : 1,
+                              }}>👎</button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -852,13 +883,20 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                           setAiChatInput("");
                           setAiChatMessages(prev => [...prev, { role: "user", content: q }]);
                           setAiChatLoading(true);
+                          const newCount = aiSessionCount + 1;
+                          setAiSessionCount(newCount);
+                          if (newCount > 4) {
+                            setAiChatMessages(prev => [...prev, { role: "ai", content: "😊 この質問はスタッフに直接お問い合わせください！\n\n何度も質問していただきありがとうございます。より正確にお答えするため、スタッフに聞いていただく方が早いかと思います📞\n\n🗑️「クリア」で会話をリセットすると、また質問できますよ！" }]);
+                            setAiChatLoading(false);
+                            return;
+                          }
                           try {
                             const res = await fetch("/api/manual-ai", {
                               method: "POST", headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages, therapistName: therapist?.name || "" }),
                             });
                             const data = await res.json();
-                            setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー" }]);
+                            setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー", logId: data.logId || undefined }]);
                           } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
                           setAiChatLoading(false);
                         }
@@ -903,13 +941,20 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                         setAiChatInput("");
                         setAiChatMessages(prev => [...prev, { role: "user", content: q }]);
                         setAiChatLoading(true);
+                        const newCount = aiSessionCount + 1;
+                        setAiSessionCount(newCount);
+                        if (newCount > 4) {
+                          setAiChatMessages(prev => [...prev, { role: "ai", content: "😊 この質問はスタッフに直接お問い合わせください！\n\n何度も質問していただきありがとうございます。より正確にお答えするため、スタッフに聞いていただく方が早いかと思います📞\n\n🗑️「クリア」で会話をリセットすると、また質問できますよ！" }]);
+                          setAiChatLoading(false);
+                          return;
+                        }
                         try {
                           const res = await fetch("/api/manual-ai", {
                             method: "POST", headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages, therapistName: therapist?.name || "" }),
                           });
                           const data = await res.json();
-                          setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー" }]);
+                          setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー", logId: data.logId || undefined }]);
                         } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
                         setAiChatLoading(false);
                       }}

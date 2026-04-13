@@ -39,7 +39,7 @@ async function callClaude(systemPrompt: string, userMessage: string, maxTokens =
 
 export async function POST(req: Request) {
   try {
-    const { action, question, content, chatHistory, therapistName } = await req.json();
+    const { action, question, content, chatHistory, therapistName, logId, rating } = await req.json();
 
     // ── AIチャット（セラピスト向け） ──
     if (action === "chat") {
@@ -108,15 +108,17 @@ ${manualContext}${historyContext}`;
       const answer = await callClaude(systemPrompt, question.trim());
 
       // 質問ログを保存
+      let savedLogId: number | null = null;
       try {
-        await supabase.from("manual_ai_logs").insert({
+        const { data: logData } = await supabase.from("manual_ai_logs").insert({
           question: question.trim(),
           answer: answer,
           therapist_name: therapistName || null,
-        });
+        }).select("id").single();
+        savedLogId = logData?.id || null;
       } catch (e) { console.error("Log save error:", e); }
 
-      return NextResponse.json({ answer });
+      return NextResponse.json({ answer, logId: savedLogId });
     }
 
     // ── AI整理（スタッフ向け） ──
@@ -167,6 +169,18 @@ ${existingTags.join(", ")}
       const tagsText = await callClaude(systemPrompt, content.trim(), 200);
       const tags = tagsText.split(/[,、，]/).map((t: string) => t.trim()).filter((t: string) => t.length > 0 && t.length < 20);
       return NextResponse.json({ tags });
+    }
+
+    // ── 評価更新（セラピスト向け） ──
+    if (action === "rate") {
+      if (!logId || ![-1, 1].includes(rating)) {
+        return NextResponse.json({ error: "無効な評価" }, { status: 400 });
+      }
+      const { error } = await supabase.from("manual_ai_logs").update({ rating }).eq("id", logId);
+      if (error) {
+        return NextResponse.json({ error: "評価保存エラー" }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: "不明なアクション" }, { status: 400 });

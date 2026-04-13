@@ -65,7 +65,8 @@ export default function ManualPage() {
   const [dragOverCover, setDragOverCover] = useState(false);
   const [dragOverEditor, setDragOverEditor] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [aiLogs, setAiLogs] = useState<{ id: number; question: string; answer: string; therapist_name: string; created_at: string }[]>([]);
+  const [aiLogs, setAiLogs] = useState<{ id: number; question: string; answer: string; therapist_name: string; created_at: string; rating: number | null }[]>([]);
+  const [aiLogFilter, setAiLogFilter] = useState<"all" | "bad" | "good" | "unrated">("all");
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -958,7 +959,7 @@ export default function ManualPage() {
         <input style={{ ...S.input, flex: 1, minWidth: 150 }} value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)} placeholder="🔍 記事を検索..." />
         <button style={S.btn} onClick={() => setView("categories")}>📂 カテゴリ管理</button>
-        <button style={S.btn} onClick={() => setView("logs")}>🤖 AI質問ログ{aiLogs.length > 0 ? `(${aiLogs.length})` : ""}</button>
+        <button style={S.btn} onClick={() => setView("logs")}>🤖 AI質問ログ{aiLogs.length > 0 ? `(${aiLogs.length})` : ""}{aiLogs.filter(l => l.rating === -1).length > 0 ? ` 👎${aiLogs.filter(l => l.rating === -1).length}` : ""}</button>
         <button style={S.btnAccent} onClick={openNewArticle}>✨ 新規記事</button>
       </div>
 
@@ -1028,6 +1029,11 @@ export default function ManualPage() {
                 <span>👤 質問者数: <strong>{new Set(aiLogs.map(l => l.therapist_name).filter(Boolean)).size}</strong>人</span>
                 <span>📅 直近: {aiLogs[0] ? new Date(aiLogs[0].created_at).toLocaleDateString("ja") : "-"}</span>
               </div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 12, marginTop: 8 }}>
+                <span>👍 高評価: <strong style={{ color: "#22c55e" }}>{aiLogs.filter(l => l.rating === 1).length}</strong></span>
+                <span>👎 低評価: <strong style={{ color: "#ef4444" }}>{aiLogs.filter(l => l.rating === -1).length}</strong></span>
+                <span>⚪ 未評価: <strong>{aiLogs.filter(l => !l.rating).length}</strong></span>
+              </div>
               {/* よく聞かれるキーワード */}
               {(() => {
                 const words: Record<string, number> = {};
@@ -1052,27 +1058,66 @@ export default function ManualPage() {
               })()}
             </div>
           )}
+          {/* フィルタータブ */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            {([["all", "📋 すべて"], ["bad", "👎 低評価"], ["good", "👍 高評価"], ["unrated", "⚪ 未評価"]] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setAiLogFilter(key)} style={{
+                ...S.btn,
+                background: aiLogFilter === key ? (key === "bad" ? "#ef444420" : key === "good" ? "#22c55e20" : "#e8849a20") : undefined,
+                borderColor: aiLogFilter === key ? (key === "bad" ? "#ef4444" : key === "good" ? "#22c55e" : "#e8849a") : undefined,
+                color: aiLogFilter === key ? (key === "bad" ? "#ef4444" : key === "good" ? "#22c55e" : undefined) : undefined,
+                fontWeight: aiLogFilter === key ? 600 : 400,
+              }}>{label}</button>
+            ))}
+          </div>
           {/* ログ一覧 */}
-          {aiLogs.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 40, color: T.textMuted }}>
-              <div style={{ fontSize: 40, marginBottom: 8 }}>🤖</div>
-              <div style={{ fontSize: 14 }}>まだ質問ログがありません</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>セラピストがAIチャットで質問すると、ここに記録されます</div>
-            </div>
-          ) : (
-            <div>
-              {aiLogs.map(l => (
-                <div key={l.id} style={{ ...S.card, marginBottom: 8, padding: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "#e8849a" }}>👤 {l.therapist_name || "不明"}</span>
-                    <span style={{ fontSize: 10, color: T.textMuted }}>{new Date(l.created_at).toLocaleString("ja")}</span>
+          {(() => {
+            const filtered = aiLogs.filter(l => {
+              if (aiLogFilter === "bad") return l.rating === -1;
+              if (aiLogFilter === "good") return l.rating === 1;
+              if (aiLogFilter === "unrated") return !l.rating;
+              return true;
+            });
+            if (filtered.length === 0) return (
+              <div style={{ textAlign: "center", padding: 40, color: T.textMuted }}>
+                <div style={{ fontSize: 40, marginBottom: 8 }}>{aiLogFilter === "bad" ? "👎" : aiLogFilter === "good" ? "👍" : "🤖"}</div>
+                <div style={{ fontSize: 14 }}>{aiLogFilter === "all" && aiLogs.length === 0 ? "まだ質問ログがありません" : `${aiLogFilter === "bad" ? "低評価" : aiLogFilter === "good" ? "高評価" : aiLogFilter === "unrated" ? "未評価" : ""}のログはありません`}</div>
+                {aiLogFilter === "all" && aiLogs.length === 0 && <div style={{ fontSize: 12, marginTop: 4 }}>セラピストがAIチャットで質問すると、ここに記録されます</div>}
+              </div>
+            );
+            return (
+              <div>
+                {filtered.map(l => (
+                  <div key={l.id} style={{ ...S.card, marginBottom: 8, padding: 12, borderLeft: l.rating === -1 ? "3px solid #ef4444" : l.rating === 1 ? "3px solid #22c55e" : undefined }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "#e8849a" }}>👤 {l.therapist_name || "不明"}</span>
+                        {l.rating === 1 && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "#22c55e20", color: "#22c55e", fontWeight: 600 }}>👍 良い</span>}
+                        {l.rating === -1 && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "#ef444420", color: "#ef4444", fontWeight: 600 }}>👎 悪い</span>}
+                      </div>
+                      <span style={{ fontSize: 10, color: T.textMuted }}>{new Date(l.created_at).toLocaleString("ja")}</span>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 4 }}>Q: {l.question}</div>
+                    <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, maxHeight: 80, overflow: "hidden" }}>A: {l.answer?.slice(0, 200)}{(l.answer?.length || 0) > 200 ? "..." : ""}</div>
+                    {l.rating === -1 && (() => {
+                      const matchedArticle = articles.find(a =>
+                        l.answer?.includes(a.title) || l.question?.toLowerCase().split(/\s+/).some(w => w.length >= 2 && a.title.toLowerCase().includes(w))
+                      );
+                      return matchedArticle ? (
+                        <button onClick={() => { setEditArticle(matchedArticle); setView("edit"); }} style={{ ...S.btn, marginTop: 8, fontSize: 10, color: "#e8849a", borderColor: "#e8849a44" }}>
+                          ✏️ 「{matchedArticle.title}」を編集
+                        </button>
+                      ) : (
+                        <button onClick={() => { setEditArticle(null); setView("edit"); }} style={{ ...S.btn, marginTop: 8, fontSize: 10, color: "#f59e0b", borderColor: "#f59e0b44" }}>
+                          ➕ 新規記事を作成
+                        </button>
+                      );
+                    })()}
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 4 }}>Q: {l.question}</div>
-                  <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, maxHeight: 80, overflow: "hidden" }}>A: {l.answer?.slice(0, 200)}{(l.answer?.length || 0) > 200 ? "..." : ""}</div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
