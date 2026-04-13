@@ -69,7 +69,7 @@ export default function InvoiceUpload() {
       <div style={{ backgroundColor: "#1a1a2e", color: "#fff", padding: "16px 20px", textAlign: "center" }}>
         <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>RELAXATION SALON</p>
         <h1 style={{ fontSize: 15, fontWeight: 600, margin: "4px 0" }}>📋 適格事業者登録通知書</h1>
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Chop（チョップ）</p>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Ange Spa（アンジュスパ）</p>
       </div>
 
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px" }}>

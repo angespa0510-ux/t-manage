@@ -152,7 +152,7 @@ export default function ContractSign() {
       <div style={{ backgroundColor: "#1a1a2e", color: "#fff", padding: "16px 20px", textAlign: "center" }}>
         <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>RELAXATION SALON</p>
         <h1 style={{ fontSize: 16, fontWeight: 600, margin: "4px 0" }}>業務委託契約書</h1>
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Chop（チョップ）</p>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Ange Spa（アンジュスパ）</p>
       </div>
 
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px" }}>
@@ -168,7 +168,7 @@ export default function ContractSign() {
         <div style={{ padding: "20px 16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16, fontSize: 12, lineHeight: 1.8, color: "#333" }}>
           <h2 style={{ fontSize: 14, fontWeight: 700, textAlign: "center", marginBottom: 16, color: "#1a1a2e" }}>業務委託契約書</h2>
 
-          <p>株式会社チョップ（以下「甲」という）と、署名者（以下「乙」という）は、以下のとおり業務委託契約を締結する。</p>
+          <p>株式会社アンジュスパ（以下「甲」という）と、署名者（以下「乙」という）は、以下のとおり業務委託契約を締結する。</p>
 
           <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第1条（委託業務）</h3>
           <p>甲は乙に対し、リラクゼーション施術業務を委託し、乙はこれを受託する。</p>

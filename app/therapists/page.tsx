@@ -989,7 +989,7 @@ const generatePassword = () => {
                 <div className="space-y-4">
                   {bulkLinks.map((link, idx) => {
                     const buildMessage = () => {
-                      let msg = `${link.name}さん\n\nお疲れ様です🌸\nチョップです。\n\n入店にあたりまして、下記の書類のご提出をお願いしております。\nお手数をおかけしますが、それぞれURLを開いて、署名・写真のアップロードをお願いいたします✨\n\nお預かりした個人情報は適切に管理いたしますので、ご安心ください。\n`;
+                      let msg = `${link.name}さん\n\nお疲れ様です🌸\nアンジュスパです。\n\n入店にあたりまして、下記の書類のご提出をお願いしております。\nお手数をおかけしますが、それぞれURLを開いて、署名・写真のアップロードをお願いいたします✨\n\nお預かりした個人情報は適切に管理いたしますので、ご安心ください。\n`;
                       if (link.contract) msg += `\n📝 業務委託契約書（署名）\n${link.contract}\n`;
                       if (link.license) msg += `\n🪪 身分証明書（写真アップロード）\n${link.license}\n`;
                       if (link.invoice) msg += `\n📋 適格事業者登録通知書（※任意）\n登録番号の入力＋写真アップロード\n${link.invoice}\n`;
