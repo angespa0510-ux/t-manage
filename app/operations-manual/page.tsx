@@ -111,6 +111,55 @@ export default function OperationsManual() {
     setView("read");
   };
 
+  // ── インラインリンク処理 ──
+  const renderInline = (text: string, lineKey: number) => {
+    // [link:記事タイトル] と [テキスト](URL) を処理
+    const parts: React.ReactNode[] = [];
+    let remaining = text;
+    let partIdx = 0;
+
+    while (remaining.length > 0) {
+      // [link:記事タイトル] パターン
+      const linkMatch = remaining.match(/\[link:([^\]]+)\]/);
+      // [テキスト](URL) パターン
+      const urlMatch = remaining.match(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
+
+      const linkPos = linkMatch ? remaining.indexOf(linkMatch[0]) : Infinity;
+      const urlPos = urlMatch ? remaining.indexOf(urlMatch[0]) : Infinity;
+
+      if (linkPos === Infinity && urlPos === Infinity) {
+        parts.push(<span key={`${lineKey}-${partIdx}`}>{remaining}</span>);
+        break;
+      }
+
+      if (linkPos <= urlPos && linkMatch) {
+        // 記事内リンク
+        if (linkPos > 0) parts.push(<span key={`${lineKey}-${partIdx++}`}>{remaining.slice(0, linkPos)}</span>);
+        const title = linkMatch[1];
+        const target = articles.find(a => a.title === title);
+        parts.push(
+          <span key={`${lineKey}-${partIdx++}`}
+            onClick={(e) => { e.stopPropagation(); if (target) openRead(target); }}
+            style={{ color: T.accent, textDecoration: "underline", cursor: target ? "pointer" : "default", fontWeight: 500, opacity: target ? 1 : 0.5 }}>
+            📄 {title}
+          </span>
+        );
+        remaining = remaining.slice(linkPos + linkMatch[0].length);
+      } else if (urlMatch) {
+        // 外部リンク
+        if (urlPos > 0) parts.push(<span key={`${lineKey}-${partIdx++}`}>{remaining.slice(0, urlPos)}</span>);
+        parts.push(
+          <a key={`${lineKey}-${partIdx++}`} href={urlMatch[2]} target="_blank" rel="noopener noreferrer"
+            style={{ color: "#3b82f6", textDecoration: "underline", cursor: "pointer" }}>
+            🔗 {urlMatch[1]}
+          </a>
+        );
+        remaining = remaining.slice(urlPos + urlMatch[0].length);
+      }
+    }
+    return parts;
+  };
+
   // ── マークダウン簡易レンダリング ──
   const renderContent = (text: string) => {
     return text.split("\n").map((line, i) => {
@@ -120,10 +169,10 @@ export default function OperationsManual() {
         const match = line.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
         if (match) return <div key={i} style={{ margin: "12px 0" }}><img src={match[2]} alt={match[1]} style={{ maxWidth: "100%", borderRadius: 8, border: `1px solid ${T.border}`, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }} /></div>;
       }
-      if (line.startsWith("・")) return <p key={i} style={{ fontSize: 13, color: T.text, margin: "3px 0", paddingLeft: 12, lineHeight: 1.8 }}>{line}</p>;
-      if (/^[①②③④⑤⑥⑦⑧⑨⑩]/.test(line)) return <p key={i} style={{ fontSize: 13, color: T.text, margin: "4px 0", paddingLeft: 8, lineHeight: 1.8, fontWeight: 500 }}>{line}</p>;
+      if (line.startsWith("・")) return <p key={i} style={{ fontSize: 13, color: T.text, margin: "3px 0", paddingLeft: 12, lineHeight: 1.8 }}>{renderInline(line, i)}</p>;
+      if (/^[①②③④⑤⑥⑦⑧⑨⑩]/.test(line)) return <p key={i} style={{ fontSize: 13, color: T.text, margin: "4px 0", paddingLeft: 8, lineHeight: 1.8, fontWeight: 500 }}>{renderInline(line, i)}</p>;
       if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
-      return <p key={i} style={{ fontSize: 13, color: T.textSub, lineHeight: 1.8, margin: "2px 0" }}>{line}</p>;
+      return <p key={i} style={{ fontSize: 13, color: T.textSub, lineHeight: 1.8, margin: "2px 0" }}>{renderInline(line, i)}</p>;
     });
   };
 
@@ -270,12 +319,31 @@ export default function OperationsManual() {
                 <label style={{ fontSize: 12, color: T.textSub, marginBottom: 4, display: "block" }}>
                   内容（マークダウン: ## 大見出し / ### 小見出し / ①②③ 手順 / ・箇条書き / ![説明](URL) 画像）
                 </label>
-                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
                   <input type="file" ref={fileInputRef} accept="image/*" style={{ display: "none" }} onChange={async (e) => { const f = e.target.files?.[0]; if (f) await insertImageAtCursor(f); e.target.value = ""; }} />
                   <button style={{ ...S.btn, fontSize: 11, padding: "4px 12px" }} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                    {uploading ? "⏳ アップロード中..." : "📷 画像を挿入"}
+                    {uploading ? "⏳ アップロード中..." : "📷 画像"}
                   </button>
-                  <span style={{ fontSize: 10, color: T.textMuted, alignSelf: "center" }}>Ctrl+Vで貼り付け / ドラッグ&ドロップもOK</span>
+                  <button style={{ ...S.btn, fontSize: 11, padding: "4px 12px" }} onClick={() => {
+                    const title = prompt("リンク先の記事タイトルを入力してください：", "");
+                    if (title) {
+                      const tag = `[link:${title}]`;
+                      const ta = textareaRef.current;
+                      if (ta) { const pos = ta.selectionStart; setEditContent(prev => prev.slice(0, pos) + tag + prev.slice(pos)); }
+                      else setEditContent(prev => prev + tag);
+                    }
+                  }}>📄 記事リンク</button>
+                  <button style={{ ...S.btn, fontSize: 11, padding: "4px 12px" }} onClick={() => {
+                    const text = prompt("リンクテキスト：", "");
+                    const url = prompt("URL：", "https://");
+                    if (text && url) {
+                      const tag = `[${text}](${url})`;
+                      const ta = textareaRef.current;
+                      if (ta) { const pos = ta.selectionStart; setEditContent(prev => prev.slice(0, pos) + tag + prev.slice(pos)); }
+                      else setEditContent(prev => prev + tag);
+                    }
+                  }}>🔗 外部リンク</button>
+                  <span style={{ fontSize: 10, color: T.textMuted, alignSelf: "center" }}>Ctrl+Vで画像貼り付けOK</span>
                 </div>
                 <textarea
                   ref={textareaRef}
