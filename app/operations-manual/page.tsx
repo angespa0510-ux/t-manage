@@ -20,6 +20,35 @@ export default function OperationsManual() {
   const [editArticle, setEditArticle] = useState<Article | null>(null);
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── 画像アップロード ──
+  const uploadImage = async (file: File): Promise<string> => {
+    const ext = file.name.split(".").pop() || "jpg";
+    const name = `ops_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from("manual-images").upload(name, file, { contentType: file.type });
+    if (error) { alert("画像アップロード失敗: " + error.message); return ""; }
+    const { data } = supabase.storage.from("manual-images").getPublicUrl(name);
+    return data.publicUrl;
+  };
+
+  const insertImageAtCursor = async (file: File) => {
+    setUploading(true);
+    const url = await uploadImage(file);
+    if (url) {
+      const img = `\n![スクリーンショット](${url})\n`;
+      const ta = textareaRef.current;
+      if (ta) {
+        const pos = ta.selectionStart;
+        setEditContent(prev => prev.slice(0, pos) + img + prev.slice(pos));
+      } else {
+        setEditContent(prev => prev + img);
+      }
+    }
+    setUploading(false);
+  };
 
   const fetchData = useCallback(async () => {
     const { data: cats } = await supabase.from("ops_manual_categories").select("*").order("sort_order");
@@ -87,6 +116,10 @@ export default function OperationsManual() {
     return text.split("\n").map((line, i) => {
       if (line.startsWith("## ")) return <h2 key={i} style={{ fontSize: 17, fontWeight: 700, color: T.text, margin: "20px 0 10px", borderBottom: `2px solid ${T.accent}`, paddingBottom: 6 }}>{line.replace("## ", "")}</h2>;
       if (line.startsWith("### ")) return <h3 key={i} style={{ fontSize: 14, fontWeight: 600, color: T.text, margin: "16px 0 6px" }}>{line.replace("### ", "")}</h3>;
+      if (/^!\[.*\]\(.*\)/.test(line)) {
+        const match = line.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
+        if (match) return <div key={i} style={{ margin: "12px 0" }}><img src={match[2]} alt={match[1]} style={{ maxWidth: "100%", borderRadius: 8, border: `1px solid ${T.border}`, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }} /></div>;
+      }
       if (line.startsWith("・")) return <p key={i} style={{ fontSize: 13, color: T.text, margin: "3px 0", paddingLeft: 12, lineHeight: 1.8 }}>{line}</p>;
       if (/^[①②③④⑤⑥⑦⑧⑨⑩]/.test(line)) return <p key={i} style={{ fontSize: 13, color: T.text, margin: "4px 0", paddingLeft: 8, lineHeight: 1.8, fontWeight: 500 }}>{line}</p>;
       if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
@@ -235,9 +268,44 @@ export default function OperationsManual() {
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 12, color: T.textSub, marginBottom: 4, display: "block" }}>
-                  内容（マークダウン: ## 大見出し / ### 小見出し / ①②③ 手順 / ・箇条書き）
+                  内容（マークダウン: ## 大見出し / ### 小見出し / ①②③ 手順 / ・箇条書き / ![説明](URL) 画像）
                 </label>
-                <textarea value={editContent} onChange={e => setEditContent(e.target.value)} style={{ ...S.textarea, minHeight: 400 }} />
+                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                  <input type="file" ref={fileInputRef} accept="image/*" style={{ display: "none" }} onChange={async (e) => { const f = e.target.files?.[0]; if (f) await insertImageAtCursor(f); e.target.value = ""; }} />
+                  <button style={{ ...S.btn, fontSize: 11, padding: "4px 12px" }} onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    {uploading ? "⏳ アップロード中..." : "📷 画像を挿入"}
+                  </button>
+                  <span style={{ fontSize: 10, color: T.textMuted, alignSelf: "center" }}>Ctrl+Vで貼り付け / ドラッグ&ドロップもOK</span>
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={editContent}
+                  onChange={e => setEditContent(e.target.value)}
+                  onPaste={async (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of Array.from(items)) {
+                      if (item.type.startsWith("image/")) {
+                        e.preventDefault();
+                        const file = item.getAsFile();
+                        if (file) await insertImageAtCursor(file);
+                        return;
+                      }
+                    }
+                  }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    const files = e.dataTransfer?.files;
+                    if (!files) return;
+                    for (const file of Array.from(files)) {
+                      if (file.type.startsWith("image/")) {
+                        await insertImageAtCursor(file);
+                      }
+                    }
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  style={{ ...S.textarea, minHeight: 400 }}
+                />
               </div>
               {editContent && (
                 <details style={{ marginBottom: 16 }}>
