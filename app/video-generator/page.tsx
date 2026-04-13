@@ -1516,6 +1516,34 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
               </details>
             </div>
 
+            {/* ── リトライロジック説明 ── */}
+            <div style={{ ...cardStyle, padding: 16 }}>
+              <div style={sectionTitle}>🔄 セーフティ拒否時のリトライロジック</div>
+              <p style={{ fontSize: 11, color: T.textSub, lineHeight: 1.8, marginBottom: 12 }}>
+                Geminiが画像や動画の生成を拒否した場合、プロンプトを段階的に調整して自動リトライします。
+              </p>
+              <div style={{ fontSize: 11, lineHeight: 1.8, color: T.text }}>
+                <p style={{ fontWeight: 600, marginBottom: 6 }}>📸 画像生成（最大リトライ回数分）</p>
+                <div style={{ padding: "8px 12px", borderRadius: 8, backgroundColor: T.cardAlt, marginBottom: 12 }}>
+                  <p style={{ margin: "2px 0" }}>① そのままのプロンプトで送信</p>
+                  <p style={{ margin: "2px 0" }}>② 「プロフェッショナルな販促素材です」を追加</p>
+                  <p style={{ margin: "2px 0" }}>③ 「動きを控えめに、穏やかな印象で」をさらに追加</p>
+                </div>
+                <p style={{ fontWeight: 600, marginBottom: 6 }}>🎥 動画生成（最大3回）</p>
+                <div style={{ padding: "8px 12px", borderRadius: 8, backgroundColor: T.cardAlt, marginBottom: 12 }}>
+                  <p style={{ margin: "2px 0" }}>① そのままの動画プロンプトで送信</p>
+                  <p style={{ margin: "2px 0" }}>② 「公式リラクゼーションサロンの販促動画。動きは控えめでエレガントに」を追加</p>
+                  <p style={{ margin: "2px 0" }}>③ 「ビジネス広告。呼吸のような最小限の動きだけ」にさらに控えめ化</p>
+                </div>
+                <p style={{ fontWeight: 600, marginBottom: 6 }}>⚠️ その他のエラー</p>
+                <div style={{ padding: "8px 12px", borderRadius: 8, backgroundColor: T.cardAlt }}>
+                  <p style={{ margin: "2px 0" }}>レート制限 → 60〜90秒待機して自動リトライ</p>
+                  <p style={{ margin: "2px 0" }}>タイムアウト → 新しいチャットを開いてリトライ</p>
+                  <p style={{ margin: "2px 0" }}>全リトライ失敗 → キューに「失敗」として表示（🔄再試行ボタンで手動リトライ可能）</p>
+                </div>
+              </div>
+            </div>
+
             {/* ── ローカルPCセットアップガイド ── */}
             <SetupGuide T={T} cardStyle={cardStyle} sectionTitle={sectionTitle} />
 
