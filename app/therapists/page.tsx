@@ -203,7 +203,7 @@ const generatePassword = () => {
     await supabase.from("contracts").insert({ therapist_id: therapistId, token, status: "pending", type: "license" });
     const url = `${window.location.origin}/license-upload/${token}`;
     navigator.clipboard.writeText(url);
-    toast.show("🪪 免許証リンクをコピーしました", "success");
+    toast.show("🪪 身分証リンクをコピーしました", "success");
     fetchTherapists();
   };
 
@@ -570,6 +570,18 @@ const generatePassword = () => {
                       <p className="text-[9px] truncate" style={{ color: T.textMuted }}>{t.phone || "電話番号なし"}</p>
                     </div>
                   </div>
+                  <div className="flex flex-wrap gap-1 mb-1" onClick={(e) => e.stopPropagation()}>
+                    {contractsMap[t.id]?.status === "signed" ? (
+                      <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 契約済</span>
+                    ) : (
+                      <button onClick={async () => { await generateContractLink(t.id); }} className="px-2 py-0.5 text-[9px] rounded-md font-medium cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>❌ 未契約</button>
+                    )}
+                    {t.license_photo_url ? (
+                      <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>✅ 身分証</span>
+                    ) : (
+                      <button onClick={async () => { await generateLicenseLink(t.id); }} className="px-2 py-0.5 text-[9px] rounded-md font-medium cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>❌ 身分証</button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-x-2 text-[8px] mb-1" style={{ color: T.textSub }}>
                     {t.age > 0 && <span>{t.age}歳</span>}
                     {t.interval_minutes > 0 && <span>{t.interval_minutes}分</span>}
@@ -581,16 +593,6 @@ const generatePassword = () => {
                     <div className="flex gap-1 items-center">
                       <button onClick={() => startEdit(t)} className="px-2 py-1 text-[8px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
                       <button onClick={() => setDeleteTarget(t)} className="px-2 py-1 text-[8px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
-                      {contractsMap[t.id]?.status === "signed" ? (
-                        <span className="px-1.5 py-0.5 text-[7px] rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅契約済</span>
-                      ) : (
-                        <button onClick={async () => { await generateContractLink(t.id); }} className="px-1.5 py-0.5 text-[7px] rounded cursor-pointer" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "none" }}>📝契約書</button>
-                      )}
-                      {t.license_photo_url ? (
-                        <span className="px-1.5 py-0.5 text-[7px] rounded" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>🪪免許済</span>
-                      ) : (
-                        <button onClick={async () => { await generateLicenseLink(t.id); }} className="px-1.5 py-0.5 text-[7px] rounded cursor-pointer" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6", border: "none" }}>🪪免許証</button>
-                      )}
                     </div>
                     <span className="text-[7px]" style={{ color: T.textFaint }}>⋮⋮</span>
                   </div>
@@ -664,7 +666,7 @@ const generatePassword = () => {
 
                 {/* 免許証 */}
                 <div className="pt-3 mt-2" style={{ borderTop: `1px solid ${T.cardAlt}` }}>
-                  <p className="text-[11px] mb-2" style={{ color: T.textMuted }}>🪪 免許証</p>
+                  <p className="text-[11px] mb-2" style={{ color: T.textMuted }}>🪪 身分証</p>
                   {detailTarget.license_photo_url ? (
                     <div>
                       <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#3b82f618", color: "#3b82f6" }}>🪪 アップロード済み</span>
@@ -674,7 +676,7 @@ const generatePassword = () => {
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => generateLicenseLink(detailTarget.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6", border: "1px solid #8b5cf644" }}>🪪 免許証リンクを発行</button>
+                    <button onClick={() => generateLicenseLink(detailTarget.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6", border: "1px solid #8b5cf644" }}>🪪 身分証リンクを発行</button>
                   )}
                 </div>
               </div>
@@ -866,7 +868,7 @@ const generatePassword = () => {
                   </div>}
                 </div>
 
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 免許証アップロード</label>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🪪 身分証アップロード</label>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
                       <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📋 表面</p>

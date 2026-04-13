@@ -71,7 +71,7 @@ export default function LicenseUpload() {
 
   if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7" }}><p style={{ color: "#999", fontSize: 14 }}>読み込み中...</p></div>;
   if (error) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7", padding: 20 }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div><p style={{ color: "#c45555", fontSize: 14 }}>{error}</p></div></div>;
-  if (done) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7", padding: 20 }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 12 }}>✅</div><h2 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>アップロード完了</h2><p style={{ fontSize: 13, color: "#666" }}>免許証のアップロードが完了しました。</p><p style={{ fontSize: 12, color: "#999", marginTop: 8 }}>このページを閉じてください。</p></div></div>;
+  if (done) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7", padding: 20 }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 12 }}>✅</div><h2 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>アップロード完了</h2><p style={{ fontSize: 13, color: "#666" }}>身分証のアップロードが完了しました。</p><p style={{ fontSize: 12, color: "#999", marginTop: 8 }}>このページを閉じてください。</p></div></div>;
 
   const photoBox = (side: "front" | "back", label: string, preview: string, required: boolean) => (
     <div style={{ marginBottom: 16 }}>
@@ -100,7 +100,7 @@ export default function LicenseUpload() {
     <div style={{ minHeight: "100vh", backgroundColor: "#faf9f7", paddingBottom: 40 }}>
       <div style={{ backgroundColor: "#1a1a2e", color: "#fff", padding: "16px 20px", textAlign: "center" }}>
         <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>RELAXATION SALON</p>
-        <h1 style={{ fontSize: 16, fontWeight: 600, margin: "4px 0" }}>🪪 免許証アップロード</h1>
+        <h1 style={{ fontSize: 16, fontWeight: 600, margin: "4px 0" }}>🪪 身分証アップロード</h1>
         <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Chop（チョップ）</p>
       </div>
 
@@ -114,7 +114,7 @@ export default function LicenseUpload() {
 
         <div style={{ padding: "16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16 }}>
           <p style={{ fontSize: 12, color: "#666", marginBottom: 16, lineHeight: 1.6 }}>
-            本人確認のため、運転免許証（または身分証明書）の表面と裏面を撮影してアップロードしてください。
+            本人確認のため、身分証明書（運転免許証など）の表面と裏面を撮影してアップロードしてください。
           </p>
           {photoBox("front", "📄 表面（顔写真側）", frontPreview, true)}
           {photoBox("back", "📄 裏面", backPreview, false)}
