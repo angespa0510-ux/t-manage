@@ -533,26 +533,6 @@ export function SokuhoPanel({
     setPostResult({ type: "success", msg: "エステ魂ブリッジを開きました" });
   };
 
-  // ── Bluesky自動投稿タイマー ──
-  useEffect(() => {
-    if (autoPostRef.current) clearInterval(autoPostRef.current);
-    const interval = currentRoom === "mikawa" ? autoPostMikawa : autoPostToyohashi;
-    if (!show || interval <= 0 || !bskyId || !bskyPw || slots.length === 0) return;
-    
-    autoPostRef.current = setInterval(async () => {
-      const text = generateText();
-      console.log(`🤖 Bluesky自動投稿 (${currentRoom}, ${interval}分毎)`);
-      const result = await postToBluesky(bskyId, bskyPw, text);
-      if (result.success) {
-        setPostResult({ type: "success", msg: `🤖 自動投稿完了 (${new Date().toLocaleTimeString("ja")})` });
-      } else {
-        setPostResult({ type: "error", msg: `🤖 自動投稿失敗: ${result.error}` });
-      }
-    }, interval * 60 * 1000);
-
-    return () => { if (autoPostRef.current) clearInterval(autoPostRef.current); };
-  }, [show, currentRoom, autoPostMikawa, autoPostToyohashi, bskyId, bskyPw, slots, generateText]);
-
   if (!show) return null;
 
   const roomConfig = ROOMS_CONFIG[currentRoom];
@@ -645,7 +625,7 @@ export function SokuhoPanel({
               {/* Bluesky自動投稿 */}
               <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
                 <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>🤖 Bluesky自動投稿設定</p>
-                <p className="text-[10px] mb-3" style={{ color: T.textFaint }}>0 = 自動投稿OFF。速報パネルを開いている間、指定間隔で自動投稿します。</p>
+                <p className="text-[10px] mb-3" style={{ color: T.textFaint }}>0 = 自動投稿OFF。タイムチャートを開いている間、指定間隔で自動投稿します。複数PCから重複投稿しない仕組みです。</p>
                 <div className="flex gap-3">
                   <div className="flex-1">
                     <label className="block text-[10px] mb-1" style={{ color: T.textFaint }}>🏠 三河安城（分毎）</label>
@@ -879,4 +859,113 @@ export function SokuhoPanel({
       </div>
     </div>
   );
+}
+
+// ========================================
+// Bluesky自動投稿（常時稼働コンポーネント）
+// タイムチャートに常時マウントされ、パネルの開閉に関係なく動作
+// 重複防止: store_settingsの最終投稿時刻をチェック
+// ========================================
+export function BlueskyAutoPost({
+  therapists, reservations, shifts, stores, buildings, allRooms, roomAssigns, clockedOut, selectedDate,
+}: Omit<SokuhoProps, "show" | "onClose" | "T" | "dark">) {
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getRoomKey = useCallback(
+    (therapistId: number): "mikawa" | "toyohashi" | null => {
+      const ra = roomAssigns.find((a) => a.therapist_id === therapistId);
+      if (!ra) return null;
+      const rm = allRooms.find((r) => r.id === ra.room_id);
+      if (!rm) return null;
+      const bl = buildings.find((b) => b.id === rm.building_id);
+      const st = stores.find((s) => s.id === rm.store_id);
+      const combined = `${bl?.name || ""} ${st?.name || ""} ${rm.name || ""}`;
+      if (ROOMS_CONFIG.mikawa.keywords.test(combined)) return "mikawa";
+      if (ROOMS_CONFIG.toyohashi.keywords.test(combined)) return "toyohashi";
+      if (st?.name?.includes("豊橋")) return "toyohashi";
+      return "mikawa";
+    }, [roomAssigns, allRooms, buildings, stores]
+  );
+
+  const generateTextForRoom = useCallback((room: "mikawa" | "toyohashi", template: string) => {
+    const config = ROOMS_CONFIG[room];
+    const days = ["日", "月", "火", "水", "木", "金", "土"];
+    const d = new Date(selectedDate + "T00:00:00");
+    const dateStr = `${d.getMonth() + 1}月${d.getDate()}日(${days[d.getDay()]})`;
+    const nowMins = getNowMins();
+    const shiftIds = new Set(shifts.map(s => s.therapist_id));
+
+    const lines: string[] = [];
+    for (const t of therapists) {
+      if (!shiftIds.has(t.id) || clockedOut.has(t.id)) continue;
+      if (getRoomKey(t.id) !== room) continue;
+      const shift = shifts.find(s => s.therapist_id === t.id);
+      if (!shift) continue;
+      const workEnd = toMinsNight(shift.end_time);
+      const bookings = reservations.filter(r => r.therapist_id === t.id).map(r => ({ start: toMinsNight(r.start_time), end: toMinsNight(r.end_time) }));
+      const interval = (t as any).interval_minutes || DEFAULT_INTERVAL;
+      const nextSlot = calcNextSlot(toMinsNight(shift.start_time), workEnd, bookings, interval, nowMins);
+      const isSoldOut = nextSlot === "完売✨";
+      lines.push(`${isSoldOut ? "💎" : "💗"}${t.name} ${nextSlot}`);
+    }
+
+    if (template) {
+      return template
+        .replace(/\{date\}/g, dateStr).replace(/\{room_name\}/g, config.name)
+        .replace(/\{area\}/g, config.area).replace(/\{therapists\}/g, lines.join("\n"))
+        .replace(/\{tel\}/g, CONTACT.tel).replace(/\{line\}/g, CONTACT.line).replace(/\{web\}/g, CONTACT.web);
+    }
+    return [`☀️ ${dateStr} ${config.name} ☀️`, "", config.area, "本日の出勤セラピストはこちらです。", "", ...lines, "", `📞 ${config.name}のご予約`, `📟 TEL: ${CONTACT.tel}`, `💬 公式LINE: ${CONTACT.line}`, `💻 WEB予約: ${CONTACT.web}`].join("\n");
+  }, [therapists, reservations, shifts, clockedOut, selectedDate, getRoomKey]);
+
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    const checkAndPost = async () => {
+      const { data: settings } = await supabase.from("store_settings").select("key,value").in("key", [
+        "bsky_id", "bsky_pw", "sokuho_autopost_mikawa", "sokuho_autopost_toyohashi",
+        "sokuho_template_mikawa", "sokuho_template_toyohashi",
+        "sokuho_last_post_mikawa", "sokuho_last_post_toyohashi"
+      ]);
+      if (!settings) return;
+      const get = (k: string) => settings.find(s => s.key === k)?.value || "";
+      const bskyId = get("bsky_id");
+      const bskyPw = get("bsky_pw");
+      if (!bskyId || !bskyPw) return;
+
+      const now = Date.now();
+      for (const room of ["mikawa", "toyohashi"] as const) {
+        const interval = parseInt(get(`sokuho_autopost_${room}`)) || 0;
+        if (interval <= 0) continue;
+        const lastPost = get(`sokuho_last_post_${room}`);
+        const lastTime = lastPost ? new Date(lastPost).getTime() : 0;
+        if (now - lastTime < interval * 60 * 1000) continue;
+
+        const template = get(`sokuho_template_${room}`);
+        const text = generateTextForRoom(room, template);
+        if (!text || text.includes("完売✨") && !text.includes("💗")) continue; // 全員完売なら投稿しない
+
+        console.log(`🤖 Bluesky自動投稿 [${room}] (${interval}分毎)`);
+        const result = await postToBluesky(bskyId, bskyPw, text);
+        if (result.success) {
+          await supabase.from("store_settings").upsert({ key: `sokuho_last_post_${room}`, value: new Date().toISOString() }, { onConflict: "key" });
+          console.log(`  ✅ 投稿完了 [${room}]`);
+        } else {
+          console.log(`  ❌ 投稿失敗 [${room}]: ${result.error}`);
+        }
+      }
+    };
+
+    // 60秒ごとにチェック
+    timerRef.current = setInterval(checkAndPost, 60000);
+    // 初回は10秒後にチェック
+    const initTimer = setTimeout(checkAndPost, 10000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      clearTimeout(initTimer);
+    };
+  }, [generateTextForRoom]);
+
+  return null; // UIなし
 }

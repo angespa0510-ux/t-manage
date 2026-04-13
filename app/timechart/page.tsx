@@ -5,7 +5,7 @@ import { useToast } from "../../lib/toast";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme"; import { NavMenu } from "../../lib/nav-menu";
-import { SokuhoPanel } from "../../lib/sokuho-panel";
+import { SokuhoPanel, BlueskyAutoPost } from "../../lib/sokuho-panel";
 
 type Therapist = { id: number; name: string; phone: string; status: string; has_withholding: boolean };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
@@ -2318,6 +2318,19 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
         selectedDate={selectedDate}
         T={T}
         dark={dark}
+      />
+
+      {/* Bluesky自動投稿（常時稼働・パネル不要） */}
+      <BlueskyAutoPost
+        therapists={therapists}
+        reservations={reservations}
+        shifts={shifts}
+        stores={stores}
+        buildings={buildings}
+        allRooms={allRooms}
+        roomAssigns={roomAssigns}
+        clockedOut={clockedOut}
+        selectedDate={selectedDate}
       />
 
       {/* ===== NG警告ポップアップ（激しめ表示） ===== */}
