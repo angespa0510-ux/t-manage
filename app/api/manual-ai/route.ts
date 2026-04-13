@@ -12,29 +12,40 @@ async function callClaude(systemPrompt: string, userMessage: string, maxTokens =
     return "⚠️ AIキーが設定されていません。Vercelの環境変数にANTHROPIC_API_KEYを追加してください。";
   }
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    }),
-  });
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    });
 
-  if (!res.ok) {
+    if (res.ok) {
+      const data = await res.json();
+      return data.content?.[0]?.text || "応答を取得できませんでした";
+    }
+
+    // 529(過負荷)は自動リトライ
+    if (res.status === 529 && attempt < maxRetries - 1) {
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      continue;
+    }
+
     const err = await res.text();
     console.error("Claude API error:", err);
     return `⚠️ AI応答エラー: ${res.status}`;
   }
 
-  const data = await res.json();
-  return data.content?.[0]?.text || "応答を取得できませんでした";
+  return "⚠️ AIサーバーが混み合っています。少し待ってからもう一度お試しください。";
 }
 
 export async function POST(req: Request) {
