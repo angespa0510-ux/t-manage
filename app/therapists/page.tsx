@@ -563,7 +563,7 @@ const generatePassword = () => {
           <button onClick={openNgRegister} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
           <button onClick={() => setShowThImport(true)} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📥 インポート</button>
           <button onClick={() => { setShowTrash(true); fetchTrash(); }} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#88888818", color: "#888", border: "1px solid #88888844" }}>🗑️ ゴミ箱</button>
-          <button onClick={generateBulkLinks} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>📨 一括リンク発行</button>
+          <button onClick={generateBulkLinks} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>📨 書類一括発行</button>
           <button onClick={() => { setShowAdd(true); setMsg(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 新規登録</button>
         </div>
       </div>
@@ -968,13 +968,13 @@ const generatePassword = () => {
         </div>
       )}
 
-      {/* 一括リンク発行モーダル */}
+      {/* 書類一括発行モーダル */}
       {showBulkLinks && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowBulkLinks(false)}>
           <div className="rounded-2xl border w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
               <div>
-                <h2 className="text-[15px] font-medium">📨 一括リンク発行</h2>
+                <h2 className="text-[15px] font-medium">📨 書類一括発行</h2>
                 <p className="text-[10px]" style={{ color: T.textMuted }}>「📋 LINE用メッセージをコピー」でそのままLINEに貼り付けて送れます</p>
               </div>
               <button onClick={() => setShowBulkLinks(false)} className="text-[18px] cursor-pointer p-1" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
