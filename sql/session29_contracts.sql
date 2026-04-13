@@ -13,3 +13,6 @@ CREATE TABLE IF NOT EXISTS contracts (
 
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "contracts_all" ON contracts FOR ALL USING (true);
+
+-- 契約書タイプ追加（contract=契約書, license=免許証）
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS type text DEFAULT 'contract';
