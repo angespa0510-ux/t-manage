@@ -53,6 +53,9 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "🌐", label: "WEB予約公開設定", path: "/web-booking-settings", category: "登録・設定" },
   { icon: "⚙️", label: "サービス設定",  path: "/service-settings",  category: "登録・設定" },
   { icon: "🛠️", label: "システム設定",  path: "/system-setup",      category: "登録・設定" },
+
+  // ── マニュアル ──
+  { icon: "📖", label: "操作マニュアル", path: "/operations-manual", category: "マニュアル" },
 ];
 
 // ── サイドバー本体 ─────────────────────────────────
