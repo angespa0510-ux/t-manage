@@ -71,6 +71,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [noteSearch, setNoteSearch] = useState(""); const [showAddNote, setShowAddNote] = useState(false);
   const [noteForm, setNoteForm] = useState({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0 })
   const [noteViewTarget, setNoteViewTarget] = useState<CustomerNote | null>(null);
+  const [noteHistoryCustomer, setNoteHistoryCustomer] = useState("");
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
 　const [calShifts, setCalShifts] = useState<Shift[]>([]);
 　const [calSettlements, setCalSettlements] = useState<Settlement[]>([]);
@@ -649,9 +650,9 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>NGに登録されたお客様がネット予約をする際は、あなたの出勤枠が<span style={{ color: "#c45555", fontWeight: 600 }}>「お休み」として表示</span>されるため、予約が入ることはありません。お電話でのご予約の場合も、受付スタッフが事前に確認しお断りいたしますのでご安心ください。</p>
           </div>
           <input type="text" value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="お客様名で検索..." className="w-full px-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
-          {uniqueCustomers.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>接客したお客様（全{uniqueCustomers.length}名）</p><div className="flex flex-wrap gap-1.5">{uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => { const note = customerNotes.find(n => n.customer_name === name); return (<button key={name} onClick={() => { if (note) setNoteViewTarget(note); else { setShowAddNote(true); setNoteForm({ customer_name: name, note: "", is_ng: false, ng_reason: "", rating: 0 }); } }} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ backgroundColor: note?.is_ng ? "#c4555515" : note ? "#e8849a15" : T.cardAlt, borderColor: note?.is_ng ? "#c4555544" : note ? "#e8849a44" : T.border, color: note?.is_ng ? "#c45555" : T.text }}>{note?.is_ng && "🚫"}{name}({info.count}回){note && " 📝"}</button>); })}</div></div>)}
+          {uniqueCustomers.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>接客したお客様（全{uniqueCustomers.length}名）</p><div className="flex flex-wrap gap-1.5">{uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => { const note = customerNotes.find(n => n.customer_name === name); return (<button key={name} onClick={() => setNoteHistoryCustomer(name)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ backgroundColor: note?.is_ng ? "#c4555515" : note ? "#e8849a15" : T.cardAlt, borderColor: note?.is_ng ? "#c4555544" : note ? "#e8849a44" : T.border, color: note?.is_ng ? "#c45555" : T.text }}>{note?.is_ng && "🚫"}{name}({info.count}回){note && " 📝"}</button>); })}</div></div>)}
           <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><div className="px-4 py-2.5 border-b" style={{ borderColor: T.border }}><p className="text-[11px] font-medium">登録済みメモ（{customerNotes.length}件）</p><p className="text-[8px]" style={{ color: T.textFaint }}>※ メモの削除はスタッフにお申し付けください</p></div>
-            {customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>メモがありません</p> : customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).map(n => (<div key={n.id} className="px-4 py-3 cursor-pointer" style={{ borderBottom: `1px solid ${T.border}` }} onClick={() => setNoteViewTarget(n)}><div className="flex items-center gap-2"><span className="text-[12px] font-medium">{n.customer_name}</span>{n.is_ng && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}</div>{n.note && <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textSub }}>{n.note}</p>}</div>))}
+            {customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>メモがありません</p> : customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).map(n => (<div key={n.id} className="px-4 py-3 cursor-pointer" style={{ borderBottom: `1px solid ${T.border}` }} onClick={() => setNoteHistoryCustomer(n.customer_name)}><div className="flex items-center gap-2"><span className="text-[12px] font-medium">{n.customer_name}</span>{n.is_ng && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}</div>{n.note && <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textSub }}>{n.note}</p>}</div>))}
           </div>
         </div>)}
 
@@ -1111,6 +1112,71 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           </div>
         );
       })()}
+
+      {/* お客様接客履歴モーダル */}
+      {noteHistoryCustomer && (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setNoteHistoryCustomer("")}><div className="rounded-2xl border w-full max-w-sm max-h-[85vh] overflow-hidden flex flex-col" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+          <div>
+            <h3 className="text-[14px] font-medium">{noteHistoryCustomer}</h3>
+            <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>接客履歴からメモを追加できます</p>
+          </div>
+          <button onClick={() => setNoteHistoryCustomer("")} className="text-[14px] cursor-pointer p-1" style={{ color: T.textSub }}>✕</button>
+        </div>
+        {/* 既存メモ表示 */}
+        {(() => { const note = customerNotes.find(n => n.customer_name === noteHistoryCustomer); return note ? (
+          <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: "#e8849a08" }}>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-medium" style={{ color: "#e8849a" }}>📝 登録済みメモ</span>
+                {note.is_ng && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}
+                {note.rating > 0 && <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(note.rating)}</span>}
+              </div>
+              <button onClick={() => { setNoteHistoryCustomer(""); setNoteForm({ customer_name: note.customer_name, note: note.note, is_ng: note.is_ng, ng_reason: note.ng_reason, rating: note.rating || 0 }); setShowAddNote(true); }} className="text-[9px] cursor-pointer px-2 py-1 rounded-lg" style={{ color: "#e8849a", backgroundColor: "#e8849a15" }}>✏️ 編集</button>
+            </div>
+            {note.note && <p className="text-[10px] whitespace-pre-wrap" style={{ color: T.textSub, maxHeight: 80, overflow: "auto" }}>{note.note}</p>}
+          </div>
+        ) : null; })()}
+        {/* 接客履歴一覧 */}
+        <div className="overflow-y-auto flex-1 px-5 py-3">
+          <p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>接客履歴</p>
+          {(() => {
+            const hist = allReservations.filter(r => r.customer_name === noteHistoryCustomer);
+            if (hist.length === 0) return <p className="text-[11px] text-center py-6" style={{ color: T.textFaint }}>接客履歴がありません</p>;
+            return hist.map(r => {
+              const dateStr = (() => { const dt = new Date(r.date + "T00:00:00"); const days = ["日","月","火","水","木","金","土"]; return `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})`; })();
+              return (
+                <div key={r.id} className="rounded-xl border p-3 mb-2" style={{ borderColor: T.border, backgroundColor: T.cardAlt }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12px] font-medium">{dateStr}</span>
+                    <span className="text-[10px]" style={{ color: T.textMuted }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}</span>
+                  </div>
+                  <p className="text-[10px]" style={{ color: T.textSub }}>{r.course}{r.nomination ? ` ⭐${r.nomination}` : ""}</p>
+                  <button onClick={() => {
+                    const note = customerNotes.find(n => n.customer_name === noteHistoryCustomer);
+                    const ds = `${dateStr} ${r.start_time?.slice(0,5)}`;
+                    if (note) {
+                      setNoteForm({ customer_name: note.customer_name, note: note.note + (note.note ? "\n" : "") + `[${ds}] `, is_ng: note.is_ng, ng_reason: note.ng_reason, rating: note.rating || 0 });
+                    } else {
+                      setNoteForm({ customer_name: noteHistoryCustomer, note: `[${ds}] `, is_ng: false, ng_reason: "", rating: 0 });
+                    }
+                    setNoteHistoryCustomer("");
+                    setShowAddNote(true);
+                  }} className="mt-1.5 w-full py-1.5 text-[10px] rounded-lg cursor-pointer font-medium" style={{ backgroundColor: "#e8849a15", color: "#e8849a", border: "1px solid #e8849a30" }}>
+                    📝 この接客のメモを追加
+                  </button>
+                </div>
+              );
+            });
+          })()}
+        </div>
+        {/* フッター */}
+        <div className="px-5 py-3 flex gap-2" style={{ borderTop: `1px solid ${T.border}` }}>
+          {!customerNotes.find(n => n.customer_name === noteHistoryCustomer) && (
+            <button onClick={() => { setNoteForm({ customer_name: noteHistoryCustomer, note: "", is_ng: false, ng_reason: "", rating: 0 }); setNoteHistoryCustomer(""); setShowAddNote(true); }} className="flex-1 py-2 text-[10px] rounded-xl cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>📝 新規メモ作成</button>
+          )}
+          <button onClick={() => setNoteHistoryCustomer("")} className="flex-1 py-2 border text-[10px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+        </div>
+      </div></div>)}
 
       {noteViewTarget && (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setNoteViewTarget(null)}><div className="rounded-2xl border p-5 w-full max-w-sm" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
         <h3 className="text-[14px] font-medium mb-1">{noteViewTarget.customer_name}</h3>
