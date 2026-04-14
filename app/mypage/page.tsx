@@ -1154,6 +1154,26 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         ); })()}
         {/* 接客履歴一覧 */}
         <div className="overflow-y-auto flex-1 px-5 py-3">
+          {/* 旧形式メモ（reservation_idなし）表示 */}
+          {(() => { const generalNotes = customerNotes.filter(n => n.customer_name === noteHistoryCustomer && !n.reservation_id && n.note); return generalNotes.length > 0 ? (
+            <div className="mb-3">
+              <p className="text-[10px] font-medium mb-2" style={{ color: "#e8849a" }}>📝 過去のメモ</p>
+              {generalNotes.map(n => (
+                <div key={n.id} className="rounded-lg px-3 py-2 mb-1.5" style={{ backgroundColor: "#e8849a08", border: "1px solid #e8849a20" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      {n.rating > 0 && <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(n.rating)}{"☆".repeat(5 - n.rating)}</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => { setNoteForm({ customer_name: n.customer_name, note: n.note, is_ng: n.is_ng, ng_reason: n.ng_reason, rating: n.rating || 0, reservation_id: 0 }); setNoteHistoryCustomer(""); setShowAddNote(true); }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#e8849a", backgroundColor: "#e8849a15" }}>✏️ 編集</button>
+                      <button onClick={async () => { if (confirm("このメモを削除しますか？")) { await supabase.from("therapist_customer_notes").delete().eq("id", n.id); await fetchData(); } }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#c45555", backgroundColor: "#c4555510" }}>🗑</button>
+                    </div>
+                  </div>
+                  <p className="text-[10px] whitespace-pre-wrap leading-relaxed" style={{ color: T.textSub }}>{n.note}</p>
+                </div>
+              ))}
+            </div>
+          ) : null; })()}
           <p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>接客履歴</p>
           {(() => {
             const hist = allReservations.filter(r => r.customer_name === noteHistoryCustomer);
