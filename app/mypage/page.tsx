@@ -1170,12 +1170,18 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                   <p className="text-[10px]" style={{ color: T.textSub }}>{r.course}{r.nomination ? ` ⭐${r.nomination}` : ""}</p>
                   {resNote ? (
                     <div className="mt-1.5">
-                      <div className="rounded-lg px-2.5 py-1.5" style={{ backgroundColor: "#e8849a10" }}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(resNote.rating || 0)}{"☆".repeat(5 - (resNote.rating || 0))}</span>
-                          <button onClick={() => { setNoteForm({ customer_name: resNote.customer_name, note: resNote.note, is_ng: resNote.is_ng, ng_reason: resNote.ng_reason, rating: resNote.rating || 0, reservation_id: r.id }); setNoteHistoryCustomer(""); setShowAddNote(true); }} className="text-[9px] cursor-pointer" style={{ color: "#e8849a" }}>✏️ 編集</button>
+                      <div className="rounded-lg px-2.5 py-2" style={{ backgroundColor: "#e8849a10", border: "1px solid #e8849a20" }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-medium" style={{ color: "#e8849a" }}>📝 メモ</span>
+                            {resNote.rating > 0 && <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(resNote.rating)}{"☆".repeat(5 - resNote.rating)}</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => { setNoteForm({ customer_name: resNote.customer_name, note: resNote.note, is_ng: resNote.is_ng, ng_reason: resNote.ng_reason, rating: resNote.rating || 0, reservation_id: r.id }); setNoteHistoryCustomer(""); setShowAddNote(true); }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#e8849a", backgroundColor: "#e8849a15" }}>✏️ 編集</button>
+                            <button onClick={async () => { if (confirm("このメモを削除しますか？")) { await supabase.from("therapist_customer_notes").delete().eq("id", resNote.id); await fetchData(); } }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#c45555", backgroundColor: "#c4555510" }}>🗑</button>
+                          </div>
                         </div>
-                        {resNote.note && <p className="text-[10px] mt-0.5" style={{ color: T.textSub }}>{resNote.note}</p>}
+                        {resNote.note && <p className="text-[10px] whitespace-pre-wrap leading-relaxed" style={{ color: T.textSub }}>{resNote.note}</p>}
                       </div>
                     </div>
                   ) : (
