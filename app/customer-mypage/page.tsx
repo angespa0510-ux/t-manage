@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 
 type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
-type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number };
+type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number; point_used?: number };
 type Therapist = { id: number; name: string; age: number; height_cm: number; bust: number; waist: number; hip: number; cup: string; photo_url: string; status: string };
 type Course = { id: number; name: string; duration: number; price: number };
 type Store = { id: number; name: string };
@@ -18,6 +18,7 @@ type Extension = { id: number; name: string; duration: number; price: number };
 type Option = { id: number; name: string; price: number };
 type Building = { id: number; store_id: number; name: string };
 type Room = { id: number; store_id: number; building_id: number; name: string };
+type CustomerTherapistMemo = { id: number; customer_id: number; therapist_id: number; rating: number; memo: string; created_at: string; updated_at: string };
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 const normPhone = (p: string) => p.replace(/[-\s\u3000()（）\u2010-\u2015\uff0d]/g, "");
@@ -99,6 +100,16 @@ export default function CustomerMypage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [freeMode, setFreeMode] = useState(false); // フリー予約モード
   const [bookFreeBuildingId, setBookFreeBuildingId] = useState<number | null>(null);
+  // セラピストから選ぶモード
+  const [schedMode, setSchedMode] = useState<"schedule" | "therapist">("schedule");
+  const [allTherapistSearch, setAllTherapistSearch] = useState("");
+  // セラピストメモ
+  const [customerMemos, setCustomerMemos] = useState<CustomerTherapistMemo[]>([]);
+  const [editMemoTid, setEditMemoTid] = useState(0);
+  const [editMemoRating, setEditMemoRating] = useState(0);
+  const [editMemoText, setEditMemoText] = useState("");
+  const [memoSaving, setMemoSaving] = useState(false);
+  const [showMemoModal, setShowMemoModal] = useState(false);
 
   useEffect(() => { const saved = localStorage.getItem("customer_mypage_id"); if (saved) { supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) { setCustomer(data); setSetEmail(data.login_email || ""); setSetBday(data.birthday || ""); setSetSelfN(data.self_name || data.name || ""); } }); } }, []);
   useEffect(() => { supabase.from("store_settings").select("value").eq("key", "cancel_phone").maybeSingle().then(({ data }) => { if (data?.value) setCancelPhone(data.value); }); }, []);
@@ -127,6 +138,8 @@ export default function CustomerMypage() {
     // NGセラピスト取得（このお客様をNGにしたセラピスト）
     const { data: ngNotes } = await supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", customer.name).eq("is_ng", true);
     if (ngNotes) setNgTherapistIdsForMe(new Set(ngNotes.map(n => n.therapist_id)));
+    // お客様セラピストメモ取得
+    try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer.id); if (memos) setCustomerMemos(memos); } catch {}
   }, [customer]);
   useEffect(() => { if (customer) fetchData(); }, [customer, fetchData]);
 
@@ -301,6 +314,43 @@ export default function CustomerMypage() {
 
   const getTherapistName = (id: number) => therapists.find(t => t.id === id)?.name || "—";
   const getStoreName = (sid: number) => stores.find(s => s.id === sid)?.name || "";
+  const getBuildingName = (r: Reservation) => {
+    if (r.free_building_id) { const b = buildings.find(bl => bl.id === r.free_building_id); return b?.name || ""; }
+    const shift = schedShifts.find(s => s.therapist_id === r.therapist_id && s.date === r.date);
+    if (shift?.store_id) { const b = buildings.find(bl => bl.store_id === shift.store_id); return b?.name || getStoreName(shift.store_id); }
+    return "";
+  };
+  const getReservationPointsEarned = (r: Reservation) => {
+    return points.filter(p => p.amount > 0 && p.description && p.description.includes(dateFmt(r.date))).reduce((s, p) => s + p.amount, 0);
+  };
+  const getPaymentInfo = (r: Reservation) => {
+    const parts: string[] = [];
+    if (r.card_base > 0) parts.push(`💳${fmt(r.card_base)}`);
+    if (r.paypay_amount > 0) parts.push(`📱${fmt(r.paypay_amount)}`);
+    if (r.cash_amount > 0) parts.push(`💵${fmt(r.cash_amount)}`);
+    return parts.length > 0 ? parts.join(" ") : "";
+  };
+  const getMemo = (tid: number) => customerMemos.find(m => m.therapist_id === tid);
+  const openMemoEdit = (tid: number) => {
+    const existing = getMemo(tid);
+    setEditMemoTid(tid);
+    setEditMemoRating(existing?.rating || 0);
+    setEditMemoText(existing?.memo || "");
+    setShowMemoModal(true);
+  };
+  const saveMemo = async () => {
+    if (!customer || !editMemoTid) return;
+    setMemoSaving(true);
+    const existing = getMemo(editMemoTid);
+    if (existing) {
+      await supabase.from("customer_therapist_memos").update({ rating: editMemoRating, memo: editMemoText, updated_at: new Date().toISOString() }).eq("id", existing.id);
+    } else {
+      await supabase.from("customer_therapist_memos").insert({ customer_id: customer.id, therapist_id: editMemoTid, rating: editMemoRating, memo: editMemoText });
+    }
+    setMemoSaving(false);
+    setShowMemoModal(false);
+    try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer.id); if (memos) setCustomerMemos(memos); } catch {}
+  };
   const getStatusBadge = (status: string): { label: string; color: string; bg: string } => {
     switch (status) {
       case "unprocessed": return { label: "🟡 リクエスト中", color: "#b45309", bg: "#f59e0b18" };
@@ -400,14 +450,67 @@ export default function CustomerMypage() {
         <button onClick={() => { setTab("schedule"); setSchedView("day"); setSchedDate(today); }} className="w-full py-4 rounded-2xl text-[15px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>📅 予約する</button>
         <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><h2 className="text-[13px] font-medium mb-3" style={{ color: C.textSub }}>📅 次回のご予約</h2>{upcomingRes.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>現在予約はありません</p>) : (<div className="space-y-3">{upcomingRes.slice(0, 3).map(r => (<div key={r.id} className="rounded-xl p-4" style={{ backgroundColor: C.accentBg, border: `1px solid ${C.accent}30` }}><div className="flex items-center justify-between mb-1"><span className="text-[15px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color }}>{getStatusBadge(r.status).label}</span></div><p className="text-[13px]">{r.start_time}〜{r.end_time}</p><div className="flex flex-wrap gap-x-4 mt-1 text-[11px]" style={{ color: C.textSub }}>{r.course && <span>💆 {r.course}</span>}{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}</div>{r.total_price > 0 && <p className="text-[12px] mt-1 font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</p>}{r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f20" }}><p className="text-[9px] mb-1" style={{ color: "#3d6b9f" }}>💳 カード決済額: <strong>{fmt(Math.round(r.total_price * 1.1))}</strong>（税10%込）</p><button onClick={(e) => { e.stopPropagation(); window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank"); }} className="w-full py-1.5 rounded-lg text-[10px] font-medium cursor-pointer text-white flex items-center justify-center gap-1" style={{ background: "linear-gradient(135deg, #3d6b9f, #2d5a8e)" }}>💳 クレジットカードで支払う</button></div>}{/* キャンセルボタン */}<div className="mt-2"><button onClick={() => handleCancelClick(r)} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer" style={{ backgroundColor: canCancelDirectly(r) ? "#c4555510" : "#88878010", color: canCancelDirectly(r) ? C.red : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? "#c4555525" : "#88878020"}` }}>{canCancelDirectly(r) ? "✕ この予約をキャンセル" : "📞 キャンセル・変更について"}</button></div></div>))}</div>)}{/* キャンセルポリシー */}<div className="mt-3 rounded-lg p-3" style={{ backgroundColor: "#c4555506", border: `1px solid #c4555515` }}><p className="text-[10px] font-medium mb-1" style={{ color: C.red }}>📌 キャンセル・変更について</p><p className="text-[9px] m-0" style={{ color: C.textMuted, lineHeight: 1.7 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。<br />当日のキャンセルにつきましては、<strong style={{ color: C.red }}>100％キャンセル料</strong>を頂戴いたします。</p><a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-medium no-underline" style={{ color: C.accent }}>📞 {cancelPhone}</a></div></div>
         <div className="grid grid-cols-3 gap-3">{[{ label: "累計来店", value: String(totalVisits), unit: "回", color: C.accent }, { label: "今月利用", value: fmt(monthTotal), unit: "", color: C.green }, { label: "ポイント", value: pointBalance.toLocaleString(), unit: "pt", color: C.blue }].map((s, i) => (<div key={i} className="rounded-xl border p-3 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[9px] mb-1" style={{ color: C.textMuted }}>{s.label}</p><p className="text-[16px] font-bold" style={{ color: s.color }}>{s.value}<span className="text-[10px] font-normal">{s.unit}</span></p></div>))}</div>
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><h2 className="text-[13px] font-medium mb-3" style={{ color: C.textSub }}>🕐 直近のご利用</h2>{pastRes.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>利用履歴がありません</p>) : (<div className="space-y-2">{pastRes.slice(0, 5).map(r => (<div key={r.id} className="rounded-xl p-3 border" style={{ borderColor: C.border, backgroundColor: C.cardAlt }}><div className="flex items-center justify-between"><div><span className="text-[12px] font-medium">{dateFmt(r.date)}</span><span className="text-[11px] ml-2" style={{ color: C.textSub }}>{r.course}</span></div>{r.total_price > 0 && <span className="text-[12px] font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</span>}</div></div>))}{pastRes.length > 5 && <button onClick={() => { setTab("schedule"); setSchedView("history"); }} className="w-full py-2 text-[11px] rounded-lg cursor-pointer" style={{ color: C.accent }}>すべて見る →</button>}</div>)}</div>
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><h2 className="text-[13px] font-medium mb-3" style={{ color: C.textSub }}>🕐 直近のご利用</h2>{pastRes.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>利用履歴がありません</p>) : (<div className="space-y-2">{pastRes.slice(0, 5).map(r => { const bName = (() => { if (r.free_building_id) { const b = buildings.find(bl => bl.id === r.free_building_id); return b?.name || ""; } return ""; })(); const ptEarned = getReservationPointsEarned(r); const payInfo = getPaymentInfo(r); return (<div key={r.id} className="rounded-xl p-3 border" style={{ borderColor: C.border, backgroundColor: C.cardAlt }}><div className="flex items-center justify-between"><div><span className="text-[12px] font-medium">{dateFmt(r.date)}</span><span className="text-[11px] ml-2" style={{ color: C.textSub }}>{r.course}</span></div>{r.total_price > 0 && <span className="text-[12px] font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</span>}</div><div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}{r.options_text && <span>✨ {r.options_text}</span>}{bName && <span>🏠 {bName}</span>}</div>{(payInfo || ptEarned > 0) && <div className="flex flex-wrap gap-x-3 mt-1 text-[9px]" style={{ color: C.textMuted }}>{payInfo && <span>{payInfo}</span>}{ptEarned > 0 && <span>🎁 +{ptEarned}pt付与</span>}</div>}</div>); })}{pastRes.length > 5 && <button onClick={() => { setTab("schedule"); setSchedView("history"); }} className="w-full py-2 text-[11px] rounded-lg cursor-pointer" style={{ color: C.accent }}>すべて見る →</button>}</div>)}</div>
       </div>)}
 
       {/* ═══ スケジュール / 予約 ═══ */}
       {tab === "schedule" && (<div className="animate-[fadeIn_0.3s]">
 
-        {/* --- 当日スケジュール --- */}
-        {schedView === "day" && (<>
+        {/* --- モード切替（dayビュー時のみ） --- */}
+        {schedView === "day" && (<div className="grid grid-cols-2 gap-2 mb-4">
+          <button onClick={() => setSchedMode("schedule")} className="py-2.5 rounded-xl text-[12px] cursor-pointer font-medium" style={{ backgroundColor: schedMode === "schedule" ? C.accentBg : "transparent", color: schedMode === "schedule" ? C.accent : C.textMuted, border: schedMode === "schedule" ? `1px solid ${C.accent}44` : `1px solid ${C.border}` }}>📅 スケジュールから選ぶ</button>
+          <button onClick={() => setSchedMode("therapist")} className="py-2.5 rounded-xl text-[12px] cursor-pointer font-medium" style={{ backgroundColor: schedMode === "therapist" ? C.accentBg : "transparent", color: schedMode === "therapist" ? C.accent : C.textMuted, border: schedMode === "therapist" ? `1px solid ${C.accent}44` : `1px solid ${C.border}` }}>👤 セラピストから選ぶ</button>
+        </div>)}
+
+        {/* --- セラピストから選ぶモード --- */}
+        {schedView === "day" && schedMode === "therapist" && (<>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[16px] font-medium">セラピスト一覧</h2>
+            <button onClick={() => setSchedView("history")} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>📋 予約履歴</button>
+          </div>
+          {/* 全セラピスト検索バー */}
+          <div className="relative mb-4">
+            <input type="text" value={allTherapistSearch} onChange={e => setAllTherapistSearch(e.target.value)} placeholder="セラピスト名で検索（全セラピスト対象）" className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: C.cardAlt, borderColor: C.border, color: C.text }} />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px]">🔍</span>
+            {allTherapistSearch && <button onClick={() => setAllTherapistSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] cursor-pointer" style={{ color: C.textMuted }}>✕</button>}
+          </div>
+          {(() => {
+            const filtered = therapists.filter(t => {
+              if (ngTherapistIdsForMe.has(t.id)) return false;
+              if (allTherapistSearch && !t.name.toLowerCase().includes(allTherapistSearch.toLowerCase())) return false;
+              return true;
+            });
+            return filtered.length === 0 ? (
+              <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[12px]" style={{ color: C.textFaint }}>該当するセラピストがいません</p></div>
+            ) : (
+              <>
+                <p className="text-[11px] mb-2 px-1" style={{ color: C.textMuted }}>全セラピスト — {filtered.length}名</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {filtered.map(t => {
+                    const memo = getMemo(t.id);
+                    return (
+                      <button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all" style={{ backgroundColor: C.card, borderColor: C.border }}>
+                        {t.photo_url ? (
+                          <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover" />
+                        ) : (
+                          <div className="w-full aspect-[3/4] flex items-center justify-center text-[36px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>
+                        )}
+                        <div className="p-2.5">
+                          <p className="text-[13px] font-medium truncate">{t.name}{t.age > 0 && <span className="text-[10px] font-normal" style={{ color: C.textMuted }}>({t.age})</span>}</p>
+                          {(t.height_cm > 0 || t.bust > 0) && <p className="text-[9px] mt-0.5" style={{ color: C.textMuted }}>T{t.height_cm} B{t.bust}({t.cup}) W{t.waist} H{t.hip}</p>}
+                          {memo && <div className="mt-1.5 rounded-md px-2 py-1" style={{ backgroundColor: "#c3a78210" }}><span className="text-[8px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span>{memo.memo && <p className="text-[8px] truncate mt-0.5" style={{ color: C.textSub }}>{memo.memo}</p>}</div>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+        </>)}
+
+        {/* --- 当日スケジュール（スケジュールから選ぶモード） --- */}
+        {schedView === "day" && schedMode === "schedule" && (<>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[16px] font-medium">出勤セラピスト</h2>
             <button onClick={() => setSchedView("history")} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>📋 予約履歴</button>
@@ -500,7 +603,10 @@ export default function CustomerMypage() {
                   </div>
                   <div className="flex gap-2 p-3" style={{ borderBottom: `1px solid ${C.border}` }}>
                     <button onClick={() => openWeekly(selectedSchedTid)} className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer" style={{ backgroundColor: C.accentBg, color: C.accent, border: `1px solid ${C.accent}30` }}>📅 週間スケジュール</button>
+                    <button onClick={() => openMemoEdit(selectedSchedTid)} className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer" style={{ backgroundColor: "#c3a78210", color: C.accent, border: `1px solid ${C.accent}30` }}>📝 メモ</button>
                   </div>
+                  {/* メモ表示 */}
+                  {(() => { const memo = getMemo(selectedSchedTid); return memo ? (<div className="px-4 py-2" style={{ borderBottom: `1px solid ${C.border}` }}><div className="rounded-lg px-3 py-2" style={{ backgroundColor: "#c3a78210" }}><div className="flex items-center justify-between"><span className="text-[10px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span><button onClick={() => openMemoEdit(selectedSchedTid)} className="text-[9px] cursor-pointer" style={{ color: C.accent }}>✏️ 編集</button></div>{memo.memo && <p className="text-[10px] mt-0.5" style={{ color: C.textSub }}>{memo.memo}</p>}</div></div>) : null; })()}
                   {/* スロット一覧 */}
                   <div className="px-4 py-2 space-y-1">
                     <p className="text-[10px] mb-1 font-medium" style={{ color: C.textSub }}>{dateFmt(schedDate)} の空き状況</p>
@@ -532,7 +638,7 @@ export default function CustomerMypage() {
                   return true;
                 });
                 return filtered.length === 0 ? (
-                  <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[12px]" style={{ color: C.textFaint }}>該当するセラピストがいません</p></div>
+                  <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[12px]" style={{ color: C.textFaint }}>{schedSearch ? "この日の出勤にはいません" : "該当するセラピストがいません"}</p>{schedSearch && (() => { const allMatching = therapists.filter(t => !ngTherapistIdsForMe.has(t.id) && t.name.toLowerCase().includes(schedSearch.toLowerCase())); return allMatching.length > 0 ? (<div className="mt-4"><p className="text-[11px] font-medium mb-2" style={{ color: C.accent }}>🔍 全セラピストの検索結果（{allMatching.length}名）</p><div className="grid grid-cols-2 gap-3">{allMatching.map(t => (<button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left" style={{ backgroundColor: C.card, borderColor: C.border }}>{t.photo_url ? <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover" /> : <div className="w-full aspect-[3/4] flex items-center justify-center text-[36px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>}<div className="p-2.5"><p className="text-[13px] font-medium truncate">{t.name}{t.age > 0 && <span className="text-[10px] font-normal" style={{ color: C.textMuted }}>({t.age})</span>}</p><p className="text-[9px] mt-1" style={{ color: C.accent }}>📅 タップで週間スケジュール</p></div></button>))}</div></div>) : null; })()}</div>
                 ) : (
                   <>
                     <p className="text-[11px] mb-2 px-1" style={{ color: C.textMuted }}>{dateFmt(schedDate)} の出勤 — {filtered.length}名</p>
@@ -585,6 +691,24 @@ export default function CustomerMypage() {
                         );
                       })}
                     </div>
+                    {/* 検索時：出勤日以外のセラピストも表示 */}
+                    {schedSearch && (() => {
+                      const onShiftIds = new Set(filtered.map(s => s.therapist_id));
+                      const otherMatching = therapists.filter(t => !onShiftIds.has(t.id) && !ngTherapistIdsForMe.has(t.id) && t.name.toLowerCase().includes(schedSearch.toLowerCase()));
+                      return otherMatching.length > 0 ? (
+                        <div className="mt-4">
+                          <p className="text-[11px] font-medium mb-2 px-1" style={{ color: C.accent }}>🔍 この日以外に出勤のセラピスト（{otherMatching.length}名）</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            {otherMatching.map(t => (
+                              <button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left" style={{ backgroundColor: C.card, borderColor: C.border + "88" }}>
+                                {t.photo_url ? <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover opacity-90" /> : <div className="w-full aspect-[3/4] flex items-center justify-center text-[36px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}cc, ${C.accentDark}cc)` }}>{t.name.charAt(0)}</div>}
+                                <div className="p-2.5"><p className="text-[13px] font-medium truncate">{t.name}</p><p className="text-[9px] mt-1" style={{ color: C.accent }}>📅 タップで週間スケジュール</p></div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                   </>
                 );
               })()}
@@ -599,8 +723,11 @@ export default function CustomerMypage() {
           return (<>
             <div className="flex items-center gap-3 mb-4">
               <button onClick={() => setSchedView("day")} className="text-[14px] cursor-pointer" style={{ color: C.textMuted }}>← 戻る</button>
-              <h2 className="text-[16px] font-medium">{t?.name || ""} の週間スケジュール</h2>
+              <h2 className="text-[16px] font-medium flex-1">{t?.name || ""} の週間スケジュール</h2>
+              <button onClick={() => openMemoEdit(weeklyTid)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: "#c3a78210", border: `1px solid ${C.accent}30` }}>📝 メモ</button>
             </div>
+            {/* メモ表示 */}
+            {(() => { const memo = getMemo(weeklyTid); return memo ? (<div className="rounded-xl px-4 py-2.5 mb-3" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78225" }}><div className="flex items-center justify-between"><div className="flex items-center gap-2"><span className="text-[11px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span><span className="text-[10px]" style={{ color: C.textSub }}>ひとことメモ</span></div><button onClick={() => openMemoEdit(weeklyTid)} className="text-[9px] cursor-pointer" style={{ color: C.accent }}>✏️</button></div>{memo.memo && <p className="text-[11px] mt-1" style={{ color: C.textSub }}>{memo.memo}</p>}</div>) : null; })()}
             {/* 週ナビ */}
             <div className="flex items-center justify-center gap-3 mb-4">
               <button onClick={() => { const nd = dateNav(weekDates[0], -7); setSchedDate(nd); fetchWeekSchedule(weeklyTid, nd); }} className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border" style={{ borderColor: C.border, color: C.textSub }}>◀</button>
@@ -741,12 +868,12 @@ export default function CustomerMypage() {
           </div>
           {upcomingRes.length > 0 && (<div className="mb-4"><h3 className="text-[12px] font-medium mb-2" style={{ color: C.accent }}>📅 今後の予約（{upcomingRes.length}件）</h3><div className="space-y-2">{upcomingRes.map(r => (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.accent + "44" }}><div className="flex items-center justify-between mb-1"><span className="text-[14px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color }}>{getStatusBadge(r.status).label}</span></div><p className="text-[13px]">{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}</div>{r.total_price > 0 && <p className="text-[13px] mt-1 font-bold" style={{ color: C.accent }}>{fmt(r.total_price)}</p>}{r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && <div className="mt-2 rounded-lg p-2.5" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f20" }}><p className="text-[10px] mb-1.5" style={{ color: "#3d6b9f" }}>💳 カード決済額: <strong>{fmt(Math.round(r.total_price * 1.1))}</strong>（税10%込）</p><button onClick={() => window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank")} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer text-white flex items-center justify-center gap-1" style={{ background: "linear-gradient(135deg, #3d6b9f, #2d5a8e)" }}>💳 クレジットカードで支払う</button></div>}{/* キャンセルボタン */}<div className="mt-2"><button onClick={() => handleCancelClick(r)} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer" style={{ backgroundColor: canCancelDirectly(r) ? "#c4555510" : "#88878010", color: canCancelDirectly(r) ? C.red : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? "#c4555525" : "#88878020"}` }}>{canCancelDirectly(r) ? "✕ この予約をキャンセル" : "📞 キャンセル・変更について"}</button></div></div>))}</div></div>)}
           <h3 className="text-[12px] font-medium mb-2" style={{ color: C.textSub }}>🕐 過去のご利用（{pastRes.length}件）</h3>
-          {pastRes.length === 0 ? (<p className="text-[12px] text-center py-8" style={{ color: C.textFaint }}>利用履歴がありません</p>) : (<div className="space-y-2">{pastRes.map(r => (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between mb-1"><span className="text-[13px] font-medium">{dateFmt(r.date)}</span><span className="text-[12px] font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</span></div><p className="text-[12px]" style={{ color: C.textSub }}>{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[10px]" style={{ color: C.textMuted }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}</div></div>))}</div>)}
+          {pastRes.length === 0 ? (<p className="text-[12px] text-center py-8" style={{ color: C.textFaint }}>利用履歴がありません</p>) : (<div className="space-y-2">{pastRes.map(r => { const bName = (() => { if (r.free_building_id) { const b = buildings.find(bl => bl.id === r.free_building_id); return b?.name || ""; } return ""; })(); const ptEarned = getReservationPointsEarned(r); const payInfo = getPaymentInfo(r); return (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between mb-1"><span className="text-[13px] font-medium">{dateFmt(r.date)}</span><span className="text-[12px] font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</span></div><p className="text-[12px]" style={{ color: C.textSub }}>{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}{r.options_text && <span>✨ {r.options_text}</span>}{bName && <span>🏠 {bName}</span>}</div>{(payInfo || ptEarned > 0) && <div className="flex flex-wrap gap-x-3 mt-1 text-[9px]" style={{ color: C.textMuted }}>{payInfo && <span>{payInfo}</span>}{ptEarned > 0 && <span>🎁 +{ptEarned}pt付与</span>}</div>}{r.therapist_id > 0 && (() => { const memo = getMemo(r.therapist_id); return memo ? (<div className="mt-2 rounded-lg px-3 py-2" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78225" }}><div className="flex items-center justify-between"><div className="flex items-center gap-1"><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span></div><button onClick={() => openMemoEdit(r.therapist_id)} className="text-[9px] cursor-pointer" style={{ color: C.accent }}>✏️ 編集</button></div>{memo.memo && <p className="text-[10px] mt-0.5" style={{ color: C.textSub }}>{memo.memo}</p>}</div>) : (<button onClick={() => openMemoEdit(r.therapist_id)} className="mt-2 w-full py-1.5 rounded-lg text-[9px] cursor-pointer" style={{ color: C.textMuted, backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>📝 {getTherapistName(r.therapist_id)}さんにメモを残す</button>); })()}</div>); })}</div>)}
         </>)}
       </div>)}
 
       {/* ═══ お気に入り ═══ */}
-      {tab === "favorites" && (<div className="animate-[fadeIn_0.3s]"><h2 className="text-[16px] font-medium mb-4">お気に入り</h2><h3 className="text-[12px] font-medium mb-3 px-1" style={{ color: C.textSub }}>💆 セラピスト</h3><div className="grid grid-cols-2 gap-3 mb-6">{therapists.map(t => { const faved = isFav("therapist", t.id); return (<div key={t.id} className="rounded-xl border p-3 relative" style={{ backgroundColor: C.card, borderColor: faved ? C.accent + "66" : C.border }}><button onClick={() => toggleFav("therapist", t.id)} className="absolute top-2 right-2 text-[16px] cursor-pointer" style={{ color: faved ? "#e74c3c" : C.textFaint }}>{faved ? "❤️" : "🤍"}</button><div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center text-[16px] text-white font-medium" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div><p className="text-[13px] font-medium text-center">{t.name}</p><div className="flex justify-center gap-2 mt-1 text-[10px]" style={{ color: C.textMuted }}>{t.age > 0 && <span>{t.age}歳</span>}{t.height_cm > 0 && <span>{t.height_cm}cm</span>}{t.cup && <span>{t.cup}カップ</span>}</div>{faved && <button onClick={() => { setTab("schedule"); setSchedView("weekly"); setWeeklyTid(t.id); setSchedDate(today); fetchWeekSchedule(t.id, today); }} className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>📅 スケジュールを見る</button>}</div>); })}</div><h3 className="text-[12px] font-medium mb-3 px-1" style={{ color: C.textSub }}>📋 コース</h3><div className="space-y-2">{courses.map(c => { const faved = isFav("course", c.id); return (<div key={c.id} className="rounded-xl border p-4 flex items-center justify-between" style={{ backgroundColor: C.card, borderColor: faved ? C.accent + "66" : C.border }}><div className="flex-1"><p className="text-[13px] font-medium">{c.name}</p><div className="flex gap-3 mt-0.5 text-[11px]" style={{ color: C.textMuted }}><span>⏱ {c.duration}分</span><span style={{ color: C.accent, fontWeight: 600 }}>{fmt(c.price)}</span></div></div><button onClick={() => toggleFav("course", c.id)} className="text-[20px] cursor-pointer" style={{ color: faved ? "#e74c3c" : C.textFaint }}>{faved ? "❤️" : "🤍"}</button></div>); })}</div></div>)}
+      {tab === "favorites" && (<div className="animate-[fadeIn_0.3s]"><h2 className="text-[16px] font-medium mb-4">お気に入り</h2><h3 className="text-[12px] font-medium mb-3 px-1" style={{ color: C.textSub }}>💆 セラピスト</h3><div className="grid grid-cols-2 gap-3 mb-6">{therapists.map(t => { const faved = isFav("therapist", t.id); const memo = getMemo(t.id); return (<div key={t.id} className="rounded-xl border p-3 relative" style={{ backgroundColor: C.card, borderColor: faved ? C.accent + "66" : C.border }}><button onClick={() => toggleFav("therapist", t.id)} className="absolute top-2 right-2 text-[16px] cursor-pointer" style={{ color: faved ? "#e74c3c" : C.textFaint }}>{faved ? "❤️" : "🤍"}</button><div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center text-[16px] text-white font-medium" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div><p className="text-[13px] font-medium text-center">{t.name}</p><div className="flex justify-center gap-2 mt-1 text-[10px]" style={{ color: C.textMuted }}>{t.age > 0 && <span>{t.age}歳</span>}{t.height_cm > 0 && <span>{t.height_cm}cm</span>}{t.cup && <span>{t.cup}カップ</span>}</div>{memo && <div className="mt-2 rounded-md px-2 py-1.5" style={{ backgroundColor: "#c3a78210" }}><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span>{memo.memo && <p className="text-[9px] mt-0.5 truncate" style={{ color: C.textSub }}>{memo.memo}</p>}</div>}<div className="flex gap-1.5 mt-2">{faved && <button onClick={() => { setTab("schedule"); setSchedView("weekly"); setWeeklyTid(t.id); setSchedDate(today); fetchWeekSchedule(t.id, today); }} className="flex-1 py-1.5 rounded-lg text-[9px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>📅 スケジュール</button>}<button onClick={() => openMemoEdit(t.id)} className="flex-1 py-1.5 rounded-lg text-[9px] font-medium cursor-pointer" style={{ color: C.accent, backgroundColor: "#c3a78210", border: `1px solid ${C.accent}25` }}>📝 メモ</button></div></div>); })}</div><h3 className="text-[12px] font-medium mb-3 px-1" style={{ color: C.textSub }}>📋 コース</h3><div className="space-y-2">{courses.map(c => { const faved = isFav("course", c.id); return (<div key={c.id} className="rounded-xl border p-4 flex items-center justify-between" style={{ backgroundColor: C.card, borderColor: faved ? C.accent + "66" : C.border }}><div className="flex-1"><p className="text-[13px] font-medium">{c.name}</p><div className="flex gap-3 mt-0.5 text-[11px]" style={{ color: C.textMuted }}><span>⏱ {c.duration}分</span><span style={{ color: C.accent, fontWeight: 600 }}>{fmt(c.price)}</span></div></div><button onClick={() => toggleFav("course", c.id)} className="text-[20px] cursor-pointer" style={{ color: faved ? "#e74c3c" : C.textFaint }}>{faved ? "❤️" : "🤍"}</button></div>); })}</div></div>)}
 
       {/* ═══ お知らせ ═══ */}
       {tab === "notifications" && (<div className="animate-[fadeIn_0.3s]"><div className="flex items-center justify-between mb-4"><h2 className="text-[16px] font-medium">お知らせ</h2>{unreadCount > 0 && <button onClick={markAllRead} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>すべて既読にする</button>}</div>{notifications.length === 0 ? (<div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[32px] mb-2">🔔</p><p className="text-[12px]" style={{ color: C.textFaint }}>お知らせはありません</p></div>) : (<div className="space-y-2">{notifications.map(n => { const isRead = readNotifIds.includes(n.id); return (<div key={n.id} onClick={() => markRead(n.id)} className="rounded-xl border p-4 cursor-pointer" style={{ backgroundColor: isRead ? C.card : "#c3a78208", borderColor: isRead ? C.border : C.accent + "44" }}><div className="flex items-start gap-3"><span className="text-[20px]">{NOTI_ICONS[n.type] || "📢"}</span><div className="flex-1"><div className="flex items-center gap-2 mb-1"><span className="text-[13px] font-medium" style={{ color: isRead ? C.text : C.accent }}>{n.title}</span>{!isRead && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: C.red }} />}</div>{n.body && <p className="text-[11px] whitespace-pre-wrap" style={{ color: C.textSub }}>{linkify(n.body)}</p>}<div className="flex items-center gap-2 mt-1.5"><span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.cardAlt, color: C.textMuted }}>{NOTI_LABELS[n.type] || n.type}</span><span className="text-[9px]" style={{ color: C.textFaint }}>{timeAgo(n.created_at)}</span></div></div></div></div>); })}</div>)}</div>)}
@@ -876,6 +1003,44 @@ export default function CustomerMypage() {
 
     {/* ポイント履歴モーダル */}
     {showPoints && (()=>{ const now = new Date(); const expiringPts = points.filter(pt => pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= new Date(now.getTime() + 30*24*60*60*1000)); const totalExpiring = expiringPts.reduce((s,pt) => s+pt.amount, 0); return (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50" onClick={() => setShowPoints(false)}><div className="rounded-t-2xl sm:rounded-2xl border w-full max-w-md max-h-[80vh] overflow-y-auto animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}><div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}><h3 className="text-[16px] font-medium">🎁 ポイント履歴</h3><button onClick={() => setShowPoints(false)} className="text-[14px] cursor-pointer p-1" style={{ color: C.textMuted }}>✕</button></div><div className="px-6 py-4"><div className="text-center mb-4"><p className="text-[11px]" style={{ color: C.textMuted }}>ポイント残高</p><p className="text-[28px] font-bold" style={{ color: C.accent }}>{pointBalance.toLocaleString()}<span className="text-[12px] font-normal ml-1">pt</span></p>{customer.rank && customer.rank !== "normal" && <p className="text-[10px] mt-1" style={{ color: C.accent }}>{customer.rank === "platinum" ? "💎 プラチナ会員" : customer.rank === "gold" ? "🥇 ゴールド会員" : customer.rank === "silver" ? "🥈 シルバー会員" : ""}</p>}</div>{totalExpiring > 0 && (<div className="rounded-xl p-3 mb-3 flex items-center gap-2" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b30" }}><span className="text-[14px]">⏰</span><div><p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>期限切れ間近: {totalExpiring.toLocaleString()}pt</p><p className="text-[9px]" style={{ color: "#f59e0b88" }}>30日以内に有効期限を迎えるポイントがあります</p></div></div>)}{points.length === 0 ? (<p className="text-center py-4 text-[12px]" style={{ color: C.textFaint }}>ポイント履歴がありません</p>) : (<div className="space-y-2">{points.map(pt => { const isExpiring = pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= new Date(now.getTime() + 30*24*60*60*1000); const isExpired = pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) <= now; const desc = pt.description || (pt.type === "earn" ? "ポイント付与" : "ポイント利用"); const icon = desc.includes("初回") ? "🎉" : desc.includes("誕生") ? "🎂" : desc.includes("雨") ? "☔" : desc.includes("曜日") || desc.includes("期間") ? "📅" : desc.includes("アイドル") ? "🕐" : desc.includes("ランク") ? "📈" : desc.includes("アンケート") ? "📝" : pt.amount > 0 ? "💰" : "🏷"; return (<div key={pt.id} className="rounded-xl border p-3" style={{ borderColor: C.border, opacity: isExpired ? 0.4 : 1 }}><div className="flex items-center justify-between"><div className="flex items-center gap-2 flex-1 min-w-0"><span className="text-[14px]">{icon}</span><div className="min-w-0"><p className="text-[12px] font-medium truncate">{desc}{isExpired && <span className="ml-1 text-[9px]" style={{ color: C.red }}>（期限切れ）</span>}</p><div className="flex gap-2 items-center"><span className="text-[10px]" style={{ color: C.textMuted }}>{new Date(pt.created_at).toLocaleDateString("ja-JP")}</span>{pt.expires_at && !isExpired && <span className="text-[9px]" style={{ color: isExpiring ? "#f59e0b" : C.textFaint }}>{isExpiring ? "⚠ " : ""}期限: {new Date(pt.expires_at).toLocaleDateString("ja-JP")}</span>}</div></div></div><span className="text-[14px] font-bold flex-shrink-0" style={{ color: isExpired ? C.textFaint : pt.amount > 0 ? C.green : C.red }}>{pt.amount > 0 ? "+" : ""}{pt.amount.toLocaleString()}pt</span></div></div>); })}</div>)}</div></div></div>); })()}
+
+    {/* セラピストメモ編集モーダル */}
+    {showMemoModal && editMemoTid > 0 && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50" onClick={() => setShowMemoModal(false)}>
+        <div className="rounded-t-2xl sm:rounded-2xl border w-full max-w-md animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}>
+          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
+            <h3 className="text-[16px] font-medium">📝 {getTherapistName(editMemoTid)}さんのメモ</h3>
+            <button onClick={() => setShowMemoModal(false)} className="text-[14px] cursor-pointer p-1" style={{ color: C.textMuted }}>✕</button>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            {/* 星評価 */}
+            <div>
+              <label className="block text-[11px] mb-2" style={{ color: C.textSub }}>⭐ 評価</label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button key={star} onClick={() => setEditMemoRating(star)} className="text-[28px] cursor-pointer transition-all" style={{ color: star <= editMemoRating ? "#f59e0b" : C.textFaint, transform: star <= editMemoRating ? "scale(1.1)" : "scale(1)" }}>
+                    {star <= editMemoRating ? "★" : "☆"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* メモテキスト */}
+            <div>
+              <label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>ひとことメモ</label>
+              <textarea value={editMemoText} onChange={e => setEditMemoText(e.target.value)} rows={3} placeholder="例：会話も弾んで、とっても癒された！旅行が趣味らしい。" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border resize-none" style={inputStyle} />
+            </div>
+            <button onClick={saveMemo} disabled={memoSaving || editMemoRating === 0} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>
+              {memoSaving ? "保存中..." : "メモを保存"}
+            </button>
+            {getMemo(editMemoTid) && (
+              <button onClick={async () => { const m = getMemo(editMemoTid); if (m && confirm("このメモを削除しますか？")) { await supabase.from("customer_therapist_memos").delete().eq("id", m.id); setShowMemoModal(false); try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer!.id); if (memos) setCustomerMemos(memos); } catch {} } }} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: C.red, backgroundColor: "#c4555510", border: "1px solid #c4555520" }}>
+                メモを削除
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* キャンセル確認モーダル */}
     {cancelTarget && (
