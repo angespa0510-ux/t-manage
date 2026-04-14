@@ -282,7 +282,7 @@ export default function TimeChart() {
   const [showSokuho, setShowSokuho] = useState(false);
 
   // Customer Memo List
-  type CustMemo = { id: number; therapist_id: number; customer_name: string; note: string; is_ng: boolean; ng_reason: string; rating: number; updated_at: string; created_at: string };
+  type CustMemo = { id: number; therapist_id: number; customer_name: string; note: string; is_ng: boolean; ng_reason: string; rating: number; updated_at: string; created_at: string; reservation_id?: number };
   const [showCustMemos, setShowCustMemos] = useState(false);
   const [custMemos, setCustMemos] = useState<CustMemo[]>([]);
   const [custMemoSearch, setCustMemoSearch] = useState("");
