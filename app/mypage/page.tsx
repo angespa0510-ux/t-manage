@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
+import TaxSupportWizard from "../../components/TaxSupportWizard";
 import { useTheme } from "../../lib/theme";
 
 /* ───────── 型定義 ───────── */
@@ -51,7 +52,7 @@ export default function TherapistMyPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual">("home");
+  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual" | "tax">("home");
   const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
@@ -426,7 +427,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
         {(() => {
           const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
-          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }].map((t) => (
+          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }, { key: "tax" as const, label: "📊 確定申告" }].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#e8849a")}>{t.label}</button>
         ));
         })()}
@@ -1129,6 +1130,12 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       })()}
 
       {/* お客様接客履歴モーダル */}
+      {/* ── 確定申告サポートタブ ── */}
+      {tab === "tax" && therapist && (
+        <TaxSupportWizard T={T} therapistId={therapist.id} />
+      )}
+
+      {/* お客様接客履歴モーダル（元の位置） */}
       {noteHistoryCustomer && (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setNoteHistoryCustomer("")}><div className="rounded-2xl border w-full max-w-sm max-h-[85vh] overflow-hidden flex flex-col" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
           <div>
