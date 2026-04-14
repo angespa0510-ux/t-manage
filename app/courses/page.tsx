@@ -8,7 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 
 type Course = {
   id: number; created_at: string; name: string; duration: number;
-  price: number; therapist_back: number;
+  price: number; therapist_back: number; description: string;
 };
 
 export default function CourseManagement() {
@@ -21,6 +21,7 @@ export default function CourseManagement() {
   const [addDuration, setAddDuration] = useState("90");
   const [addPrice, setAddPrice] = useState("");
   const [addBack, setAddBack] = useState("");
+  const [addDesc, setAddDesc] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -29,6 +30,7 @@ export default function CourseManagement() {
   const [editDuration, setEditDuration] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editBack, setEditBack] = useState("");
+  const [editDesc, setEditDesc] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg] = useState("");
 
@@ -48,17 +50,17 @@ export default function CourseManagement() {
   const handleAdd = async () => {
     if (!addName.trim() || !addPrice) { setMsg("コース名と料金を入力してください"); return; }
     setSaving(true); setMsg("");
-    const { error } = await supabase.from("courses").insert({ name: addName.trim(), duration: parseInt(addDuration) || 0, price: parseInt(addPrice) || 0, therapist_back: parseInt(addBack) || 0 });
+    const { error } = await supabase.from("courses").insert({ name: addName.trim(), duration: parseInt(addDuration) || 0, price: parseInt(addPrice) || 0, therapist_back: parseInt(addBack) || 0, description: addDesc.trim() });
     setSaving(false);
     if (error) { setMsg("登録失敗: " + error.message); }
-    else { setMsg("登録しました！"); setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("90"); fetchCourses(); setTimeout(() => { setShowAdd(false); setMsg(""); }, 600); }
+    else { setMsg("登録しました！"); setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("90"); setAddDesc(""); fetchCourses(); setTimeout(() => { setShowAdd(false); setMsg(""); }, 600); }
   };
 
-  const startEdit = (c: Course) => { setEditTarget(c); setEditName(c.name || ""); setEditDuration(String(c.duration || 0)); setEditPrice(String(c.price || 0)); setEditBack(String(c.therapist_back || 0)); setEditMsg(""); };
+  const startEdit = (c: Course) => { setEditTarget(c); setEditName(c.name || ""); setEditDuration(String(c.duration || 0)); setEditPrice(String(c.price || 0)); setEditBack(String(c.therapist_back || 0)); setEditDesc(c.description || ""); setEditMsg(""); };
   const handleUpdate = async () => {
     if (!editTarget || !editName.trim()) { setEditMsg("コース名を入力してください"); return; }
     setEditSaving(true); setEditMsg("");
-    const { error } = await supabase.from("courses").update({ name: editName.trim(), duration: parseInt(editDuration) || 0, price: parseInt(editPrice) || 0, therapist_back: parseInt(editBack) || 0 }).eq("id", editTarget.id);
+    const { error } = await supabase.from("courses").update({ name: editName.trim(), duration: parseInt(editDuration) || 0, price: parseInt(editPrice) || 0, therapist_back: parseInt(editBack) || 0, description: editDesc.trim() }).eq("id", editTarget.id);
     setEditSaving(false);
     if (error) { setEditMsg("更新失敗: " + error.message); }
     else { setEditMsg("更新しました！"); fetchCourses(); setTimeout(() => { setEditTarget(null); setEditMsg(""); }, 600); }
@@ -84,7 +86,7 @@ export default function CourseManagement() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={() => { setShowAdd(true); setMsg(""); setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("90"); }}
+          <button onClick={() => { setShowAdd(true); setMsg(""); setAddName(""); setAddPrice(""); setAddBack(""); setAddDuration("90"); setAddDesc(""); }}
             className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ コース追加</button>
         </div>
       </div>
@@ -114,6 +116,7 @@ export default function CourseManagement() {
                           <span className="text-[12px]" style={{ color: T.textSub }}>バック: <span className="font-medium" style={{ color: "#7ab88f" }}>{fmt(c.therapist_back)}</span></span>
                           <span className="text-[12px]" style={{ color: T.textSub }}>利益: <span className="font-medium" style={{ color: T.text }}>{fmt(profit)}</span></span>
                         </div>
+                        {c.description && <p className="text-[11px] mt-1.5" style={{ color: T.textMuted }}>{c.description}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -152,6 +155,10 @@ export default function CourseManagement() {
               <div>
                 <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピストバック</label>
                 <input type="text" inputMode="numeric" value={addBack} onChange={(e) => setAddBack(e.target.value.replace(/[^0-9]/g, ""))} placeholder="5000" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none transition-all" style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース説明</label>
+                <textarea value={addDesc} onChange={(e) => setAddDesc(e.target.value)} rows={3} placeholder="お客様向けのコース説明を入力してください" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none transition-all resize-none" style={inputStyle} />
               </div>
               {addPrice && (
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
@@ -197,6 +204,10 @@ export default function CourseManagement() {
               <div>
                 <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピストバック</label>
                 <input type="text" inputMode="numeric" value={editBack} onChange={(e) => setEditBack(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none transition-all" style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース説明</label>
+                <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={3} placeholder="お客様向けのコース説明を入力してください" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none transition-all resize-none" style={inputStyle} />
               </div>
               {editPrice && (
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
