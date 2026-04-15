@@ -220,7 +220,7 @@ const generatePassword = () => {
   };
 
   const [showBulkLinks, setShowBulkLinks] = useState(false);
-  const [bulkLinks, setBulkLinks] = useState<{ name: string; contract?: string; license?: string; invoice?: string }[]>([]);
+  const [bulkLinks, setBulkLinks] = useState<{ name: string; contract?: string; license?: string; invoice?: string; mynumber?: string }[]>([]);
   const generateBulkLinks = async () => {
     const links: typeof bulkLinks = [];
     for (const t of therapists) {
@@ -240,7 +240,13 @@ const generatePassword = () => {
         await supabase.from("contracts").insert({ therapist_id: t.id, token: tk, status: "pending", type: "invoice" });
         entry.invoice = `${window.location.origin}/invoice-upload/${tk}`;
       }
-      if (entry.contract || entry.license || entry.invoice) links.push(entry);
+      if (!(t as any).mynumber) {
+        const tk = `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        await supabase.from("contracts").insert({ therapist_id: t.id, token: tk, status: "pending", type: "mynumber" });
+        entry.mynumber = `${window.location.origin}/mynumber-upload/${tk}`;
+      }
+      if (entry.contract || entry.license || entry.invoice || entry.mynumber) links.push(entry);
+    }
     }
     setBulkLinks(links);
     setShowBulkLinks(true);
@@ -1065,6 +1071,7 @@ const generatePassword = () => {
                       if (link.contract) msg += `\n📝 業務委託契約書（署名）\n${link.contract}\n`;
                       if (link.license) msg += `\n🪪 身分証明書（写真アップロード）\n${link.license}\n`;
                       if (link.invoice) msg += `\n📋 適格事業者登録通知書（※任意）\n登録番号の入力＋写真アップロード\n${link.invoice}\n`;
+                      if (link.mynumber) msg += `\n🔢 マイナンバー（個人番号）の提出\n源泉徴収の届出に必要となります\n${link.mynumber}\n`;
                       msg += `\nご不明な点がございましたら、お気軽にご連絡くださいね😊\nよろしくお願いいたします🙏`;
                       return msg;
                     };
