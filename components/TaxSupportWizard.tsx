@@ -194,7 +194,7 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
 → 年間約10万円の差！
 
 青色申告は「複式簿記」が必要ですが、
-会計ソフト（freee、マネーフォワード等）を使えば簡単です。`,
+T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途会計ソフトを契約する必要はありません！`,
     },
     {
       q: "💳 経費のレシートがない場合は？",
@@ -439,14 +439,14 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
                 <div className="space-y-1.5">
                   {!profile.hasKaigyou && (
                     <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                      <span style={{ color: red }}>●</span> <b>開業届の提出</b>が必要です → Step 3
+                      <span style={{ color: red }}>●</span> <b>開業届の提出</b>が必要です → 次のステップで説明
                     </p>
                   )}
                   <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                    <span style={{ color: orange }}>●</span> <b>青色申告</b>がおすすめ → Step 4
+                    <span style={{ color: orange }}>●</span> <b>青色申告</b>がおすすめ → 「青色/白色」ステップで説明
                   </p>
                   <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                    <span style={{ color: pink }}>●</span> <b>経費の整理</b>をしましょう → Step 6
+                    <span style={{ color: pink }}>●</span> <b>経費の整理</b>をしましょう → 「経費整理」ステップで説明
                   </p>
                   {profile.isSubJob && (
                     <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
@@ -624,7 +624,7 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
                 ["帳簿の難易度", "簡単", "T-MANAGEで自動！"],
                 ["赤字繰越し", "できない", "3年間OK"],
                 ["家族の給与", "経費不可", "経費にできる"],
-                ["30日以内届出", "不要", "要（申請書提出）"],
+                ["事前届出", "不要", "要（開業2ヶ月以内）"],
                 ["節税効果", "低い", "かなり大きい"],
               ].map(([label, white, blue], i) => (
                 <div key={i} className="grid grid-cols-3 text-center" style={{ borderTop: `1px solid ${T.border}` }}>
@@ -658,15 +658,15 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
 
             {/* 65万控除の3つの条件 */}
             <div style={{ ...altCard, border: `2px solid ${green}33` }} className="mb-3">
-              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>✅ 65万円控除を受ける3つの条件</p>
+              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>✅ 青色申告特別控除 3つのランク</p>
               <div className="space-y-2">
                 {[
-                  { num: "❶", title: "複式簿記で記帳", desc: "T-MANAGEの帳簿機能が自動で対応！会計ソフト不要です", done: true },
-                  { num: "❷", title: "e-Taxで電子申告", desc: "マイナンバーカード＋スマホでオンライン提出" },
-                  { num: "❸", title: "期限内に申告", desc: "毎年3月15日までに提出すること" },
+                  { num: "10万円", title: "簡易簿記で記帳", desc: "単式簿記（お小遣い帳レベル）でもOK。でも控除額は最少", color: T.textMuted },
+                  { num: "55万円", title: "複式簿記 ＋ 紙で提出", desc: "複式簿記で記帳し、紙で申告した場合", color: orange },
+                  { num: "65万円", title: "複式簿記 ＋ e-Tax提出", desc: "複式簿記で記帳し、e-Taxで電子申告した場合 ★最大控除！", color: green },
                 ].map((item, i) => (
                   <div key={i} className="flex gap-2 items-start p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                    <span className="text-[14px]">{item.num}</span>
+                    <span className="text-[12px] font-bold flex-shrink-0" style={{ color: item.color }}>{item.num}</span>
                     <div>
                       <p className="text-[10px] font-bold" style={{ color: T.text }}>{item.title}</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>{item.desc}</p>
@@ -674,6 +674,7 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
                   </div>
                 ))}
               </div>
+              <p className="text-[9px] mt-2" style={{ color: green }}>💡 T-MANAGEは複式簿記に自動対応。e-Taxで提出すれば最大65万円控除！</p>
             </div>
 
             {/* 青色申告承認申請書 記入ガイド */}
@@ -961,7 +962,7 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
                   "月ごとに封筒やジップロックに分けて保管",
                   "レシートがない場合はメモや出金伝票で代用",
                   "交通費は日付・行き先・金額をメモ",
-                  "会計ソフトのアプリでレシート撮影→自動仕分け",
+                  "T-MANAGEの「帳簿・経費管理」でレシート撮影→AI自動仕分け",
                 ].map((t, i) => (
                   <p key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}>
                     <span style={{ color: green }}>✓</span>{t}
@@ -1100,6 +1101,97 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
               <p className="text-[12px] font-bold text-center" style={{ color: pink }}>📅 提出期限</p>
               <p className="text-[20px] font-bold text-center mt-1" style={{ color: T.text }}>毎年 2月16日 〜 3月15日</p>
               <p className="text-[9px] text-center mt-1" style={{ color: T.textMuted }}>※還付申告（税金が戻ってくる場合）は1月1日から提出可能</p>
+            </div>
+
+            {/* T-MANAGEデータの使い方 */}
+            <div className="mt-3" style={{ ...altCard, border: `2px solid ${pink}44` }}>
+              <p className="text-[11px] font-bold mb-2" style={{ color: pink }}>📒 T-MANAGEの帳簿データの使い方</p>
+              <div className="space-y-1.5">
+                {[
+                  "「帳簿・経費管理」→「📄 申告」タブで年間の収入・経費・所得を確認",
+                  "「📥 出力」タブでPDF/CSVをダウンロード",
+                  "確定申告書等作成コーナーで、ダウンロードした数値を画面に入力",
+                  "収入金額 → T-MANAGEの「事業収入」の金額を入力",
+                  "経費 → 勘定科目ごとの金額を入力（PDFに一覧あり）",
+                ].map((t, i) => (
+                  <p key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}>
+                    <span className="font-bold" style={{ color: pink }}>{i + 1}.</span>{t}
+                  </p>
+                ))}
+              </div>
+            </div>
+
+            {/* 💰 納税方法 */}
+            <div className="mt-3" style={{ ...altCard, border: `2px solid ${green}33` }}>
+              <p className="text-[12px] font-bold mb-3" style={{ color: green }}>💰 税金の納め方（所得税）</p>
+              <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>確定申告で「納付」の場合、以下の方法で3月15日までに納付します。還付の場合は約1〜2ヶ月で指定口座に振り込まれます。</p>
+              <div className="space-y-2">
+                <div className="p-2.5 rounded-lg" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
+                  <p className="text-[10px] font-bold" style={{ color: green }}>★ おすすめ：振替納税（口座引き落とし）</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>
+                    銀行口座から自動引き落とし。一度設定すれば毎年自動。引き落とし日は4月中旬〜下旬（約1ヶ月の猶予あり）。
+                  </p>
+                  <p className="text-[8px] mt-1" style={{ color: T.textMuted }}>設定方法：e-Taxで電子申告時に「振替納税」を選択 → 口座情報を入力するだけ</p>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[10px] font-bold" style={{ color: T.text }}>② クレジットカード納付</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>国税クレジットカードお支払サイトから納付。手数料がかかります（税額1万円につき約83円）。</p>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[10px] font-bold" style={{ color: T.text }}>③ スマホアプリ納付（PayPay等）</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>Pay払い（PayPay、d払い、au PAY、楽天ペイ等）で30万円以下なら納付可能。手数料無料。</p>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[10px] font-bold" style={{ color: T.text }}>④ コンビニ納付（QRコード）</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>確定申告書等作成コーナーでQRコードを作成 → コンビニのレジで納付。30万円以下。</p>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[10px] font-bold" style={{ color: T.text }}>⑤ 銀行窓口・ダイレクト納付</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>銀行窓口で納付書を使って納付。またはe-Taxからのダイレクト納付（事前届出が必要）。</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 申告後の流れ */}
+            <div className="mt-3" style={{ ...altCard, border: `2px solid ${orange}33` }}>
+              <p className="text-[12px] font-bold mb-3" style={{ color: orange }}>📅 申告後のスケジュール</p>
+              <div className="space-y-2">
+                {[
+                  { when: "3月15日", what: "所得税の納付期限", desc: "振替納税の場合は4月中旬〜下旬に引き落とし", icon: "💴" },
+                  { when: "1〜2ヶ月後", what: "還付金の振込", desc: "税金が戻る場合、申告書に書いた口座に振り込まれます", icon: "💰" },
+                  { when: "6月頃", what: "住民税の通知", desc: "市区町村から「住民税の決定通知書」が届きます。年4回に分けて納付（6月・8月・10月・1月）", icon: "📬" },
+                  { when: "6〜7月頃", what: "国民健康保険料の通知", desc: "確定申告の所得に基づいて保険料が決定されます。経費をしっかり申告すると保険料も下がります！", icon: "🏥" },
+                  { when: "翌年8月〜", what: "予定納税（該当者のみ）", desc: "前年の所得税が15万円以上の場合、翌年分の所得税を前払い（7月・11月に各1/3ずつ）", icon: "📊" },
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-2 items-start p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                    <span className="text-[14px] flex-shrink-0">{item.icon}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[8px] px-1.5 py-0.5 rounded font-bold" style={{ backgroundColor: orange + "20", color: orange }}>{item.when}</span>
+                        <span className="text-[10px] font-bold" style={{ color: T.text }}>{item.what}</span>
+                      </div>
+                      <p className="text-[8px] mt-0.5" style={{ color: T.textSub }}>{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 住民税の納付方法 */}
+            <div className="mt-3" style={altCard}>
+              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>🏛 住民税の納め方</p>
+              <p className="text-[9px] mb-2" style={{ color: T.textSub }}>
+                住民税は確定申告とは別に、お住まいの市区町村に納付します。確定申告すると自動的に住民税も計算されます。
+              </p>
+              <div className="space-y-1">
+                <p className="text-[9px] flex gap-1" style={{ color: T.textSub }}><span style={{ color: green }}>✓</span> <b>普通徴収</b>：納付書が届くので、銀行・コンビニ・口座振替で納付（年4回）</p>
+                <p className="text-[9px] flex gap-1" style={{ color: T.textSub }}><span style={{ color: green }}>✓</span> <b>口座振替</b>：市区町村の窓口で手続きすれば自動引き落としに変更可能</p>
+              </div>
+              {profile.isSubJob && (
+                <div className="mt-2 p-2 rounded-lg" style={{ backgroundColor: red + "08" }}>
+                  <p className="text-[8px] font-bold" style={{ color: red }}>⚠️ 副業の方は「普通徴収」を必ず選択！（確定申告書で選択済みのはず）</p>
+                </div>
+              )}
             </div>
           </div>
           {onGoToLedger && (
