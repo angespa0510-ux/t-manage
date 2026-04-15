@@ -13,6 +13,8 @@ type TaxProfile = {
   isAoiro: boolean | null;        // 青色申告？
   hasInvoice: boolean | null;     // インボイス登録済み？
   shopRequiresInvoice: boolean | null; // 店がインボイス求めてる？
+  isStudent: boolean | null;      // 学生？
+  isDependent: boolean | null;    // 家族の扶養に入っている？
 };
 type StepStatus = { [key: number]: "done" | "skip" | null };
 
@@ -22,6 +24,7 @@ const PROFILE_KEY = "tax_support_profile";
 const defaultProfile: TaxProfile = {
   isSubJob: null, annualIncome: "", hasSpouse: null, spouseIncome: "",
   mainJobIncome: "", hasKaigyou: null, isAoiro: null, hasInvoice: null, shopRequiresInvoice: null,
+  isStudent: null, isDependent: null,
 };
 
 /* ── メインコンポーネント ── */
@@ -599,9 +602,70 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               )}
             </div>
 
-            {/* Q5: 開業届 */}
+            {/* Q: 学生？ */}
             <div className="mb-4">
-              <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>{profile.isSubJob ? "Q5" : "Q4"}. 開業届は出していますか？</p>
+              <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>学生ですか？</p>
+              <div className="flex gap-2">
+                <button onClick={() => saveProfile({ ...profile, isStudent: true })} style={yesNoBtn(profile.isStudent, true)}>はい（学生）</button>
+                <button onClick={() => saveProfile({ ...profile, isStudent: false })} style={yesNoBtn(profile.isStudent, false)}>いいえ</button>
+              </div>
+            </div>
+
+            {/* Q: 家族の扶養に入っている？ */}
+            <div className="mb-4">
+              <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>家族の扶養（ふよう）に入っていますか？</p>
+              <p className="text-[9px] mb-2" style={{ color: T.textMuted }}>親・配偶者・家族の健康保険に入っている、または税金の扶養控除の対象になっている場合</p>
+              <div className="flex gap-2">
+                <button onClick={() => saveProfile({ ...profile, isDependent: true })} style={yesNoBtn(profile.isDependent, true)}>はい（扶養内）</button>
+                <button onClick={() => saveProfile({ ...profile, isDependent: false })} style={yesNoBtn(profile.isDependent, false)}>いいえ / わからない</button>
+              </div>
+              {profile.isDependent === true && (
+                <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
+                  <p className="text-[11px] font-bold mb-2" style={{ color: orange }}>⚠️ 扶養に入っている方の注意点</p>
+                  <div className="space-y-2">
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                      <p className="text-[9px] font-bold" style={{ color: red }}>🔴 税金の扶養（扶養控除）</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>
+                        あなたの<b>合計所得（収入−経費）が48万円</b>を超えると、親や配偶者の扶養控除から外れます。
+                        外れると、親や配偶者の税金が増えます。
+                      </p>
+                      <p className="text-[8px] mt-1" style={{ color: green }}>💡 経費をしっかり計上すれば「収入が多くても所得は48万以下」にできることも！</p>
+                    </div>
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                      <p className="text-[9px] font-bold" style={{ color: red }}>🔴 健康保険の扶養（社会保険）</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>
+                        年間収入が<b>130万円</b>を超えると、家族の社会保険の扶養から外れ、自分で国民健康保険に加入する必要があります。
+                      </p>
+                      <p className="text-[8px] mt-1" style={{ color: T.textMuted }}>※健康保険組合によって基準が異なる場合があります。事前に確認を。</p>
+                    </div>
+                    {profile.isStudent && (
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                        <p className="text-[9px] font-bold" style={{ color: "#2563eb" }}>📚 学生の場合の特別ルール</p>
+                        <p className="text-[9px]" style={{ color: T.textSub }}>
+                          「勤労学生控除（27万円）」がありますが、セラピストの収入は<b>事業所得</b>のため、事業所得が10万円を超えると使えません。
+                        </p>
+                        <p className="text-[8px] mt-1" style={{ color: T.textSub }}>
+                          学生さんが扶養内で働くなら：<b style={{ color: green }}>収入−経費 ≤ 48万円</b> を目安にしましょう。
+                        </p>
+                      </div>
+                    )}
+                    <div className="p-2.5 rounded-lg" style={{ backgroundColor: green + "10" }}>
+                      <p className="text-[9px] font-bold" style={{ color: green }}>✅ 結論：扶養内で働きたい場合</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>
+                        ① 年間の収入から経費を引いた「所得」を<b>48万円以下</b>に抑える{"\n"}
+                        ② 経費をしっかり記録・計上する（美容費・衣装代・交通費など）{"\n"}
+                        ③ 健康保険の扶養は<b>年間収入130万円</b>が目安{"\n"}
+                        ④ 迷ったら確定申告はしておく方が安心（還付金が戻る可能性も）
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Q: 開業届 */}
+            <div className="mb-4">
+              <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>開業届は出していますか？</p>
               <div className="flex gap-2">
                 <button onClick={() => saveProfile({ ...profile, hasKaigyou: true })} style={yesNoBtn(profile.hasKaigyou, true)}>出した</button>
                 <button onClick={() => saveProfile({ ...profile, hasKaigyou: false })} style={yesNoBtn(profile.hasKaigyou, false)}>まだ</button>
@@ -627,6 +691,16 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                   {profile.isSubJob && (
                     <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
                       <span style={{ color: green }}>●</span> <b>住民税は普通徴収</b>で会社バレ防止 → FAQ
+                    </p>
+                  )}
+                  {profile.isDependent && (
+                    <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
+                      <span style={{ color: orange }}>●</span> <b>扶養内で働くなら所得48万円以下</b>を意識（経費をしっかり計上！）
+                    </p>
+                  )}
+                  {profile.isStudent && (
+                    <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
+                      <span style={{ color: "#2563eb" }}>●</span> <b>学生</b>：扶養控除・勤労学生控除の条件を確認しましょう
                     </p>
                   )}
                 </div>
