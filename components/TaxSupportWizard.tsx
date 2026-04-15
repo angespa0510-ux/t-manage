@@ -598,20 +598,34 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
             <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>📘 青色申告 vs 白色申告</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>結論：<b style={{ color: green }}>青色申告（65万円控除）</b>が圧倒的におすすめ！</p>
 
+            {/* DLボタン */}
+            <div className="space-y-2 mb-4">
+              <a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/shinkoku/pdf/h28/10.pdf" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
+                <span className="text-[24px]">📘</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>青色申告承認申請書 PDFダウンロード</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公式「所得税の青色申告承認申請書」</p>
+                </div>
+                <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
+              </a>
+            </div>
+
             {/* 比較表 */}
             <div className="rounded-xl overflow-hidden mb-4" style={{ border: `1px solid ${T.border}` }}>
               <div className="grid grid-cols-3 text-center">
                 <div className="p-2" style={{ backgroundColor: T.cardAlt }}><span className="text-[9px]" style={{ color: T.textMuted }}>&nbsp;</span></div>
                 <div className="p-2" style={{ backgroundColor: T.cardAlt }}><span className="text-[10px] font-bold" style={{ color: T.text }}>白色申告</span></div>
-                <div className="p-2" style={{ backgroundColor: green + "15" }}><span className="text-[10px] font-bold" style={{ color: green }}>青色申告</span></div>
+                <div className="p-2" style={{ backgroundColor: green + "15" }}><span className="text-[10px] font-bold" style={{ color: green }}>青色申告 ★</span></div>
               </div>
               {[
                 ["特別控除", "なし", "最大65万円"],
                 ["記帳方法", "単式簿記", "複式簿記"],
-                ["帳簿の難易度", "簡単", "ソフトで簡単"],
+                ["帳簿の難易度", "簡単", "T-MANAGEで自動！"],
                 ["赤字繰越し", "できない", "3年間OK"],
                 ["家族の給与", "経費不可", "経費にできる"],
-                ["おすすめ度", "△", "◎"],
+                ["30日以内届出", "不要", "要（申請書提出）"],
+                ["節税効果", "低い", "かなり大きい"],
               ].map(([label, white, blue], i) => (
                 <div key={i} className="grid grid-cols-3 text-center" style={{ borderTop: `1px solid ${T.border}` }}>
                   <div className="p-2"><span className="text-[9px]" style={{ color: T.textSub }}>{label}</span></div>
@@ -621,27 +635,97 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
               ))}
             </div>
 
-            <div style={altCard}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📝 青色申告承認申請書の出し方</p>
+            {/* 具体的な節税額の例 */}
+            <div className="p-3 rounded-xl mb-4" style={{ background: `linear-gradient(135deg, ${green}10, ${green}05)`, border: `1px solid ${green}33` }}>
+              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>💰 青色申告でどれくらい得する？（具体例）</p>
               <div className="space-y-1.5">
                 {[
-                  "開業日から2ヶ月以内に税務署へ提出",
-                  "既に開業済みなら、翌年分から適用（3月15日まで）",
-                  "「複式簿記」「e-Tax提出」で65万円控除",
-                  "開業届と同時に出すのがベスト",
-                ].map((t, i) => (
-                  <p key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}>
-                    <span style={{ color: green }}>✓</span>{t}
-                  </p>
+                  { income: "年収200万", white: "約7.2万", blue: "約3.9万", save: "約3.3万" },
+                  { income: "年収300万", white: "約15.2万", blue: "約8.7万", save: "約6.5万" },
+                  { income: "年収500万", white: "約37.2万", blue: "約24.5万", save: "約12.7万" },
+                ].map((row, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[9px]">
+                    <span className="font-medium" style={{ color: T.text, minWidth: "60px" }}>{row.income}</span>
+                    <span style={{ color: red }}>白色 {row.white}</span>
+                    <span>→</span>
+                    <span style={{ color: green }}>青色 {row.blue}</span>
+                    <span className="font-bold" style={{ color: green }}>（{row.save}お得！）</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[7px] mt-1" style={{ color: T.textMuted }}>※経費50万円、基礎控除のみの概算。社会保険料等は含まず</p>
+            </div>
+
+            {/* 65万控除の3つの条件 */}
+            <div style={{ ...altCard, border: `2px solid ${green}33` }} className="mb-3">
+              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>✅ 65万円控除を受ける3つの条件</p>
+              <div className="space-y-2">
+                {[
+                  { num: "❶", title: "複式簿記で記帳", desc: "T-MANAGEの帳簿機能が自動で対応！会計ソフト不要です", done: true },
+                  { num: "❷", title: "e-Taxで電子申告", desc: "マイナンバーカード＋スマホでオンライン提出" },
+                  { num: "❸", title: "期限内に申告", desc: "毎年3月15日までに提出すること" },
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-2 items-start p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                    <span className="text-[14px]">{item.num}</span>
+                    <div>
+                      <p className="text-[10px] font-bold" style={{ color: T.text }}>{item.title}</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>{item.desc}</p>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
 
-            <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
+            {/* 青色申告承認申請書 記入ガイド */}
+            <div style={{ ...altCard, border: `2px solid #2563eb33` }} className="mb-3">
+              <p className="text-[12px] font-bold mb-3" style={{ color: "#2563eb" }}>✍️ 青色申告承認申請書 記入ガイド</p>
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}`, backgroundColor: T.card }}>
+                <div className="p-2 text-center" style={{ backgroundColor: "#eef2ff", borderBottom: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] font-bold" style={{ color: "#333" }}>所得税の青色申告承認申請書</p>
+                </div>
+                {[
+                  { num: "①", field: "提出先・提出日", example: "○○税務署長 / 提出日", guide: "開業届と同じ税務署名・提出する日を記入" },
+                  { num: "②", field: "納税地・氏名", example: "開業届と同じ内容", guide: "開業届と同じ住所・氏名・生年月日・電話番号を記入" },
+                  { num: "③", field: "職業", example: "リラクゼーション業", guide: "開業届と同じ職業名を記入" },
+                  { num: "④", field: "青色申告開始年分", example: "令和○年分", guide: "青色申告を始めたい年を記入", tip: "開業した年を記入すればOK" },
+                  { num: "⑤", field: "所得の種類", example: "事業所得 にチェック ✓", guide: "「事業所得」にチェックを入れる" },
+                  { num: "⑥", field: "過去の青色申告", example: "無 にチェック ✓", guide: "初めてなら「無」にチェック" },
+                  { num: "⑦", field: "開業日", example: "令和○年○月○日", guide: "1月16日以降に開業した場合のみ記入（開業届と同じ日）" },
+                  { num: "⑧", field: "簿記方式", example: "複式簿記 にチェック ✓", guide: "65万円控除には「複式簿記」を選択！", tip: "T-MANAGEが自動で複式簿記の帳簿を作成します" },
+                  { num: "⑨", field: "備付帳簿名", example: "仕訳帳・総勘定元帳", guide: "「仕訳帳」と「総勘定元帳」にチェック", tip: "この2つは必須。T-MANAGEで自動生成されます" },
+                ].map((item, i) => (
+                  <div key={i} className="p-2.5" style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] font-bold flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "#2563eb", color: "#fff" }}>{item.num}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-bold" style={{ color: T.text }}>{item.field}</span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f0f0f0", color: "#666" }}>{item.example}</span>
+                        </div>
+                        <p className="text-[9px]" style={{ color: T.textSub }}>{item.guide}</p>
+                        {item.tip && <p className="text-[8px] mt-0.5" style={{ color: "#2563eb" }}>💡 {item.tip}</p>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 提出期限 */}
+            <div className="p-3 rounded-xl mb-3" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
+              <p className="text-[11px] font-bold" style={{ color: red }}>⏰ 提出期限に注意！</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[9px]" style={{ color: T.textSub }}>• <b>新規開業の場合</b>：開業日から2ヶ月以内</p>
+                <p className="text-[9px]" style={{ color: T.textSub }}>• <b>既に開業済みの場合</b>：その年の3月15日まで（翌年分から適用）</p>
+                <p className="text-[9px]" style={{ color: T.textSub }}>• 提出を忘れると自動的に「白色申告」になります</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
               <p className="text-[11px] font-bold" style={{ color: orange }}>💡 「複式簿記」は怖くない！</p>
               <p className="text-[10px] mt-1" style={{ color: T.textSub }}>
-                会計ソフト（freee・マネーフォワード等）を使えば、レシートを入力するだけで自動的に複式簿記になります。
-                月額1,000〜2,000円程度で、65万円の控除が受けられるのでコスパ抜群です。
+                T-MANAGEの帳簿機能が自動的に複式簿記（借方・貸方）で記帳します。
+                仕訳帳・総勘定元帳もPDFで出力可能。わざわざ会計ソフトを別に契約する必要はありません！
               </p>
             </div>
 
@@ -665,50 +749,164 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
             <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>🧾 インボイス制度</h2>
-            <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>2023年10月から開始。お店との関係で必要かどうか変わります</p>
+            <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>2023年10月開始。お店との関係で登録が必要かどうか変わります</p>
 
-            <div style={altCard}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>Q. お店からインボイス登録を求められていますか？</p>
+            {/* DLボタン */}
+            <div className="space-y-2 mb-4">
+              <a href="https://www.e-tax.nta.go.jp/" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: green + "15", border: `1px solid ${green}44`, textDecoration: "none" }}>
+                <span className="text-[24px]">💻</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: green }}>e-Taxでインボイス登録申請</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>オンラインで登録申請が可能（おすすめ）</p>
+                </div>
+                <span className="text-[10px]" style={{ color: green }}>↗</span>
+              </a>
+              <a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/shohi/annai/0023006-001.htm" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: orange + "15", border: `1px solid ${orange}44`, textDecoration: "none" }}>
+                <span className="text-[24px]">📄</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: orange }}>インボイス登録申請書 ダウンロード</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁「適格請求書発行事業者の登録申請書」</p>
+                </div>
+                <span className="text-[10px]" style={{ color: orange }}>↗</span>
+              </a>
+              <a href="https://www.invoice-kohyo.nta.go.jp/" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
+                <span className="text-[24px]">🔍</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>インボイス登録番号を検索</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公表サイトで登録済みか確認</p>
+                </div>
+                <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
+              </a>
+            </div>
+
+            {/* そもそもインボイスとは？ */}
+            <div style={{ ...altCard, border: `2px solid ${orange}33` }} className="mb-3">
+              <p className="text-[12px] font-bold mb-2" style={{ color: orange }}>🧾 そもそもインボイスって何？</p>
+              <div className="space-y-2">
+                <p className="text-[10px]" style={{ color: T.textSub }}>
+                  インボイス＝「適格請求書」のこと。消費税の仕入税額控除を受けるために必要な書類です。
+                </p>
+                <div className="p-2.5 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[9px] font-bold mb-1" style={{ color: T.text }}>セラピストにとっての影響</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>
+                    お店側があなたに支払う報酬の消費税分を、お店の経費（仕入税額控除）として計上するには、
+                    あなたが「インボイス登録事業者」である必要があります。
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[9px] font-bold mb-1" style={{ color: T.text }}>登録しないとどうなる？</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>
+                    お店があなたの消費税分を控除できなくなる → お店の負担が増える → 報酬が下がる可能性があります。
+                    ただし2029年9月末まで段階的に経過措置があります。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 判定フロー */}
+            <div style={altCard} className="mb-3">
+              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>🔀 あなたはインボイス登録が必要？</p>
               <div className="flex gap-2 mb-3">
                 <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: true })} style={yesNoBtn(profile.shopRequiresInvoice, true)}>求められている</button>
-                <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: false })} style={yesNoBtn(profile.shopRequiresInvoice, false)}>特に言われてない</button>
+                <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: false })} style={yesNoBtn(profile.shopRequiresInvoice, false)}>言われてない</button>
               </div>
 
               {profile.shopRequiresInvoice === true && (
-                <div className="p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
-                  <p className="text-[10px] font-bold" style={{ color: orange }}>登録が必要な場合</p>
-                  <div className="mt-2 space-y-1">
-                    {[
-                      "e-Taxまたは税務署で「適格請求書発行事業者の登録申請書」を提出",
-                      "登録番号が発行されたらお店に伝える",
-                      "消費税の申告・納付義務が発生する（簡易課税制度がおすすめ）",
-                      "年間売上1,000万以下なら「2割特例」で消費税を抑えられる",
-                    ].map((t, i) => (
-                      <p key={i} className="text-[9px] flex gap-1.5" style={{ color: T.textSub }}>
-                        <span style={{ color: orange }}>•</span>{t}
-                      </p>
-                    ))}
+                <div className="space-y-2">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
+                    <p className="text-[10px] font-bold mb-2" style={{ color: orange }}>📝 登録が必要な場合の手順</p>
+                    <div className="space-y-2">
+                      {[
+                        { step: "①", title: "登録申請書を提出", desc: "e-Taxまたは郵送で「適格請求書発行事業者の登録申請書」を提出" },
+                        { step: "②", title: "登録番号を取得", desc: "「T＋13桁の数字」形式の番号が届きます（例: T1234567890123）" },
+                        { step: "③", title: "お店に番号を伝える", desc: "登録番号をお店に連絡してください" },
+                        { step: "④", title: "消費税の申告が必要に", desc: "確定申告に加えて消費税の申告・納付が必要になります" },
+                      ].map((item, i) => (
+                        <div key={i} className="flex gap-2 items-start">
+                          <span className="text-[10px] font-bold flex-shrink-0" style={{ color: orange }}>{item.step}</span>
+                          <div>
+                            <p className="text-[9px] font-bold" style={{ color: T.text }}>{item.title}</p>
+                            <p className="text-[8px]" style={{ color: T.textSub }}>{item.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 消費税の計算方法 */}
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: "#2563eb10", border: "1px solid #2563eb33" }}>
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "#2563eb" }}>💰 消費税の納め方（セラピスト向け）</p>
+                    <div className="space-y-2">
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                        <p className="text-[9px] font-bold" style={{ color: green }}>★ おすすめ：2割特例（2026年分まで）</p>
+                        <p className="text-[8px]" style={{ color: T.textSub }}>
+                          売上の消費税の<b>2割だけ</b>を納付すればOK。届出不要で確定申告時に選択するだけ。
+                        </p>
+                        <p className="text-[8px] mt-1" style={{ color: green }}>例：年間売上300万 → 消費税30万の2割 = <b>6万円</b>の納付</p>
+                      </div>
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                        <p className="text-[9px] font-bold" style={{ color: T.text }}>簡易課税制度（2027年以降も使える）</p>
+                        <p className="text-[8px]" style={{ color: T.textSub }}>
+                          業種ごとの「みなし仕入率」で計算。セラピストはサービス業（第5種：50%）なので、売上消費税の<b>50%を控除</b>。事前届出が必要。
+                        </p>
+                        <p className="text-[8px] mt-1" style={{ color: T.textMuted }}>例：年間売上300万 → 消費税30万 − みなし仕入15万 = <b>15万円</b>の納付</p>
+                      </div>
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                        <p className="text-[9px] font-bold" style={{ color: T.textMuted }}>原則課税（複雑）</p>
+                        <p className="text-[8px]" style={{ color: T.textMuted }}>実際の経費の消費税分を差し引いて計算。帳簿が複雑になるのでセラピストには非推奨。</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
               {profile.shopRequiresInvoice === false && (
                 <div className="p-3 rounded-xl" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
-                  <p className="text-[10px] font-bold" style={{ color: green }}>登録不要の場合</p>
-                  <p className="text-[9px] mt-1" style={{ color: T.textSub }}>
-                    年間売上1,000万円以下の「免税事業者」のままでOK。消費税の申告不要で、今まで通りです。
-                    ただし、お店側が仕入税額控除できなくなるため、将来求められる可能性はあります。
+                  <p className="text-[10px] font-bold mb-1" style={{ color: green }}>✅ 今は登録不要！</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>
+                    年間売上1,000万円以下の「免税事業者」のままでOK。消費税の申告は不要です。
                   </p>
+                  <div className="mt-2 p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                    <p className="text-[8px] font-bold" style={{ color: orange }}>⚠️ ただし注意</p>
+                    <p className="text-[8px]" style={{ color: T.textSub }}>
+                      2029年10月以降は経過措置が終了するため、お店から登録を求められる可能性が高まります。状況を注視しましょう。
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="mt-3" style={altCard}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📌 インボイス登録状況</p>
+            {/* 登録状況 */}
+            <div style={altCard} className="mb-3">
+              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📌 あなたのインボイス登録状況</p>
               <div className="flex gap-2">
                 <button onClick={() => saveProfile({ ...profile, hasInvoice: true })} style={yesNoBtn(profile.hasInvoice, true)}>登録済み</button>
                 <button onClick={() => saveProfile({ ...profile, hasInvoice: false })} style={yesNoBtn(profile.hasInvoice, false)}>まだ/不要</button>
               </div>
+              {profile.hasInvoice === true && (
+                <p className="text-[9px] mt-2" style={{ color: green }}>✅ 登録済みの場合は、毎年の確定申告で消費税の申告もお忘れなく！</p>
+              )}
+            </div>
+
+            {/* メリット・デメリット比較 */}
+            <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+              <div className="grid grid-cols-2 text-center">
+                <div className="p-2" style={{ backgroundColor: green + "15" }}><span className="text-[9px] font-bold" style={{ color: green }}>登録するメリット</span></div>
+                <div className="p-2" style={{ backgroundColor: red + "10" }}><span className="text-[9px] font-bold" style={{ color: red }}>登録するデメリット</span></div>
+              </div>
+              {[
+                ["お店との取引がスムーズ", "消費税の申告・納付が必要"],
+                ["報酬を下げられるリスク回避", "帳簿の管理が増える"],
+                ["取引先の信頼性UP", "手取りが消費税分減る"],
+              ].map(([pro, con], i) => (
+                <div key={i} className="grid grid-cols-2" style={{ borderTop: `1px solid ${T.border}` }}>
+                  <div className="p-2"><span className="text-[8px]" style={{ color: T.textSub }}>{pro}</span></div>
+                  <div className="p-2"><span className="text-[8px]" style={{ color: T.textMuted }}>{con}</span></div>
+                </div>
+              ))}
             </div>
           </div>
           <div className="flex gap-2">
