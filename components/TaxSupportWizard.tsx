@@ -473,59 +473,115 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
             <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>📝 開業届の出し方</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>個人事業を始めたら原則1ヶ月以内に提出。でも遅れても罰則なし！今からでもOK</p>
 
-            <div className="space-y-3">
-              <div style={altCard}>
-                <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📋 必要なもの</p>
-                <ul className="space-y-1">
-                  {["マイナンバーカード（または通知カード＋身分証明書）", "印鑑（認印でOK）", "開業届の用紙（税務署 or 国税庁HPからダウンロード）"].map((t, i) => (
-                    <li key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}>
-                      <span style={{ color: pink }}>•</span>{t}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {/* ダウンロードボタン */}
+            <div className="space-y-2 mb-4">
+              <a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/shinkoku/pdf/h28/05.pdf" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#dc262620", border: "1px solid #dc262644", textDecoration: "none" }}>
+                <span className="text-[24px]">📄</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: "#dc2626" }}>開業届 PDFダウンロード</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公式「個人事業の開業・廃業等届出書」</p>
+                </div>
+                <span className="text-[10px]" style={{ color: "#dc2626" }}>↗</span>
+              </a>
+              <a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/shinkoku/annai/09.htm" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
+                <span className="text-[24px]">📘</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>青色申告承認申請書 PDFダウンロード</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>開業届と一緒に提出がベスト！</p>
+                </div>
+                <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
+              </a>
+              <a href="https://www.e-tax.nta.go.jp/" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: green + "15", border: `1px solid ${green}44`, textDecoration: "none" }}>
+                <span className="text-[24px]">💻</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: green }}>e-Tax（電子申告）で提出</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>マイナンバーカード＋スマホで自宅から提出可能（おすすめ！）</p>
+                </div>
+                <span className="text-[10px]" style={{ color: green }}>↗</span>
+              </a>
+            </div>
 
-              <div style={altCard}>
-                <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>✍️ 書き方のポイント</p>
-                <div className="space-y-2">
-                  {[
-                    { label: "職業欄", value: "「リラクゼーション業」「ボディケア業」「エステティシャン」など" },
-                    { label: "届出の区分", value: "「開業」にチェック" },
-                    { label: "所得の種類", value: "「事業所得」" },
-                    { label: "開業日", value: "実際に働き始めた日（過去の日付でもOK）" },
-                    { label: "届出先", value: "自宅住所を管轄する税務署" },
-                  ].map((item, i) => (
-                    <div key={i} className="flex gap-2">
-                      <span className="text-[10px] font-medium flex-shrink-0" style={{ color: pink, minWidth: "70px" }}>{item.label}</span>
-                      <span className="text-[10px]" style={{ color: T.textSub }}>{item.value}</span>
+            {/* 必要なもの */}
+            <div style={altCard} className="mb-3">
+              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📋 必要なもの</p>
+              <ul className="space-y-1">
+                {["マイナンバーカード（または通知カード＋身分証明書）", "印鑑（認印でOK・e-Taxなら不要）", "開業届の用紙（上のボタンからDL or 税務署で入手）"].map((t, i) => (
+                  <li key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}><span style={{ color: pink }}>•</span>{t}</li>
+                ))}
+              </ul>
+            </div>
+
+            {/* ===== 開業届の記入ガイド ===== */}
+            <div style={{ ...altCard, border: `2px solid ${pink}44` }} className="mb-3">
+              <p className="text-[12px] font-bold mb-3" style={{ color: pink }}>✍️ 開業届の記入ガイド（セラピスト用）</p>
+              <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>「個人事業の開業・廃業等届出書」の各項目の書き方です</p>
+
+              {/* フォーム風ビジュアル */}
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}`, backgroundColor: T.card }}>
+                {/* ヘッダー */}
+                <div className="p-2 text-center" style={{ backgroundColor: "#f8f0f2", borderBottom: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] font-bold" style={{ color: "#333" }}>個人事業の開業・廃業等届出書</p>
+                  <p className="text-[7px]" style={{ color: "#999" }}>（正式名称）</p>
+                </div>
+
+                {/* 各項目 */}
+                {[
+                  { num: "①", field: "提出先", example: "○○税務署長", guide: "自宅住所を管轄する税務署名を記入", tip: "国税庁HPの「税務署の所在地」で検索できます" },
+                  { num: "②", field: "提出日", example: "令和○年○月○日", guide: "届出書を提出する日を記入", tip: "" },
+                  { num: "③", field: "納税地", example: "自宅の住所", guide: "住所（自宅）を記入。事業所がある場合はそちらでもOK", tip: "基本は自宅住所でOK" },
+                  { num: "④", field: "氏名・生年月日", example: "本名を記入", guide: "戸籍上の本名・フリガナ・生年月日を記入", tip: "源氏名ではなく本名で" },
+                  { num: "⑤", field: "個人番号", example: "マイナンバー12桁", guide: "マイナンバーカードまたは通知カードの番号", tip: "" },
+                  { num: "⑥", field: "職業", example: "リラクゼーション業", guide: "自由記述。下記の例から選んでください", tip: "「エステティシャン」「ボディケア業」「リラクゼーション業」など" },
+                  { num: "⑦", field: "屆出の区分", example: "開業 にチェック ✓", guide: "「開業」にチェックを入れる", tip: "" },
+                  { num: "⑧", field: "所得の種類", example: "事業所得 にチェック ✓", guide: "「事業（農業）所得」にチェック", tip: "" },
+                  { num: "⑨", field: "開業日", example: "令和○年○月○日", guide: "実際に働き始めた日（過去の日付でもOK）", tip: "正確に覚えてなければ大体の日で大丈夫" },
+                  { num: "⑩", field: "事業の概要", example: "リラクゼーション施術の提供", guide: "どんな仕事をするか簡単に記入", tip: "「アロマトリートメント・ボディケア施術の提供」など" },
+                  { num: "⑪", field: "青色申告の有無", example: "有 にチェック ✓", guide: "「有」にチェック → 青色申告承認申請書も一緒に提出！", tip: "65万円控除を受けるには「有」が必須" },
+                  { num: "⑫", field: "給与の支払", example: "無 にチェック ✓", guide: "従業員がいなければ「無」でOK", tip: "" },
+                ].map((item, i) => (
+                  <div key={i} className="p-2.5" style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] font-bold flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: pink, color: "#fff" }}>{item.num}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-bold" style={{ color: T.text }}>{item.field}</span>
+                          <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f0f0f0", color: "#666" }}>記入例: {item.example}</span>
+                        </div>
+                        <p className="text-[9px]" style={{ color: T.textSub }}>{item.guide}</p>
+                        {item.tip && <p className="text-[8px] mt-0.5" style={{ color: pink }}>💡 {item.tip}</p>}
+                      </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 提出方法 */}
+            <div style={altCard} className="mb-3">
+              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📤 提出方法（3つ）</p>
+              <div className="space-y-2">
+                <div className="p-2.5 rounded-lg" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
+                  <p className="text-[11px] font-bold" style={{ color: green }}>① e-Tax（おすすめ！）</p>
+                  <p className="text-[9px]" style={{ color: T.textSub }}>マイナンバーカード＋スマホで自宅から提出。2025年から紙の収受印が廃止されたため、e-Taxが最も確実な提出証明になります。</p>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[11px] font-medium" style={{ color: T.text }}>② 税務署に持参</p>
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>最寄りの税務署に直接提出。受付リーフレットをもらいましょう。</p>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                  <p className="text-[11px] font-medium" style={{ color: T.text }}>③ 郵送</p>
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>税務署宛てに郵送。提出証明が残りにくいので注意。</p>
                 </div>
               </div>
+            </div>
 
-              <div style={altCard}>
-                <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📤 提出方法（3つ）</p>
-                <div className="space-y-2">
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                    <p className="text-[11px] font-medium" style={{ color: green }}>① e-Tax（おすすめ！）</p>
-                    <p className="text-[9px]" style={{ color: T.textMuted }}>マイナンバーカード＋スマホで自宅からオンライン提出</p>
-                  </div>
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                    <p className="text-[11px] font-medium" style={{ color: T.text }}>② 税務署に持参</p>
-                    <p className="text-[9px]" style={{ color: T.textMuted }}>最寄りの税務署に直接提出。控えにハンコをもらう</p>
-                  </div>
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                    <p className="text-[11px] font-medium" style={{ color: T.text }}>③ 郵送</p>
-                    <p className="text-[9px]" style={{ color: T.textMuted }}>税務署宛てに郵送。返信用封筒を同封して控えをもらう</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
-                <p className="text-[10px]" style={{ color: green }}>
-                  💡 開業届と一緒に「青色申告承認申請書」も提出するのがベスト！次のステップで説明します。
-                </p>
-              </div>
+            <div className="p-3 rounded-xl" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
+              <p className="text-[10px]" style={{ color: green }}>
+                💡 開業届と一緒に「青色申告承認申請書」も提出するのがベスト！次のステップで説明します。
+              </p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -804,6 +860,28 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
                   </p>
                 ))}
               </div>
+            </div>
+
+            {/* e-Tax・確定申告コーナー リンク */}
+            <div className="mt-3 space-y-2">
+              <a href="https://www.keisan.nta.go.jp/" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: green + "15", border: `1px solid ${green}44`, textDecoration: "none" }}>
+                <span className="text-[24px]">📝</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: green }}>確定申告書等作成コーナー</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公式。ここから申告書を作成・e-Tax送信できます</p>
+                </div>
+                <span className="text-[10px]" style={{ color: green }}>↗</span>
+              </a>
+              <a href="https://www.e-tax.nta.go.jp/" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
+                <span className="text-[24px]">💻</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>e-Tax公式サイト</p>
+                  <p className="text-[8px]" style={{ color: T.textMuted }}>初めての方はこちらで利用者登録から</p>
+                </div>
+                <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
+              </a>
             </div>
 
             {/* 副業の場合の注意点 */}
