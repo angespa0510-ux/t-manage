@@ -101,6 +101,10 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [taxSubTab, setTaxSubTab] = useState<"support" | "ledger">("support");
+  const [taxChatOpen, setTaxChatOpen] = useState(false);
+  const [taxChatMsgs, setTaxChatMsgs] = useState<{ role: "user" | "ai"; text: string; cached?: boolean }[]>([]);
+  const [taxChatInput, setTaxChatInput] = useState("");
+  const [taxChatLoading, setTaxChatLoading] = useState(false);
   const [aiListening, setAiListening] = useState(false);
   const [aiSessionCount, setAiSessionCount] = useState(0);
 
@@ -1147,6 +1151,88 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           </div>
           {taxSubTab === "support" && <TaxSupportWizard T={T} therapistId={therapist.id} onGoToLedger={() => setTaxSubTab("ledger")} />}
           {taxSubTab === "ledger" && <TaxBookkeeping T={T} therapistId={therapist.id} />}
+
+          {/* 💬 税務AIチャット フローティングボタン */}
+          <button onClick={() => setTaxChatOpen(!taxChatOpen)}
+            className="fixed bottom-20 right-4 w-14 h-14 rounded-full flex items-center justify-center cursor-pointer z-40"
+            style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", boxShadow: "0 4px 15px rgba(232,132,154,0.4)" }}>
+            <span className="text-[20px]">{taxChatOpen ? "✕" : "💬"}</span>
+          </button>
+
+          {/* 💬 税務AIチャット ウィンドウ */}
+          {taxChatOpen && (
+            <div className="fixed bottom-36 right-4 w-[calc(100%-32px)] max-w-sm rounded-2xl overflow-hidden z-40 flex flex-col"
+              style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, boxShadow: "0 8px 30px rgba(0,0,0,0.2)", maxHeight: "60vh" }}>
+              <div className="px-4 py-3 flex items-center justify-between" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>
+                <div>
+                  <p className="text-[12px] font-bold text-white">🤖 確定申告AIアシスタント</p>
+                  <p className="text-[8px] text-white/70">税金・経費・申告のことなんでも聞いてね</p>
+                </div>
+                <button onClick={() => setTaxChatOpen(false)} className="text-white text-[16px] cursor-pointer" style={{ background: "none", border: "none" }}>✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{ minHeight: "200px", maxHeight: "40vh" }}>
+                {taxChatMsgs.length === 0 && (
+                  <div className="text-center py-4">
+                    <p className="text-[20px] mb-2">🌸</p>
+                    <p className="text-[11px]" style={{ color: T.textSub }}>確定申告について何でも聞いてください！</p>
+                    <div className="mt-3 space-y-1">
+                      {["経費にできるものは？", "青色申告って何？", "副業バレしない方法は？", "源泉徴収って何？"].map((q, i) => (
+                        <button key={i} onClick={() => { setTaxChatInput(q); }} className="block w-full text-left px-3 py-2 rounded-xl text-[10px] cursor-pointer"
+                          style={{ backgroundColor: T.cardAlt, color: "#e8849a", border: `1px solid #e8849a33` }}>{q}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {taxChatMsgs.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className="max-w-[85%] rounded-2xl px-3 py-2" style={{
+                      backgroundColor: m.role === "user" ? "#e8849a" : T.cardAlt,
+                      color: m.role === "user" ? "#fff" : T.text,
+                      borderBottomRightRadius: m.role === "user" ? "4px" : "16px",
+                      borderBottomLeftRadius: m.role === "user" ? "16px" : "4px",
+                    }}>
+                      <p className="text-[10px] whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                      {m.cached && <p className="text-[7px] mt-0.5" style={{ color: m.role === "user" ? "#fff8" : T.textFaint }}>⚡ キャッシュ回答</p>}
+                    </div>
+                  </div>
+                ))}
+                {taxChatLoading && (
+                  <div className="flex justify-start"><div className="rounded-2xl px-3 py-2" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[10px] animate-pulse" style={{ color: "#e8849a" }}>🤖 考え中...</p>
+                  </div></div>
+                )}
+              </div>
+              <div className="p-2 flex gap-2" style={{ borderTop: `1px solid ${T.border}` }}>
+                <input type="text" value={taxChatInput} onChange={e => setTaxChatInput(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" && taxChatInput.trim() && !taxChatLoading) {
+                      const q = taxChatInput.trim(); setTaxChatInput(""); setTaxChatLoading(true);
+                      setTaxChatMsgs(prev => [...prev, { role: "user", text: q }]);
+                      try {
+                        const res = await fetch("/api/tax-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) });
+                        const data = await res.json();
+                        setTaxChatMsgs(prev => [...prev, { role: "ai", text: data.answer || data.error || "エラー", cached: data.cached }]);
+                      } catch { setTaxChatMsgs(prev => [...prev, { role: "ai", text: "⚠️ 通信エラー" }]); }
+                      setTaxChatLoading(false);
+                    }
+                  }}
+                  placeholder="質問を入力..." className="flex-1 px-3 py-2 rounded-xl text-[11px] outline-none"
+                  style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                <button onClick={async () => {
+                  if (!taxChatInput.trim() || taxChatLoading) return;
+                  const q = taxChatInput.trim(); setTaxChatInput(""); setTaxChatLoading(true);
+                  setTaxChatMsgs(prev => [...prev, { role: "user", text: q }]);
+                  try {
+                    const res = await fetch("/api/tax-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) });
+                    const data = await res.json();
+                    setTaxChatMsgs(prev => [...prev, { role: "ai", text: data.answer || data.error || "エラー", cached: data.cached }]);
+                  } catch { setTaxChatMsgs(prev => [...prev, { role: "ai", text: "⚠️ 通信エラー" }]); }
+                  setTaxChatLoading(false);
+                }} className="px-3 py-2 rounded-xl text-[11px] cursor-pointer"
+                  style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff", border: "none" }}>送信</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

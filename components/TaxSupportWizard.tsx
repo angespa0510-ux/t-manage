@@ -37,6 +37,7 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
   const [calcIncome, setCalcIncome] = useState("");
   const [calcExpense, setCalcExpense] = useState("");
   const [calcDays, setCalcDays] = useState("");
+  const [calcHasInvoice, setCalcHasInvoice] = useState(false);
   const [checklist, setChecklist] = useState<{ [key: string]: boolean }>({});
   const [showDetail, setShowDetail] = useState<string | null>(null);
 
@@ -99,22 +100,23 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
     const income = parseInt(calcIncome) || 0;
     const expense = parseInt(calcExpense) || 0;
     const days = parseInt(calcDays) || 0;
-    // 源泉徴収（実際の計算: 各出勤日の (バック-5000)×10.21% の合計）
-    // 簡易計算: 日次バック平均 = income / days → (日次バック - 5000) × 10.21% × days
-    const dailyBack = days > 0 ? income / days : 0;
+    // インボイス控除（未登録の場合バック×10%が天引き）
+    const invoiceDed = calcHasInvoice ? 0 : Math.round(income * 0.1);
+    const adjustedIncome = income - invoiceDed;
+    // 源泉徴収（実際: (日次バック-インボイス控除後-5000)×10.21%×日数）
+    const dailyAdj = days > 0 ? adjustedIncome / days : 0;
     const withheld = days > 0
-      ? Math.floor(Math.max(0, dailyBack - 5000) * 0.1021) * days
-      : Math.floor(income * 0.1021); // 出勤日不明の場合はフォールバック
-    // 厚生費（500円×出勤日数）→ 経費に自動加算
+      ? Math.floor(Math.max(0, dailyAdj - 5000) * 0.1021) * days
+      : Math.floor(Math.max(0, adjustedIncome * 0.8) * 0.1021);
+    // 厚生費（500円×出勤日数）
     const welfareFee = days > 0 ? 500 * days : 0;
-    // 交通費支給分（上限2000円×出勤日数）→ 雑収入として加算
+    // 交通費支給（2000円×出勤日数）
     const transportIncome = days > 0 ? 2000 * days : 0;
-    // 総収入（報酬＋交通費支給）
+    // 総収入（手取りベースではなくバック総額＋交通費）
     const totalIncome = income + transportIncome;
-    // 総経費（自己申告経費＋厚生費＋交通費実費（支給額と同額と仮定））
+    // 総経費（自己負担＋厚生費＋交通費実費）
     const totalExpense = expense + welfareFee + (days > 0 ? 2000 * days : 0);
     const profit = Math.max(0, totalIncome - totalExpense);
-    // 青色65万控除
     const aoiroIncome = Math.max(0, profit - 650000);
     const baseTax = (n: number) => {
       if (n <= 0) return 0;
@@ -128,7 +130,7 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
     const aoiroTotal = aoiroTax + Math.floor(aoiroTax * 0.021);
     const refund = Math.max(0, withheld - aoiroTotal);
     const healthSaving = Math.floor(profit * 0.10) - Math.floor(aoiroIncome * 0.10);
-    return { income, expense, days, dailyBack, withheld, welfareFee, transportIncome, totalIncome, totalExpense, profit, aoiroIncome, aoiroTax, aoiroTotal, refund, healthSaving, totalBenefit: refund + healthSaving };
+    return { income, expense, days, dailyAdj, invoiceDed, adjustedIncome, withheld, welfareFee, transportIncome, totalIncome, totalExpense, profit, aoiroIncome, aoiroTax, aoiroTotal, refund, healthSaving, totalBenefit: refund + healthSaving };
   };
 
   const fmt = (n: number) => "¥" + n.toLocaleString();
@@ -468,15 +470,25 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                   <input type="number" value={calcExpense} onChange={e => setCalcExpense(e.target.value)} placeholder="直接入力も可（例: 500000）"
                     className="w-full px-3 py-2 rounded-xl text-[12px] outline-none mt-1" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} />
                 </div>
+                <div>
+                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>インボイス登録していますか？</label>
+                  <div className="flex gap-2">
+                    <button onClick={() => setCalcHasInvoice(true)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer"
+                      style={{ backgroundColor: calcHasInvoice ? green + "20" : "transparent", color: calcHasInvoice ? green : T.textMuted, border: `1px solid ${calcHasInvoice ? green : T.border}` }}>登録済み</button>
+                    <button onClick={() => setCalcHasInvoice(false)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer"
+                      style={{ backgroundColor: !calcHasInvoice ? red + "20" : "transparent", color: !calcHasInvoice ? red : T.textMuted, border: `1px solid ${!calcHasInvoice ? red : T.border}` }}>未登録（10%天引きされている）</button>
+                  </div>
+                </div>
                 {calcIncome && (() => {
                   const c = calcSaving();
                   return (
                     <div className="space-y-2">
-                      {/* 源泉徴収の計算説明 */}
+                      {/* お店からの天引き合計 */}
                       <div className="p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
-                        <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>お店が天引き済みの源泉徴収額</p>
-                        {c.days > 0 && <p className="text-[8px]" style={{ color: T.textMuted }}>（1日あたり: ({fmt(Math.round(c.dailyBack))} − ¥5,000) × 10.21% × {c.days}日）</p>}
-                        <p className="text-[16px] font-bold" style={{ color: red }}>{fmt(c.withheld)}</p>
+                        <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>お店が天引き済みの合計額</p>
+                        {c.invoiceDed > 0 && <p className="text-[8px]" style={{ color: T.textMuted }}>インボイス控除（10%）: {fmt(c.invoiceDed)}</p>}
+                        <p className="text-[8px]" style={{ color: T.textMuted }}>源泉徴収: {fmt(c.withheld)}{c.days > 0 && ` （1日: (${fmt(Math.round(c.dailyAdj))} − ¥5,000) × 10.21% × ${c.days}日）`}</p>
+                        <p className="text-[16px] font-bold mt-1" style={{ color: red }}>天引き合計 {fmt(c.invoiceDed + c.withheld)}</p>
                       </div>
                       {/* 計算過程 */}
                       <div className="space-y-1">
