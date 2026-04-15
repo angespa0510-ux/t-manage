@@ -70,6 +70,11 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [reqDrafts, setReqDrafts] = useState<Record<string, { enabled: boolean; start: string; end: string; store_id: number; notes: string }>>({});
   const [reqSaving, setReqSaving] = useState(false); const [reqMsg, setReqMsg] = useState(""); const [copiedShift, setCopiedShift] = useState(false);
   const [salaryMonth, setSalaryMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+  const [salaryViewMode, setSalaryViewMode] = useState<"monthly" | "annual">("monthly");
+  const [salaryYear, setSalaryYear] = useState(() => new Date().getFullYear());
+  const [annualSettlements, setAnnualSettlements] = useState<Settlement[]>([]);
+  const [annualLoading, setAnnualLoading] = useState(false);
+  const [storeInfo, setStoreInfo] = useState<{ company_name?: string; company_address?: string; company_phone?: string; invoice_number?: string } | null>(null);
   const [noteSearch, setNoteSearch] = useState(""); const [showAddNote, setShowAddNote] = useState(false);
   const [noteForm, setNoteForm] = useState({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 })
   const [noteViewTarget, setNoteViewTarget] = useState<CustomerNote | null>(null);
@@ -178,9 +183,22 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     const { data: ma } = await supabase.from("manual_articles").select("*").eq("is_published", true).order("sort_order").order("created_at", { ascending: false }); if (ma) setManualArticles(ma);
     const { data: mr } = await supabase.from("manual_reads").select("article_id").eq("therapist_id", tid); if (mr) setManualReads(mr.map((r: any) => r.article_id));
     const { data: mu } = await supabase.from("manual_updates").select("*").order("created_at", { ascending: false }).limit(10); if (mu) setManualUpdates(mu);
+    const { data: storeD } = await supabase.from("stores").select("company_name,company_address,company_phone,invoice_number"); if (storeD?.[0]) setStoreInfo(storeD[0]);
   }, [therapist, salaryMonth, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // 年間清算データ取得
+  useEffect(() => {
+    if (!therapist || salaryViewMode !== "annual") return;
+    const fetchAnnual = async () => {
+      setAnnualLoading(true);
+      const { data } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", therapist.id).gte("date", `${salaryYear}-01-01`).lte("date", `${salaryYear}-12-31`).eq("is_settled", true).order("date");
+      if (data) setAnnualSettlements(data);
+      setAnnualLoading(false);
+    };
+    fetchAnnual();
+  }, [therapist, salaryYear, salaryViewMode]);
   // リアルタイム同期
   useEffect(() => {
     const ch = supabase.channel("mypage-sync")
@@ -661,9 +679,130 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         </div>)}
 
         {tab === "salary" && (<div className="space-y-4">
-          <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">💰 給料明細</h2><div className="flex items-center gap-2"><button onClick={() => { const d = new Date(smY, smM - 2, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button><span className="text-[12px] font-medium">{smY}年{smM}月</span><button onClick={() => { const d = new Date(smY, smM, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button></div></div>
-          <div className="grid grid-cols-3 gap-3">{[{ l: "月合計", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[18px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
-          {settlements.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>清算データがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{settlements.map(stl => (<div key={stl.id} className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{formatDate(stl.date)}</span><span className="text-[14px] font-medium" style={{ color: "#e8849a" }}>{fmt(stl.final_payment)}</span></div><div className="flex items-center gap-3 text-[9px] flex-wrap" style={{ color: T.textMuted }}><span>{stl.order_count}件</span><span>売上{fmt(stl.total_sales)}</span><span>バック{fmt(stl.total_back)}</span>{stl.invoice_deduction > 0 && <span style={{ color: "#c45555" }}>INV-{fmt(stl.invoice_deduction)}</span>}{stl.withholding_tax > 0 && <span style={{ color: "#c45555" }}>源泉-{fmt(stl.withholding_tax)}</span>}{stl.welfare_fee > 0 && <span style={{ color: "#c45555" }}>厚生-{fmt(stl.welfare_fee)}</span>}{stl.transport_fee > 0 && <span style={{ color: "#22c55e" }}>交通+{fmt(stl.transport_fee)}</span>}</div></div>))}</div>)}
+          {/* モード切替 */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-[14px] font-medium">💰 給料明細</h2>
+            <div className="flex gap-1">
+              {([["monthly","📅 月別"],["annual","📊 年間"]] as const).map(([k,l]) => (
+                <button key={k} onClick={() => setSalaryViewMode(k)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: salaryViewMode === k ? "#e8849a20" : "transparent", color: salaryViewMode === k ? "#e8849a" : T.textMuted, border: `1px solid ${salaryViewMode === k ? "#e8849a44" : T.border}`, fontWeight: salaryViewMode === k ? 600 : 400 }}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* 月別ビュー */}
+          {salaryViewMode === "monthly" && (<>
+            <div className="flex items-center justify-center gap-2">
+              <button onClick={() => { const d = new Date(smY, smM - 2, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button>
+              <span className="text-[12px] font-medium">{smY}年{smM}月</span>
+              <button onClick={() => { const d = new Date(smY, smM, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button>
+            </div>
+            <div className="grid grid-cols-3 gap-3">{[{ l: "月合計", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[18px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
+            {settlements.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>清算データがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{settlements.map(stl => (<div key={stl.id} className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{formatDate(stl.date)}</span><span className="text-[14px] font-medium" style={{ color: "#e8849a" }}>{fmt(stl.final_payment)}</span></div><div className="flex items-center gap-3 text-[9px] flex-wrap" style={{ color: T.textMuted }}><span>{stl.order_count}件</span><span>売上{fmt(stl.total_sales)}</span><span>バック{fmt(stl.total_back)}</span>{stl.invoice_deduction > 0 && <span style={{ color: "#c45555" }}>INV-{fmt(stl.invoice_deduction)}</span>}{stl.withholding_tax > 0 && <span style={{ color: "#c45555" }}>源泉-{fmt(stl.withholding_tax)}</span>}{stl.welfare_fee > 0 && <span style={{ color: "#c45555" }}>厚生-{fmt(stl.welfare_fee)}</span>}{stl.transport_fee > 0 && <span style={{ color: "#22c55e" }}>交通+{fmt(stl.transport_fee)}</span>}</div></div>))}</div>)}
+          </>)}
+
+          {/* 年間ビュー */}
+          {salaryViewMode === "annual" && (() => {
+            const aGross = annualSettlements.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0), 0);
+            const aInvDed = annualSettlements.reduce((s, r) => s + (r.invoice_deduction || 0), 0);
+            const aTax = annualSettlements.reduce((s, r) => s + (r.withholding_tax || 0), 0);
+            const aWelfare = annualSettlements.reduce((s, r) => s + (r.welfare_fee || 0), 0);
+            const aTransport = annualSettlements.reduce((s, r) => s + (r.transport_fee || 0), 0);
+            const aFinal = annualSettlements.reduce((s, r) => s + (r.final_payment || 0), 0);
+            const aDays = annualSettlements.length;
+            const aOrders = annualSettlements.reduce((s, r) => s + (r.order_count || 0), 0);
+            // 月別集計
+            const monthlyData: { month: string; gross: number; final: number; days: number }[] = [];
+            for (let m = 1; m <= 12; m++) {
+              const key = `${salaryYear}-${String(m).padStart(2, "0")}`;
+              const ms = annualSettlements.filter(s => s.date.startsWith(key));
+              if (ms.length > 0) monthlyData.push({ month: `${m}月`, gross: ms.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0), 0), final: ms.reduce((s, r) => s + (r.final_payment || 0), 0), days: ms.length });
+            }
+            const openPayslip = () => {
+              if (!therapist) return;
+              const th = therapist as any;
+              const realName = th.real_name || th.name;
+              const hasInv = th.has_invoice || false;
+              const invNum = th.therapist_invoice_number || "";
+              const store = storeInfo;
+              const w = window.open("", "_blank"); if (!w) return;
+              w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${salaryYear}_${realName}</title>
+<style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:750px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:9px 14px;font-size:12px}th{background:#f5f0e8;text-align:left;width:38%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:14px}.section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}.doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}.stamp-area{display:flex;justify-content:space-between;margin-top:40px}.stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:10px;color:#888}@media print{body{margin:0;padding:20px}}</style></head><body>
+<p class="doc-title">報酬、料金、契約金及び賞金の支払調書</p><h1>支　払　調　書</h1><h2>対象期間：${salaryYear}年1月1日 〜 ${salaryYear}年12月31日</h2>
+<table><tr><th>支払を受ける者（氏名）</th><td>${realName}</td></tr>${realName !== th.name ? `<tr><th>業務上の名称</th><td>${th.name}</td></tr>` : ""}<tr><th>支払を受ける者（住所）</th><td>${th.address || '<span style="color:#c45555">※未登録</span>'}</td></tr>${th.birth_date ? `<tr><th>生年月日</th><td>${th.birth_date}</td></tr>` : ""}<tr><th>区分</th><td>${th.has_withholding ? "報酬（所得税法第204条第1項第6号）" : "報酬（所得税法第204条第1項第1号）"}</td></tr><tr><th>細目</th><td>${th.has_withholding ? "ホステス等の業務に関する報酬" : "マッサージ施術業務"}</td></tr><tr><th>適格請求書発行事業者</th><td>${hasInv ? `登録あり（登録番号：${invNum}）` : "未登録"}</td></tr></table>
+<table><tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
+<tr><td>稼働日数</td><td class="right">${aDays}日</td><td style="font-size:10px;color:#888">年間清算回数</td></tr>
+<tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${aGross.toLocaleString()}</strong></td><td style="font-size:10px;color:#888">業務委託報酬の年間合計</td></tr>
+${aInvDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${aInvDed.toLocaleString()}</td><td style="font-size:10px;color:#888">報酬額の10%を控除</td></tr><tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(aGross - aInvDed).toLocaleString()}</td><td style="font-size:10px;color:#888">支払金額 − 仕入税額控除</td></tr>` : ""}
+${aTax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="right" style="color:#c45555">-&yen;${aTax.toLocaleString()}</td><td style="font-size:10px;color:#888">所得税及び復興特別所得税</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
+${aWelfare > 0 ? `<tr><td style="color:#c45555">備品代・リネン代</td><td class="right" style="color:#c45555">-&yen;${aWelfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${aDays > 0 ? Math.round(aWelfare / aDays).toLocaleString() : 0}/日 × ${aDays}日</td></tr>` : ""}
+${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right">&yen;${aTransport.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${aDays > 0 ? Math.round(aTransport / aDays).toLocaleString() : 0}/日 × ${aDays}日</td></tr>` : ""}
+<tr class="total-row"><td>差引支払額</td><td class="right">&yen;${aFinal.toLocaleString()}</td><td style="font-size:10px;color:#888">年間支給額合計</td></tr></table>
+<div style="margin-top:15px"><p class="note">※ 支払金額は全て税込（内税方式）で記載。</p><p class="note">※ 源泉徴収税額は所得税法第204条第1項${th.has_withholding ? "第6号" : "第1号"}に基づき日次清算時に控除済み。</p><p class="note">※ 本書は所得税法第225条第1項に基づく支払調書に準じて作成。</p></div>
+<div class="section"><p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${store.invoice_number}</p>` : ""}</div></div>
+<div class="stamp-area"><div class="stamp-box">支払者（${store?.company_name || ""}）</div><div class="stamp-box">支払を受ける者（${realName} 様）</div></div></body></html>`);
+              w.document.close();
+            };
+            return (<>
+              <div className="flex items-center justify-center gap-2">
+                <button onClick={() => setSalaryYear(salaryYear - 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button>
+                <span className="text-[12px] font-medium">{salaryYear}年</span>
+                <button onClick={() => setSalaryYear(salaryYear + 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button>
+              </div>
+              {annualLoading ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>読み込み中...</p> : (<>
+                {/* 年間サマリーカード */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { l: "年間報酬（税込）", v: fmt(aGross), c: "#e8849a" },
+                    { l: "差引支払額", v: fmt(aFinal), c: "#c3a782" },
+                    { l: "源泉徴収", v: aTax > 0 ? `-${fmt(aTax)}` : "なし", c: aTax > 0 ? "#c45555" : T.textMuted },
+                    { l: "出勤日数", v: `${aDays}日（${aOrders}件）`, c: T.text },
+                  ].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}
+                </div>
+
+                {/* 控除内訳 */}
+                {(aInvDed > 0 || aWelfare > 0 || aTransport > 0) && (
+                  <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>控除・加算の内訳</p>
+                    <div className="space-y-1 text-[11px]">
+                      <div className="flex justify-between"><span>報酬額（税込）</span><span className="font-medium">{fmt(aGross)}</span></div>
+                      {aInvDed > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>インボイス控除（10%）</span><span>-{fmt(aInvDed)}</span></div>}
+                      {aTax > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>源泉徴収（10.21%）</span><span>-{fmt(aTax)}</span></div>}
+                      {aWelfare > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>備品・リネン代</span><span>-{fmt(aWelfare)}</span></div>}
+                      {aTransport > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>交通費</span><span>+{fmt(aTransport)}</span></div>}
+                      <div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}`, color: "#c3a782" }}><span>差引支払額</span><span>{fmt(aFinal)}</span></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 支払調書ボタン */}
+                {aDays > 0 && (
+                  <button onClick={openPayslip} className="w-full py-3 rounded-xl text-[12px] font-medium cursor-pointer" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff" }}>📄 {salaryYear}年 支払調書を表示</button>
+                )}
+
+                {/* 月別内訳 */}
+                {monthlyData.length > 0 && (
+                  <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><p className="text-[11px] font-medium">月別内訳</p></div>
+                    {monthlyData.map(md => (
+                      <div key={md.month} className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-[12px] font-medium">{md.month}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[9px]" style={{ color: T.textMuted }}>{md.days}日</span>
+                          <span className="text-[9px]" style={{ color: T.textMuted }}>報酬{fmt(md.gross)}</span>
+                          <span className="text-[13px] font-medium" style={{ color: "#e8849a" }}>{fmt(md.final)}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between px-4 py-3 font-bold" style={{ backgroundColor: T.cardAlt }}>
+                      <span className="text-[12px]">合計</span>
+                      <span className="text-[14px]" style={{ color: "#e8849a" }}>{fmt(aFinal)}</span>
+                    </div>
+                  </div>
+                )}
+                {aDays === 0 && <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>{salaryYear}年の清算データがありません</p>}
+              </>)}
+            </>);
+          })()}
         </div>)}
 
         {tab === "customers" && (<div className="space-y-4">
