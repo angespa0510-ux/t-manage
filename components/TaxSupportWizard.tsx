@@ -95,8 +95,12 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
     const income = parseInt(calcIncome) || 0;
     const expense = parseInt(calcExpense) || 0;
     const profit = Math.max(0, income - expense);
-    const whiteIncome = profit; // 白色: 経費のみ控除
-    const aoiroIncome = Math.max(0, profit - 650000); // 青色65万控除
+    // 源泉徴収額（お店が既に天引きした額）
+    const withheld = Math.floor(income * 0.1021);
+    // 青色65万控除後の所得
+    const aoiroIncome = Math.max(0, profit - 650000);
+    // 白色（控除なし）の所得
+    const whiteIncome = profit;
     const baseTax = (n: number) => {
       if (n <= 0) return 0;
       const taxable = Math.max(0, n - 480000); // 基礎控除48万
@@ -107,10 +111,15 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
     };
     const whiteTax = baseTax(whiteIncome);
     const aoiroTax = baseTax(aoiroIncome);
-    const saving = whiteTax - aoiroTax;
-    const healthBase = (n: number) => Math.floor(n * 0.1); // 概算10%
+    const aoiroTotal = aoiroTax + Math.floor(aoiroTax * 0.021); // 復興税含む
+    const whiteTotal = whiteTax + Math.floor(whiteTax * 0.021);
+    // 還付金（源泉徴収 − 本来の税額）
+    const refundAoiro = Math.max(0, withheld - aoiroTotal);
+    const refundWhite = Math.max(0, withheld - whiteTotal);
+    // 健康保険料の差（概算）
+    const healthBase = (n: number) => Math.floor(n * 0.10);
     const healthSaving = healthBase(whiteIncome) - healthBase(aoiroIncome);
-    return { profit, whiteTax, aoiroTax, saving, healthSaving, totalSaving: saving + healthSaving };
+    return { income, expense, profit, withheld, whiteTax, aoiroTax, whiteTotal, aoiroTotal, refundAoiro, refundWhite, healthSaving, totalBenefit: refundAoiro + healthSaving };
   };
 
   const fmt = (n: number) => "¥" + n.toLocaleString();
@@ -276,17 +285,65 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 0 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-3" style={{ color: T.text }}>🌸 はじめに</h2>
-            <p className="text-[12px] leading-relaxed mb-4" style={{ color: T.textSub }}>
-              セラピストとして働くあなたは<b>個人事業主</b>です。
-              お店から受け取る報酬は「給料」ではなく「事業収入」。
-              だから、<b style={{ color: pink }}>自分で確定申告する必要</b>があります。
-            </p>
+            <h2 className="text-[15px] font-bold mb-3" style={{ color: T.text }}>🌸 はじめに — なぜ確定申告するの？</h2>
 
+            {/* 核心の説明 */}
+            <div className="p-4 rounded-2xl mb-4" style={{ background: `linear-gradient(135deg, ${pink}15, ${pink}05)`, border: `2px solid ${pinkBorder}` }}>
+              <p className="text-[12px] font-bold mb-2" style={{ color: pink }}>💡 一番大事なこと</p>
+              <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+                あなたのお給料から、お店は毎回<b style={{ color: red }}>源泉徴収（約10%）</b>を天引きして税務署に納めています。
+                でもこれは<b>「経費ゼロ」前提</b>の税額です。
+              </p>
+              <p className="text-[11px] leading-relaxed mt-2" style={{ color: T.textSub }}>
+                実際は美容費・衣装代・交通費など<b style={{ color: green }}>たくさんの経費</b>がかかっていますよね？
+                確定申告で経費を申告すると、<b style={{ color: green }}>払いすぎた税金が還付金として戻ってきます！</b>
+              </p>
+            </div>
+
+            {/* 図解：お金の流れ */}
             <div style={{ ...altCard, marginBottom: "12px" }}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>✅ 確定申告すると...</p>
+              <p className="text-[11px] font-bold mb-3" style={{ color: T.text }}>📊 お金の流れ（図解）</p>
+              <div className="space-y-2">
+                {/* 今の状態 */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
+                  <p className="text-[10px] font-bold mb-1" style={{ color: red }}>❌ 今（確定申告しない場合）</p>
+                  <div className="space-y-1 text-[9px]" style={{ color: T.textSub }}>
+                    <p>あなたの報酬 例：月25万円</p>
+                    <p style={{ color: red }}>　→ 源泉徴収10.21%（約¥25,525）が毎月天引き</p>
+                    <p style={{ color: red }}>　→ インボイス分も天引き</p>
+                    <p>　→ 年間で約<b style={{ color: red }}>¥306,300</b>も税金を払っている</p>
+                    <p style={{ color: T.textMuted }}>　→ <b>経費は一切考慮されていない！</b></p>
+                  </div>
+                </div>
+                {/* 申告後 */}
+                <div className="p-3 rounded-xl" style={{ backgroundColor: green + "08", border: `1px solid ${green}33` }}>
+                  <p className="text-[10px] font-bold mb-1" style={{ color: green }}>✅ 確定申告すると</p>
+                  <div className="space-y-1 text-[9px]" style={{ color: T.textSub }}>
+                    <p>年間収入 ¥3,000,000</p>
+                    <p style={{ color: green }}>　→ 経費を引く（美容・衣装・交通費等 −¥500,000）</p>
+                    <p style={{ color: green }}>　→ 青色控除を引く（−¥650,000）</p>
+                    <p style={{ color: green }}>　→ 基礎控除を引く（−¥480,000）</p>
+                    <p>　→ 本来の税額は約<b style={{ color: green }}>¥69,000</b>だけ！</p>
+                    <p className="mt-1 text-[10px] font-bold" style={{ color: green }}>
+                      💰 差額の約¥237,000が銀行口座に還付される！
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* メリット一覧 */}
+            <div style={{ ...altCard, marginBottom: "12px" }}>
+              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>✅ 確定申告するメリット</p>
               <ul className="space-y-1.5">
-                {["払いすぎた税金が戻ってくる（還付金💰）", "経費を引いて税金が安くなる", "国民健康保険料が適正額になる", "社会的信用UP（ローン・賃貸審査）", "将来の年金額にも影響"].map((t, i) => (
+                {[
+                  "払いすぎた税金が還付金として戻ってくる💰",
+                  "経費を引いて「本来の税額」で計算される",
+                  "青色申告なら最大65万円の追加控除",
+                  "国民健康保険料が安くなる（所得が下がるため）",
+                  "社会的信用UP（ローン・賃貸審査が通りやすい）",
+                  "翌年以降、源泉徴収が調整される場合も",
+                ].map((t, i) => (
                   <li key={i} className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
                     <span style={{ color: green }}>✓</span>{t}
                   </li>
@@ -295,9 +352,14 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             <div style={{ ...altCard, marginBottom: "12px", borderLeft: `3px solid ${red}` }}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: red }}>❌ しないと...</p>
+              <p className="text-[11px] font-bold mb-2" style={{ color: red }}>❌ しないとどうなる？</p>
               <ul className="space-y-1.5">
-                {["無申告加算税（15〜20%の追加課税）", "延滞税（最大年利14.6%）", "国民健康保険が最高額に", "住宅ローンが組めない", "5年間遡って調査されるリスク"].map((t, i) => (
+                {[
+                  "払いすぎた税金がそのまま戻ってこない（大損！）",
+                  "無申告がバレると加算税15〜20% + 延滞税",
+                  "国民健康保険料が所得不明で最高額に",
+                  "住宅ローン・クレジットカードの審査に不利",
+                ].map((t, i) => (
                   <li key={i} className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
                     <span style={{ color: red }}>✗</span>{t}
                   </li>
@@ -305,44 +367,85 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </ul>
             </div>
 
-            {/* 節税シミュレーター */}
-            <button onClick={() => setShowCalc(!showCalc)} style={{ ...altCard, width: "100%", cursor: "pointer", textAlign: "left", border: `1px solid ${pinkBorder}` }}>
-              <p className="text-[12px] font-bold" style={{ color: pink }}>🧮 節税シミュレーター {showCalc ? "▲" : "▼"}</p>
-              <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>収入と経費を入れると、青色申告でどれだけ節税できるか分かります</p>
+            {/* 還付金シミュレーター */}
+            <button onClick={() => setShowCalc(!showCalc)} style={{ ...altCard, width: "100%", cursor: "pointer", textAlign: "left", border: `2px solid ${green}44` }}>
+              <p className="text-[12px] font-bold" style={{ color: green }}>💰 還付金シミュレーター {showCalc ? "▲" : "▼"}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>あなたの収入と経費を入力すると、いくら戻ってくるか分かります！</p>
             </button>
             {showCalc && (
-              <div className="mt-3 space-y-3" style={{ ...altCard, border: `1px solid ${pinkBorder}` }}>
+              <div className="mt-3 space-y-3" style={{ ...altCard, border: `2px solid ${green}44` }}>
                 <div>
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>年間の収入（税込）</label>
-                  <input type="number" value={calcIncome} onChange={e => setCalcIncome(e.target.value)} placeholder="例: 3000000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} />
-                </div>
-                <div>
-                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>年間の経費合計</label>
-                  <input type="number" value={calcExpense} onChange={e => setCalcExpense(e.target.value)} placeholder="例: 500000"
-                    className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} />
-                </div>
-                {calcIncome && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center py-2" style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <span className="text-[11px]" style={{ color: T.textSub }}>所得（収入−経費）</span>
-                      <span className="text-[12px] font-bold" style={{ color: T.text }}>{fmt(calcSaving().profit)}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2" style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <span className="text-[11px]" style={{ color: T.textSub }}>白色申告の税額（概算）</span>
-                      <span className="text-[12px]" style={{ color: red }}>{fmt(calcSaving().whiteTax)}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2" style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <span className="text-[11px]" style={{ color: T.textSub }}>青色65万控除の税額（概算）</span>
-                      <span className="text-[12px]" style={{ color: green }}>{fmt(calcSaving().aoiroTax)}</span>
-                    </div>
-                    <div className="rounded-xl p-3" style={{ background: `linear-gradient(135deg, ${green}15, ${green}05)`, border: `1px solid ${green}33` }}>
-                      <p className="text-[10px]" style={{ color: green }}>💰 青色申告にすると...</p>
-                      <p className="text-[18px] font-bold" style={{ color: green }}>年間 {fmt(calcSaving().totalSaving)} お得！</p>
-                      <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>所得税の差額 {fmt(calcSaving().saving)} ＋ 健康保険料の差額（概算） {fmt(calcSaving().healthSaving)}</p>
-                    </div>
+                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>年間の収入（お店から受け取る報酬の合計）</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {[1500000, 2000000, 3000000, 4000000, 5000000].map(v => (
+                      <button key={v} onClick={() => setCalcIncome(String(v))} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer"
+                        style={{ backgroundColor: calcIncome === String(v) ? pinkLight : T.card, color: calcIncome === String(v) ? pink : T.textMuted, border: `1px solid ${calcIncome === String(v) ? pink : T.border}` }}>
+                        {(v/10000).toFixed(0)}万円
+                      </button>
+                    ))}
                   </div>
-                )}
+                  <input type="number" value={calcIncome} onChange={e => setCalcIncome(e.target.value)} placeholder="直接入力も可（例: 3000000）"
+                    className="w-full px-3 py-2 rounded-xl text-[12px] outline-none mt-1" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} />
+                </div>
+                <div>
+                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>年間の経費（美容費・衣装代・交通費など合計）</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {[200000, 300000, 500000, 800000, 1000000].map(v => (
+                      <button key={v} onClick={() => setCalcExpense(String(v))} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer"
+                        style={{ backgroundColor: calcExpense === String(v) ? pinkLight : T.card, color: calcExpense === String(v) ? pink : T.textMuted, border: `1px solid ${calcExpense === String(v) ? pink : T.border}` }}>
+                        {(v/10000).toFixed(0)}万円
+                      </button>
+                    ))}
+                  </div>
+                  <input type="number" value={calcExpense} onChange={e => setCalcExpense(e.target.value)} placeholder="直接入力も可（例: 500000）"
+                    className="w-full px-3 py-2 rounded-xl text-[12px] outline-none mt-1" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }} />
+                </div>
+                {calcIncome && (() => {
+                  const c = calcSaving();
+                  return (
+                    <div className="space-y-2">
+                      {/* 源泉徴収額 */}
+                      <div className="p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
+                        <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>お店が天引き済みの源泉徴収額（10.21%）</p>
+                        <p className="text-[16px] font-bold" style={{ color: red }}>{fmt(c.withheld)}</p>
+                      </div>
+                      {/* 計算過程 */}
+                      <div className="space-y-1">
+                        {[
+                          ["年間収入", fmt(c.income), T.text],
+                          ["− 経費", fmt(c.expense), red],
+                          ["＝ 差引金額", fmt(c.profit), T.text],
+                          ["− 青色申告特別控除", "¥650,000", green],
+                          ["− 基礎控除", "¥480,000", green],
+                          ["＝ 本来の税額（概算）", fmt(c.aoiroTotal), T.text],
+                        ].map(([label, val, color], i) => (
+                          <div key={i} className="flex justify-between py-1" style={{ borderBottom: `1px solid ${T.border}08` }}>
+                            <span className="text-[10px]" style={{ color: T.textSub }}>{label}</span>
+                            <span className="text-[10px] font-medium" style={{ color: color as string }}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {/* 還付金ドーン */}
+                      <div className="rounded-2xl p-4 text-center" style={{ background: `linear-gradient(135deg, ${green}20, ${green}08)`, border: `2px solid ${green}44` }}>
+                        <p className="text-[10px]" style={{ color: T.textMuted }}>源泉徴収{fmt(c.withheld)} − 本来の税額{fmt(c.aoiroTotal)}</p>
+                        <p className="text-[10px] mt-1" style={{ color: green }}>💰 あなたに戻ってくる還付金</p>
+                        <p className="text-[28px] font-bold" style={{ color: green }}>{fmt(c.refundAoiro)}</p>
+                        {c.healthSaving > 0 && (
+                          <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>
+                            ＋ 国民健康保険料も約{fmt(c.healthSaving)}安くなる → 合計 <b style={{ color: green }}>{fmt(c.totalBenefit)}お得！</b>
+                          </p>
+                        )}
+                      </div>
+                      {/* 月額換算 */}
+                      {c.refundAoiro > 0 && (
+                        <p className="text-[10px] text-center" style={{ color: T.textMuted }}>
+                          月に換算すると約<b style={{ color: green }}>{fmt(Math.round(c.refundAoiro / 12))}</b>の手取りUP！
+                        </p>
+                      )}
+                      <p className="text-[7px]" style={{ color: T.textMuted }}>※概算です。社会保険料控除等は含みません。実際の金額はe-Tax等でご確認ください。</p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
