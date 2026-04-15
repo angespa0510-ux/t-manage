@@ -559,7 +559,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </div>
               {profile.isSubJob === true && (
                 <div className="mt-2 p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
-                  <p className="text-[10px]" style={{ color: orange }}>⚠️ 副業の場合は「住民税の普通徴収」が重要です！（下のFAQ「副業がバレない方法」で詳しく説明）</p>
+                  <button onClick={() => setExpandedFaq(0)} className="w-full text-left text-[10px] cursor-pointer" style={{ color: orange, background: "none", border: "none", padding: 0 }}>⚠️ 副業の場合は「住民税の普通徴収」が重要です！（<u>タップしてFAQを見る</u>）</button>
                 </div>
               )}
             </div>
@@ -690,30 +690,30 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 <p className="text-[12px] font-bold mb-2" style={{ color: pink }}>📌 あなたに必要な手続き</p>
                 <div className="space-y-1.5">
                   {!profile.hasKaigyou && (
-                    <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                      <span style={{ color: red }}>●</span> <b>開業届の提出</b>が必要です → 次のステップで説明
-                    </p>
+                    <button onClick={() => setStep(2)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
+                      <span style={{ color: red }}>●</span> <b>開業届の提出</b>が必要です → <u style={{ color: pink }}>開業届ステップへ</u>
+                    </button>
                   )}
-                  <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                    <span style={{ color: orange }}>●</span> <b>青色申告</b>がおすすめ → 「青色/白色」ステップで説明
-                  </p>
-                  <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                    <span style={{ color: pink }}>●</span> <b>経費の整理</b>をしましょう → 「経費整理」ステップで説明
-                  </p>
+                  <button onClick={() => setStep(3)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
+                    <span style={{ color: orange }}>●</span> <b>青色申告</b>がおすすめ → <u style={{ color: pink }}>青色/白色ステップへ</u>
+                  </button>
+                  <button onClick={() => setStep(5)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
+                    <span style={{ color: pink }}>●</span> <b>経費の整理</b>をしましょう → <u style={{ color: pink }}>経費整理ステップへ</u>
+                  </button>
                   {profile.isSubJob && (
-                    <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                      <span style={{ color: green }}>●</span> <b>住民税は普通徴収</b>で会社バレ防止 → FAQ
-                    </p>
+                    <button onClick={() => setExpandedFaq(0)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
+                      <span style={{ color: green }}>●</span> <b>住民税は普通徴収</b>で会社バレ防止 → <u style={{ color: pink }}>FAQを見る</u>
+                    </button>
                   )}
                   {profile.isDependent && (
-                    <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                      <span style={{ color: orange }}>●</span> <b>扶養内で働くなら所得48万円以下</b>を意識（経費をしっかり計上！）
-                    </p>
+                    <button onClick={() => setStep(5)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
+                      <span style={{ color: orange }}>●</span> <b>扶養内で働くなら所得48万円以下</b>を意識 → <u style={{ color: pink }}>経費整理で節税</u>
+                    </button>
                   )}
                   {profile.isStudent && (
-                    <p className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
-                      <span style={{ color: "#2563eb" }}>●</span> <b>学生</b>：扶養控除・勤労学生控除の条件を確認しましょう
-                    </p>
+                    <button onClick={() => setExpandedFaq(1)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
+                      <span style={{ color: "#2563eb" }}>●</span> <b>学生</b>：扶養控除の条件を確認 → <u style={{ color: pink }}>FAQで詳しく</u>
+                    </button>
                   )}
                 </div>
               </div>

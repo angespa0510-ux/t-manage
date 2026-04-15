@@ -116,7 +116,27 @@ ${articleTitles.join(" / ")}
 
 ${manualContext}${historyContext}`;
 
-      const answer = await callClaude(systemPrompt, question.trim());
+      const answer = await (async () => {
+        // キャッシュ検索
+        const norm = question.trim().replace(/[？?！!。、,.　\s]+/g, " ").trim().toLowerCase().slice(0, 200);
+        const words = norm.split(" ").filter((w: string) => w.length >= 2).slice(0, 5);
+        if (words.length > 0) {
+          const { data: exact } = await supabase.from("ai_chat_cache").select("answer, id, hit_count").eq("normalized_q", norm).eq("category", "manual").limit(1);
+          if (exact && exact.length > 0) {
+            await supabase.from("ai_chat_cache").update({ hit_count: (exact[0].hit_count || 0) + 1 }).eq("id", exact[0].id);
+            return exact[0].answer;
+          }
+          for (const word of words.slice(0, 2)) {
+            const { data: partial } = await supabase.from("ai_chat_cache").select("answer, id, hit_count, normalized_q").eq("category", "manual").ilike("normalized_q", `%${word}%`).gte("hit_count", 1).order("hit_count", { ascending: false }).limit(5);
+            if (partial) { for (const cached of partial) { const mc = words.filter((w: string) => cached.normalized_q.includes(w)).length; if (mc >= 2) { await supabase.from("ai_chat_cache").update({ hit_count: (cached.hit_count || 0) + 1 }).eq("id", cached.id); return cached.answer; } } }
+          }
+        }
+        // キャッシュミス → Claude API
+        const result = await callClaude(systemPrompt, question.trim());
+        // キャッシュ保存
+        if (norm.length > 2) { await supabase.from("ai_chat_cache").upsert({ category: "manual", normalized_q: norm, question: question.trim().slice(0, 500), answer: result.slice(0, 5000), hit_count: 0 }, { onConflict: "category,normalized_q" }); }
+        return result;
+      })();
 
       // 質問ログを保存
       let savedLogId: number | null = null;
