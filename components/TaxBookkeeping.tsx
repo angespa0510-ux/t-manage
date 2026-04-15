@@ -26,6 +26,7 @@ const formatDate = (d: string) => { const dt=new Date(d+"T00:00:00"); return `${
 
 export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: number }) {
   const [subTab, setSubTab] = useState<"journal"|"add"|"reports"|"tax"|"export">("journal");
+  const [inputMode, setInputMode] = useState<"expense"|"income">("expense");
   const [year, setYear] = useState(()=>new Date().getFullYear());
   const [month, setMonth] = useState(()=>new Date().getMonth()+1);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -71,12 +72,13 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
     settlements.forEach(s=>{entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.final_payment,credit_account:"売上高",credit_amount:s.final_payment,description:`施術報酬 ${s.order_count}件（バック${fmt(s.total_back)}）`,id:`stl-${s.id}`});
       if(s.withholding_tax>0)entries.push({date:s.date,type:"income",debit_account:"事業主貸",debit_amount:s.withholding_tax,credit_account:"売上高",credit_amount:s.withholding_tax,description:`源泉徴収税`,id:`wh-${s.id}`});
       if(s.transport_fee>0)entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.transport_fee,credit_account:"雑収入",credit_amount:s.transport_fee,description:`交通費支給`,id:`tf-${s.id}`});});
-    expenses.forEach(e=>{entries.push({date:e.date,type:"expense",debit_account:e.account_item||"雑費",debit_amount:e.amount,credit_account:"現金",credit_amount:e.amount,description:`${e.subcategory?e.subcategory+" ":""}${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`,receipt_url:e.receipt_url});});
+    expenses.forEach(e=>{if(e.category.startsWith("収入:")){entries.push({date:e.date,type:"income",debit_account:"現金",debit_amount:e.amount,credit_account:"売上高",credit_amount:e.amount,description:`${e.subcategory} ${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`});}else{entries.push({date:e.date,type:"expense",debit_account:e.account_item||"雑費",debit_amount:e.amount,credit_account:"現金",credit_amount:e.amount,description:`${e.subcategory?e.subcategory+" ":""}${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`,receipt_url:e.receipt_url});}});
     return entries.sort((a,b)=>a.date.localeCompare(b.date));};
 
   const journal=generateJournal();
-  const totalIncome=settlements.reduce((s,stl)=>s+stl.final_payment+stl.withholding_tax,0);
-  const totalExpense=expenses.reduce((s,e)=>s+e.amount,0);
+  const cashOptionIncome=expenses.filter(e=>e.category.startsWith("収入:")).reduce((s,e)=>s+e.amount,0);
+  const totalIncome=settlements.reduce((s,stl)=>s+stl.final_payment+stl.withholding_tax,0)+cashOptionIncome;
+  const totalExpense=expenses.filter(e=>!e.category.startsWith("収入:")).reduce((s,e)=>s+e.amount,0);
   const profit=totalIncome-totalExpense;
 
   const getAccountSummary=()=>{const map:Record<string,number>={};journal.filter(e=>e.type==="expense").forEach(e=>{map[e.debit_account]=(map[e.debit_account]||0)+e.debit_amount;});return Object.entries(map).sort((a,b)=>b[1]-a[1]);};
@@ -125,7 +127,7 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
   return (<div className="space-y-3 pb-10">
     {/* サブタブ */}
     <div className="flex gap-1 overflow-x-auto pb-1">
-      {([["journal","📒 仕訳帳"],["add","➕ 経費入力"],["reports","📊 決算書"],["tax","📄 申告"],["export","📥 出力"]] as const).map(([key,label])=>(<button key={key} onClick={()=>setSubTab(key)} className="px-2.5 py-1.5 text-[9px] rounded-lg cursor-pointer border whitespace-nowrap" style={{backgroundColor:subTab===key?pinkLight:"transparent",color:subTab===key?pink:T.textMuted,borderColor:subTab===key?pink:T.border,fontWeight:subTab===key?600:400}}>{label}</button>))}
+      {([["journal","📒 仕訳帳"],["add","➕ 入力"],["reports","📊 決算書"],["tax","📄 申告"],["export","📥 出力"]] as const).map(([key,label])=>(<button key={key} onClick={()=>setSubTab(key)} className="px-2.5 py-1.5 text-[9px] rounded-lg cursor-pointer border whitespace-nowrap" style={{backgroundColor:subTab===key?pinkLight:"transparent",color:subTab===key?pink:T.textMuted,borderColor:subTab===key?pink:T.border,fontWeight:subTab===key?600:400}}>{label}</button>))}
     </div>
     {/* 期間選択 */}
     <div className="flex items-center gap-2">
@@ -153,8 +155,51 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
       </div></div>)}
     </div>)}
 
-    {/* 経費入力 */}
+    {/* 経費・収入入力 */}
     {subTab==="add"&&(<div className="space-y-3">
+      {/* 経費/収入 切り替え */}
+      <div className="flex gap-2">
+        <button onClick={()=>setInputMode("expense")} className="flex-1 py-2.5 rounded-xl text-[11px] cursor-pointer"
+          style={{backgroundColor:inputMode==="expense"?red+"15":"transparent",color:inputMode==="expense"?red:T.textMuted,border:`1px solid ${inputMode==="expense"?red:T.border}`,fontWeight:inputMode==="expense"?600:400}}>💸 経費を入力</button>
+        <button onClick={()=>setInputMode("income")} className="flex-1 py-2.5 rounded-xl text-[11px] cursor-pointer"
+          style={{backgroundColor:inputMode==="income"?green+"15":"transparent",color:inputMode==="income"?green:T.textMuted,border:`1px solid ${inputMode==="income"?green:T.border}`,fontWeight:inputMode==="income"?600:400}}>💰 手渡し収入を入力</button>
+      </div>
+
+      {/* ========= 手渡しオプション収入入力 ========= */}
+      {inputMode==="income"&&(<>
+        <div style={{...cardBase,padding:"16px"}}>
+          <p className="text-[12px] font-bold mb-2" style={{color:green}}>💰 手渡しオプション収入の入力</p>
+          <div className="p-3 rounded-xl mb-3" style={{backgroundColor:orange+"10",border:`1px solid ${orange}33`}}>
+            <p className="text-[10px] font-bold mb-1" style={{color:orange}}>⚠️ なぜ入力が必要？</p>
+            <p className="text-[9px]" style={{color:T.textSub}}>お客様から<b>現金で直接受け取ったオプション料金</b>は、お店の精算に含まれていません。確定申告ではすべての収入を申告する義務があるため、自分で記録する必要があります。</p>
+            <div className="mt-2 space-y-1">
+              <p className="text-[8px]" style={{color:T.textSub}}>• <b style={{color:red}}>カード/PayPay</b>のオプション → お店の売上に入る → <b>精算データに含まれるので入力不要</b></p>
+              <p className="text-[8px]" style={{color:T.textSub}}>• <b style={{color:green}}>現金手渡し</b>のオプション → お店を通らない → <b style={{color:red}}>ここで入力が必要！</b></p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>日付</label><input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+            <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>金額</label><input type="number" inputMode="numeric" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))} placeholder="例: 3000" className="w-full px-3 py-2.5 rounded-xl text-[14px] font-bold outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+            <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>内容</label><input type="text" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="例: オプション（お客様名なしでOK）" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+            <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>メモ（任意）</label><input type="text" value={form.memo} onChange={e=>setForm(p=>({...p,memo:e.target.value}))} placeholder="例: 〇〇オプション" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+            <button onClick={()=>{if(!form.amount){setSaveMsg("金額を入力");return;}setForm(p=>({...p,category:"収入:現金オプション",subcategory:"手渡し",account_item:"売上高"}));setTimeout(()=>saveExpense(),100);}} disabled={saving} className="w-full py-3 rounded-xl text-[12px] cursor-pointer" style={{background:`linear-gradient(135deg,${green},#1a9f4a)`,color:"#fff",border:"none",borderRadius:"12px",cursor:"pointer",fontWeight:600,opacity:saving?0.6:1}}>{saving?"保存中...":"💰 収入を記録"}</button>
+            {saveMsg&&<p className="text-[10px] text-center" style={{color:saveMsg.includes("✅")?green:red}}>{saveMsg}</p>}
+          </div>
+        </div>
+        {/* 手渡し収入の一覧 */}
+        {expenses.filter(e=>e.category.startsWith("収入:")).length>0&&(<div style={{...cardBase,overflow:"hidden"}}>
+          <div className="px-4 py-2.5" style={{borderBottom:`1px solid ${T.border}`,backgroundColor:green+"10"}}><span className="text-[11px] font-bold" style={{color:green}}>💰 手渡し収入一覧（{fmt(cashOptionIncome)}）</span></div>
+          {expenses.filter(e=>e.category.startsWith("収入:")).map(e=>(<div key={e.id} className="px-4 py-2.5 flex items-center gap-2" style={{borderBottom:`1px solid ${T.border}08`}}>
+            <div className="w-8 h-8 rounded flex items-center justify-center text-[12px]" style={{backgroundColor:green+"15"}}>💰</div>
+            <div className="flex-1 min-w-0"><div className="flex items-center gap-1"><span className="text-[10px]" style={{color:T.textSub}}>{e.date.slice(5)}</span><span className="text-[7px] px-1 rounded" style={{backgroundColor:green+"20",color:green}}>手渡し</span></div><p className="text-[10px] truncate" style={{color:T.text}}>{e.description}</p></div>
+            <span className="text-[12px] font-bold flex-shrink-0" style={{color:green}}>{fmt(e.amount)}</span>
+            <button onClick={()=>deleteExpense(e.id)} className="text-[10px] cursor-pointer" style={{color:T.textMuted,background:"none",border:"none"}}>🗑</button>
+          </div>))}
+        </div>)}
+      </>)}
+
+      {/* ========= 経費入力（既存） ========= */}
+      {inputMode==="expense"&&(<>
       <div style={{...cardBase,padding:"16px"}}><p className="text-[12px] font-bold mb-2" style={{color:T.text}}>📷 レシート撮影→AI自動読取</p><input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" /><div className="flex gap-2"><button onClick={()=>fileRef.current?.click()} className="flex-1 py-3 rounded-xl text-[11px] cursor-pointer" style={{backgroundColor:pinkLight,color:pink,border:`1px dashed ${pink}`,fontWeight:600}}>📷 撮影</button><button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept="image/*";i.onchange=(ev)=>handleFileChange(ev as unknown as React.ChangeEvent<HTMLInputElement>);i.click();}} className="flex-1 py-3 rounded-xl text-[11px] cursor-pointer" style={{backgroundColor:T.cardAlt,color:T.textSub,border:`1px dashed ${T.border}`}}>📁 選択</button></div>{receiptPreview&&<div className="mt-3 text-center"><img src={receiptPreview} alt="" className="max-h-40 mx-auto rounded-xl" style={{border:`1px solid ${T.border}`}} /></div>}{aiAnalyzing&&<p className="text-[10px] mt-2 text-center animate-pulse" style={{color:pink}}>🤖 AI読取中...</p>}{aiResult&&<p className="text-[10px] mt-2 text-center" style={{color:aiResult.includes("✅")?green:orange}}>{aiResult}</p>}</div>
       <div style={{...cardBase,padding:"16px"}}><p className="text-[12px] font-bold mb-2" style={{color:T.text}}>📂 カテゴリ</p><div className="grid grid-cols-4 gap-1.5">{CATEGORIES.map(cat=>(<button key={cat.label} onClick={()=>setForm(p=>({...p,category:cat.label,account_item:cat.account,subcategory:""}))} className="flex flex-col items-center gap-0.5 py-2 rounded-xl cursor-pointer" style={{backgroundColor:form.category===cat.label?pinkLight:T.cardAlt,border:`1px solid ${form.category===cat.label?pink:"transparent"}`}}><span className="text-[16px]">{cat.icon}</span><span className="text-[8px]" style={{color:form.category===cat.label?pink:T.textMuted}}>{cat.label}</span></button>))}</div>{form.category&&(()=>{const cat=CATEGORIES.find(c=>c.label===form.category);return cat?(<div className="mt-2 flex flex-wrap gap-1">{cat.subs.map(sub=>(<button key={sub} onClick={()=>setForm(p=>({...p,subcategory:sub}))} className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer" style={{backgroundColor:form.subcategory===sub?pink+"20":"transparent",color:form.subcategory===sub?pink:T.textMuted,border:`1px solid ${form.subcategory===sub?pink:T.border}`}}>{sub}</button>))}</div>):null;})()}</div>
       <div style={{...cardBase,padding:"16px"}}><div className="space-y-3">
@@ -167,7 +212,8 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
         {editId&&<button onClick={()=>{setEditId(null);setForm({date:new Date().toISOString().split("T")[0],category:"",subcategory:"",account_item:"",description:"",amount:"",memo:""});}} className="w-full py-2 text-[11px] rounded-xl cursor-pointer" style={{backgroundColor:"transparent",color:T.textMuted,border:`1px solid ${T.border}`}}>キャンセル</button>}
         {saveMsg&&<p className="text-[10px] text-center" style={{color:saveMsg.includes("✅")?green:red}}>{saveMsg}</p>}
       </div></div>
-      {expenses.length>0&&(<div style={{...cardBase,overflow:"hidden"}}><div className="px-4 py-2.5" style={{borderBottom:`1px solid ${T.border}`,backgroundColor:T.cardAlt}}><span className="text-[11px] font-bold" style={{color:T.text}}>📝 経費一覧（{expenses.length}件 / {fmt(totalExpense)}）</span></div>{expenses.map(e=>(<div key={e.id} className="px-4 py-2.5 flex items-center gap-2" style={{borderBottom:`1px solid ${T.border}08`}}>{e.receipt_thumb_url?<a href={e.receipt_url} target="_blank" rel="noopener noreferrer"><img src={e.receipt_thumb_url} alt="" className="w-8 h-8 rounded object-cover" style={{border:`1px solid ${T.border}`}} /></a>:<div className="w-8 h-8 rounded flex items-center justify-center text-[10px]" style={{backgroundColor:T.cardAlt}}>{CATEGORIES.find(c=>c.label===e.category)?.icon||"🛒"}</div>}<div className="flex-1 min-w-0"><div className="flex items-center gap-1"><span className="text-[10px]" style={{color:T.textSub}}>{e.date.slice(5)}</span><span className="text-[7px] px-1 rounded" style={{backgroundColor:pinkLight,color:pink}}>{e.account_item}</span></div><p className="text-[10px] truncate" style={{color:T.text}}>{e.subcategory} {e.description}</p></div><span className="text-[12px] font-bold flex-shrink-0" style={{color:red}}>{fmt(e.amount)}</span><div className="flex flex-col gap-0.5"><button onClick={()=>startEdit(e)} className="text-[10px] cursor-pointer" style={{color:T.textMuted,background:"none",border:"none"}}>✏️</button><button onClick={()=>deleteExpense(e.id)} className="text-[10px] cursor-pointer" style={{color:T.textMuted,background:"none",border:"none"}}>🗑</button></div></div>))}</div>)}
+      {expenses.filter(e=>!e.category.startsWith("収入:")).length>0&&(<div style={{...cardBase,overflow:"hidden"}}><div className="px-4 py-2.5" style={{borderBottom:`1px solid ${T.border}`,backgroundColor:T.cardAlt}}><span className="text-[11px] font-bold" style={{color:T.text}}>📝 経費一覧（{expenses.filter(e=>!e.category.startsWith("収入:")).length}件 / {fmt(totalExpense)}）</span></div>{expenses.filter(e=>!e.category.startsWith("収入:")).map(e=>(<div key={e.id} className="px-4 py-2.5 flex items-center gap-2" style={{borderBottom:`1px solid ${T.border}08`}}>{e.receipt_thumb_url?<a href={e.receipt_url} target="_blank" rel="noopener noreferrer"><img src={e.receipt_thumb_url} alt="" className="w-8 h-8 rounded object-cover" style={{border:`1px solid ${T.border}`}} /></a>:<div className="w-8 h-8 rounded flex items-center justify-center text-[10px]" style={{backgroundColor:T.cardAlt}}>{CATEGORIES.find(c=>c.label===e.category)?.icon||"🛒"}</div>}<div className="flex-1 min-w-0"><div className="flex items-center gap-1"><span className="text-[10px]" style={{color:T.textSub}}>{e.date.slice(5)}</span><span className="text-[7px] px-1 rounded" style={{backgroundColor:pinkLight,color:pink}}>{e.account_item}</span></div><p className="text-[10px] truncate" style={{color:T.text}}>{e.subcategory} {e.description}</p></div><span className="text-[12px] font-bold flex-shrink-0" style={{color:red}}>{fmt(e.amount)}</span><div className="flex flex-col gap-0.5"><button onClick={()=>startEdit(e)} className="text-[10px] cursor-pointer" style={{color:T.textMuted,background:"none",border:"none"}}>✏️</button><button onClick={()=>deleteExpense(e.id)} className="text-[10px] cursor-pointer" style={{color:T.textMuted,background:"none",border:"none"}}>🗑</button></div></div>))}</div>)}
+      </>)}
     </div>)}
 
     {/* 決算書 */}
