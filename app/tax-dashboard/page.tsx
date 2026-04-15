@@ -889,14 +889,18 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
       month: 1, day: 31,
       title: "給与支払報告書の提出",
       who: "税理士", urgency: "medium",
-      what: "従業員の給与情報を市区町村に届け出る（住民税の計算に使われる）",
-      detail: `【税理士さんがやること】
-• 従業員（雇用契約のスタッフ）の給与支払報告書を名古屋市に提出
+      what: "社員（雇用契約）の給与情報を各市区町村に届け出る",
+      detail: `【対象者】
+• 雇用契約の社員のみ（社労士の大石さんが給与計算を担当）
+• T-MANAGEのスタッフは全員「業務委託」なので対象外
+
+【税理士さん・社労士さんがやること】
+• 社員の給与支払報告書を安城市・豊橋市などに提出
 • 住民税の特別徴収（給料天引き）の届出
 
 【オーナーがやること】
-• 特になし（税理士さんに任せてOK）
-• ただし従業員の住所変更があれば事前に伝える`,
+• 特になし（税理士さん・社労士さんに任せてOK）
+• 社員の住所変更があれば事前に伝える`,
     },
     // ── 3月 ──
     {
@@ -960,9 +964,15 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
 • 銀行振込 or e-Taxで納付する
 • 納付期限は5月31日（2ヶ月以内）
 
-【前期の参考】
-• 第4期（9月決算）：法人税 ¥111,570 + 地方法人税 ¥11,480
-• 第5期（9月決算）：法人税 ¥0（赤字のため）+ 均等割 ¥71,000
+【納付額の目安】
+• 黒字の場合：法人税（所得の15〜23%）+ 地方法人税 + 消費税
+• 均等割：約7万円（赤字でも必ず必要）
+
+【複数拠点の注意】
+テラスライフは安城市・豊橋市に事業所があるため：
+• 法人住民税（均等割）→ 各市に納付が必要
+• 法人事業税 → 愛知県に納付
+• 法人税 → 国（名古屋中税務署）に納付
 
 【注意】
 • 赤字でも「均等割」（最低約7万円）は必ず納付が必要
@@ -990,15 +1000,19 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
       month: 7, day: 10,
       title: "社会保険の算定基礎届",
       who: "税理士", urgency: "medium",
-      what: "従業員の社会保険料を見直すための届出（4〜6月の給与で計算）",
-      detail: `【税理士さん（社労士）がやること】
-• 4月・5月・6月の従業員給与をもとに、新しい社会保険料を計算
+      what: "社員の社会保険料を見直すための届出（4〜6月の給与で計算）",
+      detail: `【社労士の大石さんがやること】
+• 4月・5月・6月の社員給与をもとに、新しい社会保険料を計算
 • 算定基礎届を年金事務所に提出
 • 9月から新しい保険料率が適用される
 
+【対象】
+• 雇用契約の社員のみ
+• 業務委託のセラピスト・スタッフは対象外
+
 【オーナーがやること】
-• 4〜6月の給与明細を社労士に渡す（T-MANAGEから出力可能）
-• 特に難しいことはなし`,
+• 社労士の大石さんに任せてOK
+• 社員の給与変動があれば報告する`,
     },
     // ── 10月〜11月 ──
     {
@@ -1019,25 +1033,22 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
     {
       month: 12, day: 31,
       title: "年末調整",
-      who: "両方", urgency: "medium",
-      what: "従業員（雇用契約のスタッフ）の1年間の所得税を精算する",
-      detail: `【注意】業務委託のセラピストは対象外！雇用契約の従業員のみ。
+      who: "税理士", urgency: "medium",
+      what: "社員（雇用契約）の1年間の所得税を精算する",
+      detail: `【対象者】
+• 雇用契約の社員のみ
+• 業務委託のセラピスト・スタッフは対象外（自分で確定申告する）
 
-【11月中にやること】
-• 従業員から以下の書類を集める：
-  - 扶養控除等申告書
-  - 保険料控除申告書（生命保険等の証明書も）
-  - 住宅ローン控除の証明書（該当者のみ）
-• 集めた書類を税理士さんに渡す
-
-【12月〜1月に税理士さんがやること】
-• 年末調整の計算
+【社労士の大石さん・税理士さんがやること】
+• 社員の年末調整の計算
 • 源泉徴収票の作成
 • 過不足額の精算（12月 or 1月の給与で調整）
 
-【オーナーがやること】
-• 従業員から書類を集めて税理士さんに渡す（11月中が理想）
-• 精算額を12月の給与に反映する`,
+【11月中にオーナーがやること】
+• 社員から以下の書類を集めて社労士・税理士に渡す：
+  - 扶養控除等申告書
+  - 保険料控除申告書（生命保険等の証明書も）
+  - 住宅ローン控除の証明書（該当者のみ）`,
     },
   ];
 
@@ -1171,7 +1182,7 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
         <div className="space-y-3 text-[11px]">
           <div className="flex gap-3 items-start">
             <span className="flex-shrink-0 w-[60px] text-right font-medium" style={{ color: "#c3a782" }}>毎日</span>
-            <span style={{ color: T.textSub }}>T-MANAGEで清算するだけでOK。源泉徴収も自動計算。</span>
+            <span style={{ color: T.textSub }}>T-MANAGEで清算するだけでOK。源泉徴収も自動計算。大入り発生時は社労士の大石さんに報告。</span>
           </div>
           <div className="flex gap-3 items-start">
             <span className="flex-shrink-0 w-[60px] text-right font-medium" style={{ color: "#f59e0b" }}>半年に1回</span>
@@ -1184,13 +1195,45 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
         </div>
       </div>
 
-      {/* 税理士への連絡テンプレ */}
+      {/* 大入り・給与の報告フロー */}
+      <div className="rounded-2xl border p-5 mt-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>🔄 大入り（社員ボーナス）の報告フロー</h3>
+        <div className="text-[10px] leading-relaxed space-y-2" style={{ color: T.textSub }}>
+          <p>大入りは<span style={{ color: "#c3a782", fontWeight: 600 }}>雇用契約の社員のみ</span>が対象です。業務委託のセラピストは対象外。</p>
+          <div className="rounded-lg p-3 mt-2" style={{ backgroundColor: T.cardAlt }}>
+            <p className="text-[10px] font-medium mb-2" style={{ color: T.text }}>報告の流れ</p>
+            <div className="flex items-center gap-2 flex-wrap text-[10px]">
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>① 大入り発生</span>
+              <span style={{ color: T.textFaint }}>→</span>
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>② 社労士 大石さんに報告</span>
+              <span style={{ color: T.textFaint }}>→</span>
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>③ 給与総額が変更</span>
+              <span style={{ color: T.textFaint }}>→</span>
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#a78bc418", color: "#a78bc4" }}>④ 社労士↔税理士が連携</span>
+            </div>
+            <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>給与総額が変わると源泉徴収額・社会保険料も変わるため、社労士さんと税理士さんが連携して処理します。</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 連絡先 */}
       <div className="rounded-2xl border p-5 mt-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>💡 困ったときの連絡先</h3>
-        <div className="text-[11px] space-y-1" style={{ color: T.textSub }}>
-          <p>税理士：江坂留衣（江坂留衣税理士事務所）</p>
-          <p>所在地：愛知県岡崎市藤川町一里山南13</p>
-          <p>電話：0564-83-5731</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt }}>
+            <p className="text-[10px] font-medium mb-1" style={{ color: "#85a8c4" }}>📝 税理士</p>
+            <p className="text-[11px] font-medium" style={{ color: T.text }}>江坂留衣</p>
+            <p className="text-[9px]" style={{ color: T.textMuted }}>江坂留衣税理士事務所</p>
+            <p className="text-[9px]" style={{ color: T.textMuted }}>岡崎市藤川町一里山南13</p>
+            <p className="text-[9px]" style={{ color: T.textMuted }}>TEL: 0564-83-5731</p>
+            <p className="text-[8px] mt-1" style={{ color: T.textFaint }}>担当：法人税・消費税・支払調書・源泉納付書</p>
+          </div>
+          <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt }}>
+            <p className="text-[10px] font-medium mb-1" style={{ color: "#22c55e" }}>🏥 社労士</p>
+            <p className="text-[11px] font-medium" style={{ color: T.text }}>大石さん</p>
+            <p className="text-[9px]" style={{ color: T.textMuted }}>（事務所名・電話番号は後日追加）</p>
+            <p className="text-[8px] mt-1" style={{ color: T.textFaint }}>担当：社員の給与計算・社会保険・大入り報告・年末調整・算定基礎届</p>
+          </div>
         </div>
       </div>
     </div>
