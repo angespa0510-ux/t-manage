@@ -1,0 +1,11 @@
+-- 会社情報の拡張カラムを追加
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS corporate_number TEXT DEFAULT '';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS fiscal_month INTEGER DEFAULT 3;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS representative_name TEXT DEFAULT '';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'llc';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS tax_office TEXT DEFAULT '';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS tax_accountant_name TEXT DEFAULT '';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS tax_accountant_phone TEXT DEFAULT '';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS tax_accountant_address TEXT DEFAULT '';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS labor_consultant_name TEXT DEFAULT '';
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS labor_consultant_phone TEXT DEFAULT '';

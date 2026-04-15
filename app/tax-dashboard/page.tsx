@@ -36,13 +36,14 @@ export default function TaxDashboard() {
   const [mode, setMode] = useState<"monthly" | "yearly">("monthly");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
+  const [corporateNumber, setCorporateNumber] = useState(""); const [fiscalMonth, setFiscalMonth] = useState(3); const [representativeName, setRepresentativeName] = useState(""); const [entityType, setEntityType] = useState("llc"); const [taxOffice, setTaxOffice] = useState(""); const [taxAccountantName, setTaxAccountantName] = useState(""); const [taxAccountantPhone, setTaxAccountantPhone] = useState(""); const [taxAccountantAddress, setTaxAccountantAddress] = useState(""); const [laborConsultantName, setLaborConsultantName] = useState(""); const [laborConsultantPhone, setLaborConsultantPhone] = useState("");
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
   const fetchData = useCallback(async () => {
     const { data: c } = await supabase.from("courses").select("*"); if (c) setCourses(c);
-    const { data: s } = await supabase.from("stores").select("*"); if (s) { setStores(s); if (s[0]) { setCompanyName(s[0].company_name || ""); setCompanyAddress(s[0].company_address || ""); setCompanyPhone(s[0].company_phone || ""); setInvoiceNumber(s[0].invoice_number || ""); setCompanyStoreId(s[0].id); } }
+    const { data: s } = await supabase.from("stores").select("*"); if (s) { setStores(s); if (s[0]) { setCompanyName(s[0].company_name || ""); setCompanyAddress(s[0].company_address || ""); setCompanyPhone(s[0].company_phone || ""); setInvoiceNumber(s[0].invoice_number || ""); setCompanyStoreId(s[0].id); setCorporateNumber(s[0].corporate_number || ""); setFiscalMonth(s[0].fiscal_month || 3); setRepresentativeName(s[0].representative_name || ""); setEntityType(s[0].entity_type || "llc"); setTaxOffice(s[0].tax_office || ""); setTaxAccountantName(s[0].tax_accountant_name || ""); setTaxAccountantPhone(s[0].tax_accountant_phone || ""); setTaxAccountantAddress(s[0].tax_accountant_address || ""); setLaborConsultantName(s[0].labor_consultant_name || ""); setLaborConsultantPhone(s[0].labor_consultant_phone || ""); } }
 
     let startDate: string, endDate: string;
     if (mode === "monthly") {
@@ -317,17 +318,66 @@ export default function TaxDashboard() {
       {dashTab === "company" && (
         <div className="flex-1 overflow-y-auto p-4">
           <div className="max-w-[700px] mx-auto space-y-6">
-            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-              <h2 className="text-[15px] font-medium">🏢 会社情報</h2>
-              <p className="text-[10px]" style={{ color: T.textMuted }}>支払調書・納付書・各種届出に使用される会社の基本情報です。</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>会社名</label><input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="text" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+            {/* 法人形態の選択 */}
+            <div className="rounded-2xl border p-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium mb-3">🏢 事業形態</h2>
+              <div className="flex gap-2">
+                {([["llc","合同会社"],["corp","株式会社"],["sole","個人事業主"]] as const).map(([k,l]) => (
+                  <button key={k} onClick={() => setEntityType(k)} className="flex-1 py-3 rounded-xl text-[12px] cursor-pointer font-medium" style={{ backgroundColor: entityType === k ? "#c3a78222" : T.cardAlt, color: entityType === k ? "#c3a782" : T.textMuted, border: `1px solid ${entityType === k ? "#c3a782" : T.border}` }}>{l}</button>
+                ))}
               </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>適格請求書発行事業者番号（インボイス番号）</label><input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
-              <button onClick={async () => { if (!companyStoreId) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim() }).eq("id", companyStoreId); toast.show("会社情報を更新しました", "success"); fetchData(); }} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
             </div>
+
+            {/* 基本情報 */}
+            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium">📋 基本情報</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>{entityType === "sole" ? "屋号" : "会社名"}</label><input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>{entityType === "sole" ? "事業主名" : "代表者名"}</label><input type="text" value={representativeName} onChange={(e) => setRepresentativeName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+              </div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>{entityType === "sole" ? "事業所住所" : "本店所在地"}</label><input type="text" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="text" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>決算月</label>
+                  <select value={fiscalMonth} onChange={(e) => setFiscalMonth(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}>
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}月</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 法人番号・インボイス */}
+            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium">🔢 番号・届出</h2>
+              {entityType !== "sole" && (
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>法人番号（13桁・Tなし）</label><input type="text" value={corporateNumber} onChange={(e) => setCorporateNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 13))} placeholder="1234567890123" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>法人税申告書・届出書に記載。国税庁の法人番号公表サイトで確認できます。</p></div>
+              )}
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>適格請求書発行事業者番号（インボイス番号）</label><input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>{entityType === "sole" ? "Tの後にマイナンバー13桁、または届出番号" : "T + 法人番号13桁"}</p></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>管轄税務署</label><input type="text" value={taxOffice} onChange={(e) => setTaxOffice(e.target.value)} placeholder="名古屋中税務署" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+            </div>
+
+            {/* 税理士・社労士 */}
+            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium">👥 顧問の先生</h2>
+              <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: T.cardAlt }}>
+                <p className="text-[11px] font-medium" style={{ color: "#85a8c4" }}>📝 税理士</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>名前</label><input type="text" value={taxAccountantName} onChange={(e) => setTaxAccountantName(e.target.value)} placeholder="江坂留衣" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, color: T.text }} /></div>
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>電話番号</label><input type="text" value={taxAccountantPhone} onChange={(e) => setTaxAccountantPhone(e.target.value)} placeholder="0564-83-5731" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, color: T.text }} /></div>
+                </div>
+                <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>事務所住所</label><input type="text" value={taxAccountantAddress} onChange={(e) => setTaxAccountantAddress(e.target.value)} placeholder="愛知県岡崎市藤川町一里山南13" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, color: T.text }} /></div>
+              </div>
+              <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: T.cardAlt }}>
+                <p className="text-[11px] font-medium" style={{ color: "#22c55e" }}>🏥 社労士</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>名前</label><input type="text" value={laborConsultantName} onChange={(e) => setLaborConsultantName(e.target.value)} placeholder="大石さん" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, color: T.text }} /></div>
+                  <div><label className="block text-[9px] mb-1" style={{ color: T.textMuted }}>電話番号</label><input type="text" value={laborConsultantPhone} onChange={(e) => setLaborConsultantPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, color: T.text }} /></div>
+                </div>
+              </div>
+            </div>
+
+            {/* 保存ボタン */}
+            <button onClick={async () => { if (!companyStoreId) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim(), corporate_number: corporateNumber.trim(), fiscal_month: fiscalMonth, representative_name: representativeName.trim(), entity_type: entityType, tax_office: taxOffice.trim(), tax_accountant_name: taxAccountantName.trim(), tax_accountant_phone: taxAccountantPhone.trim(), tax_accountant_address: taxAccountantAddress.trim(), labor_consultant_name: laborConsultantName.trim(), labor_consultant_phone: laborConsultantPhone.trim() }).eq("id", companyStoreId); toast.show("会社情報を保存しました", "success"); fetchData(); }} className="w-full py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer font-medium">💾 保存する</button>
 
             {/* 利用先の説明 */}
             <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
@@ -336,6 +386,7 @@ export default function TaxDashboard() {
                 <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>📑</span><span>セラピスト・スタッフの<strong>支払調書PDF</strong>の支払者欄</span></div>
                 <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>💰</span><span><strong>源泉徴収納付集計表</strong>の事業者情報</span></div>
                 <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>🧾</span><span>セラピストへの<strong>日次清算の支払通知書</strong></span></div>
+                <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>📆</span><span><strong>年間スケジュール</strong>の決算月・顧問連絡先</span></div>
                 <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>📊</span><span>税理士さんへの<strong>各種報告書類</strong></span></div>
               </div>
             </div>
