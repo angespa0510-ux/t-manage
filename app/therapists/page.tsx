@@ -17,7 +17,7 @@ type Therapist = {
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
-  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string; mynumber: string; mynumber_photo_url: string;
+  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string; mynumber: string; mynumber_photo_url: string; mynumber_photo_url_back: string;
   deleted_at?: string | null;
 };
 
@@ -78,6 +78,7 @@ const [addLoginPassword, setAddLoginPassword] = useState("");
   const [editEntryDate, setEditEntryDate] = useState("");
   const [editMynumber, setEditMynumber] = useState("");
   const [editMynumberPhoto, setEditMynumberPhoto] = useState<File | null>(null);
+  const [editMynumberPhotoBack, setEditMynumberPhotoBack] = useState<File | null>(null);
   const [mynumberReading, setMynumberReading] = useState(false);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -940,7 +941,7 @@ const generatePassword = () => {
                       </p>}
                     </div>
                     <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
-                      <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📷 マイナンバーカード写真</p>
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📷 マイナンバーカード表面</p>
                       {editTarget?.mynumber_photo_url && (
                         <a href={editTarget.mynumber_photo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mb-1.5 px-2 py-1 rounded-lg"
                           style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
@@ -982,7 +983,38 @@ const generatePassword = () => {
                           await supabase.from("therapists").update({ mynumber_photo_url: u.publicUrl }).eq("id", editTarget.id);
                           setEditMynumberPhoto(null); fetchTherapists(); toast.show("マイナンバーカードを保存しました", "success");
                         }} className="mt-1.5 px-3 py-1.5 rounded-lg text-[9px] cursor-pointer"
-                          style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 カード写真を保存</button>
+                          style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 表面を保存</button>
+                      )}
+                    </div>
+                    {/* 裏面 */}
+                    <div className="rounded-xl p-2.5 mt-2" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📷 マイナンバーカード裏面</p>
+                      {editTarget?.mynumber_photo_url_back && (
+                        <a href={editTarget.mynumber_photo_url_back} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mb-1.5 px-2 py-1 rounded-lg"
+                          style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
+                          <img src={editTarget.mynumber_photo_url_back} alt="マイナンバー裏面" className="rounded" style={{ width: 60, height: 38, objectFit: "cover" }} />
+                          <span className="text-[9px]" style={{ color: "#f59e0b" }}>📄 裏面を表示</span>
+                        </a>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium"
+                          style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b44" }}>
+                          📷 裏面を撮影/選択
+                          <input type="file" accept="image/*" capture="environment" onChange={(e) => { setEditMynumberPhotoBack(e.target.files?.[0] || null); }} className="hidden" />
+                        </label>
+                        {editMynumberPhotoBack && <span className="text-[9px]" style={{ color: "#22c55e" }}>✅ {editMynumberPhotoBack.name}</span>}
+                      </div>
+                      {editMynumberPhotoBack && (
+                        <button onClick={async () => {
+                          if (!editTarget || !editMynumberPhotoBack) return;
+                          const ext = editMynumberPhotoBack.name.split(".").pop();
+                          const fn = `therapist_mynumber_back_${editTarget.id}.${ext}`;
+                          await supabase.storage.from("therapist-photos").upload(fn, editMynumberPhotoBack, { upsert: true });
+                          const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
+                          await supabase.from("therapists").update({ mynumber_photo_url_back: u.publicUrl }).eq("id", editTarget.id);
+                          setEditMynumberPhotoBack(null); fetchTherapists(); toast.show("裏面を保存しました", "success");
+                        }} className="mt-1.5 px-3 py-1.5 rounded-lg text-[9px] cursor-pointer"
+                          style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 裏面を保存</button>
                       )}
                     </div>
                     <p className="text-[8px] mt-2" style={{ color: T.textFaint }}>⚠️ マイナンバーは厳重に管理されます。源泉徴収・支払調書の作成にのみ使用します。</p>

@@ -32,7 +32,7 @@ export default function TaxDashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
-  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll" | "withholding" | "calendar" | "company">("summary");
+  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll" | "withholding" | "calendar" | "company" | "mynumber">("summary");
   const [mode, setMode] = useState<"monthly" | "yearly">("monthly");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
@@ -170,7 +170,7 @@ export default function TaxDashboard() {
           <h1 className="text-[14px] font-medium">バックオフィス</h1>
           </div>
         <div className="flex items-center gap-2">
-          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"},{k:"withholding",l:"💰 源泉徴収納付"},{k:"calendar",l:"📆 年間スケジュール"},{k:"company",l:"🏢 会社情報"}].map(t => (
+          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"},{k:"withholding",l:"💰 源泉徴収納付"},{k:"calendar",l:"📆 年間スケジュール"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
             <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
           ))}
         </div>
@@ -391,6 +391,11 @@ export default function TaxDashboard() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+      {dashTab === "mynumber" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <MyNumberManager T={T} />
         </div>
       )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
@@ -1404,6 +1409,178 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MyNumberManager({ T }: { T: any }) {
+  const [therapists, setTherapists] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const { data } = await supabase.from("therapists").select("id, name, real_name, entry_date, mynumber, mynumber_photo_url, mynumber_photo_url_back, status").order("sort_order");
+      if (data) setTherapists(data);
+      setLoading(false);
+    };
+    fetch();
+  }, []);
+
+  const submitted = therapists.filter(t => t.mynumber || t.mynumber_photo_url);
+  const notSubmitted = therapists.filter(t => !t.mynumber && !t.mynumber_photo_url && t.status === "active");
+
+  const openPDF = (t: any) => {
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>マイナンバー_${t.real_name || t.name}</title>
+<style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:18px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:10px 14px;font-size:13px}th{background:#f5f0e8;text-align:left;width:35%}.photos{display:flex;gap:20px;margin:20px 0}.photo-box{flex:1;text-align:center}.photo-box img{max-width:100%;max-height:300px;border:1px solid #ddd;border-radius:8px}.photo-label{font-size:11px;color:#888;margin-bottom:5px}.note{font-size:10px;color:#c45555;margin-top:20px;padding:10px;background:#fff5f5;border:1px solid #fecaca;border-radius:8px}@media print{body{margin:0;padding:15px}.note{break-inside:avoid}}</style></head><body>
+<h1>マイナンバー管理台帳</h1>
+<table>
+<tr><th>源氏名</th><td>${t.name}</td></tr>
+<tr><th>本名</th><td>${t.real_name || "未登録"}</td></tr>
+<tr><th>入店日</th><td>${t.entry_date || "未登録"}</td></tr>
+<tr><th>個人番号</th><td style="font-family:monospace;font-size:16px;letter-spacing:2px">${t.mynumber || "未登録"}</td></tr>
+</table>
+<div class="photos">
+${t.mynumber_photo_url ? `<div class="photo-box"><p class="photo-label">表面</p><img src="${t.mynumber_photo_url}" /></div>` : '<div class="photo-box"><p class="photo-label">表面</p><p style="color:#c45555;padding:40px">未アップロード</p></div>'}
+${t.mynumber_photo_url_back ? `<div class="photo-box"><p class="photo-label">裏面</p><img src="${t.mynumber_photo_url_back}" /></div>` : '<div class="photo-box"><p class="photo-label">裏面</p><p style="color:#c45555;padding:40px">未アップロード</p></div>'}
+</div>
+<div class="note">⚠️ この書類はマイナンバー法に基づき厳重に管理してください。目的外利用は禁止されています。不要になった場合は速やかに破棄してください。</div>
+</body></html>`);
+    w.document.close();
+  };
+
+  const openAllPDF = () => {
+    const targets = submitted.filter(t => t.mynumber || t.mynumber_photo_url);
+    if (targets.length === 0) return;
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>マイナンバー一括_${new Date().toISOString().split("T")[0]}</title>
+<style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:700px;margin:0 auto;padding:20px;color:#333}h1{text-align:center;font-size:16px;margin-bottom:5px}.date{text-align:center;font-size:11px;color:#888;margin-bottom:20px}.person{page-break-after:always;border:1px solid #ddd;border-radius:12px;padding:20px;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin:10px 0}td,th{border:1px solid #ccc;padding:8px 12px;font-size:12px}th{background:#f5f0e8;text-align:left;width:35%}.photos{display:flex;gap:15px;margin:15px 0}.photo-box{flex:1;text-align:center}.photo-box img{max-width:100%;max-height:250px;border:1px solid #ddd;border-radius:6px}.photo-label{font-size:10px;color:#888;margin-bottom:4px}.note{font-size:9px;color:#c45555;margin-top:15px;padding:8px;background:#fff5f5;border:1px solid #fecaca;border-radius:6px}@media print{.person{break-after:page;border:none;padding:0}}</style></head><body>
+<h1>マイナンバー管理台帳（一括）</h1>
+<p class="date">出力日: ${new Date().toLocaleDateString("ja-JP")} ｜ ${targets.length}名</p>
+${targets.map(t => `<div class="person">
+<table>
+<tr><th>源氏名</th><td>${t.name}</td></tr>
+<tr><th>本名</th><td>${t.real_name || "未登録"}</td></tr>
+<tr><th>入店日</th><td>${t.entry_date || "未登録"}</td></tr>
+<tr><th>個人番号</th><td style="font-family:monospace;font-size:14px;letter-spacing:2px">${t.mynumber || "未登録"}</td></tr>
+</table>
+<div class="photos">
+${t.mynumber_photo_url ? `<div class="photo-box"><p class="photo-label">表面</p><img src="${t.mynumber_photo_url}" /></div>` : ""}
+${t.mynumber_photo_url_back ? `<div class="photo-box"><p class="photo-label">裏面</p><img src="${t.mynumber_photo_url_back}" /></div>` : ""}
+</div>
+</div>`).join("")}
+<div class="note">⚠️ この書類はマイナンバー法に基づき厳重に管理してください。印刷後はローカルPCに保存し、クラウドからは削除を推奨します。</div>
+</body></html>`);
+    w.document.close();
+  };
+
+  const deleteFromCloud = async (t: any) => {
+    if (!confirm(`${t.name}のマイナンバーデータをクラウドから削除しますか？\n\n削除されるもの：\n• 個人番号（数字）\n• カード写真（表面・裏面）\n\n⚠️ 事前にPDFをダウンロードしてローカルに保存してください。`)) return;
+    setDeleting(t.id);
+    const updates: any = { mynumber: "", mynumber_photo_url: "", mynumber_photo_url_back: "" };
+    // Storage内の画像も削除
+    try {
+      await supabase.storage.from("therapist-photos").remove([`therapist_mynumber_${t.id}.jpg`, `therapist_mynumber_${t.id}.png`, `therapist_mynumber_${t.id}.jpeg`, `therapist_mynumber_back_${t.id}.jpg`, `therapist_mynumber_back_${t.id}.png`, `therapist_mynumber_back_${t.id}.jpeg`]);
+    } catch { /* ファイルが存在しない場合は無視 */ }
+    await supabase.from("therapists").update(updates).eq("id", t.id);
+    setTherapists(prev => prev.map(p => p.id === t.id ? { ...p, ...updates } : p));
+    setDeleting(null);
+  };
+
+  const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+
+  return (
+    <div className="max-w-[900px] mx-auto">
+      {/* 注意事項 */}
+      <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: "#c4555512", border: "1px solid #c4555533" }}>
+        <p className="text-[11px] font-medium" style={{ color: "#c45555" }}>🔒 マイナンバー管理について</p>
+        <p className="text-[10px] mt-1" style={{ color: T.textSub }}>マイナンバーは番号法で厳格な管理が義務付けられています。PDFでダウンロードしたらローカルPCに保存し、クラウドからは削除することを推奨します。</p>
+      </div>
+
+      {/* サマリーカード */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="rounded-2xl border p-5 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>提出済み</p>
+          <p className="text-[24px] font-light" style={{ color: "#22c55e" }}>{submitted.length}</p>
+        </div>
+        <div className="rounded-2xl border p-5 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>未提出</p>
+          <p className="text-[24px] font-light" style={{ color: notSubmitted.length > 0 ? "#f59e0b" : T.textFaint }}>{notSubmitted.length}</p>
+        </div>
+        <div className="rounded-2xl border p-5 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>全セラピスト</p>
+          <p className="text-[24px] font-light" style={{ color: T.text }}>{therapists.filter(t => t.status === "active").length}</p>
+        </div>
+      </div>
+
+      {/* 一括操作 */}
+      {submitted.length > 0 && (
+        <div className="flex gap-3 mb-6">
+          <button onClick={openAllPDF} className="flex-1 py-3 rounded-xl text-[11px] cursor-pointer font-medium text-white" style={{ backgroundColor: "#c45555" }}>📄 一括PDF表示（{submitted.length}名分）</button>
+        </div>
+      )}
+
+      {loading ? <p className="text-center py-12 text-[12px]" style={{ color: T.textFaint }}>読み込み中...</p> : (<>
+        {/* 提出済み */}
+        {submitted.length > 0 && (
+          <div className="rounded-2xl border overflow-hidden mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <h2 className="text-[13px] font-medium">✅ 提出済み（{submitted.length}名）</h2>
+            </div>
+            {submitted.map(t => (
+              <div key={t.id} className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] font-medium">{t.name}</span>
+                  {t.real_name && <span className="text-[10px]" style={{ color: T.textMuted }}>（{t.real_name}）</span>}
+                  <div className="flex gap-1">
+                    {t.mynumber && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>番号✓</span>}
+                    {t.mynumber_photo_url && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>表面✓</span>}
+                    {t.mynumber_photo_url_back && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>裏面✓</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => openPDF(t)} className="px-3 py-1.5 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c433" }}>📄 PDF</button>
+                  <button onClick={() => deleteFromCloud(t)} disabled={deleting === t.id} className="px-3 py-1.5 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555533" }}>{deleting === t.id ? "削除中..." : "🗑 クラウド削除"}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 未提出 */}
+        {notSubmitted.length > 0 && (
+          <div className="rounded-2xl border overflow-hidden mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <h2 className="text-[13px] font-medium" style={{ color: "#f59e0b" }}>⚠️ 未提出（{notSubmitted.length}名）</h2>
+            </div>
+            {notSubmitted.map(t => (
+              <div key={t.id} className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] font-medium">{t.name}</span>
+                  {t.real_name && <span className="text-[10px]" style={{ color: T.textMuted }}>（{t.real_name}）</span>}
+                </div>
+                <span className="text-[9px]" style={{ color: "#f59e0b" }}>セラピスト管理からアップロードしてください</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {submitted.length === 0 && notSubmitted.length === 0 && (
+          <p className="text-center py-12 text-[12px]" style={{ color: T.textFaint }}>セラピストデータがありません</p>
+        )}
+
+        {/* 運用ガイド */}
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>📋 マイナンバー管理の流れ</h3>
+          <div className="space-y-2 text-[10px]" style={{ color: T.textSub }}>
+            <div className="flex items-start gap-2"><span className="flex-shrink-0" style={{ color: "#c3a782" }}>①</span><span>セラピストからLINEでマイナンバーカードの写真（表面・裏面）をもらう</span></div>
+            <div className="flex items-start gap-2"><span className="flex-shrink-0" style={{ color: "#c3a782" }}>②</span><span><strong>セラピスト管理</strong>ページで各セラピストの編集画面からアップロード</span></div>
+            <div className="flex items-start gap-2"><span className="flex-shrink-0" style={{ color: "#c3a782" }}>③</span><span>このページで<strong>PDF表示</strong> → ブラウザの印刷機能で<strong>「PDFとして保存」</strong></span></div>
+            <div className="flex items-start gap-2"><span className="flex-shrink-0" style={{ color: "#c3a782" }}>④</span><span>ローカルPCに保存できたら<strong>「クラウド削除」</strong>で安全に消去</span></div>
+          </div>
+        </div>
+      </>)}
     </div>
   );
 }
