@@ -1182,7 +1182,7 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
         <div className="space-y-3 text-[11px]">
           <div className="flex gap-3 items-start">
             <span className="flex-shrink-0 w-[60px] text-right font-medium" style={{ color: "#c3a782" }}>毎日</span>
-            <span style={{ color: T.textSub }}>T-MANAGEで清算するだけでOK。源泉徴収も自動計算。大入り発生時は社労士の大石さんに報告。</span>
+            <span style={{ color: T.textSub }}>T-MANAGEで清算するだけでOK。源泉徴収も自動計算。社員の大入り発生時のみ社労士の大石さんに報告。</span>
           </div>
           <div className="flex gap-3 items-start">
             <span className="flex-shrink-0 w-[60px] text-right font-medium" style={{ color: "#f59e0b" }}>半年に1回</span>
@@ -1197,21 +1197,33 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
 
       {/* 大入り・給与の報告フロー */}
       <div className="rounded-2xl border p-5 mt-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>🔄 大入り（社員ボーナス）の報告フロー</h3>
-        <div className="text-[10px] leading-relaxed space-y-2" style={{ color: T.textSub }}>
-          <p>大入りは<span style={{ color: "#c3a782", fontWeight: 600 }}>雇用契約の社員のみ</span>が対象です。業務委託のセラピストは対象外。</p>
-          <div className="rounded-lg p-3 mt-2" style={{ backgroundColor: T.cardAlt }}>
-            <p className="text-[10px] font-medium mb-2" style={{ color: T.text }}>報告の流れ</p>
+        <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>🔄 大入りの処理フロー</h3>
+        <div className="space-y-3">
+          {/* 社員の場合 */}
+          <div className="rounded-xl p-3" style={{ backgroundColor: "#22c55e08", border: "1px solid #22c55e22" }}>
+            <p className="text-[10px] font-medium mb-2" style={{ color: "#22c55e" }}>👤 社員（雇用契約）の大入り → 給与扱い</p>
             <div className="flex items-center gap-2 flex-wrap text-[10px]">
               <span className="px-2 py-1 rounded" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>① 大入り発生</span>
               <span style={{ color: T.textFaint }}>→</span>
               <span className="px-2 py-1 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>② 社労士 大石さんに報告</span>
               <span style={{ color: T.textFaint }}>→</span>
-              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>③ 給与総額が変更</span>
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>③ 給与総額変更・源泉徴収</span>
               <span style={{ color: T.textFaint }}>→</span>
               <span className="px-2 py-1 rounded" style={{ backgroundColor: "#a78bc418", color: "#a78bc4" }}>④ 社労士↔税理士が連携</span>
             </div>
-            <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>給与総額が変わると源泉徴収額・社会保険料も変わるため、社労士さんと税理士さんが連携して処理します。</p>
+            <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>給与総額が変わると源泉徴収額・社会保険料も変わるため、社労士と税理士が連携して処理します。</p>
+          </div>
+          {/* 業務委託スタッフの場合 */}
+          <div className="rounded-xl p-3" style={{ backgroundColor: "#c3a78208", border: "1px solid #c3a78222" }}>
+            <p className="text-[10px] font-medium mb-2" style={{ color: "#c3a782" }}>🏪 業務委託スタッフの大入り → 外注費扱い</p>
+            <div className="flex items-center gap-2 flex-wrap text-[10px]">
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>① 大入り発生</span>
+              <span style={{ color: T.textFaint }}>→</span>
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>② インボイス未登録なら10%控除</span>
+              <span style={{ color: T.textFaint }}>→</span>
+              <span className="px-2 py-1 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>③ 外注費として計上</span>
+            </div>
+            <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>源泉徴収は不要。大石さんへの報告も不要。T-MANAGEの清算で自動処理されます。</p>
           </div>
         </div>
       </div>
