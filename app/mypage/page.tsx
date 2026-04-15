@@ -1280,8 +1280,9 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
       {/* ── 確定申告サポートタブ ── */}
       {tab === "tax" && therapist && (
         <div className="space-y-3">
+          <h2 className="text-[14px] font-medium">📊 確定申告サポート</h2>
           <div className="flex gap-2">
-            <button onClick={() => setTaxSubTab("support")} className="flex-1 py-2 text-[11px] rounded-xl cursor-pointer border"
+            <button onClick={() => setTaxSubTab("support")} className="flex-1 py-2.5 text-[11px] rounded-xl cursor-pointer border"
               style={{ backgroundColor: taxSubTab === "support" ? "#e8849a20" : "transparent", color: taxSubTab === "support" ? "#e8849a" : T.textMuted, borderColor: taxSubTab === "support" ? "#e8849a" : T.border, fontWeight: taxSubTab === "support" ? 600 : 400 }}>
               📊 申告サポート
             </button>
