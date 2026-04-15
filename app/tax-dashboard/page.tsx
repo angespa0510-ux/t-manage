@@ -1,1352 +1,539 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useToast } from "../../lib/toast";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
-import { useTheme } from "../../lib/theme"; import { NavMenu } from "../../lib/nav-menu";
+import { useTheme } from "../../lib/theme";
+import { NavMenu } from "../../lib/nav-menu";
+import { useRole } from "../../lib/use-role";
 
-type Therapist = { id: number; name: string; phone: string; status: string; has_withholding: boolean };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
-type Shift = { id: number; therapist_id: number; store_id: number; date: string; start_time: string; end_time: string; status: string };
+type Expense = { id: number; date: string; category: string; name: string; amount: number; store_id: number; is_recurring: boolean; notes: string; type: string };
+type Store = { id: number; name: string };
 
-const HOUR_WIDTH = 120;
-const MIN_10_WIDTH = HOUR_WIDTH / 6;
-const START_HOUR = 11;
-const DISPLAY_HOURS = 17;
-const HOURS_RAW = Array.from({ length: DISPLAY_HOURS }, (_, i) => i + START_HOUR);
-const HOURS_DISPLAY = Array.from({ length: DISPLAY_HOURS }, (_, i) => { const h = i + START_HOUR; return h >= 24 ? h - 24 : h; });
+const ACCOUNT_MAP: Record<string, string> = {
+  rent: "地代家賃", utilities: "水道光熱費", supplies: "消耗品費",
+  transport: "旅費交通費", advertising: "広告宣伝費", therapist_back: "外注費",
+  income: "売上高（入金）", other: "雑費",
+};
 
-function timeToMinutes(time: string): number { const [h, m] = time.split(":").map(Number); const adj = h < START_HOUR ? h + 24 : h; return (adj - START_HOUR) * 60 + m; }
-function minutesToTime(min: number): string { const t = min + START_HOUR * 60; const h = Math.floor(t / 60) % 24; const m = t % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; }
-function minutesToDisplay(min: number): string { const t = min + START_HOUR * 60; const h = Math.floor(t / 60); const dh = h >= 24 ? h - 24 : h; const m = t % 60; return `${dh}:${String(m).padStart(2, "0")}`; }
+const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
-const TIMES_10MIN: string[] = [];
-for (let m = 0; m <= 18 * 60; m += 10) TIMES_10MIN.push(minutesToTime(m));
-
-export default function TimeChart() {
+export default function TaxDashboard() {
   const router = useRouter();
-  const toast = useToast();
   const { dark, toggle, T } = useTheme();
-  const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const { role, loading: roleLoading, isOwner } = useRole();
+
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [clockedOut, setClockedOut] = useState<Set<number>>(new Set());
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
 
-  const [showCustSearch, setShowCustSearch] = useState(false);
-  const [custSearchQ, setCustSearchQ] = useState("");
-  const [custList, setCustList] = useState<{ id: number; name: string; phone: string; rank: string }[]>([]);
-  const [showNewCust, setShowNewCust] = useState(false);
-  const [ncName, setNcName] = useState(""); const [ncPhone, setNcPhone] = useState("");
-  const [showNewRes, setShowNewRes] = useState(false);
-  const [newCustName, setNewCustName] = useState("");
-  const [newTherapistId, setNewTherapistId] = useState<number>(0);
-  const [newDate, setNewDate] = useState("");
-  const [newStart, setNewStart] = useState("12:00");
-  const [newEnd, setNewEnd] = useState("13:00");
-  const [newCourseId, setNewCourseId] = useState<number>(0);
-  const [newNotes, setNewNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll">("summary");
+  const [mode, setMode] = useState<"monthly" | "yearly">("monthly");
+  const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
 
-  const [editRes, setEditRes] = useState<Reservation | null>(null);
-  const [editCustName, setEditCustName] = useState("");
-  const [editTherapistId, setEditTherapistId] = useState<number>(0);
-  const [editStart, setEditStart] = useState("");
-  const [editEnd, setEditEnd] = useState("");
-  const [editCourseId, setEditCourseId] = useState<number>(0);
-  const [editNotes, setEditNotes] = useState("");
-  const [editSaving, setEditSaving] = useState(false);
-  const [editNomination, setEditNomination] = useState("");
-  const [editNomFee, setEditNomFee] = useState(0);
-  const [editOptions, setEditOptions] = useState<{ name: string; price: number }[]>([]);
-  const [editDiscounts, setEditDiscounts] = useState<{ name: string; amount: number }[]>([]);
-  const [editExtension, setEditExtension] = useState("");
-  const [editExtPrice, setEditExtPrice] = useState(0);
-  const [editExtDur, setEditExtDur] = useState(0);
-  const [editStatus, setEditStatus] = useState("unprocessed");
-  const [editCardBase, setEditCardBase] = useState("");
-  const [editPaypay, setEditPaypay] = useState("");
-  const [editStaffName, setEditStaffName] = useState("");
-  const [editManualPoints, setEditManualPoints] = useState("");
-  const [editManualPointDesc, setEditManualPointDesc] = useState("");
-  const [ptSettings, setPtSettings] = useState<{earn_per_yen:number;earn_points:number;expiry_months:number;rainy_day_active:boolean;rainy_day_multiplier:number}|null>(null);
-  const [editMsg, setEditMsg] = useState("");
-
-  const [showNewTherapist, setShowNewTherapist] = useState(false);
-  const [addShiftTherapistId, setAddShiftTherapistId] = useState(0);
-  const [addShiftStart, setAddShiftStart] = useState("12:00");
-  const [addShiftEnd, setAddShiftEnd] = useState("03:00");
-  const [addShiftStore, setAddShiftStore] = useState(0);
-  const [addShiftBuilding, setAddShiftBuilding] = useState(0);
-  const [addShiftRoom, setAddShiftRoom] = useState(0);
-  const [addShiftSearch, setAddShiftSearch] = useState("");
-  const [breaks, setBreaks] = useState<{ id: number; therapist_id: number; start: string; end: string; label: string }[]>([]);
-  const [nextBreakId, setNextBreakId] = useState(1);
-  const [showBreakModal, setShowBreakModal] = useState<number | null>(null);
-  const [breakDuration, setBreakDuration] = useState(30);
-  const [breakStart, setBreakStart] = useState("12:00");
-  const [editTherapist, setEditTherapist] = useState<Therapist | null>(null);
-  const [etNotes, setEtNotes] = useState("");
-  const [etSaving, setEtSaving] = useState(false);
-  const [settleTh, setSettleTh] = useState<Therapist | null>(null);
-  const [settleAdj, setSettleAdj] = useState("");
-  const [settleAdjNote, setSettleAdjNote] = useState("");
-  const [settleInvoice, setSettleInvoice] = useState(false);
-  const [settleSaving, setSettleSaving] = useState(false);
-  const [settleSettled, setSettleSettled] = useState(false);
-  const [pastUncollected, setPastUncollected] = useState<{ date: string; total_cash: number; total_back: number; total_sales: number; therapist_name: string; sales_collected: boolean; change_collected: boolean; replenish_amount: number }[]>([]);
-  const [settleSalesCollected, setSettleSalesCollected] = useState(false);
-  const [settleChangeCollected, setSettleChangeCollected] = useState(false);
-  const [settleSafeDeposited, setSettleSafeDeposited] = useState(false);
-  const [showReplenish, setShowReplenish] = useState<number | null>(null);
-  const [settledIds, setSettledIds] = useState<Set<number>>(new Set());
-  const [changeCollectedIds, setChangeCollectedIds] = useState<Set<number>>(new Set());
-  const [replenishAmount, setReplenishAmount] = useState("");
-  const [replenishStaff, setReplenishStaff] = useState("");
-  const [replenishTherapistId, setReplenishTherapistId] = useState(0);
-  const [staffMembers, setStaffMembers] = useState<{ id: number; name: string; role: string }[]>([]);
-  const [dailySettlements, setDailySettlements] = useState<{ therapist_id: number; sales_collected: boolean; change_collected: boolean; total_cash: number; total_back: number; room_id: number; safe_deposited: boolean }[]>([]);
-
-  const [nominations, setNominations] = useState<{ id: number; name: string; price: number; back_amount?: number; therapist_back?: number }[]>([]);
-  const [options, setOptions] = useState<{ id: number; name: string; price: number }[]>([]);
-  const [discounts, setDiscounts] = useState<{ id: number; name: string; amount: number; type: string }[]>([]);
-  const [extensions, setExtensions] = useState<{ id: number; name: string; duration: number; price: number }[]>([]);
-  const [stores, setStores] = useState<{ id: number; name: string; invoice_number?: string; company_name?: string; company_address?: string; company_phone?: string }[]>([]);
-  const [buildings, setBuildings] = useState<{ id: number; store_id: number; name: string }[]>([]);
-  const [allRooms, setAllRooms] = useState<{ id: number; store_id: number; building_id: number; name: string }[]>([]);
-  const [roomAssigns, setRoomAssigns] = useState<{ id: number; date: string; room_id: number; therapist_id: number; slot: string }[]>([]);
-  const [replenishments, setReplenishments] = useState<{ id: number; room_id: number; date: string; amount: number; therapist_id?: number; staff_name?: string; created_at?: string }[]>([]);
-  const [dailyExpenses, setDailyExpenses] = useState<{ id: number; name: string; amount: number; category: string; type: string }[]>([]);
-  const [editShiftTherapist, setEditShiftTherapist] = useState<number | null>(null);
-  const [editShiftStart, setEditShiftStart] = useState("");
-  const [editShiftEnd, setEditShiftEnd] = useState("");
-  const [editShiftId, setEditShiftId] = useState<number | null>(null);
-  const [editRoomTherapist, setEditRoomTherapist] = useState<number | null>(null);
-  const [editRoomStore, setEditRoomStore] = useState(0);
-  const [editRoomBuilding, setEditRoomBuilding] = useState(0);
-  const [editRoomId, setEditRoomId] = useState(0);
-  const [newNomination, setNewNomination] = useState("");
-  const [newNomFee, setNewNomFee] = useState(0);
-  const [newOptions, setNewOptions] = useState<{ name: string; price: number }[]>([]);
-  const [newDiscounts, setNewDiscounts] = useState<{ name: string; amount: number }[]>([]);
-  const [newExtension, setNewExtension] = useState("");
-  const [newExtPrice, setNewExtPrice] = useState(0);
-  const [newExtDur, setNewExtDur] = useState(0);
-  const [newCardBase, setNewCardBase] = useState("");
-  const [newPaypay, setNewPaypay] = useState("");
-  const [newStaffName, setNewStaffName] = useState(() => typeof window !== "undefined" ? localStorage.getItem("last_staff_name") || "" : "");
-
-  const [dragInfo, setDragInfo] = useState<{ resId: number; edge: "start" | "end" | "move"; initX: number; initMin: number; initEndMin: number } | null>(null);
-  const timelineRef = useRef<HTMLDivElement>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [isPanning, setIsPanning] = useState(false);
-  const panStartX = useRef(0);
-  const panMoved = useRef(false);
-  const panScrollLeft = useRef(0);
-  const velocity = useRef(0);
-  const lastX = useRef(0);
-  const lastTime2 = useRef(0);
-  const animFrame = useRef<number>(0);
-
-  // Shift request notifications
-  type ShiftReq = { id: number; therapist_id: number; date: string; start_time: string; end_time: string; store_id: number; notes: string; status: string; updated_at: string; week_start: string };
-  const [pendingShiftReqs, setPendingShiftReqs] = useState<ShiftReq[]>([]);
-  const [showShiftNotif, setShowShiftNotif] = useState(false);
-
-  // Reservation notification
-  type NotifyInfo = { custName: string; custPhone: string; custEmail: string; hasLine: boolean; isMember: boolean; date: string; startTime: string; endTime: string; course: string; therapistName: string; total: number; nomination: string; discountName: string; extensionName: string; storeName: string; buildingName: string };
-  const [notifyInfo, setNotifyInfo] = useState<NotifyInfo | null>(null);
-  const [notifySender, setNotifySender] = useState(() => typeof window !== "undefined" ? localStorage.getItem("notify_sender") || "" : "");
-  const [notifyTab, setNotifyTab] = useState<"staff"|"customer">("customer");
-  // DB templates
-  type NtTemplate = { template_key: string; body: string };
-  const [ntTemplates, setNtTemplates] = useState<NtTemplate[]>([]);
-  const [ntUrlDays, setNtUrlDays] = useState(1);
-  const [ntLocToyohashi, setNtLocToyohashi] = useState("https://quiet-banana-895.notion.site/2f4db1122fba80fb931afe6989118990");
-  const [ntLocMycourt, setNtLocMycourt] = useState("https://quiet-banana-895.notion.site/2f4db1122fba8020b500c46883464fd7?pvs=73");
-  const [ntLocOasis, setNtLocOasis] = useState("https://quiet-banana-895.notion.site/fd809514263e4351af42b67cbfbd06ef");
-
-  const selectedCourse = courses.find((c) => c.id === newCourseId);
-  const editSelectedCourse = courses.find((c) => c.id === editCourseId);
-
-  useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(timer); }, []);
-
-  const currentTimePos = (() => {
-    const now = currentTime; const h = now.getHours(); const m = now.getMinutes();
-    const adjH = h < 9 ? h + 24 : h;
-    if (adjH < 9 || adjH >= 27) return -1;
-    return ((adjH - START_HOUR) * 60 + m) * (HOUR_WIDTH / 60);
-  })();
+  const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
   const fetchData = useCallback(async () => {
-    const { data: t } = await supabase.from("therapists").select("*").order("id"); if (t) setTherapists(t);
-    const { data: r } = await supabase.from("reservations").select("*").eq("date", selectedDate).order("start_time"); if (r) setReservations(r);
-    const { data: c } = await supabase.from("courses").select("*").order("duration"); if (c) setCourses(c);
-    const { data: sh } = await supabase.from("shifts").select("*").eq("date", selectedDate).eq("status", "confirmed"); if (sh) setShifts(sh);
-    const { data: nm } = await supabase.from("nominations").select("*"); if (nm) setNominations(nm);
-    const { data: op } = await supabase.from("options").select("*"); if (op) setOptions(op);
-    const { data: dc } = await supabase.from("discounts").select("*"); if (dc) setDiscounts(dc);
-    const { data: ex } = await supabase.from("extensions").select("*"); if (ex) setExtensions(ex);
-    const { data: st } = await supabase.from("stores").select("*"); if (st) setStores(st);
-    const { data: bl } = await supabase.from("buildings").select("*"); if (bl) setBuildings(bl);
-    const { data: rm } = await supabase.from("rooms").select("*"); if (rm) setAllRooms(rm);
-    const { data: ra } = await supabase.from("room_assignments").select("*").eq("date", selectedDate); if (ra) setRoomAssigns(ra);
-    const { data: rep } = await supabase.from("room_cash_replenishments").select("*").eq("date", selectedDate); if (rep) setReplenishments(rep);
-    const { data: exp } = await supabase.from("expenses").select("*").eq("date", selectedDate); if (exp) setDailyExpenses(exp);
-    const { data: settled } = await supabase.from("therapist_daily_settlements").select("therapist_id,change_collected").eq("date", selectedDate).eq("is_settled", true); if (settled) { setSettledIds(new Set(settled.map(s => s.therapist_id))); setChangeCollectedIds(new Set(settled.filter(s => s.change_collected).map(s => s.therapist_id))); }
-    const { data: stf } = await supabase.from("staff").select("id,name,role").eq("status", "active").order("id"); if (stf) setStaffMembers(stf);
-    const { data: pts } = await supabase.from("point_settings").select("earn_per_yen,earn_points,expiry_months,rainy_day_active,rainy_day_multiplier").limit(1).single(); if (pts) setPtSettings(pts);
-    // Notification templates from DB
-    const { data: nts } = await supabase.from("notification_templates").select("template_key,body"); if (nts) setNtTemplates(nts);
-    const ntKeys = ["notify_url_days", "notify_loc_toyohashi", "notify_loc_mycourt", "notify_loc_oasis", "notify_sender_default"];
-    const { data: ntSets } = await supabase.from("store_settings").select("key,value").in("key", ntKeys);
-    if (ntSets) { for (const s of ntSets) { if (s.key === "notify_url_days") setNtUrlDays(parseInt(s.value) || 1); else if (s.key === "notify_loc_toyohashi") setNtLocToyohashi(s.value); else if (s.key === "notify_loc_mycourt") setNtLocMycourt(s.value); else if (s.key === "notify_loc_oasis") setNtLocOasis(s.value); else if (s.key === "notify_sender_default" && s.value && !notifySender) setNotifySender(s.value); } }
-  }, [selectedDate]);
+    const { data: c } = await supabase.from("courses").select("*"); if (c) setCourses(c);
+    const { data: s } = await supabase.from("stores").select("*"); if (s) setStores(s);
 
-  useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
+    let startDate: string, endDate: string;
+    if (mode === "monthly") {
+      const dim = new Date(smYear, smMonth, 0).getDate();
+      startDate = `${selectedMonth}-01`; endDate = `${selectedMonth}-${String(dim).padStart(2, "0")}`;
+    } else {
+      startDate = `${selectedYear}-01-01`; endDate = `${selectedYear}-12-31`;
+    }
 
-  // リアルタイム同期
-  useEffect(() => {
-    const channel = supabase.channel("timechart-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "room_assignments" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "therapist_daily_settlements" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "room_cash_replenishments" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "shift_requests" }, () => fetchPendingShifts())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchData]);
-
-  // Shift request notifications
-  const fetchPendingShifts = async () => {
-    const { data } = await supabase.from("shift_requests").select("*").eq("status", "pending").order("updated_at", { ascending: false });
-    if (data) setPendingShiftReqs(data);
-  };
-  useEffect(() => { fetchPendingShifts(); }, []);
-  
-  useEffect(() => { const p = new URLSearchParams(window.location.search).get("date"); if (p) setSelectedDate(p); }, []);
-
-  const shiftTherapistIds = new Set(shifts.map((s) => s.therapist_id));
-  const sortByBuildingAndTime = (list: Therapist[]) => list.sort((a, b) => {
-    const raA = roomAssigns.find(r => r.therapist_id === a.id); const raB = roomAssigns.find(r => r.therapist_id === b.id);
-    const rmA = raA ? allRooms.find(r => r.id === raA.room_id) : null; const rmB = raB ? allRooms.find(r => r.id === raB.room_id) : null;
-    const blA = rmA ? (rmA.building_id || 0) : 9999; const blB = rmB ? (rmB.building_id || 0) : 9999;
-    if (blA !== blB) return blA - blB;
-    const rmIdA = rmA ? rmA.id : 9999; const rmIdB = rmB ? rmB.id : 9999;
-    if (rmIdA !== rmIdB) return rmIdA - rmIdB;
-    const shA = shifts.find(s => s.therapist_id === a.id); const shB = shifts.find(s => s.therapist_id === b.id);
-    const tA = shA ? timeToMinutes(shA.start_time) : 9999; const tB = shB ? timeToMinutes(shB.start_time) : 9999;
-    return tA - tB;
-  });
-  const activeTherapists = sortByBuildingAndTime(therapists.filter((t) => shiftTherapistIds.has(t.id) && !clockedOut.has(t.id)));
-  const clockedOutTherapists = sortByBuildingAndTime(therapists.filter((t) => shiftTherapistIds.has(t.id) && clockedOut.has(t.id)));
-  const displayTherapists = [...activeTherapists, ...clockedOutTherapists];
-
-  const toggleClockOut = (id: number) => {
-    setClockedOut((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const handlePanStart = (e: React.MouseEvent) => { if ((e.target as HTMLElement).closest(".res-block")) return; const c = timelineRef.current; if (!c) return; setIsPanning(true); panMoved.current = false; panStartX.current = e.clientX; panScrollLeft.current = c.scrollLeft; lastX.current = e.clientX; lastTime2.current = Date.now(); velocity.current = 0; cancelAnimationFrame(animFrame.current); };
-  const handlePanMove = (e: React.MouseEvent) => { if (!isPanning) return; const c = timelineRef.current; if (!c) return; e.preventDefault(); const dx = e.clientX - panStartX.current; c.scrollLeft = panScrollLeft.current - dx; if (Math.abs(dx) > 5) panMoved.current = true; const now = Date.now(); const dt = now - lastTime2.current; if (dt > 0) velocity.current = (e.clientX - lastX.current) / dt; lastX.current = e.clientX; lastTime2.current = now; };
-  const handlePanEnd = () => { if (!isPanning) return; setIsPanning(false); const c = timelineRef.current; if (!c) return; let v = velocity.current * 15; const dec = () => { if (Math.abs(v) < 0.5) return; c.scrollLeft -= v; v *= 0.92; animFrame.current = requestAnimationFrame(dec); }; dec(); };
+    const { data: r } = await supabase.from("reservations").select("*").gte("date", startDate).lte("date", endDate).order("date");
+    if (r) setReservations(r);
+    const { data: e } = await supabase.from("expenses").select("*").gte("date", startDate).lte("date", endDate).order("date");
+    if (e) setExpenses(e);
+  }, [mode, selectedMonth, selectedYear, smYear, smMonth]);
 
   useEffect(() => {
-    if (!dragInfo) return;
-    const hm = (e: MouseEvent) => {
-      const dx = e.clientX - dragInfo.initX; const dMin = Math.round(dx / MIN_10_WIDTH) * 10;
-      if (dragInfo.edge === "end") { const ne = Math.max(dragInfo.initEndMin + dMin, dragInfo.initMin + 10); supabase.from("reservations").update({ end_time: minutesToTime(ne) }).eq("id", dragInfo.resId).then(() => fetchData()); }
-      else if (dragInfo.edge === "start") { const ns = Math.min(dragInfo.initMin + dMin, dragInfo.initEndMin - 10); supabase.from("reservations").update({ start_time: minutesToTime(Math.max(0, ns)) }).eq("id", dragInfo.resId).then(() => fetchData()); }
-      else { const ns = Math.max(0, dragInfo.initMin + dMin); const dur = dragInfo.initEndMin - dragInfo.initMin; if (ns + dur <= 18 * 60) { supabase.from("reservations").update({ start_time: minutesToTime(ns), end_time: minutesToTime(ns + dur) }).eq("id", dragInfo.resId).then(() => fetchData()); } }
-    };
-    const hu = () => setDragInfo(null);
-    window.addEventListener("mousemove", hm); window.addEventListener("mouseup", hu);
-    return () => { window.removeEventListener("mousemove", hm); window.removeEventListener("mouseup", hu); };
-  }, [dragInfo, fetchData]);
+    const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); };
+    check(); fetchData();
+  }, [router, fetchData]);
 
-  const handleCourseChange = (cid: number, isEdit = false) => { const c = courses.find((x) => x.id === cid); if (isEdit) { setEditCourseId(cid); if (c && editStart) setEditEnd(minutesToTime(timeToMinutes(editStart) + c.duration)); } else { setNewCourseId(cid); if (c && newStart) setNewEnd(minutesToTime(timeToMinutes(newStart) + c.duration)); } };
-  const handleStartChange = (s: string, isEdit = false) => { if (isEdit) { setEditStart(s); if (editSelectedCourse) setEditEnd(minutesToTime(timeToMinutes(s) + editSelectedCourse.duration)); } else { setNewStart(s); if (selectedCourse) setNewEnd(minutesToTime(timeToMinutes(s) + selectedCourse.duration)); } };
+  const getCourse = (name: string) => courses.find((c) => c.name === name);
+  const getPrice = (r: Reservation) => getCourse(r.course)?.price || 0;
+  const getBack = (r: Reservation) => getCourse(r.course)?.therapist_back || 0;
 
-  const addReservation = async () => {
-    if (!newCustName.trim() || !newTherapistId) { setMsg("顧客名とセラピストを選択してください"); return; }
-    setSaving(true); setMsg("");
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!newCourseId) { setSaving(false); setMsg("コースを選択してください"); return; }
-    const optText = newOptions.map(o => o.name).join(","); const optTotal = newOptions.reduce((s, o) => s + o.price, 0);
-    const coursePrice = selectedCourse?.price || 0; const discText = newDiscounts.map(d => d.name).join(","); const discTotal = newDiscounts.reduce((s, d) => s + d.amount, 0); const total = coursePrice + newNomFee + optTotal + newExtPrice - discTotal;
-    const { error } = await supabase.from("reservations").insert({ customer_name: newCustName.trim(), therapist_id: newTherapistId, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, course: selectedCourse?.name || "", notes: newNotes.trim(), user_id: user?.id, nomination: newNomination, nomination_fee: newNomFee, options_text: optText, options_total: optTotal, discount_name: discText, discount_amount: discTotal, extension_name: newExtension, extension_price: newExtPrice, extension_duration: newExtDur, total_price: total, status: "unprocessed", card_base: parseInt(newCardBase) || 0, paypay_amount: parseInt(newPaypay) || 0, card_billing: Math.round((parseInt(newCardBase) || 0) * 1.1), cash_amount: total - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0), staff_name: newStaffName });
-    if (!error) {
-      const { data: cust } = await supabase.from("customers").select("id").eq("name", newCustName.trim()).maybeSingle();
-      if (cust) {
-        const optT2 = newOptions.reduce((s, o) => s + o.price, 0); const discT2 = newDiscounts.reduce((s, d) => s + d.amount, 0); const tot2 = (selectedCourse?.price || 0) + newNomFee + optT2 + newExtPrice - discT2;
-        await supabase.from("customer_visits").insert({ customer_id: cust.id, date: newDate || selectedDate, start_time: newStart, end_time: newEnd, therapist_id: newTherapistId, course_name: selectedCourse?.name || "", price: selectedCourse?.price || 0, therapist_back: selectedCourse?.therapist_back || 0, total: tot2, nomination: newNomination, options: newOptions.map(o=>o.name).join(","), discount: newDiscounts.map(d=>d.name).join(",") });
-      }
+  // 集計
+  const totalSales = reservations.reduce((s, r) => s + getPrice(r), 0);
+  const totalBack = reservations.reduce((s, r) => s + getBack(r), 0);
+  const totalExpenseOnly = expenses.filter((e) => e.type !== "income").reduce((s, e) => s + e.amount, 0);
+  const totalIncomeExtra = expenses.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+  const totalExpenseAll = totalExpenseOnly + totalBack;
+  const grossRevenue = totalSales + totalIncomeExtra;
+  const netProfit = grossRevenue - totalExpenseAll;
+
+  // 勘定科目別集計
+  const accountSummary = (() => {
+    const map = new Map<string, number>();
+    if (totalBack > 0) map.set("therapist_back", totalBack);
+    for (const e of expenses) {
+      if (e.type === "income") continue;
+      const cat = e.category || "other";
+      map.set(cat, (map.get(cat) || 0) + e.amount);
     }
-    setSaving(false);
-    if (error) { toast.show("登録失敗: " + error.message, "error"); }
-    else {
-      const thName = therapists.find(t => t.id === newTherapistId)?.name || "";
-      const { data: custInfo } = await supabase.from("customers").select("phone,login_email,self_name").eq("name", newCustName.trim()).maybeSingle();
-      const hasLine = /\sL$/i.test(newCustName.trim()) || /\sL\s/i.test(newCustName.trim());
-      const isMember = !!(custInfo?.login_email);
-      // Get store/building from room assignment
-      const ra = roomAssigns.find(a => a.therapist_id === newTherapistId);
-      const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
-      const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
-      const st = rm ? stores.find(s => s.id === rm.store_id) : null;
-      const courseWithExt = (selectedCourse?.name || "") + (newExtension ? `＋${newExtension}` : "");
-      setNotifyInfo({ custName: newCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: newDate || selectedDate, startTime: newStart, endTime: newEnd, course: courseWithExt, therapistName: thName, total: coursePrice + newNomFee + optTotal + newExtPrice - discTotal, nomination: newNomination || "指名なし", discountName: newDiscounts.map(d => d.name).join(",") || "なし", extensionName: newExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
-      toast.show("予約を登録しました！", "success"); setNewCustName(""); setNewTherapistId(0); setNewCourseId(0); setNewNotes(""); setNewStart("12:00"); setNewEnd("13:00"); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); setNewCardBase(""); setNewPaypay(""); fetchData(); setTimeout(() => { setShowNewRes(false); setMsg(""); }, 600);
+    return Array.from(map.entries()).map(([cat, amount]) => ({
+      category: cat, account: ACCOUNT_MAP[cat] || "雑費", amount,
+    })).sort((a, b) => b.amount - a.amount);
+  })();
+
+  // 全取引明細
+  const allTransactions = (() => {
+    const items: { date: string; account: string; description: string; income: number; expense: number }[] = [];
+    for (const r of reservations) {
+      const price = getPrice(r);
+      if (price > 0) items.push({ date: r.date, account: "売上高", description: `${r.customer_name} / ${r.course || "コースなし"}`, income: price, expense: 0 });
+      const back = getBack(r);
+      if (back > 0) items.push({ date: r.date, account: "外注費", description: `セラピストバック（${r.customer_name}）`, income: 0, expense: back });
     }
+    for (const e of expenses) {
+      const isIncome = e.type === "income";
+      items.push({
+        date: e.date,
+        account: isIncome ? "売上高（入金）" : (ACCOUNT_MAP[e.category] || "雑費"),
+        description: e.name + (e.notes ? ` / ${e.notes}` : ""),
+        income: isIncome ? e.amount : 0,
+        expense: isIncome ? 0 : e.amount,
+      });
+    }
+    items.sort((a, b) => a.date.localeCompare(b.date));
+    return items;
+  })();
+
+  // CSV エクスポート
+  const exportCSV = () => {
+    const BOM = "\uFEFF";
+    const header = "日付,勘定科目,摘要,収入,支出\n";
+    const rows = allTransactions.map((t) =>
+      `${t.date},"${t.account}","${t.description.replace(/"/g, '""')}",${t.income || ""},${t.expense || ""}`
+    ).join("\n");
+    const csv = BOM + header + rows;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const period = mode === "monthly" ? selectedMonth : String(selectedYear);
+    a.href = url; a.download = `税務報告_${period}.csv`; a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const openEdit = (r: Reservation) => { setEditRes(r); setEditCustName(r.customer_name); setEditTherapistId(r.therapist_id); setEditStart(r.start_time); setEditEnd(r.end_time); setEditNotes(r.notes || ""); const c = courses.find((x) => x.name === r.course); setEditCourseId(c ? c.id : 0); setEditMsg(""); setEditNomination((r as any).nomination || ""); setEditNomFee((r as any).nomination_fee || 0); const discs = (r as any).discount_name ? (r as any).discount_name.split(",").map((n: string) => { const d = discounts.find(x=>x.name===n); return { name: n, amount: d ? (d.type==="percent" ? Math.round((courses.find(x=>x.name===r.course)?.price || 0) * d.amount / 100) : d.amount) : 0 }; }).filter((d: any)=>d.name) : []; setEditDiscounts(discs); setEditExtension((r as any).extension_name || ""); setEditExtPrice((r as any).extension_price || 0); setEditExtDur((r as any).extension_duration || 0); const opts = (r as any).options_text ? (r as any).options_text.split(",").map((n: string) => { const o = options.find(x=>x.name===n); return { name: n, price: o?.price || 0 }; }).filter((o: any)=>o.name) : []; setEditOptions(opts); setEditStatus((r as any).status || "unprocessed"); setEditCardBase(String((r as any).card_base || "")); setEditPaypay(String((r as any).paypay_amount || "")); setEditStaffName((r as any).staff_name || ""); };
-  // ===== ポイント自動付与（completed時） =====
-  const awardPoints = async (resId: number, customerName: string, totalPrice: number, resDate: string) => {
-    try {
-      // 顧客取得
-      const { data: cust } = await supabase.from("customers").select("id,rank,birthday").eq("name", customerName).limit(1).maybeSingle();
-      if (!cust) return;
-      // 既に付与済みかチェック
-      const { data: existingPt } = await supabase.from("customer_points").select("id").eq("customer_id", cust.id).eq("description", `予約#${resId}ポイント付与`).maybeSingle();
-      if (existingPt) return;
-      // ポイント設定取得
-      const { data: ps } = await supabase.from("point_settings").select("*").limit(1).single();
-      if (!ps) return;
-      // 基本ポイント計算
-      const basePoints = Math.floor(totalPrice / (ps.earn_per_yen || 1000)) * (ps.earn_points || 20);
-      if (basePoints <= 0) return;
-      // ボーナスルール取得
-      const { data: rules } = await supabase.from("point_bonus_rules").select("*").eq("is_active", true);
-      const { data: rankMults } = await supabase.from("rank_point_multipliers").select("*");
-      const d = new Date(resDate + "T00:00:00");
-      const dow = d.getDay();
-      const dayOfMonth = d.getDate();
-      let multiplier = 1.0;
-      let bonusLabels: string[] = [];
-      // 曜日ボーナス
-      (rules || []).filter(r => r.type === "weekday" && r.day_of_week === dow).forEach(r => {
-        if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `曜日${r.multiplier}倍`); }
-      });
-      // 期間ボーナス
-      (rules || []).filter(r => r.type === "period" && dayOfMonth >= (r.start_day || 1) && dayOfMonth <= (r.end_day || 31)).forEach(r => {
-        if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `期間${r.multiplier}倍`); }
-      });
-      // 誕生月ボーナス
-      if (cust.birthday) {
-        const bMonth = new Date(cust.birthday).getMonth();
-        const resMonth = d.getMonth();
-        (rules || []).filter(r => r.type === "birthday" && bMonth === resMonth).forEach(r => {
-          if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `誕生月${r.multiplier}倍`); }
-        });
-      }
-      // アイドルタイムボーナス（予約の開始時間で判定）
-      const resStartMinutes = (() => { const r = reservations.find(x => x.id === resId); if (!r) return 0; const [h, m] = r.start_time.split(":").map(Number); return h * 60 + m; })();
-      (rules || []).filter(r => r.type === "idle_time").forEach(r => {
-        const wd = r.weekdays || [];
-        if (!wd.includes(dow)) return;
-        const [sh, sm] = (r.start_time || "0:0").split(":").map(Number);
-        const [eh, em] = (r.end_time || "0:0").split(":").map(Number);
-        const startMin = sh * 60 + sm;
-        const endMin = eh * 60 + em;
-        if (resStartMinutes >= startMin && resStartMinutes < endMin) {
-          if (r.multiplier > multiplier) { multiplier = r.multiplier; bonusLabels.push(r.label || `アイドルタイム${r.multiplier}倍`); }
-        }
-      });
-      // 雨の日ボーナス
-      if (ps.rainy_day_active && ps.rainy_day_multiplier > multiplier) {
-        multiplier = ps.rainy_day_multiplier; bonusLabels.push(`☔雨の日${ps.rainy_day_multiplier}倍`);
-      }
-      // 会員ランク倍率
-      const rankMult = (rankMults || []).find(rm => rm.rank_name === (cust.rank || "normal"));
-      const rankMultiplier = rankMult?.multiplier || 1.0;
-      // 最終ポイント計算
-      const finalPoints = Math.floor(basePoints * multiplier * rankMultiplier);
-      // 有効期限
-      const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + (ps.expiry_months || 12));
-      // ポイント付与
-      const desc = `予約#${resId}ポイント付与` + (bonusLabels.length > 0 ? `（${bonusLabels.join("・")}）` : "") + (rankMultiplier > 1 ? `（ランク×${rankMultiplier}）` : "");
-      await supabase.from("customer_points").insert({
-        customer_id: cust.id, amount: finalPoints, type: "earn",
-        description: desc, expires_at: expiresAt.toISOString(),
-      });
-      // 期限切れ通知予約（期限のexpiry_notify_days日前）
-      const notifyDate = new Date(expiresAt);
-      notifyDate.setDate(notifyDate.getDate() - (ps.expiry_notify_days || 30));
-      if (notifyDate > new Date()) {
-        await supabase.from("customer_notifications").insert({
-          title: "ポイント有効期限のお知らせ",
-          body: `${finalPoints}ptの有効期限が${expiresAt.toLocaleDateString("ja-JP")}に迫っています。お早めにご利用ください！`,
-          type: "campaign",
-          target_customer_id: cust.id,
-        });
-      }
-    // ===== 自動ランク判定 =====
-      try {
-        const { data: rankRules } = await supabase.from("rank_point_multipliers").select("*").order("min_total_visits", { ascending: false });
-        if (rankRules && rankRules.length > 0) {
-          // 累計来店回数
-          const { count: totalVisits } = await supabase.from("customer_visits").select("*", { count: "exact", head: true }).eq("customer_id", cust.id);
-          // 各ランクを上位から判定
-          let newRank = "normal";
-          for (const rule of rankRules) {
-            if (rule.rank_name === "normal") continue;
-            const periodStart = new Date();
-            periodStart.setMonth(periodStart.getMonth() - (rule.period_months || 3));
-            const { count: recentVisits } = await supabase.from("customer_visits").select("*", { count: "exact", head: true }).eq("customer_id", cust.id).gte("date", periodStart.toISOString().split("T")[0]);
-            if ((totalVisits || 0) >= (rule.min_total_visits || 0) && (recentVisits || 0) >= (rule.min_visits_in_period || 0)) {
-              newRank = rule.rank_name;
-              break;
-            }
-          }
-          // ランク変更があれば更新
-          if (newRank !== (cust.rank || "normal")) {
-            await supabase.from("customers").update({ rank: newRank }).eq("id", cust.id);
-            const rankLabel = newRank === "platinum" ? "💎プラチナ" : newRank === "gold" ? "🥇ゴールド" : newRank === "silver" ? "🥈シルバー" : "👤一般";
-            const isUp = ["platinum","gold","silver","normal"].indexOf(newRank) < ["platinum","gold","silver","normal"].indexOf(cust.rank || "normal");
-            if (isUp) {
-              await supabase.from("customer_notifications").insert({
-                title: "🎉 ランクアップおめでとうございます！",
-                body: `${rankLabel}会員にランクアップしました！ポイント倍率がアップします。`,
-                type: "campaign", target_customer_id: cust.id,
-              });
-            }
-          }
-        }
-      } catch (e2) { console.error("ランク判定エラー:", e2); }
-      // ポイント使用を仮押さえ→確定
-      try {
-        await supabase.from("customer_points").update({ status: "confirmed", description: `予約利用（確定）` }).eq("reservation_id", resId).eq("status", "pending");
-      } catch (e3) { console.error("ポイント確定エラー:", e3); }
-    } catch (e) { console.error("ポイント付与エラー:", e); }
+  // 勘定科目別CSV
+  const exportAccountCSV = () => {
+    const BOM = "\uFEFF";
+    const header = "勘定科目,金額\n";
+    const rows = accountSummary.map((a) => `"${a.account}",${a.amount}`).join("\n");
+    const total = `\n"経費合計",${totalExpenseAll}\n"総売上",${grossRevenue}\n"純利益",${netProfit}`;
+    const csv = BOM + header + rows + total;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const period = mode === "monthly" ? selectedMonth : String(selectedYear);
+    a.href = url; a.download = `勘定科目別_${period}.csv`; a.click();
+    URL.revokeObjectURL(url);
   };
-  const updateReservation = async () => { if (!editRes) return; setEditSaving(true); setEditMsg(""); const eOptText = editOptions.map(o=>o.name).join(","); const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0); const eCp = editSelectedCourse?.price || 0; const eDiscText = editDiscounts.map(d=>d.name).join(","); const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0); const eTotal = eCp + editNomFee + eOptTotal + editExtPrice - eDiscTotal; const { error } = await supabase.from("reservations").update({ customer_name: editCustName.trim(), therapist_id: editTherapistId, start_time: editStart, end_time: editEnd, course: editSelectedCourse?.name || editRes.course, notes: editNotes.trim(), nomination: editNomination, nomination_fee: editNomFee, options_text: eOptText, options_total: eOptTotal, discount_name: eDiscText, discount_amount: eDiscTotal, extension_name: editExtension, extension_price: editExtPrice, extension_duration: editExtDur, total_price: eTotal, status: editStatus, card_base: parseInt(editCardBase) || 0, paypay_amount: parseInt(editPaypay) || 0, card_billing: Math.round((parseInt(editCardBase) || 0) * 1.1), cash_amount: eTotal - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0), staff_name: editStaffName }).eq("id", editRes.id); setEditSaving(false); if (error) { toast.show("更新失敗: " + error.message, "error"); } else { if (editStatus === "completed") { await awardPoints(editRes.id, editCustName.trim(), eTotal, editRes.date); } if (editManualPoints && parseInt(editManualPoints) !== 0) { const mp = parseInt(editManualPoints); const { data: cust } = await supabase.from("customers").select("id").eq("name", editCustName.trim()).maybeSingle(); if (cust) { const expAt = new Date(); expAt.setMonth(expAt.getMonth() + (ptSettings?.expiry_months || 12)); await supabase.from("customer_points").insert({ customer_id: cust.id, amount: mp, type: mp > 0 ? "earn" : "use", description: editManualPointDesc.trim() || (mp > 0 ? "手動ポイント付与" : "手動ポイント減算"), expires_at: mp > 0 ? expAt.toISOString() : null }); } setEditManualPoints(""); setEditManualPointDesc(""); } toast.show("更新しました！", "success"); fetchData(); setTimeout(() => { setEditRes(null); setEditMsg(""); }, 600); } };
-  const deleteReservation = async (id: number) => { /* ポイント仮押さえ返還 */ const { data: pendingPts } = await supabase.from("customer_points").select("id,customer_id,amount").eq("reservation_id", id).eq("status", "pending"); if (pendingPts && pendingPts.length > 0) { for (const pp of pendingPts) { await supabase.from("customer_points").delete().eq("id", pp.id); } toast.show("仮押さえポイントを返還しました", "info"); } await supabase.from("reservations").delete().eq("id", id); setEditRes(null); fetchData(); };
-  const notifyFavShift = async (thId: number, date: string, start: string, end: string) => { try { const th = therapists.find(t => t.id === thId); if (!th) return; const d = new Date(date + "T00:00:00"); const days = ["日","月","火","水","木","金","土"]; const dateStr = `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`; const { data: favs } = await supabase.from("customer_favorites").select("customer_id").eq("type", "therapist").eq("item_id", thId); if (!favs || favs.length === 0) return; for (const fav of favs) { const { data: exist } = await supabase.from("customer_notifications").select("id").eq("target_customer_id", fav.customer_id).like("title", "%出勤のお知らせ%").like("body", `%${th.name}%${dateStr}%`).maybeSingle(); if (!exist) { await supabase.from("customer_notifications").insert({ title: "❤️ お気に入りセラピスト出勤のお知らせ", body: `${th.name}さんが${dateStr} ${start}〜${end}に出勤します！ご予約はお早めに♪`, type: "info", target_customer_id: fav.customer_id }); } } } catch (e) { console.error("お気に入り通知エラー:", e); } };
-  const addShiftTherapist = async () => { if (!addShiftTherapistId) return; await supabase.from("shifts").insert({ therapist_id: addShiftTherapistId, date: selectedDate, start_time: addShiftStart, end_time: addShiftEnd, status: "confirmed" }); if (addShiftRoom) { await supabase.from("room_assignments").insert({ date: selectedDate, room_id: addShiftRoom, therapist_id: addShiftTherapistId, slot: "early", start_time: addShiftStart, end_time: addShiftEnd }); } await notifyFavShift(addShiftTherapistId, selectedDate, addShiftStart, addShiftEnd); setShowNewTherapist(false); setAddShiftTherapistId(0); fetchData(); };
 
-  const getCourseByName = (name: string) => courses.find((c) => c.name === name);
-  const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
-  const prevDay = () => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().split("T")[0]); };
-  const nextDay = () => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split("T")[0]); };
-  const dateDisplay = (() => { const d = new Date(selectedDate + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${days[d.getDay()]}）`; })();
+  const prevMonth = () => { const d = new Date(smYear, smMonth - 2, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
+  const nextMonth = () => { const d = new Date(smYear, smMonth, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
 
-  const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4", "#85c4b8", "#c4a685", "#8599c4"];
-  const totalWidth = DISPLAY_HOURS * HOUR_WIDTH;
-  const getResForTherapist = (tid: number) => reservations.filter((r) => r.therapist_id === tid);
+  const periodLabel = mode === "monthly" ? `${smYear}年${smMonth}月` : `${selectedYear}年`;
 
-  const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
+  // 権限チェック
+  if (roleLoading) return <div className="h-screen flex items-center justify-center" style={{ backgroundColor: T.bg, color: T.text }}><p className="text-[14px]" style={{ color: T.textMuted }}>読み込み中...</p></div>;
+  if (!isOwner) return (
+    <div className="h-screen flex flex-col items-center justify-center" style={{ backgroundColor: T.bg, color: T.text }}>
+      <div className="text-[48px] mb-4">🔒</div>
+      <h2 className="text-[18px] font-medium mb-2">アクセス権限がありません</h2>
+      <p className="text-[13px] mb-6" style={{ color: T.textMuted }}>このページはオーナー権限が必要です</p>
+      <button onClick={() => router.push("/dashboard")} className="px-6 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">ダッシュボードに戻る</button>
+    </div>
+  );
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
       {/* Header */}
-      <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6 flex-shrink-0" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
-        <div className="flex items-center gap-4">
+      <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        <div className="flex items-center gap-3">
           <NavMenu T={T} dark={dark} />
-          <h1 className="text-[15px] font-medium">タイムチャート</h1>
+          <h1 className="text-[14px] font-medium">税務報告用ダッシュボード</h1>
+          </div>
+        <div className="flex items-center gap-2">
+          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"}].map(t => (
+            <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
+          ))}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowShiftNotif(!showShiftNotif)} className="relative px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: pendingShiftReqs.length > 0 ? "#f59e0b44" : T.border, color: pendingShiftReqs.length > 0 ? "#f59e0b" : T.textSub }}>
-            📝 出勤希望{pendingShiftReqs.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: "#f59e0b" }}>{new Set(pendingShiftReqs.map(r => r.therapist_id)).size}</span>}
-          </button>
-          <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={() => { router.push("/dashboard?openSafe=true&returnDate=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#a855f744", color: "#a855f7" }}>🔐 金庫</button>
-          <button onClick={() => { router.push("/dashboard?page=" + encodeURIComponent("営業締め") + "&date=" + selectedDate); }} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>📊 日次集計</button>
-          <button onClick={() => setShowNewTherapist(true)} className="px-3 py-2 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>+ セラピスト追加</button>
-          <button onClick={() => { setNewDate(selectedDate); setNewCourseId(0); setNewStart("12:00"); setNewEnd("13:00"); setMsg(""); setNewTherapistId(0); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)}); }}
-            className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 予約追加</button>
+        <span className="px-2 py-0.5 rounded text-[9px] font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🔒 オーナー専用</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={toggle} className="px-2.5 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
+          <button onClick={exportCSV} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#22c55e" }}>📥 明細CSV</button>
+          <button onClick={exportAccountCSV} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#3b82f6" }}>📥 科目別CSV</button>
         </div>
       </div>
 
-      {/* Date Nav */}
-      <div className="h-[52px] border-b flex items-center justify-center gap-4 flex-shrink-0" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        <button onClick={prevDay} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6"/></svg></button>
-        <button onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])} className="px-3 py-1 text-[11px] border rounded-lg cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>今日</button>
-        <span className="text-[14px] font-medium min-w-[200px] text-center">{dateDisplay}</span>
-        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="text-[12px] border rounded-lg px-2 py-1 outline-none cursor-pointer" style={{ borderColor: T.border, color: T.textSub, backgroundColor: T.card }} />
-        <button onClick={nextDay} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="9 18 15 12 9 6"/></svg></button>
+      {/* Period Selector */}
+      {dashTab === "summary" && (<>
+      <div className="h-[48px] flex items-center justify-center gap-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        <div className="flex gap-1 mr-4">
+          <button onClick={() => setMode("monthly")} className="px-3 py-1 text-[11px] rounded-lg cursor-pointer" style={{ backgroundColor: mode === "monthly" ? T.accent + "18" : "transparent", color: mode === "monthly" ? T.accent : T.textMuted, fontWeight: mode === "monthly" ? 600 : 400 }}>月次</button>
+          <button onClick={() => setMode("yearly")} className="px-3 py-1 text-[11px] rounded-lg cursor-pointer" style={{ backgroundColor: mode === "yearly" ? T.accent + "18" : "transparent", color: mode === "yearly" ? T.accent : T.textMuted, fontWeight: mode === "yearly" ? 600 : 400 }}>年次</button>
+        </div>
+        {mode === "monthly" ? (<>
+          <button onClick={prevMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+          <span className="text-[14px] font-medium min-w-[120px] text-center">{smYear}年{smMonth}月</span>
+          <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
+        </>) : (<>
+          <button onClick={() => setSelectedYear(selectedYear - 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+          <span className="text-[14px] font-medium min-w-[100px] text-center">{selectedYear}年</span>
+          <button onClick={() => setSelectedYear(selectedYear + 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
+        </>)}
       </div>
 
-      {/* Timeline */}
-      <div className="flex-1 overflow-auto select-none [&::-webkit-scrollbar]:h-[4px] [&::-webkit-scrollbar-thumb]:bg-[#d3d1c7]/40 [&::-webkit-scrollbar-thumb]:rounded-full" ref={timelineRef} style={{ cursor: isPanning ? "grabbing" : "grab" }} onMouseDown={handlePanStart} onMouseMove={handlePanMove} onMouseUp={handlePanEnd} onMouseLeave={handlePanEnd}>
-        {displayTherapists.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.textFaint} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            <p className="text-[14px] mt-4" style={{ color: T.textMuted }}>本日のシフトが登録されていません</p>
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="max-w-[900px] mx-auto">
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[
+              { label: "総売上", value: fmt(grossRevenue), sub: `予約売上 ${fmt(totalSales)}${totalIncomeExtra > 0 ? ` + 入金 ${fmt(totalIncomeExtra)}` : ""}`, color: "#22c55e" },
+              { label: "総経費", value: fmt(totalExpenseAll), sub: `バック ${fmt(totalBack)} + 経費 ${fmt(totalExpenseOnly)}`, color: "#c45555" },
+              { label: "純利益", value: fmt(netProfit), sub: `利益率 ${grossRevenue > 0 ? Math.round((netProfit / grossRevenue) * 100) : 0}%`, color: netProfit >= 0 ? "#22c55e" : "#c45555" },
+              { label: "取引件数", value: `${allTransactions.length}件`, sub: `予約 ${reservations.length}件 / 経費 ${expenses.length}件`, color: "#85a8c4" },
+            ].map((s) => (
+              <div key={s.label} className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <p className="text-[10px] mb-2" style={{ color: T.textMuted }}>{s.label}</p>
+                <p className="text-[22px] font-light mb-1" style={{ color: s.color }}>{s.value}</p>
+                <p className="text-[9px]" style={{ color: T.textFaint }}>{s.sub}</p>
+              </div>
+            ))}
           </div>
-        ) : (
-          <div className="flex" style={{ minWidth: totalWidth + 170 }}>
-            {/* Names */}
-            <div className="w-[240px] flex-shrink-0 sticky left-0 z-20" style={{ backgroundColor: T.bg }}>
-              <div className="h-[32px] border-b border-r flex items-center px-3" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
-                <span className="text-[11px]" style={{ color: T.textSub }}>セラピスト</span>
-              </div>
-              {displayTherapists.map((t, ti) => {
-                const isCO = clockedOut.has(t.id);
-                const origIdx = therapists.findIndex((x) => x.id === t.id);
-                return (
-                  <div key={t.id} className="h-[52px] border-b border-r flex items-center px-2 gap-1.5" style={{ backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.5 : 1 }}>
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] text-white font-medium flex-shrink-0" style={{ backgroundColor: isCO ? "#888" : colors[origIdx % colors.length] }}>{t.name.charAt(0)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); setEditTherapist(t); setEtNotes((t as any).notes || ""); }} className="text-[10px] font-medium truncate cursor-pointer flex items-center gap-0.5" style={{ textDecoration: isCO ? "line-through" : "none", background: "none", border: "none", padding: 0, color: T.text, textAlign: "left" }}>{t.name}<span style={{ fontSize: 8, opacity: 0.4 }}>✏️</span></button>
-                        {(t as any).age > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).age}歳</span>}
-                        {(t as any).height_cm > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).height_cm}cm</span>}
-                        {(t as any).cup && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).cup}</span>}
-                      </div>
-                      <div className="flex items-center gap-1 text-[7px]" style={{ color: T.textMuted }}>
-                        
-                        {(() => { const sh = shifts.find(s => s.therapist_id === t.id); return sh ? <button onClick={(e) => { e.stopPropagation(); setEditShiftTherapist(t.id); setEditShiftId(sh.id); setEditShiftStart(sh.start_time?.slice(0,5) || "12:00"); setEditShiftEnd(sh.end_time?.slice(0,5) || "03:00"); }} className="cursor-pointer" style={{ color: "#c3a782", background: "none", border: "none", padding: 0, fontSize: 7 }}>⏰{sh.start_time?.slice(0,5)}〜{sh.end_time?.slice(0,5)}</button> : null; })()}
-                        {(() => { const ra = roomAssigns.find(a => a.therapist_id === t.id); if (ra) { const rm = allRooms.find(r => r.id === ra.room_id); const bl = rm ? buildings.find(b => b.id === rm.building_id) : null; const hasReserve = (bl as any)?.cash_reserve > 0; return <><button onClick={(e) => { e.stopPropagation(); setEditRoomTherapist(t.id); const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { const rm2 = allRooms.find(r => r.id === ra2.room_id); setEditRoomId(ra2.room_id); setEditRoomStore(rm2?.store_id || 0); setEditRoomBuilding(rm2?.building_id || 0); } }} className="cursor-pointer" style={{ color: "#85a8c4", background: "none", border: "none", padding: 0, fontSize: 7 }}>🏠{bl?.name || ""}{rm?.name || ""}</button>{hasReserve && <button onClick={async (e) => { e.stopPropagation(); setShowReplenish(ra.room_id); setReplenishAmount(String((bl as any)?.cash_reserve || 20000)); setReplenishTherapistId(t.id); setReplenishStaff(""); const { data: ds } = await supabase.from("therapist_daily_settlements").select("therapist_id,sales_collected,change_collected,total_cash,total_back,room_id,safe_deposited").eq("date", selectedDate).eq("room_id", ra.room_id); if (ds) setDailySettlements(prev => { const filtered = prev.filter(p => p.room_id !== ra.room_id); return [...filtered, ...ds]; }); const past7: typeof pastUncollected = []; for (let d = 1; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds2 = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", ra.room_id).eq("date", ds2); if (ps) { for (const p of ps) { if (!p.sales_collected || !p.change_collected) { const th2 = therapists.find(x => x.id === p.therapist_id); const { data: pastRep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", ra.room_id).eq("date", ds2); const repAmt = pastRep ? pastRep.reduce((s2: number, r2: { amount: number }) => s2 + r2.amount, 0) : 0; past7.push({ date: ds2, total_cash: p.total_cash || 0, total_back: p.total_back || 0, total_sales: p.total_sales || 0, therapist_name: th2?.name || "", sales_collected: !!p.sales_collected, change_collected: !!p.change_collected, replenish_amount: repAmt }); } } } } setPastUncollected(past7); }} style={{ color: "#22c55e", background: "none", border: "none", padding: 0, fontSize: 7, cursor: "pointer", marginLeft: 2 }}>💰釣銭{(() => { if (changeCollectedIds.has(t.id)) return "¥0"; const rp = replenishments.filter(x => rm && x.room_id === rm.id).reduce((s2, x2) => s2 + x2.amount, 0); return fmt(rp); })()}</button>}</>; } return null; })()}
-                      </div>
-                      {(t as any).notes && <div style={{ overflow: "hidden", maxWidth: 120 }}><span className="text-[6px] block" style={{ color: "#f59e0b", whiteSpace: "nowrap", animation: (t as any).notes.length > 12 ? `scrollLeft ${Math.max(3, (t as any).notes.length * 0.2)}s linear infinite` : "none" }}>📝{(t as any).notes}</span></div>}
-                      {isCO && <span className="text-[7px]" style={{ color: "#c45555" }}>退勤済</span>}
-                      {settledIds.has(t.id) && <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`${t.name}の清算確定を取り消しますか？`)) return; await supabase.from("therapist_daily_settlements").delete().eq("therapist_id", t.id).eq("date", selectedDate); setSettledIds(prev => { const next = new Set(prev); next.delete(t.id); return next; }); toast.show("清算を取り消しました", "info"); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded font-bold cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>✓ 清算済</button>}
-                    </div>
-                    <div className="flex flex-col gap-0.5 flex-shrink-0">
-                      <button onClick={() => toggleClockOut(t.id)} className="text-[8px] px-1.5 py-0 rounded cursor-pointer border leading-tight"
-                        style={{ borderColor: isCO ? "#7ab88f66" : "#c4555566", backgroundColor: isCO ? "#7ab88f12" : "#c4555512", color: isCO ? "#7ab88f" : "#c45555" }}>
-                        {isCO ? "復活" : "退勤"}
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); const bRes2 = reservations.filter(r => r.therapist_id === t.id).sort((a, b) => timeToMinutes(b.end_time) - timeToMinutes(a.end_time)); setBreakStart(bRes2.length > 0 ? bRes2[0].end_time.slice(0,5) : "12:00"); setShowBreakModal(t.id); setBreakDuration(30); }} className="text-[8px] px-1.5 py-0 rounded cursor-pointer border leading-tight" style={{ borderColor: "#a855f744", color: "#a855f7" }}>休憩</button>
-                      <button onClick={async (e) => { e.stopPropagation(); setSettleTh(t); setSettleAdj(""); setSettleAdjNote(""); setSettleInvoice((t as any).has_invoice || false); setSettleSalesCollected(false); setSettleChangeCollected(false); const { data: existing } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", t.id).eq("date", selectedDate).maybeSingle(); setSettleSettled(!!existing?.is_settled); if (existing) { setSettleSalesCollected(!!existing.sales_collected); setSettleChangeCollected(!!existing.change_collected); setSettleSafeDeposited(!!existing.safe_deposited); } else { setSettleSafeDeposited(false); } const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { const past7: typeof pastUncollected = []; for (let d = 0; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", ra2.room_id).eq("date", ds); if (ps) { for (const p of ps) { if (p.therapist_id === t.id && ds === selectedDate) continue; if (!p.sales_collected || !p.change_collected) { const th2 = therapists.find(x => x.id === p.therapist_id); const { data: pastRep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", ra2.room_id).eq("date", ds); const repAmt = pastRep ? pastRep.reduce((s: number, r: { amount: number }) => s + r.amount, 0) : 0; past7.push({ date: ds, total_cash: p.total_cash || 0, total_back: p.total_back || 0, total_sales: p.total_sales || 0, therapist_name: th2?.name || "不明", sales_collected: !!p.sales_collected, change_collected: !!p.change_collected, replenish_amount: repAmt }); } } } } setPastUncollected(past7); } else { setPastUncollected([]); } }} className="text-[8px] px-1.5 py-0 rounded cursor-pointer border leading-tight" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>清算</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            {/* Grid */}
-            <div className="flex-1 relative">
-              <div className="h-[32px] flex border-b sticky top-0 z-10" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
-                {HOURS_RAW.map((rawH, i) => (
-                  <div key={rawH} className="flex-shrink-0 border-r flex items-end pb-1 px-1 relative" style={{ width: HOUR_WIDTH, borderColor: T.border }}>
-                    <span className="text-[11px] font-medium" style={{ color: rawH >= 24 ? "#85a8c4" : T.textSub }}>{HOURS_DISPLAY[i]}:00</span>
-                    {[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, height: tick === 3 ? 8 : 4, backgroundColor: tick === 3 ? T.textFaint : T.border }} />))}
-                  </div>
-                ))}
-              </div>
-              {/* Current Time */}
-              {selectedDate === new Date().toISOString().split("T")[0] && currentTimePos >= 0 && (
-                <div className="absolute top-0 bottom-0 z-30 pointer-events-none" style={{ left: currentTimePos }}>
-                  <div className="w-3 h-3 rounded-full bg-[#e24b4a] -ml-1.5 -mt-1 relative z-10" />
-                  <div className="w-[2px] h-full bg-[#e24b4a]/60 -mt-1 ml-[5px]" />
-                </div>
-              )}
-              {/* Rows */}
-              {displayTherapists.map((t, ti) => {
-                const tRes = getResForTherapist(t.id);
-                const isCO = clockedOut.has(t.id);
-                const origIdx = therapists.findIndex((x) => x.id === t.id);
-                return (
-                  <div key={t.id} className="h-[52px] border-b relative transition-colors"
-                    style={{ backgroundColor: isCO ? (dark ? "#2a2020" : "#faf5f5") : T.card, borderColor: T.border, opacity: isCO ? 0.4 : 1 }}
-                    onClick={(e) => {
-                      if ((e.target as HTMLElement).closest(".res-block") || isCO) return;
-                      const rect = e.currentTarget.getBoundingClientRect(); const x = e.clientX - rect.left; const min = Math.round(x / MIN_10_WIDTH) * 10;
-                      if (panMoved.current) return;
-                      setNewTherapistId(t.id); setNewStart(minutesToTime(min)); setNewEnd(minutesToTime(min + 60)); setNewDate(selectedDate); setNewCourseId(0); setMsg(""); setCustSearchQ(""); setShowCustSearch(true); supabase.from("customers").select("id,name,phone,rank").order("created_at",{ascending:false}).then(({data})=>{if(data)setCustList(data)});
-                    }}>
-                    {(() => { const sh = shifts.find(s => s.therapist_id === t.id); if (sh) { const shStart = timeToMinutes(sh.start_time); const shEnd = timeToMinutes(sh.end_time); const left = shStart * MIN_10_WIDTH / 10; const w = (shEnd - shStart) * MIN_10_WIDTH / 10; return <div className="absolute top-0 bottom-0" style={{ left, width: w, backgroundColor: dark ? "#c3a78208" : "#c3a78210", borderLeft: "2px solid #c3a78233", borderRight: "2px solid #c3a78233", zIndex: 1 }} />; } return null; })()}
-                    {HOURS_RAW.map((rawH) => (<div key={`g-${t.id}-${rawH}`} className="absolute top-0 bottom-0" style={{ left: (rawH - START_HOUR) * HOUR_WIDTH, width: 1, backgroundColor: T.border }}>{[1, 2, 3, 4, 5].map((tick) => (<div key={tick} className="absolute top-0 bottom-0" style={{ left: tick * MIN_10_WIDTH, width: 1, backgroundColor: dark ? "#2a2a32" : "#f8f6f3" }} />))}</div>))}
-                    {tRes.map((r, ri) => {
-                      const sM = timeToMinutes(r.start_time); const eM = timeToMinutes(r.end_time);
-                      const left = sM * (HOUR_WIDTH / 60); const width = (eM - sM) * (HOUR_WIDTH / 60);
-                      const course = getCourseByName(r.course); const statusColors: Record<string,string> = { unprocessed: "#888780", processed: "#85a8c4", web_reservation: "#a855f7", phone_check: "#f59e0b", serving: "#22c55e", completed: "#c3a782", email_sent: "#3d6b9f", customer_confirmed: "#4a7c59" }; const color = statusColors[(r as any).status] || colors[origIdx % colors.length];
-                      return (
-                        <div key={`res-${r.id}-${ri}`} className="res-block absolute top-[4px] bottom-[4px] rounded-lg cursor-pointer group"
-                          style={{ left, width: Math.max(width, MIN_10_WIDTH), backgroundColor: color + "20", borderLeft: `3px solid ${color}`, zIndex: 5 }}
-                          onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
-                          <div className="absolute left-0 top-0 bottom-0 w-[6px] cursor-ew-resize opacity-0 group-hover:opacity-100 hover:bg-black/10 rounded-l-lg"
-                            onMouseDown={(e) => { e.stopPropagation(); setDragInfo({ resId: r.id, edge: "start", initX: e.clientX, initMin: sM, initEndMin: eM }); }} />
-                          <div className="px-2 py-1 overflow-hidden h-full"
-                            onMouseDown={(e) => { if ((e.target as HTMLElement).closest(".drag-handle")) return; e.stopPropagation(); setDragInfo({ resId: r.id, edge: "move", initX: e.clientX, initMin: sM, initEndMin: eM }); }}>
-                            <p className="text-[11px] font-medium truncate" style={{ color: T.text }}>{r.customer_name}{(r as any).status && (r as any).status !== "unprocessed" && <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 4, backgroundColor: (r as any).status === "completed" ? "#c3a78222" : (r as any).status === "serving" ? "#22c55e22" : (r as any).status === "phone_check" ? "#f59e0b22" : (r as any).status === "web_reservation" ? "#a855f722" : (r as any).status === "email_sent" ? "#3d6b9f22" : (r as any).status === "customer_confirmed" ? "#4a7c5922" : "#85a8c422", color: (r as any).status === "completed" ? "#c3a782" : (r as any).status === "serving" ? "#22c55e" : (r as any).status === "phone_check" ? "#f59e0b" : (r as any).status === "web_reservation" ? "#a855f7" : (r as any).status === "email_sent" ? "#3d6b9f" : (r as any).status === "customer_confirmed" ? "#4a7c59" : "#85a8c4" }}>{(r as any).status === "completed" ? "終了" : (r as any).status === "serving" ? "接客中" : (r as any).status === "phone_check" ? "電話確認" : (r as any).status === "web_reservation" ? "WEB" : (r as any).status === "processed" ? "処理済" : (r as any).status === "email_sent" ? "メール済" : (r as any).status === "customer_confirmed" ? "客様確定" : ""}</span>}</p>
-                            <p className="text-[9px] truncate" style={{ color: T.textSub }}>{r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}{r.course ? ` / ${r.course}` : ""}{(r as any).staff_name ? ` 👤${(r as any).staff_name}` : ""}</p>
-                            {((r as any).card_billing > 0 || (r as any).paypay_amount > 0) && <p className="text-[8px] truncate" style={{ color: "#85a8c4" }}>{(r as any).card_billing > 0 ? `💳${fmt((r as any).card_billing)}` : ""}{(r as any).card_billing > 0 && (r as any).paypay_amount > 0 ? " " : ""}{(r as any).paypay_amount > 0 ? `📱${fmt((r as any).paypay_amount)}` : ""}</p>}
-                            {r.notes && <div style={{ overflow: "hidden", maxHeight: 20, lineHeight: "10px", marginTop: 2, position: "relative" }}><p className="text-[8px]" style={{ color: "#f59e0b", whiteSpace: "pre-wrap", animation: r.notes.length > 20 ? `scrollNote ${Math.max(4, r.notes.length * 0.15)}s linear infinite` : "none" }}>📝 {r.notes}</p></div>}
-                            
-                          </div>
-                          <div className="drag-handle absolute right-0 top-0 bottom-0 w-[6px] cursor-ew-resize opacity-0 group-hover:opacity-100 hover:bg-black/10 rounded-r-lg"
-                            onMouseDown={(e) => { e.stopPropagation(); setDragInfo({ resId: r.id, edge: "end", initX: e.clientX, initMin: sM, initEndMin: eM }); }} />
-                        </div>
-                      );
-                    })}
-                    {breaks.filter(b => b.therapist_id === t.id).map((b) => {
-                      const bsM = timeToMinutes(b.start); const beM = timeToMinutes(b.end);
-                      const bLeft = bsM * (HOUR_WIDTH / 60); const bWidth = (beM - bsM) * (HOUR_WIDTH / 60);
-                      return (
-                        <div key={`brk-${b.id}`} className="absolute top-[2px] bottom-[2px] rounded-lg cursor-pointer" style={{ left: bLeft, width: bWidth, backgroundColor: dark ? "#a855f715" : "#a855f710", borderLeft: `2px dashed #a855f7`, zIndex: 4 }}
-                          onClick={(e) => { e.stopPropagation(); if (confirm("この休憩を削除しますか？")) setBreaks(prev => prev.filter(x => x.id !== b.id)); }}>
-                          <div className="px-1 py-0.5"><p className="text-[8px] font-medium" style={{ color: "#a855f7" }}>☕ {b.start?.slice(0,5)}〜{b.end?.slice(0,5)}</p></div>
-                        </div>
-                      );
-                    })}
-                    {tRes.map((r, ri) => {
-                      const intervalMin = (t as any).interval_minutes || 0;
-                      if (intervalMin <= 0) return null;
-                      const eM = timeToMinutes(r.end_time);
-                      const iLeft = eM * (HOUR_WIDTH / 60);
-                      const iWidth = intervalMin * (HOUR_WIDTH / 60);
-                      return (
-                        <div key={`int-${r.id}-${ri}`} className="absolute top-[8px] bottom-[8px] rounded" style={{ left: iLeft, width: iWidth, backgroundColor: dark ? "#ffffff08" : "#00000008", borderLeft: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, borderRight: `1px dashed ${dark ? "#ffffff22" : "#00000022"}`, zIndex: 2 }}>
-                          <span className="text-[7px] absolute top-0.5 left-1" style={{ color: T.textFaint }}>{intervalMin}分</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Summary */}
-      <div className="border-t p-4 flex-shrink-0" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        <div className="flex items-center gap-6 text-[11px]" style={{ color: T.textSub }}>
-          <span>出勤: <strong style={{ color: T.text }}>{activeTherapists.length}</strong>名</span>
-          {clockedOutTherapists.length > 0 && <span>退勤: <strong style={{ color: "#c45555" }}>{clockedOutTherapists.length}</strong>名</span>}
-          <span>予約: <strong style={{ color: T.text }}>{reservations.length}</strong>件</span>
-          <span>売上: <strong style={{ color: T.text }}>{fmt(reservations.filter(r => (r as any).status === "completed").reduce((s, r) => { const t = (r as any).total_price; return s + (t || (getCourseByName(r.course)?.price || 0)); }, 0))}</strong></span>
-          <span>バック: <strong style={{ color: "#7ab88f" }}>{fmt(reservations.filter(r => (r as any).status === "completed").reduce((s, r) => { const c = getCourseByName(r.course); return s + (c ? c.therapist_back : 0); }, 0))}</strong></span>
-          <span style={{ color: "#c3a782" }}>終了: <strong>{reservations.filter(r => (r as any).status === "completed").length}</strong>件</span>
-          <span className="ml-auto text-[10px]" style={{ color: T.textFaint }}>ドラッグで時間変更 / クリックで編集</span>
-        </div>
-      </div>
-
-      {/* Customer Search Modal */}
-      {showCustSearch && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowCustSearch(false)}>
-          <div className="rounded-2xl border p-6 w-full max-w-md max-h-[80vh] overflow-y-auto" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-1">お客様を選択</h2>
-            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>予約するお客様を検索してください</p>
-            <input type="text" placeholder="名前・電話番号で検索" value={custSearchQ} onChange={(e) => setCustSearchQ(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[12px] outline-none mb-3" style={{ backgroundColor: T.cardAlt, color: T.text }} />
-            <div className="space-y-1 max-h-[300px] overflow-y-auto mb-4">
-              {custList.filter(c => { const q = custSearchQ.toLowerCase(); return !q || c.name?.toLowerCase().includes(q) || c.phone?.includes(q); }).map(c => (
-                <button key={c.id} onClick={async () => { setNewCustName(c.name); setShowCustSearch(false); setShowNewRes(true); setNewNomination(""); setNewNomFee(0); setNewOptions([]); setNewDiscounts([]); setNewExtension(""); setNewExtPrice(0); setNewExtDur(0); if (newTherapistId) { const { data: prevRes } = await supabase.from("reservations").select("id").eq("customer_name", c.name).eq("therapist_id", newTherapistId).limit(1); const { data: noms } = await supabase.from("nominations").select("*"); if (prevRes && prevRes.length > 0 && noms) { const honNom = noms.find((n: { name: string }) => n.name === "本指名"); if (honNom) { setNewNomination(honNom.name); setNewNomFee(honNom.price); } } } }} className="w-full text-left px-4 py-3 rounded-xl flex items-center justify-between cursor-pointer" style={{ backgroundColor: T.cardAlt }}>
-                  <div><p className="text-[13px] font-medium">{c.name}</p><p className="text-[10px]" style={{ color: T.textMuted }}>{c.phone || "電話番号なし"}</p></div>
-                  <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: c.rank === "good" ? "#7ab88f18" : c.rank === "caution" ? "#f59e0b18" : c.rank === "banned" ? "#c4555518" : "#88878018", color: c.rank === "good" ? "#7ab88f" : c.rank === "caution" ? "#f59e0b" : c.rank === "banned" ? "#c45555" : "#888780" }}>{c.rank === "good" ? "優良" : c.rank === "caution" ? "要注意" : c.rank === "banned" ? "出禁" : "普通"}</span>
-                </button>
-              ))}
-              {custList.filter(c => { const q = custSearchQ.toLowerCase(); return !q || c.name?.toLowerCase().includes(q) || c.phone?.includes(q); }).length === 0 && <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>該当するお客様がいません</p>}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => { setShowCustSearch(false); setShowNewCust(true); setNcName(custSearchQ); setNcPhone(""); }} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">+ 新規お客様登録</button>
-              <button onClick={() => setShowCustSearch(false)} className="px-5 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Customer Quick Modal */}
-      {showNewCust && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowNewCust(false)}>
-          <div className="rounded-2xl border p-6 w-full max-w-sm" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-4">新規お客様登録</h2>
-            <div className="space-y-3">
-              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>お名前 *</label><input type="text" value={ncName} onChange={(e) => setNcName(e.target.value)} placeholder="お客様名" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text }} /></div>
-              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>電話番号</label><input type="tel" value={ncPhone} onChange={(e) => setNcPhone(e.target.value)} placeholder="090-xxxx-xxxx" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text }} /></div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={async () => { if (!ncName.trim()) return; const { error } = await supabase.from("customers").insert({ name: ncName.trim(), phone: ncPhone.trim() }); if (!error) { setNewCustName(ncName.trim()); setShowNewCust(false); setShowNewRes(true); } }} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">登録してオーダーへ</button>
-                <button onClick={() => { setShowNewCust(false); setShowCustSearch(true); }} className="px-5 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>戻る</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Reservation Modal */}
-      {showNewRes && (() => {
-        const cp = selectedCourse?.price || 0; const optT = newOptions.reduce((s,o)=>s+o.price,0); const newDiscTotal = newDiscounts.reduce((s,d)=>s+d.amount,0); const totalCalc = cp + newNomFee + optT + newExtPrice - newDiscTotal;
-        return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowNewRes(false)}>
-          <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-1">オーダー登録</h2>
-            <p className="text-[11px] mb-5" style={{ color: T.textFaint }}>{newCustName} 様の予約</p>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={newCustName} readOnly className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ ...inputStyle, opacity: 0.7 }} /></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト <span style={{ color: "#c49885" }}>*</span></label><select value={newTherapistId} onChange={(e) => setNewTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
-              </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={newStaffName} onChange={(e) => { setNewStaffName(e.target.value); localStorage.setItem("last_staff_name", e.target.value); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={newCourseId} onChange={(e) => handleCourseChange(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, borderColor: !newCourseId ? "#c49885" : "transparent" }}><option value={0}>— コースを選択してください —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
-              {selectedCourse && (<div className="rounded-xl p-3 flex items-center gap-4 text-[11px]" style={{ backgroundColor: T.cardAlt }}><span style={{ color: T.textSub }}>料金: <strong style={{ color: T.text }}>{fmt(selectedCourse.price)}</strong></span><span style={{ color: T.textSub }}>バック: <strong style={{ color: "#7ab88f" }}>{fmt(selectedCourse.therapist_back)}</strong></span></div>)}
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>指名</label><select value={newNomination} onChange={(e) => { const n = nominations.find(x=>x.name===e.target.value); setNewNomination(e.target.value); setNewNomFee(n?.price||0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">指名なし</option>{nominations.map((n) => (<option key={n.id} value={n.name}>{n.name}（{fmt(n.price)}）</option>))}</select>{newNomination && <p className="text-[10px] mt-1" style={{ color: "#c3a782" }}>指名料: {fmt(newNomFee)}</p>}</div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>オプション（複数選択可）</label><div className="flex flex-wrap gap-2">{options.map((o) => { const sel = newOptions.some(x=>x.name===o.name); return <button key={o.id} onClick={() => { if (sel) setNewOptions(newOptions.filter(x=>x.name!==o.name)); else setNewOptions([...newOptions, { name: o.name, price: o.price }]); }} className="px-3 py-1.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: sel ? "#85a8c418" : T.cardAlt, color: sel ? "#85a8c4" : T.textMuted, border: `1px solid ${sel ? "#85a8c4" : T.border}`, fontWeight: sel ? 600 : 400 }}>{o.name}（{fmt(o.price)}）</button>; })}</div>{newOptions.length > 0 && <p className="text-[10px] mt-1" style={{ color: "#85a8c4" }}>オプション合計: {fmt(newOptions.reduce((s,o)=>s+o.price,0))}</p>}</div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>延長</label><select value={newExtension} onChange={(e) => { const ex = extensions.find(x=>x.name===e.target.value); setNewExtension(e.target.value); setNewExtPrice(ex?.price||0); setNewExtDur(ex?.duration||0); if (ex && selectedCourse && newStart) { setNewEnd(minutesToTime(timeToMinutes(newStart) + selectedCourse.duration + ex.duration)); } }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">延長なし</option>{extensions.map((ex) => (<option key={ex.id} value={ex.name}>{ex.name}（{ex.duration}分 / {fmt(ex.price)}）</option>))}</select></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>割引（複数追加可）</label><div className="flex gap-2"><select id="newDiscSelect" className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">— 割引を選択 —</option>{discounts.filter(d => !newDiscounts.some(nd => nd.name === d.name)).map((d) => (<option key={d.id} value={d.name}>{d.name}（{d.type==="percent" ? d.amount+"%" : fmt(d.amount)}）</option>))}</select><button onClick={() => { const sel = (document.getElementById("newDiscSelect") as HTMLSelectElement)?.value; if (!sel) return; const d = discounts.find(x=>x.name===sel); if (!d) return; const amt = d.type==="percent" ? Math.round(cp * d.amount / 100) : d.amount; setNewDiscounts([...newDiscounts, { name: sel, amount: amt }]); (document.getElementById("newDiscSelect") as HTMLSelectElement).value = ""; }} className="flex-shrink-0 px-4 py-2.5 rounded-xl text-[11px] cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>+ 追加</button></div></div>
-              {newDiscounts.length > 0 && <div className="flex flex-wrap gap-2">{newDiscounts.map((d, i) => <div key={i} className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px]" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}><span>{d.name}（-{fmt(d.amount)}）</span><button onClick={() => setNewDiscounts(newDiscounts.filter((_, j) => j !== i))} className="cursor-pointer" style={{ background: "none", border: "none", color: "#c45555", fontWeight: 700, padding: 0, fontSize: 12 }}>×</button></div>)}<p className="text-[10px] w-full" style={{ color: "#c45555" }}>割引合計: -{fmt(newDiscTotal)}</p></div>}
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>日付</label><input type="date" value={newDate || selectedDate} onChange={(e) => setNewDate(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>開始時間</label><select value={newStart} onChange={(e) => handleStartChange(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>終了時間{selectedCourse ? "（自動）" : ""}</label><select value={newEnd} onChange={(e) => setNewEnd(e.target.value)} disabled={!!selectedCourse} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, color: selectedCourse ? "#c3a782" : T.text }}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-              </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><div style={{ position: "relative" }}><textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="メモ・備考を入力" rows={4} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-y" style={inputStyle} /><div style={{ position: "absolute", left: 12, right: 12, top: 42, borderTop: "1px dashed #f59e0b44", pointerEvents: "none" }} /><p className="text-[8px] mt-1" style={{ color: T.textFaint }}>⚠ 点線より上がタイムチャートに表示されます（2行まで）</p></div></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💳 カード充当額（税抜）</label><input type="text" inputMode="numeric" value={newCardBase} onChange={(e) => setNewCardBase(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />{parseInt(newCardBase) > 0 && <p className="text-[9px] mt-1" style={{ color: "#85a8c4" }}>カード決済額: {fmt(Math.round(parseInt(newCardBase) * 1.1))}（10%手数料込）</p>}</div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📱 PayPay支払額</label><input type="text" inputMode="numeric" value={newPaypay} onChange={(e) => setNewPaypay(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>料金サマリー</p>
-                <div className="space-y-1 text-[11px]">
-                  {selectedCourse && <div className="flex justify-between"><span>コース: {selectedCourse.name}</span><span>{fmt(cp)}</span></div>}
-                  {newNomination && <div className="flex justify-between"><span>指名: {newNomination}</span><span>+{fmt(newNomFee)}</span></div>}
-                  {newOptions.map((o,i) => <div key={i} className="flex justify-between"><span>OP: {o.name}</span><span>+{fmt(o.price)}</span></div>)}
-                  {newExtension && <div className="flex justify-between"><span>延長: {newExtension}</span><span>+{fmt(newExtPrice)}</span></div>}
-                  {newDiscounts.map((d,i) => <div key={`disc-${i}`} className="flex justify-between" style={{ color: "#c45555" }}><span>割引: {d.name}</span><span>-{fmt(d.amount)}</span></div>)}
-                  <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${T.border}`, color: "#c3a782" }}><span>合計</span><span>{fmt(totalCalc)}</span></div>
-                  {(parseInt(newCardBase) > 0 || parseInt(newPaypay) > 0) && (<>
-                    <div className="pt-2 mt-1" style={{ borderTop: `1px dashed ${T.border}` }}>
-                      {parseInt(newCardBase) > 0 && <div className="flex justify-between"><span>💳 カード端末入力額</span><span style={{ color: "#85a8c4", fontWeight: 700 }}>{fmt(Math.round(parseInt(newCardBase) * 1.1))}</span></div>}
-                      {parseInt(newPaypay) > 0 && <div className="flex justify-between"><span>📱 PayPay</span><span style={{ color: "#22c55e" }}>{fmt(parseInt(newPaypay))}</span></div>}
-                      <div className="flex justify-between"><span>💴 現金</span><span>{fmt(totalCalc - (parseInt(newCardBase) || 0) - (parseInt(newPaypay) || 0))}</span></div>
-                    </div>
-                  </>)}
-                </div>
-              </div>
-              {msg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: msg.includes("失敗") || msg.includes("選択") ? "#c4988518" : "#7ab88f18", color: msg.includes("失敗") || msg.includes("選択") ? "#c49885" : "#5a9e6f" }}>{msg}</div>}
-              <div className="flex gap-3 pt-2">
-                <button onClick={addReservation} disabled={saving} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{saving ? "登録中..." : "予約する"}</button>
-                <button onClick={() => { setShowNewRes(false); setMsg(""); }} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
-              </div>
-            </div>
-          </div>
-        </div>);
-      })()}
-
-      {/* Edit Modal */}
-      {editRes && (() => {
-        const eCp = editSelectedCourse?.price || 0; const eOptT = editOptions.reduce((s,o)=>s+o.price,0); const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0); const eTotalCalc = eCp + editNomFee + eOptT + editExtPrice - eDiscTotal;
-        return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRes(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-1">オーダー編集</h2>
-            <p className="text-[11px] mb-3" style={{ color: T.textFaint }}>{editCustName} 様の予約を編集</p>
-            <div className="flex flex-wrap gap-1.5 mb-4">{([["unprocessed","未処理","#888780"],["email_sent","確認メール済","#3d6b9f"],["customer_confirmed","お客様確定","#4a7c59"],["processed","処理済","#85a8c4"],["web_reservation","WEB予約","#a855f7"],["phone_check","電話確認","#f59e0b"],["serving","接客中","#22c55e"],["completed","終了","#c3a782"]] as const).map(([val,label,color]) => (<button key={val} onClick={() => setEditStatus(val)} className="px-3 py-1.5 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: editStatus === val ? color + "22" : T.cardAlt, color: editStatus === val ? color : T.textMuted, border: `1px solid ${editStatus === val ? color : T.border}`, fontWeight: editStatus === val ? 700 : 400 }}>{label}</button>))}</div>
-            {/* 確定メール送信ボタン */}
-            {editRes && (editStatus === "unprocessed" || editStatus === "email_sent") && (<div className="mb-4 rounded-xl p-3" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f30" }}>
-              <p className="text-[11px] font-medium mb-2" style={{ color: "#3d6b9f" }}>📧 確定メール送信</p>
-              <div className="flex gap-2">
-                <button onClick={async () => {
-                  const token = (editRes as any).confirmation_token || (Math.random().toString(36).slice(2) + Date.now().toString(36));
-                  if (!(editRes as any).confirmation_token) { await supabase.from("reservations").update({ confirmation_token: token, status: "email_sent" }).eq("id", editRes.id); setEditStatus("email_sent"); fetchData(); }
-                  const url = `${window.location.origin}/customer-mypage/confirm?token=${token}`;
-                  const { data: cust } = await supabase.from("customers").select("email,login_email").or(`name.eq.${editCustName}`).limit(1);
-                  const email = cust?.[0]?.login_email || cust?.[0]?.email || "";
-                  const subject = encodeURIComponent("【チョップ】ご予約の確認");
-                  const body = encodeURIComponent(`${editCustName} 様\n\nご予約リクエストありがとうございます。\n\n以下のリンクから予約内容をご確認いただき、\n「予約を確定する」ボタンを押してください。\n\n▼ 予約確認リンク\n${url}\n\n【ご予約内容】\n日時: ${selectedDate} ${editStart}〜${editEnd}\nコース: ${editSelectedCourse?.name || editRes.course}\n\n※ 翌日以降のご予約はお部屋が確定次第、\n別途ルーム詳細メールをお送りいたします。\n\nチョップ`);
-                  window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`, "_blank");
-                  if (!(editRes as any).confirmation_token) { await supabase.from("reservations").update({ confirmation_token: token, status: "email_sent" }).eq("id", editRes.id); setEditStatus("email_sent"); fetchData(); }
-                  toast.show("Gmailを開きました", "success");
-                }} className="flex-1 py-2.5 rounded-lg text-[10px] font-medium cursor-pointer flex items-center justify-center gap-1" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f44" }}>📧 Gmailで送信</button>
-                <button onClick={async () => {
-                  const token = (editRes as any).confirmation_token || (Math.random().toString(36).slice(2) + Date.now().toString(36));
-                  if (!(editRes as any).confirmation_token) { await supabase.from("reservations").update({ confirmation_token: token, status: "email_sent" }).eq("id", editRes.id); setEditStatus("email_sent"); fetchData(); }
-                  const url = `${window.location.origin}/customer-mypage/confirm?token=${token}`;
-                  const text = `【チョップ】ご予約確認\n${editCustName}様\n\n以下のリンクからご予約を確定してください。\n${url}`;
-                  try { await navigator.clipboard.writeText(text); toast.show("LINE/SMS用テキストをコピーしました！", "success"); } catch { prompt("コピーしてLINE/SMSで送信:", text); }
-                }} className="flex-1 py-2.5 rounded-lg text-[10px] font-medium cursor-pointer flex items-center justify-center gap-1" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59", border: "1px solid #4a7c5944" }}>📋 LINE/SMS用コピー</button>
-              </div>
-              <p className="text-[9px] mt-1.5 text-center" style={{ color: T.textMuted }}>※ Gmailが開きます。送信ボタンを押してください</p>
-            </div>)}
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>顧客名</label><input type="text" value={editCustName} onChange={(e) => setEditCustName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>セラピスト</label><select value={editTherapistId} onChange={(e) => setEditTherapistId(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{therapists.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}</select></div>
-              </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👤 受付スタッフ</label><select value={editStaffName} onChange={(e) => setEditStaffName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">未選択</option>{staffMembers.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>コース <span style={{ color: "#c49885" }}>* 必須</span></label><select value={editCourseId} onChange={(e) => handleCourseChange(Number(e.target.value), true)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>— コースを選択 —</option>{courses.map((c) => (<option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>))}</select></div>
-              {editSelectedCourse && (<div className="rounded-xl p-3 flex items-center gap-4 text-[11px]" style={{ backgroundColor: T.cardAlt }}><span style={{ color: T.textSub }}>料金: <strong style={{ color: T.text }}>{fmt(editSelectedCourse.price)}</strong></span><span style={{ color: T.textSub }}>バック: <strong style={{ color: "#7ab88f" }}>{fmt(editSelectedCourse.therapist_back)}</strong></span></div>)}
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>指名</label><select value={editNomination} onChange={(e) => { const n = nominations.find(x=>x.name===e.target.value); setEditNomination(e.target.value); setEditNomFee(n?.price||0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">指名なし</option>{nominations.map((n) => (<option key={n.id} value={n.name}>{n.name}（{fmt(n.price)}）</option>))}</select>{editNomination && <p className="text-[10px] mt-1" style={{ color: "#c3a782" }}>指名料: {fmt(editNomFee)}</p>}</div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>オプション（複数選択可）</label><div className="flex flex-wrap gap-2">{options.map((o) => { const sel = editOptions.some(x=>x.name===o.name); return <button key={o.id} onClick={() => { if (sel) setEditOptions(editOptions.filter(x=>x.name!==o.name)); else setEditOptions([...editOptions, { name: o.name, price: o.price }]); }} className="px-3 py-1.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: sel ? "#85a8c418" : T.cardAlt, color: sel ? "#85a8c4" : T.textMuted, border: `1px solid ${sel ? "#85a8c4" : T.border}`, fontWeight: sel ? 600 : 400 }}>{o.name}（{fmt(o.price)}）</button>; })}</div>{editOptions.length > 0 && <p className="text-[10px] mt-1" style={{ color: "#85a8c4" }}>オプション合計: {fmt(eOptT)}</p>}</div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>延長</label><select value={editExtension} onChange={(e) => { const ex = extensions.find(x=>x.name===e.target.value); setEditExtension(e.target.value); setEditExtPrice(ex?.price||0); setEditExtDur(ex?.duration||0); if (ex && editSelectedCourse && editStart) { setEditEnd(minutesToTime(timeToMinutes(editStart) + editSelectedCourse.duration + ex.duration)); } }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">延長なし</option>{extensions.map((ex) => (<option key={ex.id} value={ex.name}>{ex.name}（{ex.duration}分 / {fmt(ex.price)}）</option>))}</select></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>割引（複数追加可）</label><div className="flex gap-2"><select id="editDiscSelect" className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="">— 割引を選択 —</option>{discounts.filter(d => !editDiscounts.some(ed => ed.name === d.name)).map((d) => (<option key={d.id} value={d.name}>{d.name}（{d.type==="percent" ? d.amount+"%" : fmt(d.amount)}）</option>))}</select><button onClick={() => { const sel = (document.getElementById("editDiscSelect") as HTMLSelectElement)?.value; if (!sel) return; const d = discounts.find(x=>x.name===sel); if (!d) return; const amt = d.type==="percent" ? Math.round(eCp * d.amount / 100) : d.amount; setEditDiscounts([...editDiscounts, { name: sel, amount: amt }]); (document.getElementById("editDiscSelect") as HTMLSelectElement).value = ""; }} className="flex-shrink-0 px-4 py-2.5 rounded-xl text-[11px] cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>+ 追加</button></div></div>
-              {editDiscounts.length > 0 && <div className="flex flex-wrap gap-2">{editDiscounts.map((d, i) => <div key={i} className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px]" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}><span>{d.name}（-{fmt(d.amount)}）</span><button onClick={() => setEditDiscounts(editDiscounts.filter((_, j) => j !== i))} className="cursor-pointer" style={{ background: "none", border: "none", color: "#c45555", fontWeight: 700, padding: 0, fontSize: 12 }}>×</button></div>)}<p className="text-[10px] w-full" style={{ color: "#c45555" }}>割引合計: -{fmt(eDiscTotal)}</p></div>}
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>開始時間</label><select value={editStart} onChange={(e) => handleStartChange(e.target.value, true)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>終了時間{editSelectedCourse ? "（自動）" : ""}</label><select value={editEnd} onChange={(e) => setEditEnd(e.target.value)} disabled={!!editSelectedCourse} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, color: editSelectedCourse ? "#c3a782" : T.text }}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-              </div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>備考</label><div style={{ position: "relative" }}><textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="メモ・備考を入力" rows={4} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-y" style={inputStyle} /><div style={{ position: "absolute", left: 12, right: 12, top: 42, borderTop: "1px dashed #f59e0b44", pointerEvents: "none" }} /><p className="text-[8px] mt-1" style={{ color: T.textFaint }}>⚠ 点線より上がタイムチャートに表示されます（2行まで）</p></div></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💳 カード充当額（税抜）</label><input type="text" inputMode="numeric" value={editCardBase} onChange={(e) => setEditCardBase(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />{parseInt(editCardBase) > 0 && <p className="text-[9px] mt-1" style={{ color: "#85a8c4" }}>カード決済額: {fmt(Math.round(parseInt(editCardBase) * 1.1))}（10%手数料込）</p>}</div>
-                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📱 PayPay支払額</label><input type="text" inputMode="numeric" value={editPaypay} onChange={(e) => setEditPaypay(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>料金サマリー</p>
-                <div className="space-y-1 text-[11px]">
-                  {editSelectedCourse && <div className="flex justify-between"><span>コース: {editSelectedCourse.name}</span><span>{fmt(eCp)}</span></div>}
-                  {editNomination && <div className="flex justify-between"><span>指名: {editNomination}</span><span>+{fmt(editNomFee)}</span></div>}
-                  {editOptions.map((o,i) => <div key={i} className="flex justify-between"><span>OP: {o.name}</span><span>+{fmt(o.price)}</span></div>)}
-                  {editExtension && <div className="flex justify-between"><span>延長: {editExtension}</span><span>+{fmt(editExtPrice)}</span></div>}
-                  {editDiscounts.map((d,i) => <div key={`edisc-${i}`} className="flex justify-between" style={{ color: "#c45555" }}><span>割引: {d.name}</span><span>-{fmt(d.amount)}</span></div>)}
-                  <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${T.border}`, color: "#c3a782" }}><span>合計</span><span>{fmt(eTotalCalc)}</span></div>
-                  {(parseInt(editCardBase) > 0 || parseInt(editPaypay) > 0) && (<>
-                    <div className="pt-2 mt-1" style={{ borderTop: `1px dashed ${T.border}` }}>
-                      {parseInt(editCardBase) > 0 && <div className="flex justify-between"><span>💳 カード端末入力額</span><span style={{ color: "#85a8c4", fontWeight: 700 }}>{fmt(Math.round(parseInt(editCardBase) * 1.1))}</span></div>}
-                      {parseInt(editPaypay) > 0 && <div className="flex justify-between"><span>📱 PayPay</span><span style={{ color: "#22c55e" }}>{fmt(parseInt(editPaypay))}</span></div>}
-                      <div className="flex justify-between"><span>💴 現金</span><span>{fmt(eTotalCalc - (parseInt(editCardBase) || 0) - (parseInt(editPaypay) || 0))}</span></div>
-                    </div>
-                  </>)}
-                </div>
-              </div>
-              {/* ポイントプレビュー */}
-              {ptSettings && (() => {
-                const previewPts = Math.floor(eTotalCalc / (ptSettings.earn_per_yen || 1000)) * (ptSettings.earn_points || 20);
-                const isRainy = ptSettings.rainy_day_active;
-                const rainyMult = ptSettings.rainy_day_multiplier || 2.0;
-                const previewWithRainy = isRainy ? Math.floor(previewPts * rainyMult) : previewPts;
-                const alreadyAwarded = (editRes as any).status === "completed";
-                return (
-                <div className="rounded-xl p-4" style={{ backgroundColor: "#d4a84308", border: "1px solid #d4a84330" }}>
-                  <p className="text-[11px] font-medium mb-2" style={{ color: "#d4a843" }}>🎁 ポイント</p>
-                  <div className="space-y-1.5 text-[11px]">
-                    <div className="flex justify-between"><span>自動付与（¥{(ptSettings.earn_per_yen||1000).toLocaleString()}={ptSettings.earn_points||20}pt）</span><span style={{ color: "#d4a843", fontWeight: 600 }}>+{previewPts}pt</span></div>
-                    {isRainy && <div className="flex justify-between"><span>☔ 雨の日ボーナス（×{rainyMult}）</span><span style={{ color: "#d4a843", fontWeight: 600 }}>+{previewWithRainy}pt</span></div>}
-                    <p className="text-[9px]" style={{ color: "#888" }}>※曜日・期間・誕生月・ランク倍率は終了時に自動計算されます</p>
-                    {alreadyAwarded && <p className="text-[9px] px-2 py-1 rounded-lg inline-block" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>✅ ポイント付与済み</p>}
-                    <div className="pt-2 mt-1" style={{ borderTop: "1px dashed #d4a84330" }}>
-                      <p className="text-[10px] font-medium mb-1.5" style={{ color: "#d4a843" }}>➕➖ 手動ポイント調整</p>
-                      <div className="flex gap-2 items-end">
-                        <div className="w-[100px]"><label className="block text-[9px] mb-0.5" style={{ color: "#888" }}>ポイント数</label><input type="text" inputMode="numeric" value={editManualPoints} onChange={e => setEditManualPoints(e.target.value.replace(/[^0-9-]/g, ""))} placeholder="例: 100 or -50" className="w-full px-2 py-2 rounded-lg text-[11px] outline-none" style={{ backgroundColor: "#d4a84310", color: "#d4a843", border: "1px solid #d4a84330" }} /></div>
-                        <div className="flex-1"><label className="block text-[9px] mb-0.5" style={{ color: "#888" }}>理由</label><input type="text" value={editManualPointDesc} onChange={e => setEditManualPointDesc(e.target.value)} placeholder="例: アンケート回答" className="w-full px-2 py-2 rounded-lg text-[11px] outline-none" style={{ backgroundColor: "#d4a84310", color: "#d4a843", border: "1px solid #d4a84330" }} /></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>);
-              })()}
-              {editMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: editMsg.includes("失敗") ? "#c4988518" : "#7ab88f18", color: editMsg.includes("失敗") ? "#c49885" : "#5a9e6f" }}>{editMsg}</div>}
-              <div className="flex gap-3 pt-2">
-                <button onClick={updateReservation} disabled={editSaving} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60">{editSaving ? "更新中..." : "更新する"}</button>
-                <button onClick={async () => {
-                  const thName = therapists.find(t => t.id === editTherapistId)?.name || "";
-                  const { data: custInfo } = await supabase.from("customers").select("phone,login_email,self_name").eq("name", editCustName.trim()).maybeSingle();
-                  const hasLine = /\sL$/i.test(editCustName.trim()) || /\sL\s/i.test(editCustName.trim());
-                  const isMember = !!(custInfo?.login_email);
-                  const ra = roomAssigns.find(a => a.therapist_id === editTherapistId);
-                  const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
-                  const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
-                  const st = rm ? stores.find(s => s.id === rm.store_id) : null;
-                  const courseWithExt = (editSelectedCourse?.name || editRes.course) + (editExtension ? `＋${editExtension}` : "");
-                  const eOptTotal = editOptions.reduce((s,o)=>s+o.price,0);
-                  const eDiscTotal = editDiscounts.reduce((s,d)=>s+d.amount,0);
-                  const eTotal = (editSelectedCourse?.price || 0) + editNomFee + eOptTotal + editExtPrice - eDiscTotal;
-                  setNotifyInfo({ custName: editCustName.trim(), custPhone: custInfo?.phone || "", custEmail: custInfo?.login_email || "", hasLine, isMember, date: editRes.date, startTime: editStart, endTime: editEnd, course: courseWithExt, therapistName: thName, total: eTotal, nomination: editNomination || "指名なし", discountName: editDiscounts.map(d => d.name).join(",") || "なし", extensionName: editExtension, storeName: st?.name || "", buildingName: bl?.name || "" });
-                }} className="px-5 py-2.5 text-[12px] rounded-xl cursor-pointer" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f", border: "1px solid #3d6b9f44" }}>📩 通知</button>
-                <button onClick={() => deleteReservation(editRes.id)} className="px-6 py-2.5 bg-[#c45555] text-white text-[12px] rounded-xl cursor-pointer">削除</button>
-                <button onClick={() => setEditRes(null)} className="px-6 py-2.5 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
-              </div>
-            </div>
-          </div>
-        </div>);
-      })()}
-
-      {/* Settlement Modal */}
-      {settleTh && (() => {
-        const tRes = reservations.filter(r => r.therapist_id === settleTh.id && (r as any).status === "completed");
-        const totalSales = tRes.reduce((s,r) => s + ((r as any).total_price || 0), 0);
-        const totalBack = tRes.reduce((s,r) => { const c = getCourseByName(r.course); return s + (c?.therapist_back || 0); }, 0);
-        const salaryType = (settleTh as any).salary_type || "fixed";
-        const salaryAmount = (settleTh as any).salary_amount || 0;
-        const salaryBonus = salaryType === "percent" ? Math.round(totalBack * salaryAmount / 100) : salaryAmount * tRes.length;
-        const totalNomFee = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
-        const totalNom = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.therapist_back || (r as any).nomination_fee || 0); }, 0);
-        const totalNomBack = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.back_amount || 0); }, 0);
-        
-        const transportFee = (settleTh as any).transport_fee || 0;
-        const totalOpt = tRes.reduce((s,r) => s + ((r as any).options_total || 0), 0);
-        const totalOptBack = tRes.reduce((s,r) => { const optNames = ((r as any).options_text || "").split(",").filter((n: string) => n); return s + optNames.reduce((os: number, n: string) => { const o = options.find(x => x.name === n); return os + ((o as any)?.therapist_back || 0); }, 0); }, 0);
-        const totalExt = tRes.reduce((s,r) => s + ((r as any).extension_price || 0), 0);
-        const totalExtBack = tRes.reduce((s,r) => { const ex = extensions.find(x => x.name === (r as any).extension_name); return s + ((ex as any)?.therapist_back || 0); }, 0);
-        const totalDisc = tRes.reduce((s,r) => s + ((r as any).discount_amount || 0), 0);
-        const totalCard = tRes.reduce((s,r) => s + ((r as any).card_billing || 0), 0);
-        const totalPaypay = tRes.reduce((s,r) => s + ((r as any).paypay_amount || 0), 0);
-        const totalCash = tRes.reduce((s,r) => s + ((r as any).cash_amount || 0), 0);
-        const adj = parseInt(settleAdj) || 0;
-        const backTotal = totalBack + salaryBonus + totalNom + totalOptBack + totalExtBack + adj;
-        const welfareFee = (() => {
-          if (tRes.length === 0) return 0;
-          const base = (settleTh as any).welfare_fee ?? 500;
-          const ordTh = (settleTh as any).welfare_fee_orders_threshold || 0;
-          const ordAmt = (settleTh as any).welfare_fee_orders_amount || 0;
-          const payTh = (settleTh as any).welfare_fee_pay_threshold || 0;
-          const payAmt = (settleTh as any).welfare_fee_pay_amount || 0;
-          if (payTh > 0 && backTotal >= payTh) return payAmt;
-          if (ordTh > 0 && tRes.length >= ordTh) return ordAmt;
-          return base;
-        })();
-        const invoiceDed = settleInvoice ? 0 : Math.round(backTotal * 0.1);
-        const adjustedPay = backTotal - invoiceDed;
-        const hasWT = settleTh?.has_withholding || false;
-        const withholdingBase = hasWT ? Math.max(adjustedPay - 5000, 0) : 0;
-        const withholding = hasWT ? Math.floor(withholdingBase * 0.1021) : 0;
-        const finalPayRaw = adjustedPay - withholding - welfareFee + transportFee;
-        const finalPay = Math.ceil(finalPayRaw / 100) * 100;
-        const ra = roomAssigns.find(a => a.therapist_id === settleTh.id);
-        const rm = ra ? allRooms.find(r => r.id === ra.room_id) : null;
-        const bl = rm ? buildings.find(b => b.id === rm.building_id) : null;
-        const todayReplenish = replenishments.filter(r => rm && r.room_id === rm.id).reduce((s, r) => s + r.amount, 0);
-        const cashReserve = todayReplenish;
-        const carryOverSales = pastUncollected.filter(p => !p.sales_collected).reduce((s, p) => s + (p.total_cash - p.total_back), 0);
-        const carryOverChange = pastUncollected.filter(p => !p.change_collected).reduce((s, p) => s + p.replenish_amount, 0);
-        const carryOverTotal = carryOverSales + carryOverChange;
-        const cashBalance = cashReserve + totalCash - finalPay + carryOverTotal;
-        const storeRecovery = cashBalance > cashReserve ? cashBalance - cashReserve : 0;
-        return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSettleTh(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+          {/* 勘定科目別集計 */}
+          <div className="rounded-2xl border p-5 mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
             <div className="flex items-center justify-between mb-4">
-              <div><h2 className="text-[15px] font-medium">💰 本日の清算</h2><p className="text-[11px]" style={{ color: T.textFaint }}>{settleTh.name} — {selectedDate}</p></div>
-              {settleSettled && <span className="px-2 py-1 rounded text-[9px] font-medium" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✓ 清算済</span>}
+              <h2 className="text-[14px] font-medium">勘定科目別集計</h2>
+              <span className="text-[11px]" style={{ color: T.textMuted }}>{periodLabel}</span>
             </div>
-            <div className="space-y-3">
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>売上明細（終了 {tRes.length}件）</p>
-                <div className="space-y-1 text-[11px]">
-                  {tRes.map((r,i) => <div key={i} className="flex justify-between"><span className="truncate" style={{ maxWidth: 200 }}>{r.customer_name} / {r.course}</span><span className="font-medium">{fmt((r as any).total_price || 0)}</span></div>)}
-                  {tRes.length === 0 && <p className="text-[10px] text-center py-2" style={{ color: T.textFaint }}>終了した予約がありません</p>}
-                </div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>給与計算</p>
-                <div className="space-y-1 text-[11px]">
-                  <div className="flex justify-between"><span>基本バック（{tRes.length}件）</span><span>{fmt(totalBack)}</span></div>
-                  {salaryAmount > 0 && <div className="flex justify-between" style={{ color: "#c3a782" }}><span>給料ランク（{salaryType === "percent" ? `${salaryAmount}%UP` : `${salaryAmount.toLocaleString()}円UP×${tRes.length}件`}）</span><span>+{fmt(salaryBonus)}</span></div>}
-                  {totalNom > 0 && <div className="flex justify-between"><span>指名バック</span><span>+{fmt(totalNom)}</span></div>}
-                  {totalOptBack > 0 && <div className="flex justify-between"><span>オプションバック</span><span>+{fmt(totalOptBack)}</span></div>}
-                  {totalExtBack > 0 && <div className="flex justify-between"><span>延長バック</span><span>+{fmt(totalExtBack)}</span></div>}
-                  {adj !== 0 && <div className="flex justify-between" style={{ color: adj > 0 ? "#22c55e" : "#c45555" }}><span>調整金{settleAdjNote ? `（${settleAdjNote}）` : ""}</span><span>{adj > 0 ? "+" : ""}{fmt(adj)}</span></div>}
-                  <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}` }}><span>バック額</span><span>{fmt(backTotal)}</span></div>
-                  {invoiceDed > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>① インボイス控除（10%）</span><span>-{fmt(invoiceDed)}</span></div>}
-                  {invoiceDed > 0 && <div className="flex justify-between"><span>調整後の報酬額</span><span>{fmt(adjustedPay)}</span></div>}
-                  {withholding > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>② 源泉徴収（10.21%）</span><span>-{fmt(withholding)}</span></div>}
-                  {withholding > 0 && <div className="text-[8px] pl-2" style={{ color: T.textFaint }}>({fmt(adjustedPay)} - ¥5,000) × 10.21%</div>}
-                  {!settleTh?.has_withholding && <div className="flex justify-between text-[10px]" style={{ color: T.textFaint }}><span>② 源泉徴収</span><span>なし</span></div>}
-                  <div className="flex justify-between" style={{ color: "#c45555" }}><span>③ 備品・リネン代</span><span>-{fmt(welfareFee)}</span></div>
-                  {transportFee > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>④ 交通費（実費精算分）</span><span>+{fmt(transportFee)}</span></div>}
-                </div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>支払い内訳</p>
-                <div className="space-y-1 text-[11px]">
-                  <div className="flex justify-between"><span>💳 カード合計</span><span>{fmt(totalCard)}</span></div>
-                  <div className="flex justify-between"><span>📱 PayPay合計</span><span>{fmt(totalPaypay)}</span></div>
-                  <div className="flex justify-between"><span>💴 現金合計</span><span>{fmt(totalCash)}</span></div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[9px] mb-1" style={{ color: T.textSub }}>調整金（+/-）</label><input type="text" value={settleAdj} onChange={(e) => setSettleAdj(e.target.value.replace(/[^0-9-]/g, ""))} placeholder="0" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-                <div><label className="block text-[9px] mb-1" style={{ color: T.textSub }}>調整理由</label><input type="text" value={settleAdjNote} onChange={(e) => setSettleAdjNote(e.target.value)} placeholder="理由" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-              </div>
-              <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78212", border: "1px solid #c3a78233" }}>
-                <div className="space-y-1 text-[12px]">
-                  {finalPayRaw !== finalPay && <div className="flex justify-between text-[10px]" style={{ color: T.textFaint }}><span>計算額</span><span>{fmt(finalPayRaw)}</span></div>}
-                  <div className="flex justify-between pt-2 font-bold text-[15px]" style={{ borderTop: "1px solid #c3a78233", color: "#c3a782" }}><span>支給額（100円繰上）</span><span>{fmt(finalPay)}</span></div>
-                </div>
-              </div>
-              {pastUncollected.length > 0 && (
-              <div className="rounded-xl p-4" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: "#f59e0b" }}>📦 前日からの引き継ぎ（未回収）</p>
-                <div className="space-y-1 text-[11px]">
-                  {pastUncollected.map((p, i) => <div key={i} className="flex justify-between text-[10px]"><span>{p.date} {p.therapist_name}</span><span>{!p.sales_collected && <span style={{ color: "#f59e0b" }}>売上+{fmt(p.total_cash - p.total_back)} </span>}{!p.change_collected && <span style={{ color: "#85a8c4" }}>釣銭+{fmt(p.replenish_amount)}</span>}</span></div>)}
-                  <div className="flex justify-between pt-1 font-bold" style={{ borderTop: "1px solid #f59e0b33", color: "#f59e0b" }}><span>引き継ぎ合計（売上{fmt(carryOverSales)} + 釣銭{fmt(carryOverChange)}）</span><span>{fmt(carryOverTotal)}</span></div>
-                </div>
-              </div>
-              )}
-              {(cashReserve > 0 || carryOverTotal > 0 || totalCash > 0) && (
-              <div className="rounded-xl p-4" style={{ backgroundColor: cashBalance < 0 ? "#c4555512" : "#85a8c412", border: `1px solid ${cashBalance < 0 ? "#c4555533" : "#85a8c433"}` }}>
-                <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>💴 ルーム内現金（{bl?.name || ""}）</p>
-                <div className="space-y-1 text-[11px]">
-                  <div className="flex justify-between"><span>準備金（釣銭）</span><span>{fmt(cashReserve)}</span></div>
-                  {carryOverTotal > 0 && <div className="flex justify-between" style={{ color: "#f59e0b" }}><span>引き継ぎ分（売上{fmt(carryOverSales)} + 釣銭{fmt(carryOverChange)}）</span><span>+{fmt(carryOverTotal)}</span></div>}
-                  <div className="flex justify-between"><span>現金受取（お客様から）</span><span>+{fmt(totalCash)}</span></div>
-                  <div className="flex justify-between" style={{ color: "#c45555" }}><span>報酬支払（セラピストへ）</span><span>-{fmt(finalPay)}</span></div>
-                  <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${cashBalance < 0 ? "#c4555533" : "#85a8c433"}`, color: cashBalance < 0 ? "#c45555" : "#85a8c4" }}><span>現在の残高</span><span>{fmt(cashBalance)}</span></div>
-                  {cashBalance < 0 && <p className="text-[10px] font-medium mt-2 px-2 py-1.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠ 残高がマイナスです。予備金から {fmt(Math.abs(cashBalance))} を補充してください</p>}
-                  {storeRecovery > 0 && <div className="flex justify-between mt-2 pt-2" style={{ borderTop: `1px dashed ${T.border}` }}><span>回収額（残高 - 準備金）</span><span className="font-bold" style={{ color: "#22c55e" }}>{fmt(storeRecovery)}</span></div>}
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <button onClick={() => setSettleSalesCollected(!settleSalesCollected)} className="flex-1 px-3 py-2 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: settleSalesCollected ? "#22c55e18" : T.cardAlt, color: settleSalesCollected ? "#22c55e" : T.textMuted, border: `1px solid ${settleSalesCollected ? "#22c55e" : T.border}`, fontWeight: settleSalesCollected ? 700 : 400 }}>{settleSalesCollected ? "✅ 売上回収済" : "💴 売上回収"}</button>
-                  <button onClick={() => setSettleChangeCollected(!settleChangeCollected)} className="flex-1 px-3 py-2 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: settleChangeCollected ? "#22c55e18" : T.cardAlt, color: settleChangeCollected ? "#22c55e" : T.textMuted, border: `1px solid ${settleChangeCollected ? "#22c55e" : T.border}`, fontWeight: settleChangeCollected ? 700 : 400 }}>{settleChangeCollected ? "✅ 釣銭回収済" : "💰 釣銭回収"}</button>
-                </div>
-                {(settleSalesCollected || settleChangeCollected) && <div className="grid grid-cols-2 gap-2"><button onClick={() => { setSettleSafeDeposited(false); }} className="px-3 py-2.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: !settleSafeDeposited ? "#22c55e18" : T.cardAlt, color: !settleSafeDeposited ? "#22c55e" : T.textMuted, border: `1px solid ${!settleSafeDeposited ? "#22c55e" : T.border}`, fontWeight: !settleSafeDeposited ? 700 : 400 }}>{!settleSafeDeposited ? "✅ スタッフが回収" : "👤 スタッフが回収"}</button><button onClick={() => { setSettleSafeDeposited(true); }} className="px-3 py-2.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: settleSafeDeposited ? "#a855f718" : T.cardAlt, color: settleSafeDeposited ? "#a855f7" : T.textMuted, border: `1px solid ${settleSafeDeposited ? "#a855f7" : T.border}`, fontWeight: settleSafeDeposited ? 700 : 400 }}>{settleSafeDeposited ? "✅ 金庫に投函" : "🔐 金庫に投函"}</button></div>}
-              </div>
-              )}
-              <div className="flex gap-3 pt-2">
-                <button onClick={async () => { setSettleSaving(true); await supabase.from("therapist_daily_settlements").upsert({ therapist_id: settleTh.id, date: selectedDate, total_sales: totalSales, total_back: totalBack + salaryBonus + totalNom + totalOptBack + totalExtBack, total_nomination: totalNom, total_options: totalOpt, total_extension: totalExt, total_discount: totalDisc, total_card: totalCard, total_paypay: totalPaypay, total_cash: totalCash, order_count: tRes.length, is_settled: true, adjustment: adj, adjustment_note: settleAdjNote.trim(), invoice_deduction: invoiceDed, has_invoice: settleInvoice, withholding_tax: withholding, final_payment: finalPay, welfare_fee: welfareFee, transport_fee: transportFee, room_id: ra?.room_id || 0, sales_collected: settleSalesCollected, change_collected: settleChangeCollected, safe_deposited: settleSafeDeposited }, { onConflict: "therapist_id,date" }); if (ra && settleSalesCollected) { for (const p of pastUncollected) { if (!p.sales_collected) { await supabase.from("therapist_daily_settlements").update({ sales_collected: true }).eq("room_id", ra.room_id).eq("date", p.date).eq("sales_collected", false); } } } if (ra && settleChangeCollected) { for (const p of pastUncollected) { if (!p.change_collected) { await supabase.from("therapist_daily_settlements").update({ change_collected: true }).eq("room_id", ra.room_id).eq("date", p.date).eq("change_collected", false); } } } toast.show("清算を確定しました", "success"); setSettleSaving(false); setSettleTh(null); fetchData(); }} disabled={settleSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{settleSaving ? "保存中..." : "清算確定"}</button>
-                <button onClick={() => setSettleTh(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
-<button onClick={() => { const store = stores[0]; const th = settleTh; const realName = (th as any)?.real_name || th.name; const hasInv = settleInvoice; const invNum = (th as any)?.therapist_invoice_number || ""; const w = window.open("", "_blank"); if (!w) return; w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払通知書_${selectedDate}_${th.name}</title>
-<style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:750px;margin:40px auto;padding:30px;color:#222;font-weight:500}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #bbb;padding:10px 14px;font-size:13px;font-weight:500}th{background:#f5f0e8;text-align:left;width:38%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:14px}.section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}.doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}.stamp-area{display:flex;justify-content:space-between;margin-top:40px}.stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:11px;color:#666}@media print{body{margin:0;padding:20px}}</style></head><body>
-<div style="text-align:center;display:flex;gap:10px;justify-content:center;margin-bottom:20px" class="no-print"><button onclick="window.print()" style="padding:8px 20px;background:linear-gradient(to right,#c3a782,#b09672);color:#fff;border:none;border-radius:10px;font-size:12px;cursor:pointer">📄 PDF保存</button><button onclick="saveAsImage()" style="padding:8px 20px;background:linear-gradient(to right,#3b82f6,#2563eb);color:#fff;border:none;border-radius:10px;font-size:12px;cursor:pointer">📥 画像保存</button><button onclick="copyAsImage()" style="padding:8px 20px;background:linear-gradient(to right,#22c55e,#16a34a);color:#fff;border:none;border-radius:10px;font-size:12px;cursor:pointer">📋 コピー</button></div>
-<p class="doc-title">業務委託報酬 支払通知書</p>
-<h1>支 払 通 知 書</h1>
-<h2>業務実施日：${selectedDate}</h2>
-<table>
-<tr><th>支払を受ける者（氏名）</th><td>${realName}</td></tr>
-${realName !== th.name ? `<tr><th>業務上の名称</th><td>${th.name}</td></tr>` : ""}
-<tr><th>区分</th><td>${(th as any)?.has_withholding ? "報酬（所得税法第204条第1項第6号）" : "報酬（所得税法第204条第1項第1号）"}</td></tr>
-<tr><th>細目</th><td>${(th as any)?.has_withholding ? "ホステス等の業務に関する報酬" : "エステティック施術業務"}</td></tr>
-<tr><th>適格請求書発行事業者</th><td>${hasInv ? "登録あり（登録番号：" + invNum + "）" : "未登録"}</td></tr>
-</table>
-<table>
-<tr><th style="width:40%">項目</th><th class="right" style="width:22%">金額</th><th style="width:38%">摘要</th></tr>
-<tr><td>基本バック（${tRes.length}件）</td><td class="right">&yen;${totalBack.toLocaleString()}</td><td style="font-size:11px;color:#666">コースバック合計（税込）</td></tr>
-${salaryBonus > 0 ? `<tr><td>給料ランク</td><td class="right">+&yen;${salaryBonus.toLocaleString()}</td><td style="font-size:11px;color:#666">${salaryType === "percent" ? salaryAmount + "%UP" : "¥" + salaryAmount.toLocaleString() + "×" + tRes.length + "件"}</td></tr>` : ""}
-${totalNom > 0 ? `<tr><td>指名バック</td><td class="right">+&yen;${totalNom.toLocaleString()}</td><td style="font-size:11px;color:#666">指名料（税込）</td></tr>` : ""}
-${totalOptBack > 0 ? `<tr><td>オプションバック</td><td class="right">+&yen;${totalOptBack.toLocaleString()}</td><td style="font-size:11px;color:#666">オプション設定バック（税込）</td></tr>` : ""}
-${totalExtBack > 0 ? `<tr><td>延長バック</td><td class="right">+&yen;${totalExtBack.toLocaleString()}</td><td style="font-size:11px;color:#666">延長設定バック（税込）</td></tr>` : ""}
-${adj !== 0 ? `<tr><td>調整金${settleAdjNote ? "（" + settleAdjNote + "）" : ""}</td><td class="right" style="color:${adj > 0 ? "#22c55e" : "#c45555"}">${adj > 0 ? "+" : ""}&yen;${adj.toLocaleString()}</td><td></td></tr>` : ""}
-<tr style="background:#f9f6f0"><td><strong>業務委託報酬（税込）</strong></td><td class="right"><strong>&yen;${backTotal.toLocaleString()}</strong></td><td style="font-size:11px;color:#666">控除前の報酬総額</td></tr>
-${invoiceDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${invoiceDed.toLocaleString()}</td><td style="font-size:11px;color:#666">適格請求書発行事業者以外<br>報酬額の10%を控除</td></tr>
-<tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${adjustedPay.toLocaleString()}</td><td style="font-size:11px;color:#666">税金計算の基準額</td></tr>` : ""}
-${(th as any)?.has_withholding ? `<tr><td style="color:#c45555">源泉徴収税（10.21%）</td><td class="right" style="color:#c45555">-&yen;${withholding.toLocaleString()}</td><td style="font-size:11px;color:#666">（&yen;${adjustedPay.toLocaleString()} − &yen;5,000）× 10.21%<br>所得税及び復興特別所得税</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:11px;color:#666">源泉徴収対象外</td></tr>`}
-<tr><td style="color:#c45555">備品・リネン代</td><td class="right" style="color:#c45555">-&yen;${welfareFee.toLocaleString()}</td><td style="font-size:11px;color:#666">備品・リネン代等</td></tr>
-${transportFee > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right" style="color:#22c55e">+&yen;${transportFee.toLocaleString()}</td><td style="font-size:11px;color:#666">源泉対象外</td></tr>` : ""}
-<tr class="total-row"><td>差引支給額（100円切上）</td><td class="right" style="color:#c3a782">&yen;${finalPay.toLocaleString()}</td><td style="font-size:11px;color:#666">実際にお渡しする金額</td></tr>
-</table>
-<div style="display:none">
-<table><tr><th>顧客</th><th>コース</th><th class="right">売上（税込）</th></tr>
-${tRes.map(r => `<tr><td>${r.customer_name}</td><td>${r.course}</td><td class="right">&yen;${((r as any).total_price || 0).toLocaleString()}</td></tr>`).join("")}
-</table></div>
-<div style="margin-top:15px">
-<p class="note">※ 金額は全て税込（内税方式）で記載しています。</p>
-<p class="note">※ 源泉徴収税額は所得税法第204条第1項${(th as any)?.has_withholding ? "第6号" : "第1号"}に基づき計算。${(th as any)?.has_withholding ? "1回の支払につき¥5,000を控除した残額に対し10.21%を適用。" : ""}</p>
-${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、消費税法附則第52条・第53条に基づきます。</p>` : ""}
-</div>
-<div class="section"><p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${store.invoice_number}</p>` : ""}</div></div>
-<div class="stamp-area"><div class="stamp-box">支払者（${store?.company_name || ""}）</div><div class="stamp-box">支払を受ける者（${realName} 様）</div></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>function saveAsImage(){var btns=document.querySelector('.no-print');btns.style.display='none';html2canvas(document.querySelector('body'),{scale:2,useCORS:true,width:750,windowWidth:750}).then(function(c){btns.style.display='flex';var a=document.createElement('a');a.download='支払通知書_${selectedDate}_${th.name}.png';a.href=c.toDataURL('image/png');a.click();})}function copyAsImage(){var btns=document.querySelector('.no-print');btns.style.display='none';html2canvas(document.querySelector('body'),{scale:2,useCORS:true,width:750,windowWidth:750}).then(function(c){btns.style.display='flex';c.toBlob(function(b){navigator.clipboard.write([new ClipboardItem({'image/png':b})]).then(function(){alert('クリップボードにコピーしました！LINEやメールに貼り付けできます。')})});})}</script>
-<style>@media print{.no-print{display:none!important}}</style>
-</body></html>`); w.document.close(); }} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: "#85a8c444", color: "#85a8c4" }}>📄 通知書</button>
-              </div>
-            </div>
+            {accountSummary.length === 0 ? (
+              <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>データがありません</p>
+            ) : (
+              <table className="w-full text-[12px]">
+                <thead><tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                  {["勘定科目", "金額", "構成比"].map((h) => (<th key={h} className="py-2 px-3 text-left font-medium text-[11px]" style={{ color: T.textMuted }}>{h}</th>))}
+                </tr></thead>
+                <tbody>
+                  {accountSummary.map((a) => (
+                    <tr key={a.category} style={{ borderBottom: `1px solid ${T.border}` }}>
+                      <td className="py-2.5 px-3 font-medium">{a.account}</td>
+                      <td className="py-2.5 px-3" style={{ color: "#c45555" }}>{fmt(a.amount)}</td>
+                      <td className="py-2.5 px-3" style={{ color: T.textSub }}>{totalExpenseAll > 0 ? Math.round((a.amount / totalExpenseAll) * 100) : 0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: `2px solid ${T.border}` }}>
+                    <td className="py-2.5 px-3 font-bold">経費合計</td>
+                    <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(totalExpenseAll)}</td>
+                    <td className="py-2.5 px-3 font-bold">100%</td>
+                  </tr>
+                  <tr><td className="py-2 px-3 font-bold" style={{ color: "#22c55e" }}>総売上</td><td className="py-2 px-3 font-bold" style={{ color: "#22c55e" }}>{fmt(grossRevenue)}</td><td /></tr>
+                  <tr style={{ borderTop: `2px solid ${T.accent}` }}><td className="py-2.5 px-3 font-bold text-[13px]">純利益</td><td className="py-2.5 px-3 font-bold text-[13px]" style={{ color: netProfit >= 0 ? "#22c55e" : "#c45555" }}>{fmt(netProfit)}</td><td /></tr>
+                </tfoot>
+              </table>
+            )}
           </div>
-        </div>);
-      })()}
 
-      {/* Therapist Edit Modal */}
-      {editTherapist && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditTherapist(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[15px] font-medium mb-2">セラピスト編集</h2>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-[14px] text-white font-medium" style={{ backgroundColor: colors[therapists.findIndex(x => x.id === editTherapist.id) % colors.length] }}>{editTherapist.name.charAt(0)}</div>
-              <div>
-                <p className="text-[13px] font-medium">{editTherapist.name}</p>
-                <div className="flex gap-2 text-[9px]" style={{ color: T.textMuted }}>
-                  {(editTherapist as any).age > 0 && <span>{(editTherapist as any).age}歳</span>}
-                  {(editTherapist as any).height_cm > 0 && <span>{(editTherapist as any).height_cm}cm</span>}
-                  {(editTherapist as any).cup && <span>{(editTherapist as any).cup}カップ</span>}
-                </div>
-              </div>
+          {/* 取引明細 */}
+          <div className="rounded-2xl border overflow-hidden mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <h2 className="text-[14px] font-medium">全取引明細</h2>
+              <span className="text-[11px]" style={{ color: T.textMuted }}>{allTransactions.length}件</span>
             </div>
-            <div className="space-y-3">
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>備考・メモ</label><textarea value={etNotes} onChange={(e) => { if (e.target.value.length <= 50) setEtNotes(e.target.value); }} placeholder="セラピストの備考を入力" rows={3} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-y" style={inputStyle} /><div className="flex items-center justify-between mt-1"><div className="h-1 flex-1 rounded-full overflow-hidden" style={{ backgroundColor: T.cardAlt }}><div className="h-full rounded-full" style={{ width: `${(etNotes.length / 50) * 100}%`, backgroundColor: etNotes.length > 40 ? "#c45555" : etNotes.length > 25 ? "#f59e0b" : "#7ab88f" }} /></div><span className="text-[8px] ml-2 flex-shrink-0" style={{ color: etNotes.length > 40 ? "#c45555" : T.textMuted }}>{etNotes.length}/50</span></div></div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={async () => { setEtSaving(true); await supabase.from("therapists").update({ notes: etNotes.trim() }).eq("id", editTherapist.id); setEtSaving(false); setEditTherapist(null); fetchData(); }} disabled={etSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{etSaving ? "保存中..." : "保存する"}</button>
-                <button onClick={() => window.open("/therapists", "_blank")} className="px-5 py-2.5 text-[11px] rounded-xl cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>詳細編集</button>
-                <button onClick={() => setEditTherapist(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Replenish Modal */}
-      {showReplenish && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowReplenish(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-xs animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[15px] font-medium mb-2">💰 釣銭補充</h2>
-            <p className="text-[11px] mb-3" style={{ color: T.textFaint }}>{allRooms.find(r => r.id === showReplenish)?.name || ""} — {selectedDate}</p>
-            <div className="space-y-3">
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>担当スタッフ</label><div className="flex flex-wrap gap-2">{staffMembers.map(s => (<button key={s.id} onClick={() => setReplenishStaff(s.name)} className="px-3 py-1.5 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: replenishStaff === s.name ? "#85a8c422" : T.cardAlt, color: replenishStaff === s.name ? "#85a8c4" : T.textMuted, border: `1px solid ${replenishStaff === s.name ? "#85a8c4" : T.border}`, fontWeight: replenishStaff === s.name ? 700 : 400 }}>{s.name}</button>))}</div></div>
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>補充金額</label><input type="text" inputMode="numeric" value={replenishAmount} onChange={(e) => setReplenishAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="20000" className="w-full px-3 py-2.5 rounded-xl text-[14px] font-bold outline-none text-center" style={inputStyle} /></div>
-              <div className="flex flex-wrap gap-2">{[10000, 15000, 20000, 30000, 50000].map(v => (<button key={v} onClick={() => setReplenishAmount(String(v))} className="px-3 py-1.5 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: replenishAmount === String(v) ? "#22c55e22" : T.cardAlt, color: replenishAmount === String(v) ? "#22c55e" : T.textMuted, border: `1px solid ${replenishAmount === String(v) ? "#22c55e" : T.border}` }}>{fmt(v)}</button>))}</div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={async () => { const amt = parseInt(replenishAmount) || 0; if (amt <= 0) return; await supabase.from("room_cash_replenishments").insert({ room_id: showReplenish, date: selectedDate, amount: amt, therapist_id: replenishTherapistId, staff_name: replenishStaff }); toast.show(`${fmt(amt)} を補充しました`, "success"); setShowReplenish(null); fetchData(); }} className="px-5 py-2.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white text-[11px] rounded-xl cursor-pointer">補充する</button>
-                <button onClick={() => setShowReplenish(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
-              </div>
-              {(() => { const roomReps = replenishments.filter(r => r.room_id === showReplenish); if (roomReps.length === 0) return null; return (
-                <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${T.border}` }}>
-                  <p className="text-[10px] font-medium mb-2" style={{ color: T.textSub }}>📋 補充履歴（{allRooms.find(r => r.id === showReplenish)?.name || ""}）</p>
-                  <div className="space-y-1">
-                    {roomReps.map(r => (
-                      <div key={r.id} className="flex justify-between items-center py-1.5 px-2 rounded-lg text-[11px]" style={{ backgroundColor: T.cardAlt }}>
-                        <span>{r.staff_name ? `👤${r.staff_name}` : ""}{r.created_at ? <span style={{ color: T.textFaint, fontSize: 9 }}> {new Date(r.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}</span> : ""}</span>
-                        <div className="flex items-center gap-2">
-                          <span style={{ color: "#22c55e", fontWeight: 600 }}>{fmt(r.amount)}</span>
-                          <button onClick={async () => { if (!confirm(`${fmt(r.amount)} の補充を取り消しますか？`)) return; await supabase.from("room_cash_replenishments").delete().eq("id", r.id); toast.show("補充を取り消しました", "info"); setShowReplenish(null); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "1px solid #c4555533" }}>取消</button>
-                        </div>
-                      </div>
+            {allTransactions.length === 0 ? (
+              <p className="text-[12px] text-center py-12" style={{ color: T.textFaint }}>データがありません</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                    {["日付", "勘定科目", "摘要", "収入", "支出"].map((h) => (
+                      <th key={h} className="py-2.5 px-3 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>
                     ))}
-                    <div className="flex justify-between pt-1 font-bold text-[11px]" style={{ borderTop: `1px dashed ${T.border}` }}><span>合計</span><span style={{ color: "#22c55e" }}>{fmt(roomReps.reduce((s, r) => s + r.amount, 0))}</span></div>
-                  </div>
-                </div>
-              ); })()}
-            </div>
+                  </tr></thead>
+                  <tbody>
+                    {allTransactions.map((t, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <td className="py-2 px-3 whitespace-nowrap">{t.date}</td>
+                        <td className="py-2 px-3 whitespace-nowrap">{t.account}</td>
+                        <td className="py-2 px-3 max-w-[300px] truncate">{t.description}</td>
+                        <td className="py-2 px-3 whitespace-nowrap font-medium" style={{ color: t.income > 0 ? "#22c55e" : T.textFaint }}>{t.income > 0 ? fmt(t.income) : ""}</td>
+                        <td className="py-2 px-3 whitespace-nowrap font-medium" style={{ color: t.expense > 0 ? "#c45555" : T.textFaint }}>{t.expense > 0 ? fmt(t.expense) : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr style={{ borderTop: `2px solid ${T.border}` }}>
+                    <td colSpan={3} className="py-2.5 px-3 font-bold">合計</td>
+                    <td className="py-2.5 px-3 font-bold" style={{ color: "#22c55e" }}>{fmt(allTransactions.reduce((s, t) => s + t.income, 0))}</td>
+                    <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(allTransactions.reduce((s, t) => s + t.expense, 0))}</td>
+                  </tr></tfoot>
+                </table>
+              </div>
+            )}
           </div>
         </div>
-      )}
-
-      {/* Break Modal */}
-      {showBreakModal && (() => {
-        const bTh = therapists.find(t => t.id === showBreakModal);
-        const bEndMin = timeToMinutes(breakStart) + breakDuration;
-        const bEnd = minutesToTime(bEndMin);
-        return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowBreakModal(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-xs animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[15px] font-medium mb-2">☕ 休憩追加</h2>
-            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{bTh?.name}</p>
-            <div className="space-y-3">
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label><select value={breakStart} onChange={(e) => setBreakStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>休憩時間</label><div className="flex flex-wrap gap-2">{[10, 15, 20, 30, 45, 60].map(d => (<button key={d} onClick={() => setBreakDuration(d)} className="px-3 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: breakDuration === d ? "#a855f722" : T.cardAlt, color: breakDuration === d ? "#a855f7" : T.textMuted, border: `1px solid ${breakDuration === d ? "#a855f7" : T.border}`, fontWeight: breakDuration === d ? 700 : 400 }}>{d}分</button>))}</div></div>
-              <p className="text-[11px] text-center py-2" style={{ color: "#a855f7" }}>☕ {breakStart?.slice(0,5)} 〜 {minutesToDisplay(bEndMin)}（{breakDuration}分間）</p>
-              <div className="flex gap-3">
-                <button onClick={() => { setBreaks(prev => [...prev, { id: nextBreakId, therapist_id: showBreakModal, start: breakStart, end: bEnd, label: "休憩" }]); setNextBreakId(prev => prev + 1); setShowBreakModal(null); }} className="px-5 py-2.5 bg-gradient-to-r from-[#a855f7] to-[#9333ea] text-white text-[11px] rounded-xl cursor-pointer">追加する</button>
-                <button onClick={() => setShowBreakModal(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
-              </div>
-            </div>
-          </div>
-        </div>);
-      })()}
-
-      {/* Shift Change Modal */}
-      {editShiftTherapist && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditShiftTherapist(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[15px] font-medium mb-2">⏰ 出勤時間変更</h2>
-            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{therapists.find(t => t.id === editShiftTherapist)?.name} の出勤時間</p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label><select value={editShiftStart} onChange={(e) => setEditShiftStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>終了時間</label><select value={editShiftEnd} onChange={(e) => setEditShiftEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={async () => { if (!editShiftId) return; await supabase.from("shifts").update({ start_time: editShiftStart, end_time: editShiftEnd }).eq("id", editShiftId); setEditShiftTherapist(null); fetchData(); }} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">変更する</button>
-                <button onClick={() => setEditShiftTherapist(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
-              </div>
-            </div>
-          </div>
+      </div>
+</>)}
+      {dashTab === "therapist_payroll" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <TherapistPayroll T={T} />
         </div>
       )}
-
-      {/* Room Change Modal */}
-      {editRoomTherapist && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRoomTherapist(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[15px] font-medium mb-4">🏠 ルーム変更</h2>
-            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>{therapists.find(t => t.id === editRoomTherapist)?.name} のルームを変更</p>
-            <div className="space-y-3">
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>店舗</label><select value={editRoomStore} onChange={(e) => { setEditRoomStore(Number(e.target.value)); setEditRoomBuilding(0); setEditRoomId(0); }} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-              {editRoomStore > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>建物</label><select value={editRoomBuilding} onChange={(e) => { setEditRoomBuilding(Number(e.target.value)); setEditRoomId(0); }} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{buildings.filter(b => b.store_id === editRoomStore).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>}
-              {editRoomBuilding > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>部屋</label><select value={editRoomId} onChange={(e) => setEditRoomId(Number(e.target.value))} className="w-full px-3 py-2 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{allRooms.filter(r => r.building_id === editRoomBuilding).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>}
-              <div className="flex gap-3 pt-2">
-                <button onClick={async () => { if (!editRoomTherapist || !editRoomId) return; const existing = roomAssigns.find(a => a.therapist_id === editRoomTherapist); if (existing) { await supabase.from("room_assignments").update({ room_id: editRoomId }).eq("id", existing.id); } else { await supabase.from("room_assignments").insert({ date: selectedDate, room_id: editRoomId, therapist_id: editRoomTherapist, slot: "early" }); } setEditRoomTherapist(null); fetchData(); }} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">変更する</button>
-                <button onClick={() => setEditRoomTherapist(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
-              </div>
-            </div>
-          </div>
+      {dashTab === "staff_payroll" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <StaffPayroll T={T} />
         </div>
       )}
+      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+    </div>
+  );
+}
 
-      {/* Add Shift Modal */}
-      {showNewTherapist && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowNewTherapist(false)}>
-          <div className="rounded-2xl border p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[15px] font-medium mb-1">出勤追加</h2>
-            <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>セラピストを本日の出勤に追加します</p>
-            <div className="space-y-3">
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト *</label><input type="text" placeholder="名前で検索" value={addShiftSearch} onChange={(e) => setAddShiftSearch(e.target.value)} className="w-full px-3 py-2 rounded-xl text-[11px] outline-none mb-2" style={inputStyle} /><div className="max-h-[150px] overflow-y-auto space-y-1">{therapists.filter(t => t.status === "active" && (!addShiftSearch || t.name.toLowerCase().includes(addShiftSearch.toLowerCase()))).map(t => { const onShift = shiftTherapistIds.has(t.id); return <button key={t.id} onClick={() => setAddShiftTherapistId(t.id)} className="w-full text-left px-3 py-2 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: addShiftTherapistId === t.id ? "#c3a78222" : T.cardAlt, border: `1px solid ${addShiftTherapistId === t.id ? "#c3a782" : "transparent"}` }}><span>{t.name}{(t as any).age ? ` (${(t as any).age}歳)` : ""}</span>{onShift && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>出勤中</span>}</button>; })}</div></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label><select value={addShiftStart} onChange={(e) => setAddShiftStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-                <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>終了時間</label><select value={addShiftEnd} onChange={(e) => setAddShiftEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
-              </div>
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>店舗</label><select value={addShiftStore} onChange={(e) => { setAddShiftStore(Number(e.target.value)); setAddShiftBuilding(0); setAddShiftRoom(0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-              {addShiftStore > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>建物</label><select value={addShiftBuilding} onChange={(e) => { setAddShiftBuilding(Number(e.target.value)); setAddShiftRoom(0); }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{buildings.filter(b => b.store_id === addShiftStore).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>}
-              {addShiftBuilding > 0 && <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>部屋</label><select value={addShiftRoom} onChange={(e) => setAddShiftRoom(Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value={0}>選択</option>{allRooms.filter(r => r.building_id === addShiftBuilding).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>}
-              <div className="flex gap-3 pt-2">
-                <button onClick={addShiftTherapist} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">出勤追加</button>
-<button onClick={() => setShowNewTherapist(false)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
-              </div>
-            </div>
-          </div>
+function TherapistPayroll({ T }: { T: any }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [therapists, setTherapists] = useState<any[]>([]);
+  const [data, setData] = useState<{ id: number; name: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; total: number; days: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [storeInfo, setStoreInfo] = useState<any>(null);
+  const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+
+  useEffect(() => {
+    const f = async () => {
+      const { data: th } = await supabase.from("therapists").select("*"); if (th) setTherapists(th);
+      const { data: st } = await supabase.from("stores").select("*"); if (st?.[0]) setStoreInfo(st[0]);
+    }; f();
+  }, []);
+
+  const fetchPayroll = useCallback(async () => {
+    if (therapists.length === 0) return;
+    setLoading(true);
+    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, total_back, invoice_deduction, withholding_tax, adjustment, final_payment, transport_fee, welfare_fee").gte("date", `${year}-01-01`).lte("date", `${year}-12-31`).eq("is_settled", true);
+    const thMap: Record<number, { name: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }> = {};
+    (settlements || []).forEach(s => {
+      if (!thMap[s.therapist_id]) {
+        const th = therapists.find(t => t.id === s.therapist_id);
+        thMap[s.therapist_id] = { name: th?.name || "不明", gross: 0, invoiceDed: 0, tax: 0, welfare: 0, transport: 0, final: 0, days: 0 };
+      }
+      const th = therapists.find(t => t.id === s.therapist_id);
+      const backAmt = (s.total_back || 0) + (s.adjustment || 0);
+      const transportFee = s.transport_fee || th?.transport_fee || 0;
+      let dayWT = s.withholding_tax || 0;
+      if (dayWT === 0 && th?.has_withholding) { dayWT = Math.floor(Math.max(backAmt - (s.invoice_deduction || 0) - 5000, 0) * 0.1021); }
+      thMap[s.therapist_id].gross += backAmt;
+      thMap[s.therapist_id].invoiceDed += (s.invoice_deduction || 0);
+      thMap[s.therapist_id].tax += dayWT;
+      thMap[s.therapist_id].welfare += (s.welfare_fee || 0);
+      thMap[s.therapist_id].transport += transportFee;
+      thMap[s.therapist_id].final += (s.final_payment || 0);
+      thMap[s.therapist_id].days += 1;
+    });
+    const result = Object.entries(thMap).map(([id, d]) => ({ id: Number(id), name: d.name, gross: d.gross, invoiceDed: d.invoiceDed, tax: d.tax, welfare: d.welfare, transport: d.transport, total: d.final, days: d.days }));
+    result.sort((a, b) => b.gross - a.gross);
+    setData(result);
+    setLoading(false);
+  }, [year, therapists]);
+
+  useEffect(() => { fetchPayroll(); }, [fetchPayroll]);
+
+  const openPDF = (row: typeof data[0]) => {
+    const store = storeInfo;
+    const th = therapists.find(t => t.id === row.id);
+    const realName = th?.real_name || row.name;
+    const hasInvoice = th?.has_invoice || false;
+    const invoiceNum = th?.therapist_invoice_number || "";
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${year}_${realName}</title>
+    <style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:750px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:9px 14px;font-size:12px}th{background:#f5f0e8;text-align:left;width:38%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:14px}.section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}.doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}.stamp-area{display:flex;justify-content:space-between;margin-top:40px}.stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:10px;color:#888}@media print{body{margin:0;padding:20px}}</style></head><body>
+    <p class="doc-title">報酬、料金、契約金及び賞金の支払調書</p><h1>支　払　調　書</h1><h2>対象期間：${year}年1月1日 〜 ${year}年12月31日</h2>
+    <table><tr><th>支払を受ける者（氏名）</th><td>${realName}</td></tr>${realName !== row.name ? `<tr><th>業務上の名称</th><td>${row.name}</td></tr>` : ""}<tr><th>支払を受ける者（住所）</th><td>${th?.address || '<span style="color:#c45555">※未登録</span>'}</td></tr>${th?.birth_date ? `<tr><th>生年月日</th><td>${th.birth_date}</td></tr>` : ""}<tr><th>区分</th><td>${th?.has_withholding ? "報酬（所得税法第204条第1項第6号）" : "報酬（所得税法第204条第1項第1号）"}</td></tr><tr><th>細目</th><td>${th?.has_withholding ? "ホステス等の業務に関する報酬" : "マッサージ施術業務"}</td></tr><tr><th>適格請求書発行事業者</th><td>${hasInvoice ? `登録あり（登録番号：${invoiceNum}）` : "未登録"}</td></tr></table>
+    <table><tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
+    <tr><td>稼働日数</td><td class="right">${row.days}日</td><td style="font-size:10px;color:#888">年間清算回数</td></tr>
+    <tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${row.gross.toLocaleString()}</strong></td><td style="font-size:10px;color:#888">業務委託報酬の年間合計</td></tr>
+    ${row.invoiceDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${row.invoiceDed.toLocaleString()}</td><td style="font-size:10px;color:#888">報酬額の10%を控除</td></tr><tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(row.gross - row.invoiceDed).toLocaleString()}</td><td style="font-size:10px;color:#888">支払金額 − 仕入税額控除</td></tr>` : ""}
+    ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="right" style="color:#c45555">-&yen;${row.tax.toLocaleString()}</td><td style="font-size:10px;color:#888">所得税及び復興特別所得税</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
+    ${row.welfare > 0 ? `<tr><td style="color:#c45555">備品代・リネン代</td><td class="right" style="color:#c45555">-&yen;${row.welfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;500/日 × ${row.days}日</td></tr>` : ""}
+    ${row.transport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${Math.round(row.transport / row.days).toLocaleString()}/日 × ${row.days}日</td></tr>` : ""}
+    <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:10px;color:#888">年間支給額合計</td></tr></table>
+    <div style="margin-top:15px"><p class="note">※ 支払金額は全て税込（内税方式）で記載。</p><p class="note">※ 源泉徴収税額は所得税法第204条第1項${th?.has_withholding ? "第6号" : "第1号"}に基づき日次清算時に控除済み。</p><p class="note">※ 本書は所得税法第225条第1項に基づく支払調書に準じて作成。</p></div>
+    <div class="section"><p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${store.invoice_number}</p>` : ""}</div></div>
+    <div class="stamp-area"><div class="stamp-box">支払者（${store?.company_name || ""}）</div><div class="stamp-box">支払を受ける者（${realName} 様）</div></div></body></html>`);
+    w.document.close();
+  };
+
+  return (
+    <div className="max-w-[900px] mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setYear(year - 1)} className="px-2 py-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+          <span className="text-[14px] font-medium">{year}年</span>
+          <button onClick={() => setYear(year + 1)} className="px-2 py-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
+        </div>
+        {data.length > 0 && <button onClick={() => data.forEach(r => openPDF(r))} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#3b82f6" }}>📥 全員分表示</button>}
+      </div>
+      {loading ? <p className="text-center py-12 text-[12px]" style={{ color: T.textFaint }}>読み込み中...</p> : data.length === 0 ? <p className="text-center py-12 text-[12px]" style={{ color: T.textFaint }}>清算データがありません</p> : (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><h2 className="text-[13px] font-medium">セラピスト支払調書 — {year}年</h2></div>
+          <table className="w-full text-[11px]">
+            <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+              {["名前", "日数", "報酬（税込）", "インボイス控除", "源泉徴収", "厚生費", "交通費", "差引支払額", ""].map(h => <th key={h} className="py-2.5 px-3 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>)}
+            </tr></thead>
+            <tbody>{data.map(row => (
+              <tr key={row.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                <td className="py-2.5 px-3 font-medium">{row.name}</td>
+                <td className="py-2.5 px-3">{row.days}日</td>
+                <td className="py-2.5 px-3">{fmt(row.gross)}</td>
+                <td className="py-2.5 px-3" style={{ color: row.invoiceDed > 0 ? "#c45555" : T.textFaint }}>{row.invoiceDed > 0 ? `-${fmt(row.invoiceDed)}` : "-"}</td>
+                <td className="py-2.5 px-3" style={{ color: row.tax > 0 ? "#c45555" : T.textFaint }}>{row.tax > 0 ? `-${fmt(row.tax)}` : "-"}</td>
+                <td className="py-2.5 px-3" style={{ color: "#c45555" }}>{row.welfare > 0 ? `-${fmt(row.welfare)}` : "-"}</td>
+                <td className="py-2.5 px-3">{row.transport > 0 ? fmt(row.transport) : "-"}</td>
+                <td className="py-2.5 px-3 font-bold" style={{ color: "#c3a782" }}>{fmt(row.total)}</td>
+                <td className="py-2.5 px-3"><button onClick={() => openPDF(row)} className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ color: "#85a8c4", backgroundColor: "#85a8c418" }}>📄 調書</button></td>
+              </tr>
+            ))}</tbody>
+            <tfoot><tr style={{ borderTop: `2px solid ${T.border}` }}>
+              <td className="py-2.5 px-3 font-bold">合計</td>
+              <td className="py-2.5 px-3 font-bold">{data.reduce((s,r) => s + r.days, 0)}日</td>
+              <td className="py-2.5 px-3 font-bold">{fmt(data.reduce((s,r) => s + r.gross, 0))}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(data.reduce((s,r) => s + r.invoiceDed, 0))}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(data.reduce((s,r) => s + r.tax, 0))}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(data.reduce((s,r) => s + r.welfare, 0))}</td>
+              <td className="py-2.5 px-3 font-bold">{fmt(data.reduce((s,r) => s + r.transport, 0))}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c3a782" }}>{fmt(data.reduce((s,r) => s + r.total, 0))}</td>
+              <td></td>
+            </tr></tfoot>
+          </table>
         </div>
       )}
-      {/* Shift Request Notification Popup */}
-      {showShiftNotif && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center z-50 pt-20 p-4" onClick={() => setShowShiftNotif(false)}>
-          <div className="rounded-2xl border w-full max-w-lg max-h-[70vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
-              <h2 className="text-[15px] font-medium">📝 出勤希望一覧</h2>
-              <button onClick={() => setShowShiftNotif(false)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
-            </div>
-            <div className="px-6 py-4">
-              {pendingShiftReqs.length === 0 ? (
-                <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>未処理の出勤希望はありません</p>
-              ) : (() => {
-                const grouped: Record<number, ShiftReq[]> = {};
-                pendingShiftReqs.forEach(r => { if (!grouped[r.therapist_id]) grouped[r.therapist_id] = []; grouped[r.therapist_id].push(r); });
-                return (
-                  <div className="space-y-4">
-                    {Object.entries(grouped).map(([tid, reqs]) => {
-                      const t = therapists.find(x => x.id === Number(tid));
-                      const sorted = [...reqs].sort((a, b) => a.date.localeCompare(b.date));
-                      const weekLabel = sorted[0]?.week_start ? (() => { const ws = new Date(sorted[0].week_start + "T00:00:00"); return `${ws.getMonth()+1}/${ws.getDate()}〜`; })() : "";
-                      return (
-                        <div key={tid} className="rounded-xl border p-4" style={{ borderColor: "#f59e0b33", backgroundColor: "#f59e0b08" }}>
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[14px] font-medium">{t?.name || "不明"}</span>
-                              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>未処理 {weekLabel}</span>
-                            </div>
-                            <span className="text-[9px]" style={{ color: T.textMuted }}>{sorted[0]?.updated_at ? new Date(sorted[0].updated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) + " 提出" : ""}</span>
-                          </div>
-                          <div className="space-y-1.5">
-                            {sorted.map(r => {
-                              const d = new Date(r.date + "T00:00:00");
-                              const days = ["日","月","火","水","木","金","土"];
-                              const store = stores.find(s => s.id === r.store_id);
-                              return (
-                                <div key={r.id} className="flex items-center justify-between rounded-lg px-3 py-2 text-[12px]" style={{ backgroundColor: T.card }}>
-                                  <span className="font-medium">{d.getMonth()+1}/{d.getDate()}({days[d.getDay()]})</span>
-                                  <span style={{ color: T.textSub }}>{r.start_time?.slice(0,5)} 〜 {r.end_time?.slice(0,5)}</span>
-                                  {store && <span className="text-[10px]" style={{ color: T.textMuted }}>{store.name}</span>}
-                                  {r.notes && <span className="text-[10px]" style={{ color: "#f59e0b" }}>📝 {r.notes}</span>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="flex gap-2 mt-3">
-                            <button onClick={() => { router.push("/shifts"); }} className="px-4 py-2 text-[11px] rounded-lg cursor-pointer" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>シフト管理で確認</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
+    </div>
+  );
+}
+
+function StaffPayroll({ T }: { T: any }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [data, setData] = useState<{ id: number; name: string; gross: number; invoiceDed: number; tax: number; transport: number; total: number; days: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [storeInfo, setStoreInfo] = useState<any>(null);
+  const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+
+  useEffect(() => {
+    const f = async () => {
+      const { data: st } = await supabase.from("staff").select("*").in("company_position", ["業務委託"]); if (st) setStaffList(st);
+      const { data: store } = await supabase.from("stores").select("*"); if (store?.[0]) setStoreInfo(store[0]);
+    }; f();
+  }, []);
+
+  const fetchPayroll = useCallback(async () => {
+    if (staffList.length === 0) return;
+    setLoading(true);
+    const { data: schedules } = await supabase.from("staff_schedules").select("*").gte("date", `${year}-01-01`).lte("date", `${year}-12-31`).eq("status", "completed");
+    const sMap: Record<number, { name: string; gross: number; invoiceDed: number; tax: number; transport: number; total: number; days: number }> = {};
+    (schedules || []).forEach(s => {
+      const staff = staffList.find(st => st.id === s.staff_id);
+      if (!staff) return;
+      if (!sMap[s.staff_id]) sMap[s.staff_id] = { name: staff.name, gross: 0, invoiceDed: 0, tax: 0, transport: 0, total: 0, days: 0 };
+      const subtotal = (s.commission_fee || 0) + (s.night_premium || 0) + (s.license_premium || 0);
+      const invDed = staff.has_invoice ? 0 : Math.round(subtotal * 0.1);
+      const adjusted = subtotal - invDed;
+      const wtTax = staff.has_withholding ? Math.floor(adjusted * 0.1021) : 0;
+      const transport = s.transport_fee || 0;
+      const finalRaw = adjusted - wtTax + transport;
+      const finalPay = Math.ceil(finalRaw / 100) * 100;
+      sMap[s.staff_id].gross += subtotal;
+      sMap[s.staff_id].invoiceDed += invDed;
+      sMap[s.staff_id].tax += wtTax;
+      sMap[s.staff_id].transport += transport;
+      sMap[s.staff_id].total += finalPay;
+      sMap[s.staff_id].days += 1;
+    });
+    const result = Object.entries(sMap).map(([id, d]) => ({ id: Number(id), ...d }));
+    result.sort((a, b) => b.gross - a.gross);
+    setData(result);
+    setLoading(false);
+  }, [year, staffList]);
+
+  useEffect(() => { fetchPayroll(); }, [fetchPayroll]);
+
+  const openPDF = (row: typeof data[0]) => {
+    const store = storeInfo;
+    const staff = staffList.find(s => s.id === row.id);
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${year}_${row.name}</title>
+    <style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:750px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:9px 14px;font-size:12px}th{background:#f5f0e8;text-align:left;width:38%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:14px}.section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}.doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}.stamp-area{display:flex;justify-content:space-between;margin-top:40px}.stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:10px;color:#888}@media print{body{margin:0;padding:20px}}</style></head><body>
+    <p class="doc-title">報酬、料金、契約金及び賞金の支払調書</p><h1>支　払　調　書</h1><h2>対象期間：${year}年1月1日 〜 ${year}年12月31日</h2>
+    <table><tr><th>支払を受ける者（氏名）</th><td>${row.name}</td></tr><tr><th>支払を受ける者（住所）</th><td>${staff?.address || '<span style="color:#c45555">※未登録</span>'}</td></tr><tr><th>区分</th><td>${staff?.has_withholding ? "報酬（所得税法第204条第1項第1号）" : "報酬・受付・清掃業務委託料"}</td></tr><tr><th>細目</th><td>${staff?.has_withholding ? "店舗運営指導報酬" : "店舗管理・受付業務一式"}</td></tr><tr><th>適格請求書発行事業者</th><td>${staff?.has_invoice ? `登録あり（${staff.invoice_number || ""})` : "未登録"}</td></tr></table>
+    <table><tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
+    <tr><td>稼働日数</td><td class="right">${row.days}日</td><td style="font-size:10px;color:#888">年間稼働回数</td></tr>
+    <tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${row.gross.toLocaleString()}</strong></td><td style="font-size:10px;color:#888">業務委託費の年間合計（税込）</td></tr>
+    ${row.invoiceDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${row.invoiceDed.toLocaleString()}</td><td style="font-size:10px;color:#888">報酬額の10%を控除</td></tr>` : ""}
+    ${row.tax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="right" style="color:#c45555">-&yen;${row.tax.toLocaleString()}</td><td style="font-size:10px;color:#888">所得税及び復興特別所得税（10.21%）</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
+    ${row.transport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right">&yen;${row.transport.toLocaleString()}</td><td style="font-size:10px;color:#888">実費精算・源泉対象外</td></tr>` : ""}
+    <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${row.total.toLocaleString()}</td><td style="font-size:10px;color:#888">年間支給額合計（100円切上後）</td></tr></table>
+    <div style="margin-top:15px"><p class="note">※ 支払金額は全て税込（内税方式）で記載。</p><p class="note">※ 本書は所得税法第225条第1項に基づく支払調書に準じて作成。</p></div>
+    <div class="section"><p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${store.invoice_number}</p>` : ""}</div></div>
+    <div class="stamp-area"><div class="stamp-box">支払者（${store?.company_name || ""}）</div><div class="stamp-box">支払を受ける者（${row.name} 様）</div></div></body></html>`);
+    w.document.close();
+  };
+
+  return (
+    <div className="max-w-[900px] mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setYear(year - 1)} className="px-2 py-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+          <span className="text-[14px] font-medium">{year}年</span>
+          <button onClick={() => setYear(year + 1)} className="px-2 py-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
+        </div>
+        {data.length > 0 && <button onClick={() => data.forEach(r => openPDF(r))} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#3b82f6" }}>📥 全員分表示</button>}
+      </div>
+      {loading ? <p className="text-center py-12 text-[12px]" style={{ color: T.textFaint }}>読み込み中...</p> : data.length === 0 ? <p className="text-center py-12 text-[12px]" style={{ color: T.textFaint }}>業務委託スタッフの稼働データがありません</p> : (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><h2 className="text-[13px] font-medium">内勤スタッフ支払調書 — {year}年（業務委託のみ）</h2></div>
+          <table className="w-full text-[11px]">
+            <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+              {["名前", "日数", "報酬（税込）", "インボイス控除", "源泉徴収", "交通費", "差引支払額", ""].map(h => <th key={h} className="py-2.5 px-3 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>)}
+            </tr></thead>
+            <tbody>{data.map(row => (
+              <tr key={row.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                <td className="py-2.5 px-3 font-medium">{row.name}</td>
+                <td className="py-2.5 px-3">{row.days}日</td>
+                <td className="py-2.5 px-3">{fmt(row.gross)}</td>
+                <td className="py-2.5 px-3" style={{ color: row.invoiceDed > 0 ? "#c45555" : T.textFaint }}>{row.invoiceDed > 0 ? `-${fmt(row.invoiceDed)}` : "-"}</td>
+                <td className="py-2.5 px-3" style={{ color: row.tax > 0 ? "#c45555" : T.textFaint }}>{row.tax > 0 ? `-${fmt(row.tax)}` : "-"}</td>
+                <td className="py-2.5 px-3">{row.transport > 0 ? fmt(row.transport) : "-"}</td>
+                <td className="py-2.5 px-3 font-bold" style={{ color: "#c3a782" }}>{fmt(row.total)}</td>
+                <td className="py-2.5 px-3"><button onClick={() => openPDF(row)} className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ color: "#85a8c4", backgroundColor: "#85a8c418" }}>📄 調書</button></td>
+              </tr>
+            ))}</tbody>
+            <tfoot><tr style={{ borderTop: `2px solid ${T.border}` }}>
+              <td className="py-2.5 px-3 font-bold">合計</td>
+              <td className="py-2.5 px-3 font-bold">{data.reduce((s,r) => s + r.days, 0)}日</td>
+              <td className="py-2.5 px-3 font-bold">{fmt(data.reduce((s,r) => s + r.gross, 0))}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(data.reduce((s,r) => s + r.invoiceDed, 0))}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(data.reduce((s,r) => s + r.tax, 0))}</td>
+              <td className="py-2.5 px-3 font-bold">{fmt(data.reduce((s,r) => s + r.transport, 0))}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c3a782" }}>{fmt(data.reduce((s,r) => s + r.total, 0))}</td>
+              <td></td>
+            </tr></tfoot>
+          </table>
         </div>
       )}
-
-      {/* Reservation Notification Popup — Full Spec */}
-      {notifyInfo && (() => {
-        const ni = notifyInfo;
-        const d = new Date(ni.date + "T00:00:00"); const days = ["日","月","火","水","木","金","土"];
-        const dateStr = `${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}（${days[d.getDay()]}）`;
-        const dateFull = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
-        const cleanName = ni.custName.replace(/\s*L$/i, "").replace(/\s+\d+～\d+歳$/, "");
-        // URL判定: DB設定の日数 or デフォルト1日
-        const now = new Date(); const h = now.getHours();
-        const today = h < 5 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const diff = Math.floor((d.getTime() - today.getTime()) / 86400000);
-        const showUrl = diff <= ntUrlDays;
-        // 場所URL切替（DB値使用）
-        const locUrl = ni.storeName.includes("豊橋") ? ntLocToyohashi : ni.buildingName.includes("マイコート") ? ntLocMycourt : ntLocOasis;
-        // 条件行の値を計算
-        const nomLine = ni.nomination && ni.nomination !== "フリー" && ni.nomination !== "指名なし" ? `\n指名 : ${ni.nomination}` : "";
-        const discLine = ni.discountName && ni.discountName !== "なし" ? `\n割引 : ${ni.discountName}` : "";
-        const thLine = ni.nomination !== "フリー" ? `\n${ni.therapistName}セラピスト` : "";
-        const senderLine = notifySender ? `\n\n送信者 : ${notifySender}` : "";
-        // テンプレート変数マッピング
-        const applyTemplate = (tpl: string) => {
-          let text = tpl;
-          const vars: Record<string, string> = {
-            "{お客様名}": cleanName, "{日時}": dateFull, "{日付}": dateStr,
-            "{開始時刻}": ni.startTime?.slice(0,5) || "", "{終了時刻}": ni.endTime?.slice(0,5) || "",
-            "{コース}": ni.course, "{指名}": ni.nomination || "指名なし", "{割引}": ni.discountName || "なし",
-            "{店舗名}": ni.storeName || "チョップ", "{金額}": ni.total.toLocaleString(),
-            "{送信者}": notifySender, "{セラピスト名}": ni.therapistName, "{場所URL}": locUrl,
-            "{お客様リンク}": `https://t-manage.vercel.app/mypage/customer?name=${encodeURIComponent(cleanName)}`,
-          };
-          text = text.replace(/\{指名行\}/g, nomLine);
-          text = text.replace(/\{割引行\}/g, discLine);
-          text = text.replace(/\{セラピスト行\}/g, thLine);
-          text = text.replace(/\{送信者行\}/g, senderLine);
-          for (const [k, v] of Object.entries(vars)) text = text.replaceAll(k, v);
-          return text;
-        };
-        // DBテンプレートがあれば使用、なければフォールバック
-        const staffTpl = ntTemplates.find(t => t.template_key === "staff");
-        const custUrlTpl = ntTemplates.find(t => t.template_key === "customer_url");
-        const custNoUrlTpl = ntTemplates.find(t => t.template_key === "customer_no_url");
-        const custLink = `https://t-manage.vercel.app/mypage/customer?name=${encodeURIComponent(cleanName)}`;
-        const staffMsg = staffTpl ? applyTemplate(staffTpl.body) : `お疲れ様です！\n\nお時間 : ${dateFull} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\n\nお客様 : ${cleanName}\n\nコース : ${ni.course}\n\n割引 : ${ni.discountName}\n\n指名 : ${ni.nomination}\n\n店舗名 : ${ni.storeName || "チョップ"}\n\n金額 : ${ni.total.toLocaleString()}円\n\nお客様情報 : ${custLink}\n\nよろしくお願いします。${senderLine}`;
-        const custMsgUrl = custUrlTpl ? applyTemplate(custUrlTpl.body) : `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します。\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n場所等はリンクURLからご確認ください\n${locUrl}\n\n※リンクが開けない場合はWEBで「シークレットモード」で開いていただくか\n「Yahoo」の検索ページでURLを張り付けて検索をお願いします。\n\n当店より、ご来店時のお願いでございます。\n当店は近隣に居住されている方もいらっしゃいます。\nつきましては、施術中はお静かにお過ごしいただけますよう、ご理解とご協力をお願い申し上げます。\n\n皆様に心地よい時間をお過ごしいただけるよう努めてまいります。\n当日のご来店を心よりお待ちしております。`;
-        const custMsgNoUrl = custNoUrlTpl ? applyTemplate(custNoUrlTpl.body) : `アンジュスパです。\n\n※予約内容を確認されましたらお手数ですがお返事をお願い致します\n\nお時間 : ${dateStr} ${ni.startTime?.slice(0,5)}～${ni.endTime?.slice(0,5)}\nコース : ${ni.course}${nomLine}${discLine}\n店舗名 : ${ni.storeName || "チョップ"}\n金額 : ${ni.total.toLocaleString()}円${thLine}\n\n当日のルーム等詳細につきましては\n前日の夜、または当日の11時半までにご連絡致しますので\nご確認よろしくお願い致します🙇‍♂️`;
-        const custMsg = showUrl ? custMsgUrl : custMsgNoUrl;
-        return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setNotifyInfo(null)}>
-          <div className="rounded-2xl border w-full max-w-lg max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
-              <div>
-                <h2 className="text-[15px] font-medium">📩 予約確認通知</h2>
-                <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{cleanName} 様 | {dateStr} {ni.startTime?.slice(0,5)}〜 | {showUrl ? "URL付き" : `URLなし（${ntUrlDays + 1}日以降）`}</p>
-              </div>
-              <button onClick={() => setNotifyInfo(null)} className="text-[14px] cursor-pointer p-2" style={{ color: T.textSub }}>✕</button>
-            </div>
-            <div className="px-6 py-4">
-              {/* Tab */}
-              <div className="flex gap-2 mb-4">
-                <button onClick={() => setNotifyTab("customer")} className="flex-1 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: notifyTab === "customer" ? "#c3a78222" : T.cardAlt, color: notifyTab === "customer" ? "#c3a782" : T.textMuted, fontWeight: notifyTab === "customer" ? 600 : 400 }}>👤 お客様向け</button>
-                <button onClick={() => setNotifyTab("staff")} className="flex-1 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: notifyTab === "staff" ? "#85a8c422" : T.cardAlt, color: notifyTab === "staff" ? "#85a8c4" : T.textMuted, fontWeight: notifyTab === "staff" ? 600 : 400 }}>💼 セラピスト向け</button>
-              </div>
-
-              {/* 通知方法バッジ */}
-              <div className="rounded-xl p-3 mb-3 text-[11px]" style={{ backgroundColor: ni.hasLine ? "#06C75512" : ni.isMember ? "#3b82f612" : "#f59e0b12", border: `1px solid ${ni.hasLine ? "#06C75533" : ni.isMember ? "#3b82f633" : "#f59e0b33"}` }}>
-                <span style={{ color: ni.hasLine ? "#06C755" : ni.isMember ? "#3b82f6" : "#f59e0b" }}>
-                  {ni.hasLine ? "💬 LINE登録済み" : ni.isMember ? "✉️ マイページ会員（メール）" : "📱 SMS対象"}
-                  {ni.custPhone && !ni.hasLine ? ` — ${ni.custPhone}` : ""}
-                </span>
-              </div>
-
-              {/* メッセージプレビュー */}
-              <div className="rounded-xl p-4 mb-4 text-[11px] whitespace-pre-wrap leading-relaxed max-h-[250px] overflow-y-auto" style={{ backgroundColor: T.cardAlt, color: T.textSub, fontFamily: "var(--font-mono, monospace)" }}>
-                {notifyTab === "customer" ? custMsg : staffMsg}
-              </div>
-
-              {/* 送信者名（セラピスト向け） */}
-              {notifyTab === "staff" && (
-                <div className="mb-3">
-                  <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>送信者名（受付スタッフ）</label>
-                  <select value={notifySender} onChange={e => { setNotifySender(e.target.value); localStorage.setItem("notify_sender", e.target.value); }}
-                    className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }}>
-                    <option value="">送信者なし</option>
-                    {staffMembers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {/* 送信ボタン */}
-              <div className="space-y-2">
-                {notifyTab === "customer" ? (<>
-                  {ni.hasLine && <button onClick={() => { navigator.clipboard.writeText(custMsg); toast.show("LINE用メッセージをコピーしました！", "success"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#06C75518", color: "#06C755", border: "1px solid #06C75544" }}>💬 LINE用テキストをコピー</button>}
-                  {ni.isMember && ni.custEmail && <button onClick={() => { const s = encodeURIComponent("【アンジュスパ】ご予約確認"); const b = encodeURIComponent(custMsg); window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${ni.custEmail}&su=${s}&body=${b}`, "_blank"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>✉️ Gmailで送信</button>}
-                  {!ni.hasLine && !ni.isMember && <button onClick={() => { navigator.clipboard.writeText(custMsg); toast.show(`SMS用コピー完了（${ni.custPhone}）`, "success"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b44" }}>📱 SMS用コピー（{ni.custPhone}）</button>}
-                  <button onClick={() => { navigator.clipboard.writeText(custMsg); toast.show("テキストをコピーしました！", "success"); }} className="w-full py-2 rounded-xl text-[11px] cursor-pointer" style={{ color: T.textMuted, backgroundColor: T.cardAlt }}>📋 テキストだけコピー</button>
-                </>) : (<>
-                  <button onClick={() => { navigator.clipboard.writeText(staffMsg); toast.show("セラピスト向けメッセージをコピーしました！", "success"); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>💬 セラピストLINE用コピー</button>
-                </>)}
-                <button onClick={() => setNotifyInfo(null)} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: T.textMuted }}>閉じる</button>
-              </div>
-            </div>
-          </div>
-        </div>);
-      })()}
-
-      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } }`}</style>
     </div>
   );
 }
