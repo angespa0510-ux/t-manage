@@ -25,7 +25,7 @@ const defaultProfile: TaxProfile = {
 };
 
 /* ── メインコンポーネント ── */
-export default function TaxSupportWizard({ T, therapistId }: { T: ThemeColors; therapistId: number }) {
+export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: ThemeColors; therapistId: number; onGoToLedger?: () => void }) {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState<TaxProfile>(defaultProfile);
   const [stepStatus, setStepStatus] = useState<StepStatus>({});
@@ -724,6 +724,12 @@ export default function TaxSupportWizard({ T, therapistId }: { T: ThemeColors; t
               </p>
             </div>
           </div>
+          {onGoToLedger && (
+            <button onClick={onGoToLedger} className="w-full py-3 rounded-xl text-[11px] cursor-pointer"
+              style={{ backgroundColor: "#22c55e15", color: "#22c55e", border: "1px solid #22c55e44", fontWeight: 600 }}>
+              📒 帳簿・経費管理を開く（レシート登録・帳簿ダウンロード）
+            </button>
+          )}
           <div className="flex gap-2">
             <button onClick={() => setStep(4)} style={btnOutline}>← 戻る</button>
             <button onClick={() => { saveStatus({ ...stepStatus, 5: "done" }); setStep(6); }} style={btnPink}>次へ →</button>
@@ -820,6 +826,12 @@ export default function TaxSupportWizard({ T, therapistId }: { T: ThemeColors; t
               <p className="text-[9px] text-center mt-1" style={{ color: T.textMuted }}>※還付申告（税金が戻ってくる場合）は1月1日から提出可能</p>
             </div>
           </div>
+          {onGoToLedger && (
+            <button onClick={onGoToLedger} className="w-full py-3 rounded-xl text-[11px] cursor-pointer"
+              style={{ backgroundColor: "#22c55e15", color: "#22c55e", border: "1px solid #22c55e44", fontWeight: 600 }}>
+              📒 帳簿を開いてCSVダウンロード → 確定申告に使える！
+            </button>
+          )}
           <div className="flex gap-2">
             <button onClick={() => setStep(5)} style={btnOutline}>← 戻る</button>
             <button onClick={() => { saveStatus({ ...stepStatus, 6: "done" }); }} style={btnPink}>すべて理解した！ ✅</button>

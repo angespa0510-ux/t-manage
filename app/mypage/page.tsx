@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import TaxSupportWizard from "../../components/TaxSupportWizard";
+import TaxBookkeeping from "../../components/TaxBookkeeping";
 import { useTheme } from "../../lib/theme";
 
 /* ───────── 型定義 ───────── */
@@ -99,6 +100,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [aiChatMessages, setAiChatMessages] = useState<{ role: "user" | "ai"; content: string; logId?: number; rating?: number }[]>([]);
   const [aiChatInput, setAiChatInput] = useState("");
   const [aiChatLoading, setAiChatLoading] = useState(false);
+  const [taxSubTab, setTaxSubTab] = useState<"support" | "ledger">("support");
   const [aiListening, setAiListening] = useState(false);
   const [aiSessionCount, setAiSessionCount] = useState(0);
 
@@ -1132,7 +1134,20 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       {/* お客様接客履歴モーダル */}
       {/* ── 確定申告サポートタブ ── */}
       {tab === "tax" && therapist && (
-        <TaxSupportWizard T={T} therapistId={therapist.id} />
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <button onClick={() => setTaxSubTab("support")} className="flex-1 py-2 text-[11px] rounded-xl cursor-pointer border"
+              style={{ backgroundColor: taxSubTab === "support" ? "#e8849a20" : "transparent", color: taxSubTab === "support" ? "#e8849a" : T.textMuted, borderColor: taxSubTab === "support" ? "#e8849a" : T.border, fontWeight: taxSubTab === "support" ? 600 : 400 }}>
+              📊 申告サポート
+            </button>
+            <button onClick={() => setTaxSubTab("ledger")} className="flex-1 py-2 text-[11px] rounded-xl cursor-pointer border"
+              style={{ backgroundColor: taxSubTab === "ledger" ? "#22c55e20" : "transparent", color: taxSubTab === "ledger" ? "#22c55e" : T.textMuted, borderColor: taxSubTab === "ledger" ? "#22c55e" : T.border, fontWeight: taxSubTab === "ledger" ? 600 : 400 }}>
+              📒 帳簿・経費管理
+            </button>
+          </div>
+          {taxSubTab === "support" && <TaxSupportWizard T={T} therapistId={therapist.id} onGoToLedger={() => setTaxSubTab("ledger")} />}
+          {taxSubTab === "ledger" && <TaxBookkeeping T={T} therapistId={therapist.id} />}
+        </div>
       )}
 
       {/* お客様接客履歴モーダル（元の位置） */}
