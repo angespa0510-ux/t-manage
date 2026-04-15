@@ -247,7 +247,6 @@ const generatePassword = () => {
       }
       if (entry.contract || entry.license || entry.invoice || entry.mynumber) links.push(entry);
     }
-    }
     setBulkLinks(links);
     setShowBulkLinks(true);
     fetchTherapists();
@@ -447,7 +446,7 @@ const generatePassword = () => {
     }).eq("id", editTarget.id);
     setEditSaving(false);
     if (error) { setEditMsg("更新失敗: " + error.message); }
-    else { setEditMsg("更新しました！"); fetchTherapists(); setTimeout(() => { setEditTarget(null); setEditMsg(""); }, 800); }
+    else { setEditMsg("更新しました！"); fetchTherapists(); setTimeout(() => { setEditTarget(null); setEditMsg(""); }, 800);
   const now = new Date();
       const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
       const uploadDocPDF = async (file: File, label: string, idNum: number): Promise<string> => {
@@ -491,6 +490,7 @@ const generatePassword = () => {
       } catch (e) { console.error("upload error:", e); }
       fetchTherapists();
     }
+  };
 
   const handleDelete = async () => { if (!deleteTarget) return; setDeleting(true); await supabase.from("therapists").update({ deleted_at: new Date().toISOString() }).eq("id", deleteTarget.id); setDeleting(false); setDeleteTarget(null); fetchTherapists(); toast.show("🗑️ ゴミ箱に移動しました（30日後に自動削除）", "success"); };
 
