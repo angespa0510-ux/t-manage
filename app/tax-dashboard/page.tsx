@@ -30,7 +30,7 @@ export default function TaxDashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
-  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll">("summary");
+  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll" | "withholding">("summary");
   const [mode, setMode] = useState<"monthly" | "yearly">("monthly");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
@@ -166,7 +166,7 @@ export default function TaxDashboard() {
           <h1 className="text-[14px] font-medium">税務報告用ダッシュボード</h1>
           </div>
         <div className="flex items-center gap-2">
-          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"}].map(t => (
+          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"},{k:"withholding",l:"💰 源泉徴収納付"}].map(t => (
             <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
           ))}
         </div>
@@ -299,6 +299,11 @@ export default function TaxDashboard() {
       {dashTab === "staff_payroll" && (
         <div className="flex-1 overflow-y-auto p-4">
           <StaffPayroll T={T} />
+        </div>
+      )}
+      {dashTab === "withholding" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <WithholdingTaxSummary T={T} />
         </div>
       )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
@@ -534,6 +539,282 @@ function StaffPayroll({ T }: { T: any }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+function WithholdingTaxSummary({ T }: { T: any }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [loading, setLoading] = useState(false);
+  const [therapistData, setTherapistData] = useState<{ month: number; name: string; tax: number; back: number }[]>([]);
+  const [staffData, setStaffData] = useState<{ month: number; name: string; tax: number; gross: number }[]>([]);
+  const [salaryData, setSalaryData] = useState<{ month: number; tax: number; gross: number }[]>([]);
+  const [halfView, setHalfView] = useState<"first" | "second">("first");
+  const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+
+  useEffect(() => {
+    const fetch = async () => {
+      setLoading(true);
+      // セラピスト源泉（therapist_daily_settlements）
+      const { data: settlements } = await supabase.from("therapist_daily_settlements").select("therapist_id, date, withholding_tax, total_back, adjustment").gte("date", `${year}-01-01`).lte("date", `${year}-12-31`).eq("is_settled", true);
+      const { data: therapists } = await supabase.from("therapists").select("id, name");
+      const thMap: Record<number, string> = {};
+      (therapists || []).forEach(t => { thMap[t.id] = t.name; });
+      const thRows: typeof therapistData = [];
+      (settlements || []).forEach(s => {
+        if ((s.withholding_tax || 0) > 0) {
+          const m = parseInt(s.date.split("-")[1]);
+          thRows.push({ month: m, name: thMap[s.therapist_id] || "不明", tax: s.withholding_tax || 0, back: (s.total_back || 0) + (s.adjustment || 0) });
+        }
+      });
+      setTherapistData(thRows);
+
+      // スタッフ源泉（staff_schedules）
+      const { data: schedules } = await supabase.from("staff_schedules").select("staff_id, date, withholding_tax, commission_fee, night_premium, license_premium").gte("date", `${year}-01-01`).lte("date", `${year}-12-31`).eq("status", "completed");
+      const { data: staffList } = await supabase.from("staff").select("id, name");
+      const stMap: Record<number, string> = {};
+      (staffList || []).forEach(s => { stMap[s.id] = s.name; });
+      const stRows: typeof staffData = [];
+      (schedules || []).forEach(s => {
+        const wt = (s as any).withholding_tax || 0;
+        if (wt > 0) {
+          const m = parseInt(s.date.split("-")[1]);
+          const gross = (s.commission_fee || 0) + (s.night_premium || 0) + (s.license_premium || 0);
+          stRows.push({ month: m, name: stMap[s.staff_id] || "不明", tax: wt, gross });
+        }
+      });
+      setStaffData(stRows);
+
+      // 給与源泉（概算：預り金から）- 月別の給与源泉は別途管理が必要なので、ここでは空配列
+      setSalaryData([]);
+      setLoading(false);
+    };
+    fetch();
+  }, [year]);
+
+  const firstHalf = { start: 1, end: 6, label: "1月〜6月（7月10日納付期限）" };
+  const secondHalf = { start: 7, end: 12, label: "7月〜12月（翌年1月20日納付期限）" };
+  const current = halfView === "first" ? firstHalf : secondHalf;
+
+  // 月別集計
+  const monthlyTotals = (() => {
+    const result: { month: number; therapistTax: number; therapistGross: number; staffTax: number; staffGross: number; salaryTax: number; salaryGross: number }[] = [];
+    for (let m = current.start; m <= current.end; m++) {
+      const thTax = therapistData.filter(r => r.month === m).reduce((s, r) => s + r.tax, 0);
+      const thGross = therapistData.filter(r => r.month === m).reduce((s, r) => s + r.back, 0);
+      const stTax = staffData.filter(r => r.month === m).reduce((s, r) => s + r.tax, 0);
+      const stGross = staffData.filter(r => r.month === m).reduce((s, r) => s + r.gross, 0);
+      const slTax = salaryData.filter(r => r.month === m).reduce((s, r) => s + r.tax, 0);
+      const slGross = salaryData.filter(r => r.month === m).reduce((s, r) => s + r.gross, 0);
+      result.push({ month: m, therapistTax: thTax, therapistGross: thGross, staffTax: stTax, staffGross: stGross, salaryTax: slTax, salaryGross: slGross });
+    }
+    return result;
+  })();
+
+  const totalThTax = monthlyTotals.reduce((s, r) => s + r.therapistTax, 0);
+  const totalThGross = monthlyTotals.reduce((s, r) => s + r.therapistGross, 0);
+  const totalStTax = monthlyTotals.reduce((s, r) => s + r.staffTax, 0);
+  const totalStGross = monthlyTotals.reduce((s, r) => s + r.staffGross, 0);
+  const totalSlTax = monthlyTotals.reduce((s, r) => s + r.salaryTax, 0);
+  const totalSlGross = monthlyTotals.reduce((s, r) => s + r.salaryGross, 0);
+  const grandTotalTax = totalThTax + totalStTax + totalSlTax;
+
+  // セラピスト別集計（該当半期）
+  const therapistSummary = (() => {
+    const filtered = therapistData.filter(r => r.month >= current.start && r.month <= current.end);
+    const map: Record<string, { tax: number; gross: number; count: number }> = {};
+    filtered.forEach(r => {
+      if (!map[r.name]) map[r.name] = { tax: 0, gross: 0, count: 0 };
+      map[r.name].tax += r.tax;
+      map[r.name].gross += r.back;
+      map[r.name].count += 1;
+    });
+    return Object.entries(map).map(([name, d]) => ({ name, ...d })).sort((a, b) => b.tax - a.tax);
+  })();
+
+  // CSV出力
+  const exportCSV = () => {
+    const BOM = "\uFEFF";
+    const lines = [
+      `源泉徴収納付集計,${year}年,${current.label}`,
+      "",
+      "【月別集計】",
+      "月,セラピスト報酬,セラピスト源泉,スタッフ報酬,スタッフ源泉,給与額,給与源泉,源泉合計",
+      ...monthlyTotals.map(r => `${r.month}月,${r.therapistGross},${r.therapistTax},${r.staffGross},${r.staffTax},${r.salaryGross},${r.salaryTax},${r.therapistTax + r.staffTax + r.salaryTax}`),
+      `合計,${totalThGross},${totalThTax},${totalStGross},${totalStTax},${totalSlGross},${totalSlTax},${grandTotalTax}`,
+      "",
+      "【セラピスト別内訳】",
+      "名前,稼働日数,報酬額,源泉徴収額",
+      ...therapistSummary.map(r => `"${r.name}",${r.count},${r.gross},${r.tax}`),
+    ];
+    const csv = BOM + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `源泉徴収納付集計_${year}_${halfView === "first" ? "上半期" : "下半期"}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 納付書風PDF
+  const openPaymentSlip = () => {
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>源泉徴収納付集計_${year}_${halfView === "first" ? "上半期" : "下半期"}</title>
+<style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:800px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:18px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:3px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}h3{font-size:14px;margin:25px 0 10px;padding-bottom:5px;border-bottom:2px solid #c3a782}table{width:100%;border-collapse:collapse;margin:10px 0}td,th{border:1px solid #ccc;padding:8px 12px;font-size:12px}th{background:#f5f0e8;text-align:left}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold}.note{font-size:9px;color:#888;margin-top:15px;line-height:1.8}.section{margin-top:30px}@media print{body{margin:0;padding:20px}}</style></head><body>
+<h1>源泉徴収税額 納付集計表</h1>
+<h2>${year}年 ${current.label}</h2>
+<h3>📊 区分別集計</h3>
+<table>
+<tr><th style="width:35%">区分</th><th class="right" style="width:25%">支払金額</th><th class="right" style="width:20%">源泉徴収税額</th><th class="right" style="width:20%">人数</th></tr>
+<tr><td>報酬・料金（セラピスト）</td><td class="right">&yen;${totalThGross.toLocaleString()}</td><td class="right">&yen;${totalThTax.toLocaleString()}</td><td class="right">${therapistSummary.length}名</td></tr>
+${totalStTax > 0 ? `<tr><td>報酬・料金（スタッフ）</td><td class="right">&yen;${totalStGross.toLocaleString()}</td><td class="right">&yen;${totalStTax.toLocaleString()}</td><td class="right">-</td></tr>` : ""}
+${totalSlTax > 0 ? `<tr><td>給与所得</td><td class="right">&yen;${totalSlGross.toLocaleString()}</td><td class="right">&yen;${totalSlTax.toLocaleString()}</td><td class="right">-</td></tr>` : ""}
+<tr class="total-row"><td>合計納付税額</td><td class="right"></td><td class="right" style="font-size:16px;color:#c45555">&yen;${grandTotalTax.toLocaleString()}</td><td></td></tr>
+</table>
+<h3>📅 月別内訳</h3>
+<table>
+<tr><th>月</th><th class="right">セラピスト源泉</th><th class="right">スタッフ源泉</th><th class="right">給与源泉</th><th class="right">月合計</th></tr>
+${monthlyTotals.map(r => `<tr><td>${r.month}月</td><td class="right">&yen;${r.therapistTax.toLocaleString()}</td><td class="right">&yen;${r.staffTax.toLocaleString()}</td><td class="right">&yen;${r.salaryTax.toLocaleString()}</td><td class="right" style="font-weight:bold">&yen;${(r.therapistTax + r.staffTax + r.salaryTax).toLocaleString()}</td></tr>`).join("")}
+<tr class="total-row"><td>合計</td><td class="right">&yen;${totalThTax.toLocaleString()}</td><td class="right">&yen;${totalStTax.toLocaleString()}</td><td class="right">&yen;${totalSlTax.toLocaleString()}</td><td class="right" style="color:#c45555">&yen;${grandTotalTax.toLocaleString()}</td></tr>
+</table>
+<h3>👤 セラピスト別内訳（報酬・料金）</h3>
+<table>
+<tr><th>名前</th><th class="right">稼働日数</th><th class="right">報酬額（税込）</th><th class="right">源泉徴収税額</th></tr>
+${therapistSummary.map(r => `<tr><td>${r.name}</td><td class="right">${r.count}日</td><td class="right">&yen;${r.gross.toLocaleString()}</td><td class="right">&yen;${r.tax.toLocaleString()}</td></tr>`).join("")}
+<tr class="total-row"><td>合計</td><td class="right">${therapistSummary.reduce((s,r) => s + r.count, 0)}日</td><td class="right">&yen;${totalThGross.toLocaleString()}</td><td class="right">&yen;${totalThTax.toLocaleString()}</td></tr>
+</table>
+<div class="note">
+<p>※ 本集計は「所得税徴収高計算書（納付書）」の記入に使用できます。</p>
+<p>※ 納期の特例適用の場合：上半期（1〜6月分）→ 7月10日まで、下半期（7〜12月分）→ 翌年1月20日までに納付。</p>
+<p>※ セラピストへの報酬は所得税法第204条第1項第6号（ホステス等）に該当し、1回5,000円の控除後に10.21%を適用。</p>
+</div>
+</body></html>`);
+    w.document.close();
+  };
+
+  return (
+    <div className="max-w-[900px] mx-auto">
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setYear(year - 1)} className="px-2 py-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+          <span className="text-[14px] font-medium">{year}年</span>
+          <button onClick={() => setYear(year + 1)} className="px-2 py-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
+        </div>
+        <div className="flex gap-1">
+          {([["first", "📅 上半期（1〜6月）"], ["second", "📅 下半期（7〜12月）"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setHalfView(k)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: halfView === k ? "#c3a78222" : "transparent", color: halfView === k ? "#c3a782" : T.textMuted, fontWeight: halfView === k ? 700 : 400, border: `1px solid ${halfView === k ? "#c3a78244" : T.border}` }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? <p className="text-center py-12 text-[12px]" style={{ color: T.textFaint }}>読み込み中...</p> : (<>
+        {/* 納付期限の注意 */}
+        <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
+          <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>⏰ {current.label}</p>
+          <p className="text-[10px] mt-1" style={{ color: T.textSub }}>納期の特例を適用している場合、この期間の源泉徴収税額をまとめて納付します。</p>
+        </div>
+
+        {/* 合計カード */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {[
+            { label: "納付税額合計", value: fmt(grandTotalTax), color: "#c45555" },
+            { label: "セラピスト源泉", value: fmt(totalThTax), sub: `${therapistSummary.length}名`, color: "#c3a782" },
+            { label: "対象報酬合計", value: fmt(totalThGross + totalStGross), color: T.text },
+          ].map(s => (
+            <div key={s.label} className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <p className="text-[10px] mb-2" style={{ color: T.textMuted }}>{s.label}</p>
+              <p className="text-[22px] font-light mb-1" style={{ color: s.color }}>{s.value}</p>
+              {(s as any).sub && <p className="text-[9px]" style={{ color: T.textFaint }}>{(s as any).sub}</p>}
+            </div>
+          ))}
+        </div>
+
+        {/* 月別内訳テーブル */}
+        <div className="rounded-2xl border overflow-hidden mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+            <h2 className="text-[13px] font-medium">📅 月別源泉徴収額</h2>
+          </div>
+          <table className="w-full text-[11px]">
+            <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+              {["月", "セラピスト報酬", "セラピスト源泉", "スタッフ源泉", "月合計"].map(h => <th key={h} className="py-2.5 px-3 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {monthlyTotals.map(r => {
+                const total = r.therapistTax + r.staffTax + r.salaryTax;
+                return (
+                  <tr key={r.month} style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <td className="py-2.5 px-3 font-medium">{r.month}月</td>
+                    <td className="py-2.5 px-3">{r.therapistGross > 0 ? fmt(r.therapistGross) : "-"}</td>
+                    <td className="py-2.5 px-3" style={{ color: r.therapistTax > 0 ? "#c45555" : T.textFaint }}>{r.therapistTax > 0 ? fmt(r.therapistTax) : "-"}</td>
+                    <td className="py-2.5 px-3" style={{ color: r.staffTax > 0 ? "#c45555" : T.textFaint }}>{r.staffTax > 0 ? fmt(r.staffTax) : "-"}</td>
+                    <td className="py-2.5 px-3 font-bold" style={{ color: total > 0 ? "#c45555" : T.textFaint }}>{total > 0 ? fmt(total) : "-"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot><tr style={{ borderTop: `2px solid ${T.border}` }}>
+              <td className="py-2.5 px-3 font-bold">合計</td>
+              <td className="py-2.5 px-3 font-bold">{fmt(totalThGross)}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(totalThTax)}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(totalStTax)}</td>
+              <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(grandTotalTax)}</td>
+            </tr></tfoot>
+          </table>
+        </div>
+
+        {/* セラピスト別内訳 */}
+        {therapistSummary.length > 0 && (
+          <div className="rounded-2xl border overflow-hidden mb-6" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <h2 className="text-[13px] font-medium">👤 セラピスト別内訳（{current.start}〜{current.end}月）</h2>
+            </div>
+            <table className="w-full text-[11px]">
+              <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                {["名前", "稼働日数", "報酬額", "源泉徴収額"].map(h => <th key={h} className="py-2.5 px-3 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {therapistSummary.map(r => (
+                  <tr key={r.name} style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <td className="py-2.5 px-3 font-medium">{r.name}</td>
+                    <td className="py-2.5 px-3">{r.count}日</td>
+                    <td className="py-2.5 px-3">{fmt(r.gross)}</td>
+                    <td className="py-2.5 px-3" style={{ color: "#c45555" }}>{fmt(r.tax)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr style={{ borderTop: `2px solid ${T.border}` }}>
+                <td className="py-2.5 px-3 font-bold">合計</td>
+                <td className="py-2.5 px-3 font-bold">{therapistSummary.reduce((s,r) => s + r.count, 0)}日</td>
+                <td className="py-2.5 px-3 font-bold">{fmt(totalThGross)}</td>
+                <td className="py-2.5 px-3 font-bold" style={{ color: "#c45555" }}>{fmt(totalThTax)}</td>
+              </tr></tfoot>
+            </table>
+          </div>
+        )}
+
+        {grandTotalTax === 0 && therapistSummary.length === 0 && (
+          <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>この期間の源泉徴収データがありません</p>
+        )}
+
+        {/* アクションボタン */}
+        <div className="flex gap-3">
+          <button onClick={openPaymentSlip} className="flex-1 px-4 py-3 text-[11px] rounded-xl cursor-pointer text-white font-medium" style={{ backgroundColor: "#c45555" }}>📄 納付集計表を表示</button>
+          <button onClick={exportCSV} className="flex-1 px-4 py-3 text-[11px] rounded-xl cursor-pointer text-white font-medium" style={{ backgroundColor: "#3b82f6" }}>📥 CSV出力</button>
+        </div>
+
+        {/* 注意事項 */}
+        <div className="rounded-xl p-4 mt-4" style={{ backgroundColor: T.cardAlt }}>
+          <p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>📝 所得税徴収高計算書（納付書）の記入方法</p>
+          <div className="space-y-1 text-[9px]" style={{ color: T.textFaint }}>
+            <p>• 「報酬・料金等の所得税徴収高計算書」を使用（給与とは別の納付書）</p>
+            <p>• 「区分」欄 →「ホステス等の報酬・料金」（所得税法204条1項6号）</p>
+            <p>• 「支払年月日」→ 期間の最初と最後の日（例：1/1〜6/30）</p>
+            <p>• 「人員」→ 延べ人数（日数の合計）</p>
+            <p>• 「支払金額」→ 報酬額の合計</p>
+            <p>• 「税額」→ 源泉徴収税額の合計</p>
+            <p>• 納付先：管轄税務署（名古屋中税務署）</p>
+          </div>
+        </div>
+      </>)}
     </div>
   );
 }
