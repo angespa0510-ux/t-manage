@@ -2,727 +2,198 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
 
-/* ── 型定義 ── */
 type T = { [key: string]: string };
-type Settlement = {
-  id: number; therapist_id: number; date: string; total_sales: number; total_back: number;
-  order_count: number; adjustment: number; adjustment_note: string; invoice_deduction: number;
-  withholding_tax: number; welfare_fee: number; transport_fee: number; final_payment: number;
-  is_settled: boolean;
-};
-type Expense = {
-  id: number; therapist_id: number; date: string; category: string; subcategory: string;
-  account_item: string; description: string; amount: number; receipt_url: string;
-  receipt_thumb_url: string; memo: string; created_at: string;
-};
-type LedgerEntry = {
-  date: string; type: "income" | "expense"; category: string; account_item: string;
-  description: string; income: number; expense: number; id: string; receipt_url?: string;
-};
+type Settlement = { id: number; therapist_id: number; date: string; total_sales: number; total_back: number; order_count: number; adjustment: number; adjustment_note: string; invoice_deduction: number; withholding_tax: number; welfare_fee: number; transport_fee: number; final_payment: number; is_settled: boolean; };
+type Expense = { id: number; therapist_id: number; date: string; category: string; subcategory: string; account_item: string; description: string; amount: number; receipt_url: string; receipt_thumb_url: string; memo: string; created_at: string; };
+type JournalEntry = { date: string; debit_account: string; debit_amount: number; credit_account: string; credit_amount: number; description: string; id: string; type: "income"|"expense"; receipt_url?: string; };
 
-/* ── 定数 ── */
 const CATEGORIES = [
-  { icon: "💄", label: "美容費", account: "消耗品費", subs: ["美容院", "ネイル", "マツエク", "スキンケア", "化粧品", "サプリ"] },
-  { icon: "👗", label: "衣装・備品", account: "消耗品費", subs: ["衣装", "ルームウェア", "ストッキング", "タオル", "オイル", "備品"] },
-  { icon: "🚃", label: "交通費", account: "旅費交通費", subs: ["電車・バス", "タクシー", "駐車場", "ガソリン"] },
-  { icon: "📱", label: "通信費", account: "通信費", subs: ["携帯電話", "Wi-Fi", "アプリ"] },
-  { icon: "☕", label: "カフェ・食事", account: "雑費", subs: ["待機カフェ", "食事", "飲料"] },
-  { icon: "📚", label: "研修・勉強", account: "研修費", subs: ["講習", "セミナー", "書籍"] },
-  { icon: "🏥", label: "医療・健康", account: "福利厚生費", subs: ["検査", "健康診断", "医療費"] },
-  { icon: "🛒", label: "その他", account: "雑費", subs: ["雑費", "その他"] },
+  { icon:"💄", label:"美容費", account:"消耗品費", subs:["美容院","ネイル","マツエク","スキンケア","化粧品","サプリ"] },
+  { icon:"👗", label:"衣装・備品", account:"消耗品費", subs:["衣装","ルームウェア","ストッキング","タオル","オイル","備品"] },
+  { icon:"🚃", label:"交通費", account:"旅費交通費", subs:["電車・バス","タクシー","駐車場","ガソリン"] },
+  { icon:"📱", label:"通信費", account:"通信費", subs:["携帯電話","Wi-Fi","アプリ"] },
+  { icon:"☕", label:"カフェ・食事", account:"雑費", subs:["待機カフェ","食事","飲料"] },
+  { icon:"📚", label:"研修・勉強", account:"研修費", subs:["講習","セミナー","書籍"] },
+  { icon:"🏥", label:"医療・健康", account:"福利厚生費", subs:["検査","健康診断","医療費"] },
+  { icon:"🛒", label:"その他", account:"雑費", subs:["雑費","その他"] },
 ];
-const ACCOUNT_ITEMS = ["消耗品費", "旅費交通費", "通信費", "接待交際費", "研修費", "福利厚生費", "地代家賃", "広告宣伝費", "雑費"];
-const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+const ACCOUNT_ITEMS = ["消耗品費","旅費交通費","通信費","接待交際費","研修費","福利厚生費","地代家賃","広告宣伝費","雑費"];
+const fmt = (n: number) => "¥"+(n||0).toLocaleString();
+const fmtN = (n: number) => (n||0).toLocaleString();
+const TAX_TABLE = [{limit:1950000,rate:0.05,ded:0},{limit:3300000,rate:0.10,ded:97500},{limit:6950000,rate:0.20,ded:427500},{limit:9000000,rate:0.23,ded:636000},{limit:18000000,rate:0.33,ded:1536000},{limit:40000000,rate:0.40,ded:2796000},{limit:Infinity,rate:0.45,ded:4796000}];
+const calcIncomeTax = (t: number) => { if(t<=0)return 0; const b=TAX_TABLE.find(x=>t<=x.limit)!; return Math.floor(t*b.rate-b.ded); };
+const formatDate = (d: string) => { const dt=new Date(d+"T00:00:00"); return `${dt.getMonth()+1}/${dt.getDate()}`; };
 
-/* ── メインコンポーネント ── */
 export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: number }) {
-  const [subTab, setSubTab] = useState<"ledger" | "add" | "download">("ledger");
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
+  const [subTab, setSubTab] = useState<"journal"|"add"|"reports"|"tax"|"export">("journal");
+  const [year, setYear] = useState(()=>new Date().getFullYear());
+  const [month, setMonth] = useState(()=>new Date().getMonth()+1);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [tableReady, setTableReady] = useState<boolean | null>(null);
+  const [tableReady, setTableReady] = useState<boolean|null>(null);
   const [setupMsg, setSetupMsg] = useState("");
   const [setupSql, setSetupSql] = useState("");
   const [loading, setLoading] = useState(true);
-
-  // 経費入力フォーム
-  const [form, setForm] = useState({ date: new Date().toISOString().split("T")[0], category: "", subcategory: "", account_item: "", description: "", amount: "", memo: "" });
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [viewMode, setViewMode] = useState<"month"|"year">("month");
+  const [form, setForm] = useState({date:new Date().toISOString().split("T")[0],category:"",subcategory:"",account_item:"",description:"",amount:"",memo:""});
+  const [receiptFile, setReceiptFile] = useState<File|null>(null);
   const [receiptPreview, setReceiptPreview] = useState("");
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
-  const [aiResult, setAiResult] = useState<string>("");
+  const [aiResult, setAiResult] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
-  const [editId, setEditId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<number|null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [deductions, setDeductions] = useState<Record<string,number>>(()=>{try{const s=localStorage.getItem(`tax_ded_${therapistId}`);return s?JSON.parse(s):{};}catch{return{};}});
+  const saveDed = (d: Record<string,number>) => {setDeductions(d);localStorage.setItem(`tax_ded_${therapistId}`,JSON.stringify(d));};
+  const [isAoiro, setIsAoiro] = useState(()=>{try{const p=localStorage.getItem(`tax_support_profile_${therapistId}`);return p?JSON.parse(p).isAoiro===true:false;}catch{return false;}});
 
-  const pink = "#e8849a";
-  const pinkLight = "#e8849a20";
-  const pinkBorder = "#e8849a44";
-  const green = "#22c55e";
-  const red = "#ef4444";
-  const orange = "#f59e0b";
+  const pink="#e8849a";const pinkLight="#e8849a20";const pinkBorder="#e8849a44";
+  const green="#22c55e";const red="#ef4444";const orange="#f59e0b";const blue="#3b82f6";
+  const cardBase={backgroundColor:T.card,borderColor:T.border,borderRadius:"16px",border:`1px solid ${T.border}`};
+  const altCard={backgroundColor:T.cardAlt,borderRadius:"12px",padding:"12px"};
+  const btnPink={background:`linear-gradient(135deg,${pink},#d4687e)`,color:"#fff",border:"none",borderRadius:"12px",padding:"10px 20px",fontSize:"12px",cursor:"pointer",fontWeight:600};
+  const monthKey=`${year}-${String(month).padStart(2,"0")}`;
+  const dim=new Date(year,month,0).getDate();
 
-  const cardBase = { backgroundColor: T.card, borderColor: T.border, borderRadius: "16px", border: `1px solid ${T.border}` };
-  const altCard = { backgroundColor: T.cardAlt, borderRadius: "12px", padding: "12px" };
-  const btnPink = { background: `linear-gradient(135deg, ${pink}, #d4687e)`, color: "#fff", border: "none", borderRadius: "12px", padding: "10px 20px", fontSize: "12px", cursor: "pointer", fontWeight: 600 };
+  const checkTable=useCallback(async()=>{const{error}=await supabase.from("therapist_expenses").select("id").limit(1);setTableReady(!(error&&(error.message.includes("does not exist")||error.message.includes("relation")||error.code==="42P01")));},[]);
+  const setupTable=async()=>{setSetupMsg("作成中...");try{const res=await fetch("/api/tax-init",{method:"POST"});const data=await res.json();if(data.ok){setTableReady(true);setSetupMsg("✅ 完了！");}else{setSetupMsg(data.message);if(data.sql)setSetupSql(data.sql);}}catch{setSetupMsg("エラー");}};
 
-  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-  const dim = new Date(year, month, 0).getDate();
+  const fetchData=useCallback(async()=>{if(!tableReady)return;setLoading(true);
+    const s=viewMode==="year"?`${year}-01-01`:`${monthKey}-01`;const e=viewMode==="year"?`${year}-12-31`:`${monthKey}-${String(dim).padStart(2,"0")}`;
+    const[{data:stl},{data:exp}]=await Promise.all([supabase.from("therapist_daily_settlements").select("*").eq("therapist_id",therapistId).gte("date",s).lte("date",e).eq("is_settled",true).order("date"),supabase.from("therapist_expenses").select("*").eq("therapist_id",therapistId).gte("date",s).lte("date",e).order("date")]);
+    setSettlements(stl||[]);setExpenses(exp||[]);setLoading(false);},[tableReady,therapistId,monthKey,dim,year,viewMode]);
+  useEffect(()=>{checkTable();},[checkTable]);
+  useEffect(()=>{fetchData();},[fetchData]);
 
-  /* ── テーブル存在チェック ── */
-  const checkTable = useCallback(async () => {
-    const { error } = await supabase.from("therapist_expenses").select("id").limit(1);
-    if (error && (error.message.includes("does not exist") || error.message.includes("relation") || error.code === "42P01")) {
-      setTableReady(false);
-    } else {
-      setTableReady(true);
-    }
-  }, []);
+  /* 複式簿記 仕訳帳生成 */
+  const generateJournal=():JournalEntry[]=>{const entries:JournalEntry[]=[];
+    settlements.forEach(s=>{entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.final_payment,credit_account:"売上高",credit_amount:s.final_payment,description:`施術報酬 ${s.order_count}件（バック${fmt(s.total_back)}）`,id:`stl-${s.id}`});
+      if(s.withholding_tax>0)entries.push({date:s.date,type:"income",debit_account:"事業主貸",debit_amount:s.withholding_tax,credit_account:"売上高",credit_amount:s.withholding_tax,description:`源泉徴収税`,id:`wh-${s.id}`});
+      if(s.transport_fee>0)entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.transport_fee,credit_account:"雑収入",credit_amount:s.transport_fee,description:`交通費支給`,id:`tf-${s.id}`});});
+    expenses.forEach(e=>{entries.push({date:e.date,type:"expense",debit_account:e.account_item||"雑費",debit_amount:e.amount,credit_account:"現金",credit_amount:e.amount,description:`${e.subcategory?e.subcategory+" ":""}${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`,receipt_url:e.receipt_url});});
+    return entries.sort((a,b)=>a.date.localeCompare(b.date));};
 
-  /* ── テーブル作成 ── */
-  const setupTable = async () => {
-    setSetupMsg("作成中...");
-    try {
-      const res = await fetch("/api/tax-init", { method: "POST" });
-      const data = await res.json();
-      if (data.ok) {
-        setTableReady(true); setSetupMsg("✅ 完了！");
-      } else {
-        setSetupMsg(data.message || "手動作成が必要です");
-        if (data.sql) setSetupSql(data.sql);
-      }
-    } catch { setSetupMsg("エラーが発生しました"); }
-  };
+  const journal=generateJournal();
+  const totalIncome=settlements.reduce((s,stl)=>s+stl.final_payment+stl.withholding_tax,0);
+  const totalExpense=expenses.reduce((s,e)=>s+e.amount,0);
+  const profit=totalIncome-totalExpense;
 
-  /* ── データ取得 ── */
-  const fetchData = useCallback(async () => {
-    if (!tableReady) return;
-    setLoading(true);
-    const startDate = `${monthKey}-01`;
-    const endDate = `${monthKey}-${String(dim).padStart(2, "0")}`;
+  const getAccountSummary=()=>{const map:Record<string,number>={};journal.filter(e=>e.type==="expense").forEach(e=>{map[e.debit_account]=(map[e.debit_account]||0)+e.debit_amount;});return Object.entries(map).sort((a,b)=>b[1]-a[1]);};
+  const getGeneralLedger=()=>{const accounts:Record<string,JournalEntry[]>={};journal.forEach(e=>{[e.debit_account,e.credit_account].forEach(acc=>{if(!accounts[acc])accounts[acc]=[];accounts[acc].push(e);});});return accounts;};
 
-    const [{ data: stl }, { data: exp }] = await Promise.all([
-      supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", therapistId).gte("date", startDate).lte("date", endDate).eq("is_settled", true).order("date"),
-      supabase.from("therapist_expenses").select("*").eq("therapist_id", therapistId).gte("date", startDate).lte("date", endDate).order("date"),
-    ]);
-    setSettlements(stl || []);
-    setExpenses(exp || []);
-    setLoading(false);
-  }, [tableReady, therapistId, monthKey, dim]);
+  /* 確定申告 税額計算 */
+  const calcTax=()=>{const aoiroD=isAoiro?650000:0;const bIncome=Math.max(0,profit-aoiroD);const kiso=480000;const shakai=deductions.shakai||0;const seimei=Math.min(deductions.seimei||0,120000);const ideco=deductions.ideco||0;const totalDed=kiso+shakai+seimei+ideco;const taxable=Math.max(0,bIncome-totalDed);const itax=calcIncomeTax(taxable);const rtax=Math.floor(itax*0.021);const totalTax=itax+rtax;const withheld=settlements.reduce((s,stl)=>s+stl.withholding_tax,0);const taxDue=totalTax-withheld;const resTax=Math.floor(taxable*0.10);const fLimit=Math.floor(taxable*0.30*0.10);return{aoiroD,bIncome,kiso,shakai,seimei,ideco,totalDed,taxable,itax,rtax,totalTax,withheld,taxDue,resTax,fLimit,totalIncome,totalExpense,profit};};
 
-  useEffect(() => { checkTable(); }, [checkTable]);
-  useEffect(() => { fetchData(); }, [fetchData]);
+  /* レシートAI解析 */
+  const analyzeReceipt=async(file:File)=>{setAiAnalyzing(true);setAiResult("");try{const reader=new FileReader();const base64=await new Promise<string>(r=>{reader.onload=()=>r((reader.result as string).split(",")[1]);reader.readAsDataURL(file);});const res=await fetch("/api/receipt-analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({imageBase64:base64,mediaType:file.type})});const data=await res.json();if(data.ok&&data.result){const r=data.result;setForm(p=>({...p,date:r.date||p.date,description:r.items||r.store||"",amount:r.amount?String(r.amount):p.amount,category:r.category||p.category,account_item:r.account_item||p.account_item,memo:r.store?`店舗: ${r.store}`:p.memo}));const cat=CATEGORIES.find(c=>c.label===r.category);if(cat)setForm(p=>({...p,subcategory:cat.subs[0]||""}));setAiResult("✅ 読取完了！確認してください");}else{setAiResult("⚠️ 手動入力してください");}}catch{setAiResult("⚠️ エラー");}setAiAnalyzing(false);};
+  const handleFileChange=(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];if(!file)return;setReceiptFile(file);const reader=new FileReader();reader.onload=()=>setReceiptPreview(reader.result as string);reader.readAsDataURL(file);analyzeReceipt(file);};
 
-  /* ── 帳簿データ生成 ── */
-  const generateLedger = (): LedgerEntry[] => {
-    const entries: LedgerEntry[] = [];
-    // 収入（精算データ）
-    settlements.forEach(s => {
-      entries.push({
-        date: s.date, type: "income", category: "売上（施術報酬）", account_item: "売上高",
-        description: `${s.order_count}件施術 バック${fmt(s.total_back)}${s.transport_fee > 0 ? ` 交通費${fmt(s.transport_fee)}` : ""}`,
-        income: s.final_payment, expense: 0, id: `stl-${s.id}`,
-      });
-    });
-    // 経費
-    expenses.forEach(e => {
-      entries.push({
-        date: e.date, type: "expense", category: e.category, account_item: e.account_item,
-        description: `${e.subcategory ? e.subcategory + " " : ""}${e.description}`,
-        income: 0, expense: e.amount, id: `exp-${e.id}`, receipt_url: e.receipt_url,
-      });
-    });
-    return entries.sort((a, b) => a.date.localeCompare(b.date));
-  };
+  /* 経費保存 */
+  const saveExpense=async()=>{if(!form.amount||parseInt(form.amount)<=0){setSaveMsg("金額を入力");return;}if(!form.category){setSaveMsg("カテゴリを選択");return;}setSaving(true);setSaveMsg("");
+    let rUrl="",tUrl="";
+    if(receiptFile){const ts=Date.now();const fn=`therapist_${therapistId}/${form.date}_${ts}.${receiptFile.name.split(".").pop()}`;const{error:upErr}=await supabase.storage.from("receipts").upload(fn,receiptFile,{contentType:receiptFile.type,upsert:true});if(!upErr){const{data:u}=supabase.storage.from("receipts").getPublicUrl(fn);rUrl=u.publicUrl;try{const img=new Image();const du=await new Promise<string>(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result as string);fr.readAsDataURL(receiptFile);});await new Promise<void>(r=>{img.onload=()=>r();img.src=du;});const c=document.createElement("canvas");const ctx=c.getContext("2d")!;const sc=150/Math.max(img.width,img.height);c.width=img.width*sc;c.height=img.height*sc;ctx.drawImage(img,0,0,c.width,c.height);const tb=await new Promise<Blob>(r=>c.toBlob(b=>r(b!),"image/jpeg",0.6));const tn=`therapist_${therapistId}/thumb_${form.date}_${ts}.jpg`;await supabase.storage.from("receipts").upload(tn,tb,{contentType:"image/jpeg",upsert:true});const{data:tu}=supabase.storage.from("receipts").getPublicUrl(tn);tUrl=tu.publicUrl;}catch{}}}
+    const row={therapist_id:therapistId,date:form.date,category:form.category,subcategory:form.subcategory,account_item:form.account_item,description:form.description,amount:parseInt(form.amount)||0,receipt_url:rUrl,receipt_thumb_url:tUrl,memo:form.memo};
+    const{error}=editId?await supabase.from("therapist_expenses").update(row).eq("id",editId):await supabase.from("therapist_expenses").insert(row);
+    setSaveMsg(error?"失敗: "+error.message:editId?"✅ 更新":"✅ 保存");setSaving(false);setForm({date:new Date().toISOString().split("T")[0],category:"",subcategory:"",account_item:"",description:"",amount:"",memo:""});setReceiptFile(null);setReceiptPreview("");setAiResult("");setEditId(null);fetchData();};
+  const deleteExpense=async(id:number)=>{if(!confirm("削除？"))return;await supabase.from("therapist_expenses").delete().eq("id",id);fetchData();};
+  const startEdit=(e:Expense)=>{setEditId(e.id);setForm({date:e.date,category:e.category,subcategory:e.subcategory,account_item:e.account_item,description:e.description,amount:String(e.amount),memo:e.memo});setSubTab("add");};
 
-  const ledger = generateLedger();
-  const totalIncome = ledger.reduce((s, e) => s + e.income, 0);
-  const totalExpense = ledger.reduce((s, e) => s + e.expense, 0);
-  const profit = totalIncome - totalExpense;
+  /* PDF生成（HTML→印刷） */
+  const openPrint=(title:string,body:string)=>{const w=window.open("","_blank");if(!w){alert("ポップアップを許可してください");return;}
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>@page{size:A4;margin:15mm}body{font-family:"Hiragino Sans","Meiryo","Yu Gothic",sans-serif;font-size:10px;color:#333;line-height:1.5}h1{font-size:16px;border-bottom:2px solid #e8849a;padding-bottom:6px;margin-bottom:12px}h2{font-size:13px;margin:20px 0 8px;color:#555;border-left:4px solid #e8849a;padding-left:8px}table{width:100%;border-collapse:collapse;margin:8px 0 16px;font-size:9px}th{background:#f8f0f2;color:#666;padding:6px 4px;border:1px solid #ddd;font-weight:600;white-space:nowrap}td{padding:5px 4px;border:1px solid #ddd}.r{text-align:right}.c{text-align:center}.total-row{background:#fef7f8;font-weight:700}.summary-box{border:2px solid #e8849a;border-radius:8px;padding:12px;margin:12px 0;background:#fef7f8}.summary-box h3{margin:0 0 8px;color:#e8849a;font-size:12px}.info{font-size:8px;color:#999;margin-top:20px}@media print{.no-print{display:none}}</style></head><body><button class="no-print" onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#e8849a;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:12px;z-index:99">🖨 印刷 / PDF保存</button>${body}<p class="info">T-MANAGE 帳簿システム / 出力日: ${new Date().toLocaleDateString("ja-JP")} / 複式簿記形式</p></body></html>`);w.document.close();};
 
-  /* ── レシートAI解析 ── */
-  const analyzeReceipt = async (file: File) => {
-    setAiAnalyzing(true); setAiResult("");
-    try {
-      const reader = new FileReader();
-      const base64 = await new Promise<string>((resolve) => {
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.readAsDataURL(file);
-      });
-      const res = await fetch("/api/receipt-analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64, mediaType: file.type }),
-      });
-      const data = await res.json();
-      if (data.ok && data.result) {
-        const r = data.result;
-        setForm(prev => ({
-          ...prev,
-          date: r.date || prev.date,
-          description: r.items || r.store || "",
-          amount: r.amount ? String(r.amount) : prev.amount,
-          category: r.category || prev.category,
-          account_item: r.account_item || prev.account_item,
-          memo: r.store ? `店舗: ${r.store}` : prev.memo,
-        }));
-        // カテゴリに合致するsubcategoryを設定
-        const cat = CATEGORIES.find(c => c.label === r.category);
-        if (cat) setForm(prev => ({ ...prev, subcategory: cat.subs[0] || "" }));
-        setAiResult("✅ レシート読み取り完了！内容を確認してください");
-      } else {
-        setAiResult("⚠️ 読み取りに失敗しました。手動で入力してください");
-      }
-    } catch { setAiResult("⚠️ エラーが発生しました"); }
-    setAiAnalyzing(false);
-  };
+  const printJournal=()=>{const p=viewMode==="year"?`${year}年`:monthKey;let rows=journal.map(e=>`<tr><td class="c">${e.date}</td><td>${e.debit_account}</td><td class="r">${fmtN(e.debit_amount)}</td><td>${e.credit_account}</td><td class="r">${fmtN(e.credit_amount)}</td><td>${e.description}${e.receipt_url?" 📎":""}</td></tr>`).join("");const tD=journal.reduce((s,e)=>s+e.debit_amount,0);const tC=journal.reduce((s,e)=>s+e.credit_amount,0);rows+=`<tr class="total-row"><td class="c">合計</td><td></td><td class="r">${fmtN(tD)}</td><td></td><td class="r">${fmtN(tC)}</td><td>借方＝貸方 ✓</td></tr>`;openPrint(`仕訳帳_${p}`,`<h1>仕訳帳（${p}）</h1><table><tr><th>日付</th><th>借方科目</th><th>借方金額</th><th>貸方科目</th><th>貸方金額</th><th>摘要</th></tr>${rows}</table>`);};
 
-  /* ── レシート画像選択 ── */
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setReceiptFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setReceiptPreview(reader.result as string);
-    reader.readAsDataURL(file);
-    analyzeReceipt(file);
-  };
+  const printGL=()=>{const p=viewMode==="year"?`${year}年`:monthKey;const gl=getGeneralLedger();let html=`<h1>総勘定元帳（${p}）</h1>`;Object.entries(gl).sort().forEach(([acc,entries])=>{let bal=0;html+=`<h2>${acc}</h2><table><tr><th>日付</th><th>相手科目</th><th>借方</th><th>貸方</th><th>残高</th><th>摘要</th></tr>`;entries.forEach(e=>{const isD=e.debit_account===acc;const d=isD?e.debit_amount:0;const c=!isD?e.credit_amount:0;bal+=d-c;html+=`<tr><td class="c">${e.date}</td><td>${isD?e.credit_account:e.debit_account}</td><td class="r">${d?fmtN(d):""}</td><td class="r">${c?fmtN(c):""}</td><td class="r">${fmtN(Math.abs(bal))}</td><td>${e.description}</td></tr>`;});html+=`</table>`;});openPrint(`総勘定元帳_${p}`,html);};
 
-  /* ── 経費保存 ── */
-  const saveExpense = async () => {
-    if (!form.amount || parseInt(form.amount) <= 0) { setSaveMsg("金額を入力してください"); return; }
-    if (!form.category) { setSaveMsg("カテゴリを選択してください"); return; }
-    setSaving(true); setSaveMsg("");
+  const printPL=()=>{const p=viewMode==="year"?`${year}年`:monthKey;const acS=getAccountSummary();let html=`<h1>損益計算書（${p}）</h1><div class="summary-box"><h3>概要</h3><table><tr><td>売上高（収入）</td><td class="r" style="font-size:13px;font-weight:700;color:#22c55e">${fmtN(totalIncome)}</td></tr><tr><td>経費合計</td><td class="r" style="color:#ef4444">${fmtN(totalExpense)}</td></tr><tr style="border-top:2px solid #e8849a"><td style="font-weight:700">事業所得</td><td class="r" style="font-size:14px;font-weight:700;color:#e8849a">${fmtN(profit)}</td></tr></table></div><h2>収入の部</h2><table><tr><th>科目</th><th>金額</th></tr><tr><td>売上高</td><td class="r">${fmtN(totalIncome)}</td></tr><tr class="total-row"><td>収入合計</td><td class="r">${fmtN(totalIncome)}</td></tr></table><h2>経費の部</h2><table><tr><th>勘定科目</th><th>金額</th><th>構成比</th></tr>`;acS.forEach(([acc,amt])=>{html+=`<tr><td>${acc}</td><td class="r">${fmtN(amt)}</td><td class="r">${totalExpense>0?Math.round(amt/totalExpense*100):0}%</td></tr>`;});html+=`<tr class="total-row"><td>経費合計</td><td class="r">${fmtN(totalExpense)}</td><td class="r">100%</td></tr></table>`;openPrint(`損益計算書_${p}`,html);};
 
-    let receiptUrl = "";
-    let thumbUrl = "";
+  const printTax=()=>{const t=calcTax();openPrint(`確定申告書データ_${year}年`,`<h1>確定申告書用データ（${year}年分）</h1><div class="summary-box"><h3>最終結果</h3><table><tr><td style="font-weight:700">${t.taxDue>=0?"納付税額":"還付税額"}</td><td class="r" style="font-size:18px;font-weight:700;color:${t.taxDue>=0?"#ef4444":"#22c55e"}">${fmt(Math.abs(t.taxDue))}</td></tr></table></div><h2>■ 収支計算</h2><table><tr><th>項目</th><th>金額</th></tr><tr><td>① 事業収入</td><td class="r">${fmtN(t.totalIncome)}</td></tr><tr><td>② 必要経費</td><td class="r">${fmtN(t.totalExpense)}</td></tr><tr><td>③ 差引金額</td><td class="r">${fmtN(t.profit)}</td></tr>${isAoiro?`<tr><td>④ 青色申告特別控除</td><td class="r">${fmtN(t.aoiroD)}</td></tr>`:""}<tr class="total-row"><td>⑤ 事業所得</td><td class="r">${fmtN(t.bIncome)}</td></tr></table><h2>■ 所得控除</h2><table><tr><th>控除項目</th><th>金額</th></tr><tr><td>基礎控除</td><td class="r">${fmtN(t.kiso)}</td></tr><tr><td>社会保険料控除</td><td class="r">${fmtN(t.shakai)}</td></tr>${t.seimei>0?`<tr><td>生命保険料控除</td><td class="r">${fmtN(t.seimei)}</td></tr>`:""}${t.ideco>0?`<tr><td>小規模企業共済等掛金控除</td><td class="r">${fmtN(t.ideco)}</td></tr>`:""}<tr class="total-row"><td>所得控除合計</td><td class="r">${fmtN(t.totalDed)}</td></tr></table><h2>■ 税額計算</h2><table><tr><td>課税所得</td><td class="r">${fmtN(t.taxable)}</td></tr><tr><td>所得税</td><td class="r">${fmtN(t.itax)}</td></tr><tr><td>復興特別所得税(2.1%)</td><td class="r">${fmtN(t.rtax)}</td></tr><tr><td>合計税額</td><td class="r">${fmtN(t.totalTax)}</td></tr><tr><td>源泉徴収税額</td><td class="r">-${fmtN(t.withheld)}</td></tr><tr class="total-row"><td>${t.taxDue>=0?"納付税額":"還付税額"}</td><td class="r" style="font-size:14px;color:${t.taxDue>=0?"#ef4444":"#22c55e"}">${fmt(Math.abs(t.taxDue))}</td></tr></table><h2>■ 住民税(参考)</h2><table><tr><td>住民税概算</td><td class="r">${fmtN(t.resTax)}</td></tr><tr><td>ふるさと納税上限目安</td><td class="r">${fmtN(t.fLimit)}</td></tr></table><h2>■ 経費内訳</h2><table><tr><th>勘定科目</th><th>金額</th></tr>${getAccountSummary().map(([a,v])=>`<tr><td>${a}</td><td class="r">${fmtN(v)}</td></tr>`).join("")}<tr class="total-row"><td>経費合計</td><td class="r">${fmtN(t.totalExpense)}</td></tr></table>`);};
 
-    // レシート画像アップロード
-    if (receiptFile) {
-      const ts = Date.now();
-      const fileName = `therapist_${therapistId}/${form.date}_${ts}.${receiptFile.name.split(".").pop()}`;
-      const { error: upErr } = await supabase.storage.from("receipts").upload(fileName, receiptFile, { contentType: receiptFile.type, upsert: true });
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(fileName);
-        receiptUrl = urlData.publicUrl;
+  /* CSV生成 */
+  const dlCSV=(fn:string,c:string)=>{const b=new Blob(["\uFEFF"+c],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=fn;a.click();};
+  const csvJournal=()=>{const p=viewMode==="year"?`${year}年`:monthKey;dlCSV(`仕訳帳_${p}.csv`,"日付,借方科目,借方金額,貸方科目,貸方金額,摘要\n"+journal.map(e=>`${e.date},${e.debit_account},${e.debit_amount},${e.credit_account},${e.credit_amount},"${e.description}"`).join("\n"));};
+  const csvFreee=()=>{dlCSV(`freee取込_${year}年.csv`,"収支区分,管理番号,発生日,勘定科目,税区分,金額,税計算区分,税額,備考\n"+journal.map((e,i)=>`${e.type==="income"?"収入":"支出"},${i+1},${e.date},${e.type==="income"?e.credit_account:e.debit_account},課税売上10%,${e.type==="income"?e.credit_amount:e.debit_amount},税込,,"${e.description}"`).join("\n"));};
+  const csvMF=()=>{dlCSV(`MF取込_${year}年.csv`,"取引日,借方勘定科目,借方補助科目,借方税区分,借方金額,貸方勘定科目,貸方補助科目,貸方税区分,貸方金額,摘要\n"+journal.map(e=>`${e.date},${e.debit_account},,課対仕入10%,${e.debit_amount},${e.credit_account},,課対仕入10%,${e.credit_amount},"${e.description}"`).join("\n"));};
+  const csvSyuushi=()=>{const t=calcTax();let c=`収支内訳書（${year}年）\n\n■ 収入\n事業収入,${t.totalIncome}\n\n■ 経費\n`;getAccountSummary().forEach(([k,v])=>{c+=`${k},${v}\n`;});c+=`経費合計,${t.totalExpense}\n\n■ 所得\n事業所得,${t.profit}\n`;if(isAoiro)c+=`青色申告特別控除,${t.aoiroD}\n差引事業所得,${t.bIncome}\n`;dlCSV(`収支内訳書_${year}年.csv`,c);};
 
-        // サムネイル生成
-        try {
-          const img = new Image();
-          const dataUrl = await new Promise<string>((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(receiptFile); });
-          await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = dataUrl; });
-          const c = document.createElement("canvas"); const ctx = c.getContext("2d")!;
-          const scale = 150 / Math.max(img.width, img.height);
-          c.width = img.width * scale; c.height = img.height * scale;
-          ctx.drawImage(img, 0, 0, c.width, c.height);
-          const thumbBlob = await new Promise<Blob>((resolve) => c.toBlob((b) => resolve(b!), "image/jpeg", 0.6));
-          const thumbName = `therapist_${therapistId}/thumb_${form.date}_${ts}.jpg`;
-          await supabase.storage.from("receipts").upload(thumbName, thumbBlob, { contentType: "image/jpeg", upsert: true });
-          const { data: tUrl } = supabase.storage.from("receipts").getPublicUrl(thumbName);
-          thumbUrl = tUrl.publicUrl;
-        } catch { /* thumb optional */ }
-      }
-    }
+  /* テーブル未作成 */
+  if(tableReady===false)return(<div style={{...cardBase,padding:"20px"}}><h2 className="text-[14px] font-bold mb-3" style={{color:T.text}}>📒 帳簿機能セットアップ</h2><p className="text-[11px] mb-4" style={{color:T.textSub}}>初回セットアップが必要です。</p><button onClick={setupTable} style={btnPink}>🔧 セットアップ</button>{setupMsg&&<p className="text-[11px] mt-3" style={{color:setupMsg.includes("✅")?green:orange}}>{setupMsg}</p>}{setupSql&&<pre className="text-[8px] p-3 rounded-xl mt-3 overflow-x-auto" style={{backgroundColor:T.cardAlt,color:T.textSub}}>{setupSql}</pre>}</div>);
+  if(tableReady===null)return<div className="text-center py-8"><p className="text-[11px]" style={{color:T.textMuted}}>読み込み中...</p></div>;
 
-    const row = {
-      therapist_id: therapistId,
-      date: form.date,
-      category: form.category,
-      subcategory: form.subcategory,
-      account_item: form.account_item,
-      description: form.description,
-      amount: parseInt(form.amount) || 0,
-      receipt_url: receiptUrl,
-      receipt_thumb_url: thumbUrl,
-      memo: form.memo,
-    };
-
-    if (editId) {
-      const { error } = await supabase.from("therapist_expenses").update(row).eq("id", editId);
-      if (error) { setSaveMsg("保存失敗: " + error.message); } else { setSaveMsg("✅ 更新しました"); }
-    } else {
-      const { error } = await supabase.from("therapist_expenses").insert(row);
-      if (error) { setSaveMsg("保存失敗: " + error.message); } else { setSaveMsg("✅ 保存しました"); }
-    }
-
-    setSaving(false);
-    setForm({ date: new Date().toISOString().split("T")[0], category: "", subcategory: "", account_item: "", description: "", amount: "", memo: "" });
-    setReceiptFile(null); setReceiptPreview(""); setAiResult(""); setEditId(null);
-    fetchData();
-  };
-
-  /* ── 経費削除 ── */
-  const deleteExpense = async (id: number) => {
-    if (!confirm("この経費を削除しますか？")) return;
-    await supabase.from("therapist_expenses").delete().eq("id", id);
-    fetchData();
-  };
-
-  /* ── 経費編集 ── */
-  const startEdit = (e: Expense) => {
-    setEditId(e.id);
-    setForm({ date: e.date, category: e.category, subcategory: e.subcategory, account_item: e.account_item, description: e.description, amount: String(e.amount), memo: e.memo });
-    setSubTab("add");
-  };
-
-  /* ── CSVダウンロード ── */
-  const downloadCSV = () => {
-    const bom = "\uFEFF";
-    const header = "日付,種別,カテゴリ,勘定科目,摘要,収入,支出\n";
-    const rows = ledger.map(e =>
-      `${e.date},${e.type === "income" ? "収入" : "支出"},${e.category},${e.account_item},"${e.description}",${e.income || ""},${e.expense || ""}`
-    ).join("\n");
-    const summary = `\n\n月間サマリー（${monthKey}）\n収入合計,${totalIncome}\n経費合計,${totalExpense}\n所得（収入−経費）,${profit}`;
-
-    // 勘定科目別集計
-    const byAccount: { [k: string]: number } = {};
-    ledger.filter(e => e.type === "expense").forEach(e => { byAccount[e.account_item] = (byAccount[e.account_item] || 0) + e.expense; });
-    const accountSummary = "\n\n勘定科目別経費\n" + Object.entries(byAccount).map(([k, v]) => `${k},${v}`).join("\n");
-
-    const blob = new Blob([bom + header + rows + summary + accountSummary], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `帳簿_${monthKey}.csv`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  /* ── 年間CSV ── */
-  const downloadYearCSV = () => {
-    // 全年間データを取得してDL（非同期）
-    (async () => {
-      const startDate = `${year}-01-01`;
-      const endDate = `${year}-12-31`;
-      const [{ data: stl }, { data: exp }] = await Promise.all([
-        supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", therapistId).gte("date", startDate).lte("date", endDate).eq("is_settled", true).order("date"),
-        supabase.from("therapist_expenses").select("*").eq("therapist_id", therapistId).gte("date", startDate).lte("date", endDate).order("date"),
-      ]);
-      const entries: LedgerEntry[] = [];
-      (stl || []).forEach((s: Settlement) => {
-        entries.push({ date: s.date, type: "income", category: "売上（施術報酬）", account_item: "売上高", description: `${s.order_count}件施術`, income: s.final_payment, expense: 0, id: `stl-${s.id}` });
-      });
-      (exp || []).forEach((e: Expense) => {
-        entries.push({ date: e.date, type: "expense", category: e.category, account_item: e.account_item, description: `${e.subcategory} ${e.description}`, income: 0, expense: e.amount, id: `exp-${e.id}` });
-      });
-      entries.sort((a, b) => a.date.localeCompare(b.date));
-
-      const bom = "\uFEFF";
-      const header = "日付,種別,カテゴリ,勘定科目,摘要,収入,支出\n";
-      const rows = entries.map(e => `${e.date},${e.type === "income" ? "収入" : "支出"},${e.category},${e.account_item},"${e.description}",${e.income || ""},${e.expense || ""}`).join("\n");
-      const tIncome = entries.reduce((s, e) => s + e.income, 0);
-      const tExpense = entries.reduce((s, e) => s + e.expense, 0);
-      const summary = `\n\n年間サマリー（${year}年）\n収入合計,${tIncome}\n経費合計,${tExpense}\n所得,${tIncome - tExpense}`;
-
-      const byAccount: { [k: string]: number } = {};
-      entries.filter(e => e.type === "expense").forEach(e => { byAccount[e.account_item] = (byAccount[e.account_item] || 0) + e.expense; });
-      const acSummary = "\n\n勘定科目別経費\n" + Object.entries(byAccount).map(([k, v]) => `${k},${v}`).join("\n");
-
-      // 月別サマリー
-      const byMonth: { [m: string]: { income: number; expense: number } } = {};
-      for (let m = 1; m <= 12; m++) {
-        const mk = `${year}-${String(m).padStart(2, "0")}`;
-        byMonth[mk] = { income: 0, expense: 0 };
-      }
-      entries.forEach(e => {
-        const mk = e.date.slice(0, 7);
-        if (byMonth[mk]) { byMonth[mk].income += e.income; byMonth[mk].expense += e.expense; }
-      });
-      const monthSummary = "\n\n月別サマリー\n月,収入,経費,所得\n" + Object.entries(byMonth).map(([m, v]) => `${m},${v.income},${v.expense},${v.income - v.expense}`).join("\n");
-
-      const blob = new Blob([bom + header + rows + summary + acSummary + monthSummary], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `帳簿_${year}年_年間.csv`; a.click();
-      URL.revokeObjectURL(url);
-    })();
-  };
-
-  /* ── 収支内訳書用データダウンロード ── */
-  const downloadSyuushiCSV = () => {
-    (async () => {
-      const startDate = `${year}-01-01`;
-      const endDate = `${year}-12-31`;
-      const [{ data: stl }, { data: exp }] = await Promise.all([
-        supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", therapistId).gte("date", startDate).lte("date", endDate).eq("is_settled", true),
-        supabase.from("therapist_expenses").select("*").eq("therapist_id", therapistId).gte("date", startDate).lte("date", endDate),
-      ]);
-      const tIncome = (stl || []).reduce((s: number, r: Settlement) => s + r.final_payment, 0);
-      const byAccount: { [k: string]: number } = {};
-      (exp || []).forEach((e: Expense) => { byAccount[e.account_item] = (byAccount[e.account_item] || 0) + e.amount; });
-      const tExpense = Object.values(byAccount).reduce((s, v) => s + v, 0);
-
-      const bom = "\uFEFF";
-      let csv = bom;
-      csv += `収支内訳書用データ（${year}年分）\n\n`;
-      csv += `■ 収入\n`;
-      csv += `事業収入（施術報酬）,${tIncome}\n\n`;
-      csv += `■ 経費\n`;
-      Object.entries(byAccount).sort().forEach(([k, v]) => { csv += `${k},${v}\n`; });
-      csv += `経費合計,${tExpense}\n\n`;
-      csv += `■ 所得\n`;
-      csv += `事業所得（収入−経費）,${tIncome - tExpense}\n`;
-
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `収支内訳書_${year}年.csv`; a.click();
-      URL.revokeObjectURL(url);
-    })();
-  };
-
-  /* ================================================================
-     レンダリング
-     ================================================================ */
-
-  // テーブル未作成
-  if (tableReady === false) {
-    return (
-      <div style={{ ...cardBase, padding: "20px" }}>
-        <h2 className="text-[14px] font-bold mb-3" style={{ color: T.text }}>📒 帳簿機能セットアップ</h2>
-        <p className="text-[11px] mb-4" style={{ color: T.textSub }}>帳簿機能を使うには、初回セットアップが必要です。</p>
-        <button onClick={setupTable} style={btnPink}>🔧 セットアップ開始</button>
-        {setupMsg && <p className="text-[11px] mt-3" style={{ color: setupMsg.includes("✅") ? green : orange }}>{setupMsg}</p>}
-        {setupSql && (
-          <div className="mt-3">
-            <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>Supabase SQL Editorで以下を実行：</p>
-            <pre className="text-[8px] p-3 rounded-xl overflow-x-auto" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{setupSql}</pre>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (tableReady === null) {
-    return <div className="text-center py-8"><p className="text-[11px]" style={{ color: T.textMuted }}>読み込み中...</p></div>;
-  }
-
-  return (
-    <div className="space-y-3 pb-10">
-      {/* ── サブタブ ── */}
-      <div className="flex gap-1.5">
-        {([["ledger", "📒 帳簿"], ["add", "➕ 経費入力"], ["download", "📥 ダウンロード"]] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setSubTab(key)}
-            className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap"
-            style={{ backgroundColor: subTab === key ? pinkLight : "transparent", color: subTab === key ? pink : T.textMuted, borderColor: subTab === key ? pink : T.border }}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── 月選択 ── */}
-      <div className="flex items-center gap-2">
-        <button onClick={() => { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); }}
-          className="px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>◀</button>
-        <span className="text-[13px] font-bold flex-1 text-center" style={{ color: T.text }}>{year}年{month}月</span>
-        <button onClick={() => { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); }}
-          className="px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>▶</button>
-      </div>
-
-      {/* ── 月間サマリー ── */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-xl p-3 text-center" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
-          <p className="text-[8px]" style={{ color: green }}>収入</p>
-          <p className="text-[13px] font-bold" style={{ color: green }}>{fmt(totalIncome)}</p>
-        </div>
-        <div className="rounded-xl p-3 text-center" style={{ backgroundColor: red + "10", border: `1px solid ${red}33` }}>
-          <p className="text-[8px]" style={{ color: red }}>経費</p>
-          <p className="text-[13px] font-bold" style={{ color: red }}>{fmt(totalExpense)}</p>
-        </div>
-        <div className="rounded-xl p-3 text-center" style={{ backgroundColor: profit >= 0 ? green + "10" : red + "10", border: `1px solid ${profit >= 0 ? green : red}33` }}>
-          <p className="text-[8px]" style={{ color: T.textMuted }}>所得</p>
-          <p className="text-[13px] font-bold" style={{ color: profit >= 0 ? green : red }}>{fmt(profit)}</p>
-        </div>
-      </div>
-
-      {/* ============== 帳簿一覧 ============== */}
-      {subTab === "ledger" && (
-        <div style={{ ...cardBase, overflow: "hidden" }}>
-          <div className="px-4 py-2.5 flex justify-between items-center" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
-            <span className="text-[11px] font-bold" style={{ color: T.text }}>📒 帳簿一覧（{monthKey}）</span>
-            <span className="text-[9px]" style={{ color: T.textMuted }}>{ledger.length}件</span>
-          </div>
-          {loading ? (
-            <p className="text-center py-6 text-[11px]" style={{ color: T.textMuted }}>読み込み中...</p>
-          ) : ledger.length === 0 ? (
-            <p className="text-center py-8 text-[11px]" style={{ color: T.textFaint }}>この月のデータはありません</p>
-          ) : (
-            <div>
-              {/* ヘッダー */}
-              <div className="grid grid-cols-12 gap-1 px-3 py-1.5 text-[8px] font-bold" style={{ borderBottom: `1px solid ${T.border}`, color: T.textMuted }}>
-                <div className="col-span-2">日付</div>
-                <div className="col-span-3">勘定科目</div>
-                <div className="col-span-4">摘要</div>
-                <div className="col-span-1 text-right">収入</div>
-                <div className="col-span-1 text-right">支出</div>
-                <div className="col-span-1"></div>
-              </div>
-              {ledger.map(entry => (
-                <div key={entry.id} className="grid grid-cols-12 gap-1 px-3 py-2 items-center" style={{ borderBottom: `1px solid ${T.border}08` }}>
-                  <div className="col-span-2 text-[9px]" style={{ color: T.textSub }}>{entry.date.slice(5)}</div>
-                  <div className="col-span-3 text-[8px]" style={{ color: entry.type === "income" ? green : T.textSub }}>
-                    {entry.account_item}
-                  </div>
-                  <div className="col-span-4 text-[8px] truncate" style={{ color: T.textSub }}>
-                    {entry.receipt_url && <span style={{ color: orange }}>📎</span>}
-                    {entry.description}
-                  </div>
-                  <div className="col-span-1 text-[9px] text-right font-medium" style={{ color: green }}>
-                    {entry.income > 0 ? fmt(entry.income) : ""}
-                  </div>
-                  <div className="col-span-1 text-[9px] text-right font-medium" style={{ color: red }}>
-                    {entry.expense > 0 ? fmt(entry.expense) : ""}
-                  </div>
-                  <div className="col-span-1 text-right">
-                    {entry.type === "expense" && (
-                      <div className="flex gap-0.5 justify-end">
-                        <button onClick={() => startEdit(expenses.find(e => e.id === parseInt(entry.id.replace("exp-", "")))!)}
-                          className="text-[8px] cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>✏️</button>
-                        <button onClick={() => deleteExpense(parseInt(entry.id.replace("exp-", "")))}
-                          className="text-[8px] cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>🗑</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {/* 合計行 */}
-              <div className="grid grid-cols-12 gap-1 px-3 py-2.5 font-bold" style={{ backgroundColor: T.cardAlt }}>
-                <div className="col-span-2 text-[9px]" style={{ color: T.text }}>合計</div>
-                <div className="col-span-3"></div>
-                <div className="col-span-4"></div>
-                <div className="col-span-1 text-[10px] text-right" style={{ color: green }}>{fmt(totalIncome)}</div>
-                <div className="col-span-1 text-[10px] text-right" style={{ color: red }}>{fmt(totalExpense)}</div>
-                <div className="col-span-1"></div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ============== 経費入力 ============== */}
-      {subTab === "add" && (
-        <div className="space-y-3">
-          {/* レシートアップロード */}
-          <div style={{ ...cardBase, padding: "16px" }}>
-            <p className="text-[12px] font-bold mb-2" style={{ color: T.text }}>📷 レシート撮影・アップロード</p>
-            <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>写真を撮るとAIが自動で読み取ります</p>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
-            <div className="flex gap-2">
-              <button onClick={() => fileRef.current?.click()}
-                className="flex-1 py-3 rounded-xl text-[11px] cursor-pointer"
-                style={{ backgroundColor: pinkLight, color: pink, border: `1px dashed ${pink}`, fontWeight: 600 }}>
-                📷 レシートを撮影
-              </button>
-              <button onClick={() => { const input = document.createElement("input"); input.type = "file"; input.accept = "image/*"; input.onchange = (e) => handleFileChange(e as unknown as React.ChangeEvent<HTMLInputElement>); input.click(); }}
-                className="flex-1 py-3 rounded-xl text-[11px] cursor-pointer"
-                style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px dashed ${T.border}` }}>
-                📁 ファイル選択
-              </button>
-            </div>
-            {receiptPreview && (
-              <div className="mt-3 text-center">
-                <img src={receiptPreview} alt="レシート" className="max-h-40 mx-auto rounded-xl" style={{ border: `1px solid ${T.border}` }} />
-              </div>
-            )}
-            {aiAnalyzing && (
-              <div className="mt-2 text-center">
-                <p className="text-[10px] animate-pulse" style={{ color: pink }}>🤖 AIが読み取り中...</p>
-              </div>
-            )}
-            {aiResult && <p className="text-[10px] mt-2 text-center" style={{ color: aiResult.includes("✅") ? green : orange }}>{aiResult}</p>}
-          </div>
-
-          {/* カテゴリ選択 */}
-          <div style={{ ...cardBase, padding: "16px" }}>
-            <p className="text-[12px] font-bold mb-2" style={{ color: T.text }}>📂 カテゴリ</p>
-            <div className="grid grid-cols-4 gap-1.5">
-              {CATEGORIES.map(cat => (
-                <button key={cat.label} onClick={() => setForm(prev => ({ ...prev, category: cat.label, account_item: cat.account, subcategory: "" }))}
-                  className="flex flex-col items-center gap-0.5 py-2 rounded-xl cursor-pointer"
-                  style={{ backgroundColor: form.category === cat.label ? pinkLight : T.cardAlt, border: `1px solid ${form.category === cat.label ? pink : "transparent"}` }}>
-                  <span className="text-[16px]">{cat.icon}</span>
-                  <span className="text-[8px]" style={{ color: form.category === cat.label ? pink : T.textMuted }}>{cat.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* サブカテゴリ */}
-            {form.category && (() => {
-              const cat = CATEGORIES.find(c => c.label === form.category);
-              return cat ? (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {cat.subs.map(sub => (
-                    <button key={sub} onClick={() => setForm(prev => ({ ...prev, subcategory: sub }))}
-                      className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer"
-                      style={{ backgroundColor: form.subcategory === sub ? pink + "20" : "transparent", color: form.subcategory === sub ? pink : T.textMuted, border: `1px solid ${form.subcategory === sub ? pink : T.border}` }}>
-                      {sub}
-                    </button>
-                  ))}
-                </div>
-              ) : null;
-            })()}
-          </div>
-
-          {/* 入力フォーム */}
-          <div style={{ ...cardBase, padding: "16px" }}>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>日付</label>
-                <input type="date" value={form.date} onChange={e => setForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
-              </div>
-              <div>
-                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>金額（税込）</label>
-                <input type="number" inputMode="numeric" value={form.amount} onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
-                  placeholder="例: 1500" className="w-full px-3 py-2.5 rounded-xl text-[14px] font-bold outline-none"
-                  style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
-              </div>
-              <div>
-                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>内容・品目</label>
-                <input type="text" value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="例: ネイル代、電車代" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none"
-                  style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
-              </div>
-              <div>
-                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>勘定科目</label>
-                <div className="flex flex-wrap gap-1">
-                  {ACCOUNT_ITEMS.map(item => (
-                    <button key={item} onClick={() => setForm(prev => ({ ...prev, account_item: item }))}
-                      className="px-2.5 py-1.5 text-[9px] rounded-lg cursor-pointer"
-                      style={{ backgroundColor: form.account_item === item ? green + "20" : "transparent", color: form.account_item === item ? green : T.textMuted, border: `1px solid ${form.account_item === item ? green : T.border}` }}>
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>メモ（任意）</label>
-                <input type="text" value={form.memo} onChange={e => setForm(prev => ({ ...prev, memo: e.target.value }))}
-                  placeholder="店舗名や補足情報" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none"
-                  style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
-              </div>
-
-              <button onClick={saveExpense} disabled={saving}
-                className="w-full py-3 rounded-xl text-[12px] cursor-pointer"
-                style={{ ...btnPink, opacity: saving ? 0.6 : 1 }}>
-                {saving ? "保存中..." : editId ? "✏️ 更新する" : "💾 経費を保存"}
-              </button>
-              {editId && (
-                <button onClick={() => { setEditId(null); setForm({ date: new Date().toISOString().split("T")[0], category: "", subcategory: "", account_item: "", description: "", amount: "", memo: "" }); }}
-                  className="w-full py-2 text-[11px] rounded-xl cursor-pointer" style={{ backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}` }}>
-                  キャンセル
-                </button>
-              )}
-              {saveMsg && <p className="text-[10px] text-center" style={{ color: saveMsg.includes("✅") ? green : red }}>{saveMsg}</p>}
-            </div>
-          </div>
-
-          {/* 今月の経費一覧 */}
-          {expenses.length > 0 && (
-            <div style={{ ...cardBase, overflow: "hidden" }}>
-              <div className="px-4 py-2.5" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
-                <span className="text-[11px] font-bold" style={{ color: T.text }}>📝 今月の経費（{expenses.length}件 / {fmt(expenses.reduce((s, e) => s + e.amount, 0))}）</span>
-              </div>
-              {expenses.map(e => (
-                <div key={e.id} className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.border}08` }}>
-                  {e.receipt_thumb_url ? (
-                    <a href={e.receipt_url} target="_blank" rel="noopener noreferrer">
-                      <img src={e.receipt_thumb_url} alt="" className="w-8 h-8 rounded object-cover" style={{ border: `1px solid ${T.border}` }} />
-                    </a>
-                  ) : (
-                    <div className="w-8 h-8 rounded flex items-center justify-center text-[10px]" style={{ backgroundColor: T.cardAlt }}>
-                      {CATEGORIES.find(c => c.label === e.category)?.icon || "🛒"}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px]" style={{ color: T.textSub }}>{e.date.slice(5)}</span>
-                      <span className="text-[8px] px-1 rounded" style={{ backgroundColor: pinkLight, color: pink }}>{e.category}</span>
-                    </div>
-                    <p className="text-[10px] truncate" style={{ color: T.text }}>{e.subcategory} {e.description}</p>
-                  </div>
-                  <span className="text-[12px] font-bold flex-shrink-0" style={{ color: red }}>{fmt(e.amount)}</span>
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={() => startEdit(e)} className="text-[10px] cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>✏️</button>
-                    <button onClick={() => deleteExpense(e.id)} className="text-[10px] cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>🗑</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ============== ダウンロード ============== */}
-      {subTab === "download" && (
-        <div className="space-y-3">
-          <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[14px] font-bold mb-4" style={{ color: T.text }}>📥 帳簿ダウンロード</h2>
-            <div className="space-y-3">
-              {/* 月間帳簿 */}
-              <button onClick={downloadCSV} className="w-full p-4 rounded-xl text-left cursor-pointer" style={{ ...altCard, border: `1px solid ${pinkBorder}` }}>
-                <div className="flex items-center gap-3">
-                  <span className="text-[24px]">📒</span>
-                  <div>
-                    <p className="text-[12px] font-bold" style={{ color: T.text }}>月間帳簿（{monthKey}）</p>
-                    <p className="text-[9px]" style={{ color: T.textMuted }}>CSV形式 / 収入{fmt(totalIncome)} 経費{fmt(totalExpense)}</p>
-                  </div>
-                </div>
-              </button>
-
-              {/* 年間帳簿 */}
-              <button onClick={downloadYearCSV} className="w-full p-4 rounded-xl text-left cursor-pointer" style={{ ...altCard, border: `1px solid ${green}33` }}>
-                <div className="flex items-center gap-3">
-                  <span className="text-[24px]">📊</span>
-                  <div>
-                    <p className="text-[12px] font-bold" style={{ color: T.text }}>年間帳簿（{year}年）</p>
-                    <p className="text-[9px]" style={{ color: T.textMuted }}>CSV形式 / 月別サマリー・勘定科目別集計付き</p>
-                  </div>
-                </div>
-              </button>
-
-              {/* 収支内訳書 */}
-              <button onClick={downloadSyuushiCSV} className="w-full p-4 rounded-xl text-left cursor-pointer" style={{ ...altCard, border: `1px solid ${orange}33` }}>
-                <div className="flex items-center gap-3">
-                  <span className="text-[24px]">📄</span>
-                  <div>
-                    <p className="text-[12px] font-bold" style={{ color: T.text }}>収支内訳書用データ（{year}年）</p>
-                    <p className="text-[9px]" style={{ color: T.textMuted }}>確定申告書に転記するための収支サマリー</p>
-                  </div>
-                </div>
-              </button>
-            </div>
-
-            <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-              <p className="text-[10px] font-bold mb-1" style={{ color: T.text }}>💡 ダウンロードしたCSVの使い方</p>
-              <div className="space-y-1">
-                {[
-                  "Excelやスプレッドシートで開いて内容確認",
-                  "税理士さんに渡す資料として活用",
-                  "確定申告書への転記に使用",
-                  "帳簿保存義務（7年間）の記録として保管",
-                ].map((t, i) => (
-                  <p key={i} className="text-[9px] flex gap-1" style={{ color: T.textSub }}>
-                    <span style={{ color: green }}>✓</span>{t}
-                  </p>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 年選択 */}
-          <div className="flex items-center justify-center gap-3">
-            <button onClick={() => setYear(y => y - 1)} className="px-3 py-1.5 rounded-lg cursor-pointer text-[11px]" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>◀ {year - 1}年</button>
-            <span className="text-[12px] font-bold" style={{ color: T.text }}>{year}年</span>
-            <button onClick={() => setYear(y => y + 1)} className="px-3 py-1.5 rounded-lg cursor-pointer text-[11px]" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>{year + 1}年 ▶</button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 帳簿の保管に関する注意 ── */}
-      <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-        <p className="text-[8px] leading-relaxed" style={{ color: T.textMuted }}>
-          📋 帳簿の保存義務：個人事業主は帳簿を原則7年間保存する義務があります。このアプリのデータに加え、CSVダウンロードしたファイルも保管してください。
-          レシート原本も可能な限り保管しましょう。
-        </p>
-      </div>
+  return (<div className="space-y-3 pb-10">
+    {/* サブタブ */}
+    <div className="flex gap-1 overflow-x-auto pb-1">
+      {([["journal","📒 仕訳帳"],["add","➕ 経費入力"],["reports","📊 決算書"],["tax","📄 申告"],["export","📥 出力"]] as const).map(([key,label])=>(<button key={key} onClick={()=>setSubTab(key)} className="px-2.5 py-1.5 text-[9px] rounded-lg cursor-pointer border whitespace-nowrap" style={{backgroundColor:subTab===key?pinkLight:"transparent",color:subTab===key?pink:T.textMuted,borderColor:subTab===key?pink:T.border,fontWeight:subTab===key?600:400}}>{label}</button>))}
     </div>
-  );
+    {/* 期間選択 */}
+    <div className="flex items-center gap-2">
+      <div className="flex gap-1"><button onClick={()=>setViewMode("month")} className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{backgroundColor:viewMode==="month"?pinkLight:"transparent",color:viewMode==="month"?pink:T.textMuted,border:`1px solid ${viewMode==="month"?pink:T.border}`}}>月次</button><button onClick={()=>setViewMode("year")} className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{backgroundColor:viewMode==="year"?pinkLight:"transparent",color:viewMode==="year"?pink:T.textMuted,border:`1px solid ${viewMode==="year"?pink:T.border}`}}>年間</button></div>
+      {viewMode==="month"?(<div className="flex items-center gap-1 flex-1"><button onClick={()=>{if(month===1){setMonth(12);setYear(y=>y-1);}else setMonth(m=>m-1);}} className="px-2 py-1 rounded cursor-pointer" style={{backgroundColor:T.cardAlt,color:T.textSub,border:"none"}}>◀</button><span className="text-[12px] font-bold flex-1 text-center" style={{color:T.text}}>{year}年{month}月</span><button onClick={()=>{if(month===12){setMonth(1);setYear(y=>y+1);}else setMonth(m=>m+1);}} className="px-2 py-1 rounded cursor-pointer" style={{backgroundColor:T.cardAlt,color:T.textSub,border:"none"}}>▶</button></div>):(<div className="flex items-center gap-1 flex-1"><button onClick={()=>setYear(y=>y-1)} className="px-2 py-1 rounded cursor-pointer" style={{backgroundColor:T.cardAlt,color:T.textSub,border:"none"}}>◀</button><span className="text-[12px] font-bold flex-1 text-center" style={{color:T.text}}>{year}年（年間）</span><button onClick={()=>setYear(y=>y+1)} className="px-2 py-1 rounded cursor-pointer" style={{backgroundColor:T.cardAlt,color:T.textSub,border:"none"}}>▶</button></div>)}
+    </div>
+    {/* サマリー */}
+    <div className="grid grid-cols-3 gap-2">
+      {[{l:"収入",v:totalIncome,c:green},{l:"経費",v:totalExpense,c:red},{l:"所得",v:profit,c:profit>=0?green:red}].map(s=>(<div key={s.l} className="rounded-xl p-2.5 text-center" style={{backgroundColor:s.c+"10",border:`1px solid ${s.c}33`}}><p className="text-[8px]" style={{color:s.c}}>{s.l}</p><p className="text-[12px] font-bold" style={{color:s.c}}>{fmt(s.v)}</p></div>))}
+    </div>
+
+    {/* 仕訳帳 */}
+    {subTab==="journal"&&(<div style={{...cardBase,overflow:"hidden"}}><div className="px-4 py-2.5 flex justify-between items-center" style={{borderBottom:`1px solid ${T.border}`,backgroundColor:T.cardAlt}}><span className="text-[11px] font-bold" style={{color:T.text}}>📒 仕訳帳（複式簿記）</span><span className="text-[9px]" style={{color:T.textMuted}}>{journal.length}件</span></div>
+      {loading?<p className="text-center py-6 text-[11px]" style={{color:T.textMuted}}>読込中...</p>:journal.length===0?<p className="text-center py-8 text-[11px]" style={{color:T.textFaint}}>データなし</p>:(<div className="overflow-x-auto"><div style={{minWidth:"500px"}}>
+        <div className="grid grid-cols-12 gap-0.5 px-2 py-1.5 text-[7px] font-bold" style={{borderBottom:`1px solid ${T.border}`,color:T.textMuted}}><div className="col-span-2">日付</div><div className="col-span-2">借方科目</div><div className="col-span-2 text-right">借方金額</div><div className="col-span-2">貸方科目</div><div className="col-span-2 text-right">貸方金額</div><div className="col-span-2">摘要</div></div>
+        {journal.map(e=>(<div key={e.id} className="grid grid-cols-12 gap-0.5 px-2 py-1.5 items-center" style={{borderBottom:`1px solid ${T.border}08`}}>
+          <div className="col-span-2 text-[8px]" style={{color:T.textSub}}>{formatDate(e.date)}</div>
+          <div className="col-span-2 text-[8px] font-medium" style={{color:e.type==="income"?green:T.text}}>{e.debit_account}</div>
+          <div className="col-span-2 text-[9px] text-right font-medium" style={{color:T.text}}>{fmtN(e.debit_amount)}</div>
+          <div className="col-span-2 text-[8px]" style={{color:T.textSub}}>{e.credit_account}</div>
+          <div className="col-span-2 text-[9px] text-right" style={{color:T.textSub}}>{fmtN(e.credit_amount)}</div>
+          <div className="col-span-2 text-[7px] truncate" style={{color:T.textMuted}}>{e.receipt_url&&<span style={{color:orange}}>📎</span>}{e.description.slice(0,15)}{e.type==="expense"&&<button onClick={()=>deleteExpense(parseInt(e.id.replace("exp-","")))} className="ml-0.5 cursor-pointer" style={{color:T.textFaint,background:"none",border:"none",fontSize:"8px"}}>🗑</button>}</div>
+        </div>))}
+        <div className="grid grid-cols-12 gap-0.5 px-2 py-2 font-bold" style={{backgroundColor:T.cardAlt}}><div className="col-span-2 text-[8px]" style={{color:T.text}}>合計</div><div className="col-span-2"></div><div className="col-span-2 text-[9px] text-right" style={{color:green}}>{fmtN(journal.reduce((s,e)=>s+e.debit_amount,0))}</div><div className="col-span-2"></div><div className="col-span-2 text-[9px] text-right" style={{color:green}}>{fmtN(journal.reduce((s,e)=>s+e.credit_amount,0))}</div><div className="col-span-2 text-[7px]" style={{color:T.textMuted}}>借方=貸方 ✓</div></div>
+      </div></div>)}
+    </div>)}
+
+    {/* 経費入力 */}
+    {subTab==="add"&&(<div className="space-y-3">
+      <div style={{...cardBase,padding:"16px"}}><p className="text-[12px] font-bold mb-2" style={{color:T.text}}>📷 レシート撮影→AI自動読取</p><input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" /><div className="flex gap-2"><button onClick={()=>fileRef.current?.click()} className="flex-1 py-3 rounded-xl text-[11px] cursor-pointer" style={{backgroundColor:pinkLight,color:pink,border:`1px dashed ${pink}`,fontWeight:600}}>📷 撮影</button><button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept="image/*";i.onchange=(ev)=>handleFileChange(ev as unknown as React.ChangeEvent<HTMLInputElement>);i.click();}} className="flex-1 py-3 rounded-xl text-[11px] cursor-pointer" style={{backgroundColor:T.cardAlt,color:T.textSub,border:`1px dashed ${T.border}`}}>📁 選択</button></div>{receiptPreview&&<div className="mt-3 text-center"><img src={receiptPreview} alt="" className="max-h-40 mx-auto rounded-xl" style={{border:`1px solid ${T.border}`}} /></div>}{aiAnalyzing&&<p className="text-[10px] mt-2 text-center animate-pulse" style={{color:pink}}>🤖 AI読取中...</p>}{aiResult&&<p className="text-[10px] mt-2 text-center" style={{color:aiResult.includes("✅")?green:orange}}>{aiResult}</p>}</div>
+      <div style={{...cardBase,padding:"16px"}}><p className="text-[12px] font-bold mb-2" style={{color:T.text}}>📂 カテゴリ</p><div className="grid grid-cols-4 gap-1.5">{CATEGORIES.map(cat=>(<button key={cat.label} onClick={()=>setForm(p=>({...p,category:cat.label,account_item:cat.account,subcategory:""}))} className="flex flex-col items-center gap-0.5 py-2 rounded-xl cursor-pointer" style={{backgroundColor:form.category===cat.label?pinkLight:T.cardAlt,border:`1px solid ${form.category===cat.label?pink:"transparent"}`}}><span className="text-[16px]">{cat.icon}</span><span className="text-[8px]" style={{color:form.category===cat.label?pink:T.textMuted}}>{cat.label}</span></button>))}</div>{form.category&&(()=>{const cat=CATEGORIES.find(c=>c.label===form.category);return cat?(<div className="mt-2 flex flex-wrap gap-1">{cat.subs.map(sub=>(<button key={sub} onClick={()=>setForm(p=>({...p,subcategory:sub}))} className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer" style={{backgroundColor:form.subcategory===sub?pink+"20":"transparent",color:form.subcategory===sub?pink:T.textMuted,border:`1px solid ${form.subcategory===sub?pink:T.border}`}}>{sub}</button>))}</div>):null;})()}</div>
+      <div style={{...cardBase,padding:"16px"}}><div className="space-y-3">
+        <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>日付</label><input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+        <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>金額（税込）</label><input type="number" inputMode="numeric" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))} placeholder="例: 1500" className="w-full px-3 py-2.5 rounded-xl text-[14px] font-bold outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+        <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>内容・品目（摘要）</label><input type="text" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="例: ネイル代" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+        <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>勘定科目</label><div className="flex flex-wrap gap-1">{ACCOUNT_ITEMS.map(item=>(<button key={item} onClick={()=>setForm(p=>({...p,account_item:item}))} className="px-2.5 py-1.5 text-[9px] rounded-lg cursor-pointer" style={{backgroundColor:form.account_item===item?green+"20":"transparent",color:form.account_item===item?green:T.textMuted,border:`1px solid ${form.account_item===item?green:T.border}`}}>{item}</button>))}</div></div>
+        <div><label className="block text-[10px] mb-1" style={{color:T.textSub}}>メモ</label><input type="text" value={form.memo} onChange={e=>setForm(p=>({...p,memo:e.target.value}))} placeholder="店舗名等" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>
+        <button onClick={saveExpense} disabled={saving} className="w-full py-3 rounded-xl text-[12px] cursor-pointer" style={{...btnPink,opacity:saving?0.6:1}}>{saving?"保存中...":editId?"✏️ 更新":"💾 保存"}</button>
+        {editId&&<button onClick={()=>{setEditId(null);setForm({date:new Date().toISOString().split("T")[0],category:"",subcategory:"",account_item:"",description:"",amount:"",memo:""});}} className="w-full py-2 text-[11px] rounded-xl cursor-pointer" style={{backgroundColor:"transparent",color:T.textMuted,border:`1px solid ${T.border}`}}>キャンセル</button>}
+        {saveMsg&&<p className="text-[10px] text-center" style={{color:saveMsg.includes("✅")?green:red}}>{saveMsg}</p>}
+      </div></div>
+      {expenses.length>0&&(<div style={{...cardBase,overflow:"hidden"}}><div className="px-4 py-2.5" style={{borderBottom:`1px solid ${T.border}`,backgroundColor:T.cardAlt}}><span className="text-[11px] font-bold" style={{color:T.text}}>📝 経費一覧（{expenses.length}件 / {fmt(totalExpense)}）</span></div>{expenses.map(e=>(<div key={e.id} className="px-4 py-2.5 flex items-center gap-2" style={{borderBottom:`1px solid ${T.border}08`}}>{e.receipt_thumb_url?<a href={e.receipt_url} target="_blank" rel="noopener noreferrer"><img src={e.receipt_thumb_url} alt="" className="w-8 h-8 rounded object-cover" style={{border:`1px solid ${T.border}`}} /></a>:<div className="w-8 h-8 rounded flex items-center justify-center text-[10px]" style={{backgroundColor:T.cardAlt}}>{CATEGORIES.find(c=>c.label===e.category)?.icon||"🛒"}</div>}<div className="flex-1 min-w-0"><div className="flex items-center gap-1"><span className="text-[10px]" style={{color:T.textSub}}>{e.date.slice(5)}</span><span className="text-[7px] px-1 rounded" style={{backgroundColor:pinkLight,color:pink}}>{e.account_item}</span></div><p className="text-[10px] truncate" style={{color:T.text}}>{e.subcategory} {e.description}</p></div><span className="text-[12px] font-bold flex-shrink-0" style={{color:red}}>{fmt(e.amount)}</span><div className="flex flex-col gap-0.5"><button onClick={()=>startEdit(e)} className="text-[10px] cursor-pointer" style={{color:T.textMuted,background:"none",border:"none"}}>✏️</button><button onClick={()=>deleteExpense(e.id)} className="text-[10px] cursor-pointer" style={{color:T.textMuted,background:"none",border:"none"}}>🗑</button></div></div>))}</div>)}
+    </div>)}
+
+    {/* 決算書 */}
+    {subTab==="reports"&&(<div className="space-y-3">
+      <div style={{...cardBase,padding:"16px"}}><h2 className="text-[13px] font-bold mb-3" style={{color:T.text}}>📊 損益計算書</h2><div className="space-y-2"><div className="flex justify-between py-1.5" style={{borderBottom:`1px solid ${T.border}`}}><span className="text-[11px]" style={{color:T.textSub}}>売上高（収入）</span><span className="text-[12px] font-bold" style={{color:green}}>{fmt(totalIncome)}</span></div>{getAccountSummary().map(([acc,amt])=>(<div key={acc} className="flex justify-between py-1" style={{borderBottom:`1px solid ${T.border}08`}}><span className="text-[10px] pl-3" style={{color:T.textSub}}>├ {acc}</span><span className="text-[10px]" style={{color:red}}>{fmt(amt)}</span></div>))}<div className="flex justify-between py-1.5" style={{borderBottom:`1px solid ${T.border}`}}><span className="text-[11px]" style={{color:T.textSub}}>経費合計</span><span className="text-[12px] font-bold" style={{color:red}}>{fmt(totalExpense)}</span></div><div className="flex justify-between py-2 rounded-xl px-3" style={{backgroundColor:(profit>=0?green:red)+"10"}}><span className="text-[12px] font-bold" style={{color:T.text}}>事業所得</span><span className="text-[14px] font-bold" style={{color:profit>=0?green:red}}>{fmt(profit)}</span></div></div></div>
+      <div style={{...cardBase,padding:"16px"}}><h2 className="text-[13px] font-bold mb-3" style={{color:T.text}}>📖 総勘定元帳（科目別残高）</h2>{(()=>{const gl=getGeneralLedger();return Object.entries(gl).sort().map(([acc,entries])=>{const tD=entries.filter(e=>e.debit_account===acc).reduce((s,e)=>s+e.debit_amount,0);const tC=entries.filter(e=>e.credit_account===acc).reduce((s,e)=>s+e.credit_amount,0);return(<div key={acc} className="flex justify-between items-center py-2" style={{borderBottom:`1px solid ${T.border}08`}}><span className="text-[10px] font-medium" style={{color:T.text}}>{acc}</span><div className="flex gap-3 text-[9px]"><span style={{color:T.textSub}}>借方{fmt(tD)}</span><span style={{color:T.textMuted}}>貸方{fmt(tC)}</span><span className="font-bold" style={{color:pink}}>残高{fmt(Math.abs(tD-tC))}</span></div></div>);});})()}</div>
+      <div className="flex gap-2"><button onClick={printPL} className="flex-1 py-2.5 rounded-xl text-[10px] cursor-pointer" style={{backgroundColor:green+"15",color:green,border:`1px solid ${green}44`,fontWeight:600}}>📊 損益計算書PDF</button><button onClick={printGL} className="flex-1 py-2.5 rounded-xl text-[10px] cursor-pointer" style={{backgroundColor:blue+"15",color:blue,border:`1px solid ${blue}44`,fontWeight:600}}>📖 総勘定元帳PDF</button></div>
+    </div>)}
+
+    {/* 確定申告 */}
+    {subTab==="tax"&&(()=>{const t=calcTax();return(<div className="space-y-3">
+      <div className="p-3 rounded-xl" style={{backgroundColor:orange+"10",border:`1px solid ${orange}33`}}><p className="text-[10px]" style={{color:orange}}>⚠️ 年間表示にして正確な数値を確認してください</p></div>
+      <div className="rounded-2xl p-4" style={{background:`linear-gradient(135deg,${t.taxDue>=0?red:green}15,${t.taxDue>=0?red:green}05)`,border:`2px solid ${t.taxDue>=0?red:green}44`}}><p className="text-[10px] text-center" style={{color:T.textMuted}}>{t.taxDue>=0?"納付する所得税":"還付される所得税"}</p><p className="text-[24px] font-bold text-center" style={{color:t.taxDue>=0?red:green}}>{fmt(Math.abs(t.taxDue))}</p>{t.taxDue<0&&<p className="text-[9px] text-center mt-1" style={{color:green}}>源泉徴収で払いすぎた税金が戻ってきます！</p>}</div>
+      <div style={{...cardBase,padding:"16px"}}><h3 className="text-[12px] font-bold mb-2" style={{color:T.text}}>■ 収支計算</h3><div className="space-y-1.5">{[["① 事業収入",fmt(t.totalIncome),green],["② 必要経費",fmt(t.totalExpense),red],["③ 差引金額",fmt(t.profit),T.text],...(isAoiro?[["④ 青色特別控除",fmt(t.aoiroD),blue]]:[]),["⑤ 事業所得",fmt(t.bIncome),pink]].map(([l,v,c])=>(<div key={l as string} className="flex justify-between py-1" style={{borderBottom:`1px solid ${T.border}08`}}><span className="text-[10px]" style={{color:T.textSub}}>{l}</span><span className="text-[11px] font-medium" style={{color:c as string}}>{v}</span></div>))}</div><div className="mt-2"><button onClick={()=>{setIsAoiro(!isAoiro);try{const p=JSON.parse(localStorage.getItem(`tax_support_profile_${therapistId}`)||"{}");p.isAoiro=!isAoiro;localStorage.setItem(`tax_support_profile_${therapistId}`,JSON.stringify(p));}catch{}}} className="px-3 py-1.5 text-[9px] rounded-lg cursor-pointer" style={{backgroundColor:isAoiro?blue+"20":"transparent",color:isAoiro?blue:T.textMuted,border:`1px solid ${isAoiro?blue:T.border}`}}>{isAoiro?"💙 青色65万控除 ON":"青色控除 OFF"}</button></div></div>
+      <div style={{...cardBase,padding:"16px"}}><h3 className="text-[12px] font-bold mb-2" style={{color:T.text}}>■ 所得控除</h3><div className="space-y-2">{[{key:"shakai",label:"社会保険料（国保＋年金）",ph:"例: 400000"},{key:"seimei",label:"生命保険料（上限12万）",ph:"例: 80000"},{key:"ideco",label:"iDeCo掛金",ph:"例: 276000"},{key:"furusato",label:"ふるさと納税額",ph:"例: 30000"}].map(d=>(<div key={d.key}><label className="block text-[9px] mb-0.5" style={{color:T.textSub}}>{d.label}</label><input type="number" inputMode="numeric" value={deductions[d.key]||""} onChange={e=>saveDed({...deductions,[d.key]:parseInt(e.target.value)||0})} placeholder={d.ph} className="w-full px-3 py-2 rounded-xl text-[11px] outline-none" style={{backgroundColor:T.cardAlt,color:T.text,border:`1px solid ${T.border}`}} /></div>))}<div className="flex justify-between py-1.5 mt-1" style={{borderTop:`1px solid ${T.border}`}}><span className="text-[10px]" style={{color:T.textSub}}>基礎控除（自動）</span><span className="text-[10px]" style={{color:T.text}}>{fmt(480000)}</span></div><div className="flex justify-between py-1"><span className="text-[10px] font-bold" style={{color:T.text}}>所得控除合計</span><span className="text-[11px] font-bold" style={{color:blue}}>{fmt(t.totalDed)}</span></div></div></div>
+      <div style={{...cardBase,padding:"16px"}}><h3 className="text-[12px] font-bold mb-2" style={{color:T.text}}>■ 税額計算</h3><div className="space-y-1.5">{[["課税所得",fmt(t.taxable)],["所得税",fmt(t.itax)],["復興特別所得税(2.1%)",fmt(t.rtax)],["合計税額",fmt(t.totalTax)],["源泉徴収税額（天引済）","−"+fmt(t.withheld)]].map(([l,v])=>(<div key={l} className="flex justify-between py-1" style={{borderBottom:`1px solid ${T.border}08`}}><span className="text-[10px]" style={{color:T.textSub}}>{l}</span><span className="text-[10px]" style={{color:T.text}}>{v}</span></div>))}<div className="flex justify-between py-2 rounded-xl px-3" style={{backgroundColor:(t.taxDue>=0?red:green)+"10"}}><span className="text-[11px] font-bold">{t.taxDue>=0?"納付税額":"還付税額"}</span><span className="text-[14px] font-bold" style={{color:t.taxDue>=0?red:green}}>{fmt(Math.abs(t.taxDue))}</span></div></div><div className="mt-3 p-2 rounded-xl" style={{backgroundColor:T.cardAlt}}><p className="text-[9px]" style={{color:T.textMuted}}>住民税概算: {fmt(t.resTax)} / ふるさと納税上限目安: {fmt(t.fLimit)}</p></div></div>
+      <button onClick={printTax} className="w-full py-3 rounded-xl text-[11px] cursor-pointer" style={{...btnPink}}>📄 確定申告書データをPDF出力</button>
+    </div>);})()}
+
+    {/* 出力 */}
+    {subTab==="export"&&(<div className="space-y-3">
+      <div style={{...cardBase,padding:"16px"}}><h2 className="text-[13px] font-bold mb-3" style={{color:T.text}}>🖨 PDF出力</h2><div className="space-y-2">{[{l:"📒 仕訳帳",d:"借方・貸方の全仕訳",fn:printJournal,c:pink},{l:"📖 総勘定元帳",d:"科目別取引と残高",fn:printGL,c:blue},{l:"📊 損益計算書",d:"収入・経費・所得",fn:printPL,c:green},{l:"📄 確定申告書データ",d:"税額計算の全データ",fn:printTax,c:orange}].map(i=>(<button key={i.l} onClick={i.fn} className="w-full p-3 rounded-xl text-left cursor-pointer" style={{...altCard,border:`1px solid ${i.c}33`}}><div className="flex items-center gap-3"><span className="text-[20px]">{i.l.slice(0,2)}</span><div><p className="text-[11px] font-bold" style={{color:T.text}}>{i.l.slice(2)}</p><p className="text-[8px]" style={{color:T.textMuted}}>{i.d}</p></div></div></button>))}</div></div>
+      <div style={{...cardBase,padding:"16px"}}><h2 className="text-[13px] font-bold mb-3" style={{color:T.text}}>📥 CSV出力</h2><div className="space-y-2">{[{l:"📒 仕訳帳CSV",d:"複式簿記データ",fn:csvJournal,c:pink},{l:"📄 収支内訳書CSV",d:"確定申告用サマリー",fn:csvSyuushi,c:orange},{l:"🟢 freee取込用CSV",d:"freeeにインポート可能",fn:csvFreee,c:green},{l:"🔵 マネーフォワード取込用CSV",d:"MFにインポート可能",fn:csvMF,c:blue}].map(i=>(<button key={i.l} onClick={i.fn} className="w-full p-3 rounded-xl text-left cursor-pointer" style={{...altCard,border:`1px solid ${i.c}33`}}><div className="flex items-center gap-3"><span className="text-[20px]">{i.l.slice(0,2)}</span><div><p className="text-[11px] font-bold" style={{color:T.text}}>{i.l.slice(2)}</p><p className="text-[8px]" style={{color:T.textMuted}}>{i.d}</p></div></div></button>))}</div></div>
+      <div className="p-3 rounded-xl" style={{backgroundColor:T.cardAlt}}><p className="text-[9px] font-bold mb-1" style={{color:T.text}}>💡 使い方</p>{["PDF: 印刷画面で「PDFに保存」を選択","CSV: Excelで開いて確認・編集","freee/MF: 各ソフトの取引インポートからCSV取込","帳簿は7年間保存義務あり。必ずDLして保管"].map((t,i)=>(<p key={i} className="text-[8px]" style={{color:T.textMuted}}>• {t}</p>))}</div>
+    </div>)}
+
+    <div className="p-3 rounded-xl" style={{backgroundColor:T.cardAlt}}><p className="text-[7px] leading-relaxed" style={{color:T.textMuted}}>📋 帳簿保存義務：7年間。税額は概算です。正確な金額はe-Tax等で確認してください。このシステムは帳簿作成支援であり税務相談・申告代理ではありません。</p></div>
+  </div>);
 }
