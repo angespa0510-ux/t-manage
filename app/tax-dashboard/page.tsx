@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useRole } from "../../lib/use-role";
+import { useToast } from "../../lib/toast";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -22,6 +23,7 @@ const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
 export default function TaxDashboard() {
   const router = useRouter();
+  const toast = useToast();
   const { dark, toggle, T } = useTheme();
   const { role, loading: roleLoading, isOwner } = useRole();
 
@@ -30,16 +32,17 @@ export default function TaxDashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
-  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll" | "withholding" | "calendar">("summary");
+  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll" | "withholding" | "calendar" | "company">("summary");
   const [mode, setMode] = useState<"monthly" | "yearly">("monthly");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+  const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
   const fetchData = useCallback(async () => {
     const { data: c } = await supabase.from("courses").select("*"); if (c) setCourses(c);
-    const { data: s } = await supabase.from("stores").select("*"); if (s) setStores(s);
+    const { data: s } = await supabase.from("stores").select("*"); if (s) { setStores(s); if (s[0]) { setCompanyName(s[0].company_name || ""); setCompanyAddress(s[0].company_address || ""); setCompanyPhone(s[0].company_phone || ""); setInvoiceNumber(s[0].invoice_number || ""); setCompanyStoreId(s[0].id); } }
 
     let startDate: string, endDate: string;
     if (mode === "monthly") {
@@ -163,10 +166,10 @@ export default function TaxDashboard() {
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">
           <NavMenu T={T} dark={dark} />
-          <h1 className="text-[14px] font-medium">税務報告用ダッシュボード</h1>
+          <h1 className="text-[14px] font-medium">バックオフィス</h1>
           </div>
         <div className="flex items-center gap-2">
-          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"},{k:"withholding",l:"💰 源泉徴収納付"},{k:"calendar",l:"📆 年間スケジュール"}].map(t => (
+          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"},{k:"withholding",l:"💰 源泉徴収納付"},{k:"calendar",l:"📆 年間スケジュール"},{k:"company",l:"🏢 会社情報"}].map(t => (
             <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
           ))}
         </div>
@@ -309,6 +312,34 @@ export default function TaxDashboard() {
       {dashTab === "calendar" && (
         <div className="flex-1 overflow-y-auto p-4">
           <TaxCalendar T={T} onNavigate={(tab: string) => setDashTab(tab as any)} />
+        </div>
+      )}
+      {dashTab === "company" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-[700px] mx-auto space-y-6">
+            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium">🏢 会社情報</h2>
+              <p className="text-[10px]" style={{ color: T.textMuted }}>支払調書・納付書・各種届出に使用される会社の基本情報です。</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>会社名</label><input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+                <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="text" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+              </div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>適格請求書発行事業者番号（インボイス番号）</label><input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }} /></div>
+              <button onClick={async () => { if (!companyStoreId) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim() }).eq("id", companyStoreId); toast.show("会社情報を更新しました", "success"); fetchData(); }} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
+            </div>
+
+            {/* 利用先の説明 */}
+            <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>📋 この情報が使われる場所</h3>
+              <div className="space-y-2 text-[11px]" style={{ color: T.textSub }}>
+                <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>📑</span><span>セラピスト・スタッフの<strong>支払調書PDF</strong>の支払者欄</span></div>
+                <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>💰</span><span><strong>源泉徴収納付集計表</strong>の事業者情報</span></div>
+                <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>🧾</span><span>セラピストへの<strong>日次清算の支払通知書</strong></span></div>
+                <div className="flex items-start gap-2"><span style={{ color: "#c3a782" }}>📊</span><span>税理士さんへの<strong>各種報告書類</strong></span></div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>

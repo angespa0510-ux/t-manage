@@ -21,7 +21,7 @@ const NAV_ITEMS: NavItem[] = [
 
   // ── 売上 ──
   { icon: "📊", label: "売上分析",  path: "/analytics",      category: "売上" },
-  { icon: "📑", label: "税務報告",  path: "/tax-dashboard",  category: "売上" },
+  { icon: "📋", label: "バックオフィス",  path: "/tax-dashboard",  category: "売上" },
 
   // ── 顧客 ──
   { icon: "👥", label: "顧客一覧",       path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },

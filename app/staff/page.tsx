@@ -18,7 +18,7 @@ export default function StaffPage() {
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "company">("staff");
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license">("staff");
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 
@@ -410,9 +410,9 @@ const openPaymentStatement = (sch: Schedule) => {
 
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["staff", "schedule", "oiri", "company"] as const).map(t => (
+          {(["staff", "schedule", "oiri", "license"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: tab === t ? "#c3a78222" : T.cardAlt, color: tab === t ? "#c3a782" : T.textMuted, border: `1px solid ${tab === t ? "#c3a782" : T.border}`, fontWeight: tab === t ? 700 : 400 }}>
-              {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : t === "company" ? "🏢 会社情報" : "📑 支払調書"}
+              {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🚗 免許資格単価設定"}
             </button>
           ))}
         </div>
@@ -545,17 +545,12 @@ const openPaymentStatement = (sch: Schedule) => {
 
         {/* ========== Tab 4: Company Info ========== */}
         
-        {tab === "company" && (
+        {tab === "license" && (
           <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <h2 className="text-[15px] font-medium">🏢 会社情報</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>会社名</label><input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label><input type="text" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-            </div>
-            <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-            <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>適格事業者番号</label><input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
-              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🚗 免許資格単価（全スタッフ共通）</label><div className="flex items-center gap-2"><input type="text" inputMode="numeric" value={licenseUnitPrice} onChange={(e) => setLicenseUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-24 px-3 py-2.5 rounded-xl text-[12px] outline-none text-center" style={inputStyle} /><span className="text-[11px]" style={{ color: T.textMuted }}>円/ユニット（免許所持スタッフに加算）</span></div><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>デフォルト: ¥50/u</p></div>
-            <button onClick={saveCompany} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
+            <h2 className="text-[15px] font-medium">🚗 免許資格単価設定</h2>
+            <p className="text-[10px]" style={{ color: T.textMuted }}>免許（普通自動車免許等）を所持しているスタッフに対して、業務稼働時に加算される単価です。</p>
+              <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>免許資格単価（全スタッフ共通）</label><div className="flex items-center gap-2"><input type="text" inputMode="numeric" value={licenseUnitPrice} onChange={(e) => setLicenseUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-24 px-3 py-2.5 rounded-xl text-[12px] outline-none text-center" style={inputStyle} /><span className="text-[11px]" style={{ color: T.textMuted }}>円/ユニット（免許所持スタッフに加算）</span></div><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>デフォルト: ¥50/u</p></div>
+            <button onClick={async () => { if (!storeInfo) return; await supabase.from("stores").update({ license_unit_price: parseInt(licenseUnitPrice) || 50 }).eq("id", storeInfo.id); toast.show("免許資格単価を更新しました", "success"); fetchData(); }} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
           </div>
         )}
       </div>
