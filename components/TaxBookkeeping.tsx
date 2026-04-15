@@ -69,7 +69,7 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
 
   /* 複式簿記 仕訳帳生成 */
   const generateJournal=():JournalEntry[]=>{const entries:JournalEntry[]=[];
-    settlements.forEach(s=>{entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.final_payment,credit_account:"売上高",credit_amount:s.final_payment,description:`施術報酬 ${s.order_count}件（バック${fmt(s.total_back)}）`,id:`stl-${s.id}`});
+    settlements.forEach(s=>{entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.final_payment,credit_account:"売上高",credit_amount:s.final_payment,description:`業務委託報酬 ${s.order_count}件`,id:`stl-${s.id}`});
       if(s.withholding_tax>0)entries.push({date:s.date,type:"income",debit_account:"事業主貸",debit_amount:s.withholding_tax,credit_account:"売上高",credit_amount:s.withholding_tax,description:`源泉徴収税`,id:`wh-${s.id}`});
       if(s.transport_fee>0)entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.transport_fee,credit_account:"雑収入",credit_amount:s.transport_fee,description:`交通費支給`,id:`tf-${s.id}`});});
     expenses.forEach(e=>{if(e.category.startsWith("収入:")){entries.push({date:e.date,type:"income",debit_account:"現金",debit_amount:e.amount,credit_account:"売上高",credit_amount:e.amount,description:`${e.subcategory} ${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`});}else{entries.push({date:e.date,type:"expense",debit_account:e.account_item||"雑費",debit_amount:e.amount,credit_account:"現金",credit_amount:e.amount,description:`${e.subcategory?e.subcategory+" ":""}${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`,receipt_url:e.receipt_url});}});
