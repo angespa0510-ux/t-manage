@@ -17,7 +17,7 @@ type Therapist = {
   photo_url: string; photo_width: number; photo_height: number; notes: string;
   email: string; email_verified: boolean; email_token: string;
   has_withholding: boolean;
-  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string;
+  real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string; mynumber: string; mynumber_photo_url: string;
   deleted_at?: string | null;
 };
 
@@ -76,6 +76,9 @@ const [addLoginPassword, setAddLoginPassword] = useState("");
   const [editLicensePhotoBack, setEditLicensePhotoBack] = useState<File | null>(null);
   const [editBirthDate, setEditBirthDate] = useState("");
   const [editEntryDate, setEditEntryDate] = useState("");
+  const [editMynumber, setEditMynumber] = useState("");
+  const [editMynumberPhoto, setEditMynumberPhoto] = useState<File | null>(null);
+  const [mynumberReading, setMynumberReading] = useState(false);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null); const [editPhotoPreview, setEditPhotoPreview] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -403,6 +406,7 @@ const generatePassword = () => {
     setEditInvoicePhoto(null); setEditLicensePhoto(null); setEditLicensePhotoBack(null);
     setEditBirthDate(t.birth_date || "");
     setEditEntryDate(t.entry_date || "");
+    setEditMynumber((t as any).mynumber || ""); setEditMynumberPhoto(null); setMynumberReading(false);
     setEditPhotoFile(null); setEditPhotoPreview(t.photo_url || ""); setEditNotes(t.notes || ""); setEditEmail(t.email || ""); setEditLoginEmail((t as any).login_email || ""); setEditLoginPassword((t as any).login_password || ""); setEditMsg("");
     setEditWelfareFee(String((t as any).welfare_fee ?? 500));
     setEditWelfareOrdersThreshold(String((t as any).welfare_fee_orders_threshold || 0));
@@ -424,7 +428,7 @@ const generatePassword = () => {
       photo_url: photoUrl, photo_width: parseInt(editPhotoW) || 400, photo_height: parseInt(editPhotoH) || 600,
       notes: editNotes.trim(),
       has_withholding: editWithholding,
-      real_name: editRealName.trim(), address: editAddress.trim(), birth_date: editBirthDate, entry_date: editEntryDate || null,
+      real_name: editRealName.trim(), address: editAddress.trim(), birth_date: editBirthDate, entry_date: editEntryDate || null, mynumber: editMynumber.trim(),
       has_invoice: editHasInvoice, therapist_invoice_number: editInvoiceNum.trim(),
       email: editEmail.trim(),
       login_email: editLoginEmail.trim(), login_password: editLoginPassword,
@@ -624,6 +628,11 @@ const generatePassword = () => {
                       <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>✅ 適格</span>
                     ) : (
                       <button onClick={async () => { await generateInvoiceLink(t.id); }} className="px-2 py-0.5 text-[9px] rounded-md font-medium cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>❌ 適格</button>
+                    )}
+                    {(t as any).mynumber ? (
+                      <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>✅ マイナ</span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>❌ マイナ</span>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-x-2 text-[8px] mb-1" style={{ color: T.textSub }}>
@@ -910,6 +919,69 @@ const generatePassword = () => {
                 </div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎂 生年月日</label><input type="date" value={editBirthDate} onChange={(e) => { setEditBirthDate(e.target.value); if (e.target.value) { const b = new Date(e.target.value); const today = new Date(); let age = today.getFullYear() - b.getFullYear(); if (today.getMonth() < b.getMonth() || (today.getMonth() === b.getMonth() && today.getDate() < b.getDate())) age--; setEditAge(String(age)); } }} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />{editBirthDate && <p className="text-[10px] mt-1" style={{ color: "#c3a782" }}>現在 {(() => { const b = new Date(editBirthDate); const today = new Date(); let age = today.getFullYear() - b.getFullYear(); if (today.getMonth() < b.getMonth() || (today.getMonth() === b.getMonth() && today.getDate() < b.getDate())) age--; return age; })()}歳</p>}</div>
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>住所</label><input type="text" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="愛知県安城市..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
+
+                {/* マイナンバー */}
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🔢 マイナンバー（個人番号）</label>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: "#f59e0b08", border: "1px solid #f59e0b33" }}>
+                    <div className="mb-2">
+                      <input type="text" value={editMynumber} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 12); setEditMynumber(v); }}
+                        placeholder="12桁の番号を入力" maxLength={12}
+                        className="w-full px-3 py-2.5 rounded-xl text-[14px] font-mono tracking-widest outline-none text-center"
+                        style={{ ...inputStyle, letterSpacing: "0.2em" }} />
+                      {editMynumber && <p className="text-[9px] mt-1 text-center" style={{ color: editMynumber.length === 12 ? "#22c55e" : "#f59e0b" }}>
+                        {editMynumber.length}/12桁 {editMynumber.length === 12 ? "✅" : ""}
+                      </p>}
+                    </div>
+                    <div className="rounded-xl p-2.5" style={{ backgroundColor: T.cardAlt }}>
+                      <p className="text-[10px] font-medium mb-1.5" style={{ color: T.textSub }}>📷 マイナンバーカード写真</p>
+                      {editTarget?.mynumber_photo_url && (
+                        <a href={editTarget.mynumber_photo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mb-1.5 px-2 py-1 rounded-lg"
+                          style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b33" }}>
+                          <img src={editTarget.mynumber_photo_url} alt="マイナンバー" className="rounded" style={{ width: 60, height: 38, objectFit: "cover" }} />
+                          <span className="text-[9px]" style={{ color: "#f59e0b" }}>📄 カードを表示</span>
+                        </a>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium"
+                          style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b44" }}>
+                          📷 カードを撮影/選択
+                          <input type="file" accept="image/*" capture="environment" onChange={async (e) => {
+                            const file = e.target.files?.[0]; if (!file) return;
+                            setEditMynumberPhoto(file);
+                            // AI読取で番号を自動入力
+                            setMynumberReading(true);
+                            try {
+                              const reader = new FileReader();
+                              const base64 = await new Promise<string>((resolve) => { reader.onload = () => resolve((reader.result as string).split(",")[1]); reader.readAsDataURL(file); });
+                              const res = await fetch("/api/receipt-analyze", { method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ imageBase64: base64, mediaType: file.type,
+                                  customPrompt: "このマイナンバーカードの画像から個人番号（12桁の数字）を読み取ってください。JSON形式のみで返してください：{\"mynumber\":\"123456789012\"} 読み取れない場合は{\"mynumber\":\"\"}" }) });
+                              const data = await res.json();
+                              if (data.ok && data.result?.mynumber) { setEditMynumber(data.result.mynumber.replace(/[^0-9]/g, "").slice(0, 12)); }
+                            } catch { /* 手動入力にフォールバック */ }
+                            setMynumberReading(false);
+                          }} className="hidden" />
+                        </label>
+                        {mynumberReading && <span className="text-[9px] animate-pulse" style={{ color: "#f59e0b" }}>🤖 番号読取中...</span>}
+                        {editMynumberPhoto && !mynumberReading && <span className="text-[9px]" style={{ color: "#22c55e" }}>✅ {editMynumberPhoto.name}</span>}
+                      </div>
+                      {editMynumberPhoto && (
+                        <button onClick={async () => {
+                          if (!editTarget || !editMynumberPhoto) return;
+                          const ext = editMynumberPhoto.name.split(".").pop();
+                          const fn = `therapist_mynumber_${editTarget.id}.${ext}`;
+                          await supabase.storage.from("therapist-photos").upload(fn, editMynumberPhoto, { upsert: true });
+                          const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
+                          await supabase.from("therapists").update({ mynumber_photo_url: u.publicUrl }).eq("id", editTarget.id);
+                          setEditMynumberPhoto(null); fetchTherapists(); toast.show("マイナンバーカードを保存しました", "success");
+                        }} className="mt-1.5 px-3 py-1.5 rounded-lg text-[9px] cursor-pointer"
+                          style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 カード写真を保存</button>
+                      )}
+                    </div>
+                    <p className="text-[8px] mt-2" style={{ color: T.textFaint }}>⚠️ マイナンバーは厳重に管理されます。源泉徴収・支払調書の作成にのみ使用します。</p>
+                  </div>
+                </div>
 
                 <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📋 適格事業者登録</label>
                   <button type="button" onClick={() => setEditHasInvoice(!editHasInvoice)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer mb-2" style={{ backgroundColor: editHasInvoice ? "#22c55e22" : "#88878022", color: editHasInvoice ? "#22c55e" : "#888780", border: `1px solid ${editHasInvoice ? "#22c55e44" : "#88878044"}` }}>{editHasInvoice ? "✅ 適格事業者登録あり" : "⬜ 適格事業者登録なし"}</button>
