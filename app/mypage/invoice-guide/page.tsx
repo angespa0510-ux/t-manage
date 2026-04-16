@@ -668,12 +668,14 @@ export default function InvoiceGuidePage() {
               </p>
               <p>例：</p>
               <ul className="pl-4 space-y-0.5" style={{ listStyle: "disc" }}>
-                <li>「〇〇ボディケア」</li>
-                <li>「△△セラピー」</li>
-                <li>「Smile Body Works」</li>
-                <li>「癒し処 □□」</li>
+                <li>「〇〇クリエイティブ」</li>
+                <li>「Studio △△」</li>
+                <li>「〇〇デザインワークス」</li>
+                <li>「〇〇プランニング」</li>
               </ul>
               <p className="mt-2 text-[10px]" style={{ color: T.textMuted }}>
+                ※ 「ボディケア」「セラピー」「エステ」等の業種が分かる名前は避け、汎用的な名前がおすすめです。
+                <br />
                 ※ 本名も完全に非表示にはできず、屋号と併記する場合が多いですが、検索性が大幅に下がります。
               </p>
             </div>
