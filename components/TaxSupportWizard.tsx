@@ -15,6 +15,7 @@ type TaxProfile = {
   shopRequiresInvoice: boolean | null; // 店がインボイス求めてる？
   isStudent: boolean | null;      // 学生？
   isDependent: boolean | null;    // 家族の扶養に入っている？
+  isSingleParent: boolean | null; // ひとり親？（シングルマザー/ファザー）
 };
 type StepStatus = { [key: number]: "done" | "skip" | null };
 
@@ -24,7 +25,7 @@ const PROFILE_KEY = "tax_support_profile";
 const defaultProfile: TaxProfile = {
   isSubJob: null, annualIncome: "", hasSpouse: null, spouseIncome: "",
   mainJobIncome: "", hasKaigyou: null, isAoiro: null, hasInvoice: null, shopRequiresInvoice: null,
-  isStudent: null, isDependent: null,
+  isStudent: null, isDependent: null, isSingleParent: null,
 };
 
 /* ── メインコンポーネント ── */
@@ -576,6 +577,16 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                           月に換算すると約<b style={{ color: green }}>{fmt(Math.round(c.refund / 12))}</b>の手取りUP！
                         </p>
                       )}
+                      {profile.isSingleParent && (
+                        <div className="rounded-xl p-3 mt-2" style={{ backgroundColor: "#0d948810", border: "1px solid #0d948833" }}>
+                          <p className="text-[9px] font-bold" style={{ color: "#0d9488" }}>
+                            🌸 さらに「ひとり親控除」で所得税・住民税合わせて約5〜8万円/年の追加節税！
+                          </p>
+                          <p className="text-[8px]" style={{ color: T.textMuted }}>
+                            上記の還付金に加え、ひとり親控除（所得税38万円＋住民税33万円）で追加の節税が見込めます。
+                          </p>
+                        </div>
+                      )}
                       <p className="text-[7px]" style={{ color: T.textMuted }}>※概算です。社会保険料控除等は含みません。実際はT-MANAGEの帳簿データに基づいて正確に計算されます。</p>
                     </div>
                   );
@@ -592,6 +603,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 { href: "/mypage/tax-guide", icon: "🔒", label: "副業がバレない 完全ガイド", color: pink },
                 { href: "/mypage/spouse-guide", icon: "💑", label: "配偶者控除・扶養 完全ガイド", color: "#8b6cb7" },
                 { href: "/mypage/invoice-guide", icon: "💎", label: "インボイス登録ガイド", color: "#c3a782" },
+                { href: "/mypage/single-mother-guide", icon: "🌸", label: "シングルマザー 完全サポートガイド", color: "#0d9488" },
               ].map((g) => (
                 <a key={g.href} href={g.href} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer" style={{ backgroundColor: g.color + "10", border: `1px solid ${g.color}33`, textDecoration: "none" }}>
                   <span style={{ fontSize: 16 }}>{g.icon}</span>
@@ -740,6 +752,57 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               )}
             </div>
 
+            {/* Q: ひとり親？（シングルマザー/ファザー） */}
+            <div className="mb-4">
+              <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>ひとり親（シングルマザー/ファザー）ですか？</p>
+              <p className="text-[9px] mb-2" style={{ color: T.textMuted }}>お子さんを一人で育てている場合、「ひとり親控除」や手当が受けられます</p>
+              <div className="flex gap-2">
+                <button onClick={() => saveProfile({ ...profile, isSingleParent: true })} style={yesNoBtn(profile.isSingleParent, true)}>はい</button>
+                <button onClick={() => saveProfile({ ...profile, isSingleParent: false })} style={yesNoBtn(profile.isSingleParent, false)}>いいえ</button>
+              </div>
+              {profile.isSingleParent === true && (
+                <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: "#0d948810", border: "1px solid #0d948833" }}>
+                  <p className="text-[11px] font-bold mb-2" style={{ color: "#0d9488" }}>🌸 ひとり親のあなたへ — 使える制度がたくさんあります！</p>
+                  <div className="space-y-2">
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                      <p className="text-[9px] font-bold" style={{ color: green }}>💰 ひとり親控除（2026年〜拡充）</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>
+                        所得税<b>38万円</b>＋住民税<b>33万円</b>が控除されます。{"\n"}
+                        確定申告で申告するだけで<b>年間約5〜8万円の節税</b>に！{"\n"}
+                        所得要件も<b>1,000万円以下</b>に緩和されました。
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                      <p className="text-[9px] font-bold" style={{ color: pink }}>👶 児童扶養手当（国の制度）</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>
+                        子ども1人で最大<b>月48,050円</b>支給。{"\n"}
+                        経費をしっかり計上して所得を下げれば受給額UP！
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                      <p className="text-[9px] font-bold" style={{ color: orange }}>🏛️ 愛知県遺児手当 + 市の手当</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>
+                        愛知県遺児手当（月4,350円〜）＋市独自の手当も。{"\n"}
+                        児童扶養手当と<b>同時に受給OK</b>！
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                      <p className="text-[9px] font-bold" style={{ color: red }}>🏥 医療費助成 + 保育料無償化</p>
+                      <p className="text-[9px]" style={{ color: T.textSub }}>
+                        ひとり親家庭の医療費助成、3〜5歳の保育料無料、{"\n"}
+                        国民年金の免除制度なども利用できます。
+                      </p>
+                    </div>
+                    <a href="/mypage/single-mother-guide" className="flex items-center gap-2 p-2.5 rounded-lg cursor-pointer" style={{ backgroundColor: "#0d948815", border: "1px solid #0d948833", textDecoration: "none" }}>
+                      <span style={{ fontSize: 16 }}>🌸</span>
+                      <span className="text-[10px] font-bold" style={{ color: "#0d9488" }}>シングルマザー完全サポートガイドを見る</span>
+                      <span className="ml-auto text-[10px]" style={{ color: "#0d9488" }}>→</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Q: 開業届 */}
             <div className="mb-4">
               <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>開業届は出していますか？</p>
@@ -779,6 +842,11 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <button onClick={() => setExpandedFaq(1)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
                       <span style={{ color: "#2563eb" }}>●</span> <b>学生</b>：扶養控除の条件を確認 → <u style={{ color: pink }}>FAQで詳しく</u>
                     </button>
+                  )}
+                  {profile.isSingleParent && (
+                    <a href="/mypage/single-mother-guide" className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none", textDecoration: "none" }}>
+                      <span style={{ color: "#0d9488" }}>●</span> <b>ひとり親控除38万円</b> + 手当の申請を → <u style={{ color: "#0d9488" }}>サポートガイドへ</u>
+                    </a>
                   )}
                 </div>
               </div>
