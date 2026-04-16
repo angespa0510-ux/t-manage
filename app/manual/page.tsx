@@ -197,7 +197,7 @@ export default function ManualPage() {
 
   // ── 記事内リンク プレビュー表示 ──
   const renderAdminInlineLinks = (text: string): React.ReactNode => {
-    const parts = text.split(/(\[link:[^\]]+\]|\[catlink:[^\]]+\])/g);
+    const parts = text.split(/(\[link:[^\]]+\]|\[catlink:[^\]]+\]|\[page:[^\]]+\]|\[button:[^\]]+\])/g);
     if (parts.length === 1) return text;
     return parts.map((part, idx) => {
       const linkMatch = part.match(/^\[link:(.+)\]$/);
@@ -207,6 +207,12 @@ export default function ManualPage() {
         const cat = categories.find(c => c.name === catMatch[1] || c.name.includes(catMatch[1]));
         return <span key={idx} style={{ color: "#e8849a", fontWeight: 600, borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{cat ? `${cat.icon} ${cat.name}` : catMatch[1]}</span>;
       }
+      // [page:パス:ラベル]
+      const pageMatch = part.match(/^\[page:([^:]+):(.+)\]$/);
+      if (pageMatch) return <a key={idx} href={pageMatch[1]} target="_blank" rel="noopener noreferrer" style={{ color: "#e8849a", fontWeight: 600, borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{pageMatch[2]}</a>;
+      // [button:パス:ラベル]
+      const btnMatch = part.match(/^\[button:([^:]+):(.+)\]$/);
+      if (btnMatch) return <a key={idx} href={btnMatch[1]} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff", fontWeight: 600, fontSize: 12, padding: "8px 16px", borderRadius: 999, textDecoration: "none", boxShadow: "0 2px 6px rgba(232,132,154,0.25)", margin: "4px 2px" }}>{btnMatch[2]} →</a>;
       return <span key={idx}>{part}</span>;
     });
   };
@@ -760,6 +766,7 @@ export default function ManualPage() {
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{"💡 ## 見出し / **太字** / - リスト / 1. 番号 / > 引用 / --- 区切り / ![画像](URL) / [youtube:ID] 🎬 / [gdrive:ID] 📁"}</div>
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{"📸 画像: ドラッグ&ドロップ / Ctrl+V貼り付け / 🖼ボタン に対応"}</div>
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{"🔗 [link:記事タイトル] で記事リンク / [catlink:カテゴリ名] でカテゴリリンク"}</div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{"🔘 [page:パス:ラベル] でページリンク / [button:パス:ラベル] でボタンリンク"}</div>
         {uploading && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, padding: "6px 12px", background: "rgba(232,132,154,0.1)", borderRadius: 8, fontSize: 12, color: "#e8849a" }}>
             <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #e8849a", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
