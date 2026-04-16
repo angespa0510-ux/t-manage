@@ -146,6 +146,14 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   useEffect(() => {
     const session = localStorage.getItem("therapist_session");
     if (session) { const { id } = JSON.parse(session); supabase.from("therapists").select("*").eq("id", id).maybeSingle().then(({ data }) => { if (data) { setTherapist(data); setLoggedIn(true); } else localStorage.removeItem("therapist_session"); }); }
+    // URLクエリパラメータから初期タブを設定（例: /mypage?tab=tax）
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get("tab");
+      if (t && ["home", "shift", "schedule", "salary", "customers", "manual", "tax"].includes(t)) {
+        setTab(t as typeof tab);
+      }
+    }
   }, []);
 
   const fetchData = useCallback(async () => {

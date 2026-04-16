@@ -791,7 +791,7 @@ export default function InvoiceGuidePage() {
               },
               {
                 title: "登録から2年間は免税事業者に戻れない",
-                desc: "途中でやめる場合も最低2年は課税事業者のまま。",
+                desc: "仕事を続けながらインボイスだけやめる場合の話。お仕事自体を辞める（廃業する）時は、2年経ってなくても自動的に効力を失います。",
               },
               {
                 title: "本名または屋号が公表される",
@@ -877,7 +877,15 @@ export default function InvoiceGuidePage() {
               },
               {
                 q: "将来的に引退する予定ですが、登録しても大丈夫？",
-                a: "登録から最低2年間は課税事業者のままになります。1年以内に引退予定なら、控除10%を受け入れる方が楽かもしれません。2年以上続ける予定なら登録推奨です。",
+                a: "大丈夫です。「2年縛り」とは『事業を続けながらインボイスだけやめる』場合のルール。お仕事を完全に辞める（廃業する）時は、2年経っていなくても登録は自動的に効力を失います。つまり『2年間無駄に税金を払い続ける』ことはありません。",
+              },
+              {
+                q: "お仕事を辞める時の手続きは？",
+                a: "3ステップで完了です。①e-Taxで『廃業届』を提出、②e-Taxで『インボイス登録の取消届』を提出、③辞めた年の分を翌年3月に確定申告。すべてスマホ・e-Taxで完結するので書類が自宅に届くこともありません。",
+              },
+              {
+                q: "廃業届を出さないとどうなる？",
+                a: "税務署から「確定申告の催促」が自宅に届く可能性があります。また、新しく別の扶養に入る際に健保組合から『廃業届の控え』を求められることが多いので、辞めた時は必ず提出しましょう。",
               },
               {
                 q: "青色申告と組み合わせるとさらにお得？",
@@ -935,6 +943,98 @@ export default function InvoiceGuidePage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* ─── チョップで確定申告完結 ─── */}
+        <section
+          className="rounded-2xl p-4 border"
+          style={{
+            background: dark
+              ? "linear-gradient(135deg, #2a3828, #202a1e)"
+              : "linear-gradient(135deg, #e8f5e9, #f0faf1)",
+            borderColor: GREEN + "66",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <span style={{ fontSize: 22 }}>🎉</span>
+            <h2 className="text-[15px] font-bold" style={{ color: GREEN }}>
+              確定申告、freeeを契約しなくてもチョップで完結！
+            </h2>
+          </div>
+          <p
+            className="text-[11.5px] leading-relaxed mb-3"
+            style={{ color: T.textSub }}
+          >
+            実は、このマイページ内に
+            <strong style={{ color: GREEN }}>
+              確定申告まで完結できる機能
+            </strong>
+            が既に搭載されています。会計ソフトへの月額課金は不要です！
+          </p>
+
+          <div
+            className="rounded-xl p-3 mb-3"
+            style={{
+              backgroundColor: T.card,
+              border: `1px solid ${T.border}`,
+            }}
+          >
+            <p
+              className="text-[11.5px] font-semibold mb-2"
+              style={{ color: T.text }}
+            >
+              📊 マイページの「確定申告サポート」タブでできること
+            </p>
+            <div className="space-y-1.5 text-[10.5px]" style={{ color: T.textSub }}>
+              {[
+                { icon: "📋", label: "申告ウィザード（副業/配偶者/青色/インボイスの状況を整理）" },
+                { icon: "📒", label: "仕訳帳（清算データから自動生成・複式簿記）" },
+                { icon: "📸", label: "レシート撮影 → AI自動読取で経費入力" },
+                { icon: "📊", label: "決算書・損益計算書を自動作成" },
+                { icon: "📄", label: "確定申告書データをPDF出力（そのまま書き写せる）" },
+                { icon: "💰", label: "所得税・住民税・ふるさと納税上限を自動計算" },
+                { icon: "📥", label: "freee / マネーフォワード / 収支内訳書のCSV出力" },
+              ].map((f, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span style={{ fontSize: 12 }}>{f.icon}</span>
+                  <span>{f.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div
+            className="rounded-xl p-3 mb-3"
+            style={{
+              backgroundColor: GREEN + "10",
+              border: `1px dashed ${GREEN}44`,
+            }}
+          >
+            <p className="text-[10.5px] leading-relaxed" style={{ color: T.textSub }}>
+              💡 <strong style={{ color: GREEN }}>月額コスト比較</strong>
+              <br />
+              ・freee/マネーフォワード契約：年間 <strong>12,000〜35,000円</strong>
+              <br />
+              ・チョップの確定申告機能：<strong style={{ color: GREEN }}>完全無料</strong>（セラピスト特典）✨
+            </p>
+          </div>
+
+          <Link
+            href="/mypage?tab=tax"
+            className="block text-center py-3 rounded-xl text-[12px] font-bold"
+            style={{
+              background: `linear-gradient(135deg, ${GREEN}, #3a6b4a)`,
+              color: "#fff",
+            }}
+          >
+            📊 確定申告サポートを開く →
+          </Link>
+          <p
+            className="text-[9.5px] mt-2 text-center leading-relaxed"
+            style={{ color: T.textMuted }}
+          >
+            ※ マイページ下部のタブ「📊 税務」からもアクセスできます
+          </p>
         </section>
 
         {/* ─── 関連リンク ─── */}
