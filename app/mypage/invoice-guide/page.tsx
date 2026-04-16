@@ -961,15 +961,37 @@ export default function InvoiceGuidePage() {
               確定申告、freeeを契約しなくてもチョップで完結！
             </h2>
           </div>
+
+          <div
+            className="rounded-xl p-3 mb-3"
+            style={{
+              backgroundColor: GREEN + "15",
+              border: `2px solid ${GREEN}44`,
+            }}
+          >
+            <p className="text-[12px] font-bold mb-1" style={{ color: GREEN }}>
+              ⭐ 最大のメリット：報酬が自動で記帳される
+            </p>
+            <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+              freeeやマネーフォワードでは、<strong style={{ color: RED }}>報酬が入るたびに自分で手入力</strong>しなければなりません。
+              忙しい日が続くとどんどん溜まり、確定申告の時期に地獄を見ることに…
+            </p>
+            <p className="text-[11.5px] leading-relaxed mt-2 font-semibold" style={{ color: GREEN }}>
+              チョップなら、お店で清算した瞬間に自動で帳簿に記録されます 🎉
+              <br />
+              面倒な手入力は一切不要！
+            </p>
+          </div>
+
           <p
-            className="text-[11.5px] leading-relaxed mb-3"
+            className="text-[11px] leading-relaxed mb-3"
             style={{ color: T.textSub }}
           >
-            実は、このマイページ内に
+            このマイページ内に
             <strong style={{ color: GREEN }}>
               確定申告まで完結できる機能
             </strong>
-            が既に搭載されています。会計ソフトへの月額課金は不要です！
+            が既に搭載されています。
           </p>
 
           <div
@@ -987,13 +1009,14 @@ export default function InvoiceGuidePage() {
             </p>
             <div className="space-y-1.5 text-[10.5px]" style={{ color: T.textSub }}>
               {[
-                { icon: "📋", label: "申告ウィザード（副業/配偶者/青色/インボイスの状況を整理）" },
-                { icon: "📒", label: "仕訳帳（清算データから自動生成・複式簿記）" },
-                { icon: "📸", label: "レシート撮影 → AI自動読取で経費入力" },
-                { icon: "📊", label: "決算書・損益計算書を自動作成" },
+                { icon: "⭐", label: "報酬が自動で記帳（清算データ連動、手入力ゼロ！）" },
+                { icon: "📸", label: "レシート撮影 → AI自動読取で経費も楽々入力" },
+                { icon: "📒", label: "仕訳帳が自動生成（複式簿記対応）" },
+                { icon: "📊", label: "決算書・損益計算書をワンタップ作成" },
                 { icon: "📄", label: "確定申告書データをPDF出力（そのまま書き写せる）" },
-                { icon: "💰", label: "所得税・住民税・ふるさと納税上限を自動計算" },
-                { icon: "📥", label: "freee / マネーフォワード / 収支内訳書のCSV出力" },
+                { icon: "💰", label: "所得税・消費税・住民税・ふるさと納税上限を自動計算" },
+                { icon: "📋", label: "申告ウィザード（副業/配偶者/青色/インボイスの状況を整理）" },
+                { icon: "📥", label: "freee / マネーフォワード / 収支内訳書のCSV出力も可" },
               ].map((f, i) => (
                 <div key={i} className="flex items-start gap-2">
                   <span style={{ fontSize: 12 }}>{f.icon}</span>
@@ -1011,11 +1034,11 @@ export default function InvoiceGuidePage() {
             }}
           >
             <p className="text-[10.5px] leading-relaxed" style={{ color: T.textSub }}>
-              💡 <strong style={{ color: GREEN }}>月額コスト比較</strong>
+              💡 <strong style={{ color: GREEN }}>freee / マネーフォワードとの比較</strong>
               <br />
-              ・freee/マネーフォワード契約：年間 <strong>12,000〜35,000円</strong>
+              <span style={{ color: RED }}>✗ freee等：</span>報酬を<strong>毎回手入力</strong> ＋ 年間 <strong>12,000〜35,000円</strong>
               <br />
-              ・チョップの確定申告機能：<strong style={{ color: GREEN }}>完全無料</strong>（セラピスト特典）✨
+              <span style={{ color: GREEN }}>✓ チョップ：</span>報酬は<strong>自動記帳</strong>、経費もAI読取 ＋ <strong style={{ color: GREEN }}>完全無料</strong> ✨
             </p>
           </div>
 
