@@ -9,12 +9,14 @@ type JournalEntry = { date: string; debit_account: string; debit_amount: number;
 
 const CATEGORIES = [
   { icon:"💄", label:"美容費", account:"消耗品費", subs:["美容院","ネイル","マツエク","スキンケア","化粧品","サプリ"] },
-  { icon:"👗", label:"衣装・備品", account:"消耗品費", subs:["衣装","ルームウェア","ストッキング","タオル","オイル","備品"] },
-  { icon:"🚃", label:"交通費", account:"旅費交通費", subs:["電車・バス","タクシー","駐車場","ガソリン"] },
+  { icon:"👗", label:"衣装・備品", account:"消耗品費", subs:["衣装","ルームウェア","ストッキング","タオル","オイル","シーツ","備品"] },
+  { icon:"🧴", label:"洗濯・消耗品", account:"消耗品費", subs:["洗剤・柔軟剤","コインランドリー","除菌グッズ","消臭剤","ボディソープ"] },
+  { icon:"🚃", label:"交通費", account:"旅費交通費", subs:["電車・バス","タクシー","駐車場","ガソリン","高速道路"] },
   { icon:"📱", label:"通信費", account:"通信費", subs:["携帯電話","Wi-Fi","アプリ"] },
   { icon:"☕", label:"カフェ・食事", account:"雑費", subs:["待機カフェ","食事","飲料"] },
-  { icon:"📚", label:"研修・勉強", account:"研修費", subs:["講習","セミナー","書籍"] },
-  { icon:"🏥", label:"医療・健康", account:"福利厚生費", subs:["検査","健康診断","医療費"] },
+  { icon:"📚", label:"研修・勉強", account:"研修費", subs:["講習","セミナー","書籍","資格講座"] },
+  { icon:"📸", label:"宣伝・広告", account:"広告宣伝費", subs:["写真撮影","名刺","SNS広告"] },
+  { icon:"🛡️", label:"保険・健康", account:"福利厚生費", subs:["施術賠償保険","健康診断"] },
   { icon:"🛒", label:"その他", account:"雑費", subs:["雑費","その他"] },
 ];
 const ACCOUNT_ITEMS = ["消耗品費","旅費交通費","通信費","接待交際費","研修費","福利厚生費","地代家賃","広告宣伝費","雑費"];

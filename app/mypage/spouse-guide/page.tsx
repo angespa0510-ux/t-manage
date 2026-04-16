@@ -675,12 +675,12 @@ export default function SpouseGuidePage() {
             {[
               { icon: "👗", label: "衣装・下着", desc: "仕事用ワンピース、ストッキング等" },
               { icon: "💄", label: "美容代", desc: "ヘアセット、ネイル（仕事に直結するもの）" },
-              { icon: "🛢️", label: "オイル・備品", desc: "マッサージオイル、タオル、指サック等" },
-              { icon: "🚗", label: "交通費", desc: "お店までの往復" },
+              { icon: "🛢️", label: "オイル・備品", desc: "マッサージオイル、タオル、シーツ等" },
+              { icon: "🧴", label: "洗濯・消耗品", desc: "洗剤、除菌グッズ、消臭剤、ボディソープ" },
+              { icon: "🚗", label: "交通費", desc: "お店までの往復、駐車場代" },
               { icon: "📱", label: "通信費", desc: "仕事で使うスマホ代の割合分" },
               { icon: "📚", label: "講習費", desc: "技術向上のための受講料" },
-              { icon: "🧴", label: "消耗品", desc: "除菌シート、アルコール等" },
-              { icon: "💻", label: "PC・スマホ", desc: "仕事で使う割合の一部" },
+              { icon: "📸", label: "宣伝・広告", desc: "プロフィール写真、名刺印刷" },
             ].map((e, i) => (
               <div
                 key={i}
