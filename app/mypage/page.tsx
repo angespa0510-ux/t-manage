@@ -341,8 +341,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
   // ── 記事内リンク処理 ──
   const renderInlineLinks = (text: string): React.ReactNode => {
-    // [link:記事タイトル] と [catlink:カテゴリ名] をパース
-    const parts = text.split(/(\[link:[^\]]+\]|\[catlink:[^\]]+\])/g);
+    // [link:記事タイトル] [catlink:カテゴリ名] [page:パス:表示テキスト] [button:パス:ボタンテキスト] をパース
+    const parts = text.split(/(\[link:[^\]]+\]|\[catlink:[^\]]+\]|\[page:[^\]]+\]|\[button:[^\]]+\])/g);
     if (parts.length === 1) return text;
     return parts.map((part, idx) => {
       const linkMatch = part.match(/^\[link:(.+)\]$/);
@@ -364,6 +364,28 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{target.icon} {target.name}</span>;
         }
         return <span key={idx} style={{ color: "#e8849a" }}>{catName}</span>;
+      }
+      // [page:/mypage/tax-guide:📖 詳しい手順はこちら] — 内部ページへの通常リンク
+      const pageMatch = part.match(/^\[page:([^:]+):(.+)\]$/);
+      if (pageMatch) {
+        const [, path, label] = pageMatch;
+        const isExternal = /^https?:\/\//.test(path);
+        return <a key={idx} href={path} {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          onClick={(e) => e.stopPropagation()}
+          style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{label}</a>;
+      }
+      // [button:/mypage/tax-guide:詳しい手順はこちら] — 目立つボタン
+      const btnMatch = part.match(/^\[button:([^:]+):(.+)\]$/);
+      if (btnMatch) {
+        const [, path, label] = btnMatch;
+        const isExternal = /^https?:\/\//.test(path);
+        return <a key={idx} href={path} {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            display: "inline-block", background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff",
+            fontWeight: 600, fontSize: 12, padding: "8px 16px", borderRadius: 999, textDecoration: "none",
+            boxShadow: "0 2px 6px rgba(232,132,154,0.25)", margin: "4px 2px", cursor: "pointer",
+          }}>{label} →</a>;
       }
       return <span key={idx}>{part}</span>;
     });
