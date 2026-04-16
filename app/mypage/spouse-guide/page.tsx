@@ -924,7 +924,7 @@ export default function SpouseGuidePage() {
               },
               {
                 q: "インボイス登録は必要？本名バレしない？",
-                a: "お店から「登録してください」と言われていなければ不要です。登録すると消費税の納税義務が発生し手続きが増えます。また本名が国税庁サイトで公表されますが、屋号（ペンネーム的なもの）での登録も選択可能です。",
+                a: "チョップではインボイス登録を推奨しています。未登録だとバック額の10%が控除されますが、登録すればこの控除がなくなり手取りが増えます。本名公開が気になる場合は『屋号』で登録できます。詳しくは[page:/mypage/invoice-guide:インボイス登録ガイド]をご覧ください。",
               },
               {
                 q: "健保組合の検認（けんにん）を回避できる？",
@@ -1009,22 +1009,40 @@ export default function SpouseGuidePage() {
           style={{ backgroundColor: T.cardAlt, borderColor: T.border }}
         >
           <h2 className="text-[13px] font-semibold mb-3">🔗 関連ガイド</h2>
-          <Link
-            href="/mypage/tax-guide"
-            className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
-            style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
-          >
-            <span style={{ fontSize: 20 }}>🔒</span>
-            <div style={{ flex: 1 }}>
-              <p className="text-[12px] font-semibold" style={{ color: PINK_DARK }}>
-                副業がバレない 完全ガイド
-              </p>
-              <p className="text-[10px]" style={{ color: T.textSub }}>
-                住民税の普通徴収手続き、e-Taxでの申告方法など
-              </p>
-            </div>
-            <span style={{ color: T.textMuted, fontSize: 14 }}>→</span>
-          </Link>
+          <div className="space-y-2">
+            <Link
+              href="/mypage/tax-guide"
+              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
+              style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+            >
+              <span style={{ fontSize: 20 }}>🔒</span>
+              <div style={{ flex: 1 }}>
+                <p className="text-[12px] font-semibold" style={{ color: PINK_DARK }}>
+                  副業がバレない 完全ガイド
+                </p>
+                <p className="text-[10px]" style={{ color: T.textSub }}>
+                  住民税の普通徴収手続き、e-Taxでの申告方法など
+                </p>
+              </div>
+              <span style={{ color: T.textMuted, fontSize: 14 }}>→</span>
+            </Link>
+            <Link
+              href="/mypage/invoice-guide"
+              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
+              style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+            >
+              <span style={{ fontSize: 20 }}>💎</span>
+              <div style={{ flex: 1 }}>
+                <p className="text-[12px] font-semibold" style={{ color: "#c3a782" }}>
+                  インボイス登録ガイド
+                </p>
+                <p className="text-[10px]" style={{ color: T.textSub }}>
+                  手取りシミュレーター付き。2割特例で今が登録のチャンス
+                </p>
+              </div>
+              <span style={{ color: T.textMuted, fontSize: 14 }}>→</span>
+            </Link>
+          </div>
         </section>
 
         {/* ─── フッター ─── */}
