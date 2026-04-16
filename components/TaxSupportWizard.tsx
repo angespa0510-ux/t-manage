@@ -120,7 +120,9 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
     const aoiroIncome = Math.max(0, profit - 650000);
     const baseTax = (n: number) => {
       if (n <= 0) return 0;
-      const taxable = Math.max(0, n - 480000);
+      // 2025年分以降：基礎控除95万円（合計所得132万以下）、それ以上は58万円
+      const kiso = n <= 1320000 ? 950000 : 580000;
+      const taxable = Math.max(0, n - kiso);
       if (taxable <= 1950000) return Math.floor(taxable * 0.05);
       if (taxable <= 3300000) return Math.floor(taxable * 0.10 - 97500);
       if (taxable <= 6950000) return Math.floor(taxable * 0.20 - 427500);
@@ -420,8 +422,8 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <p style={{ color: green }}>　→ 自己負担経費を引く（美容・衣装等 −¥500,000）</p>
                     <p style={{ color: green }}>　→ 備品・リネン代を引く（¥500×180日 = −¥90,000）</p>
                     <p style={{ color: green }}>　→ 青色控除を引く（−¥650,000）</p>
-                    <p style={{ color: green }}>　→ 基礎控除を引く（−¥480,000）</p>
-                    <p>　→ 本来の税額は約<b style={{ color: green }}>¥94,000</b></p>
+                    <p style={{ color: green }}>　→ 基礎控除を引く（−¥950,000〜）</p>
+                    <p>　→ 本来の税額は<b style={{ color: green }}>大幅に減額</b></p>
                     <p>　→ 源泉徴収で<b style={{ color: red }}>¥276,000</b>も払い済み</p>
                     <p className="mt-1 text-[10px] font-bold" style={{ color: green }}>
                       💰 差額の約¥182,000が銀行口座に還付される！
@@ -579,6 +581,25 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </div>
             )}
           </div>
+
+          {/* ガイドページへの誘導 */}
+          <div style={{ ...cardBase, padding: "16px" }}>
+            <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📚 詳しくはガイドページもご覧ください</p>
+            <div className="space-y-1.5">
+              {[
+                { href: "/mypage/tax-guide", icon: "🔒", label: "副業がバレない 完全ガイド", color: pink },
+                { href: "/mypage/spouse-guide", icon: "💑", label: "配偶者控除・扶養 完全ガイド", color: "#8b6cb7" },
+                { href: "/mypage/invoice-guide", icon: "💎", label: "インボイス登録ガイド", color: "#c3a782" },
+              ].map((g) => (
+                <a key={g.href} href={g.href} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer" style={{ backgroundColor: g.color + "10", border: `1px solid ${g.color}33`, textDecoration: "none" }}>
+                  <span style={{ fontSize: 16 }}>{g.icon}</span>
+                  <span className="text-[10px] font-bold" style={{ color: g.color }}>{g.label}</span>
+                  <span className="ml-auto text-[10px]" style={{ color: g.color }}>→</span>
+                </a>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button onClick={() => { saveStatus({ ...stepStatus, 0: "done" }); setStep(1); }} style={btnPink}>理解した！次へ →</button>
           </div>
@@ -1105,18 +1126,27 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                   <p className="text-[9px] font-bold mb-1" style={{ color: T.text }}>登録しないとどうなる？</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>
                     お店があなたの消費税分を控除できなくなる → お店の負担が増える → 報酬が下がる可能性があります。
-                    ただし2029年9月末まで段階的に経過措置があります。
+                    ただし2031年10月まで段階的に経過措置があります（80%→70%→50%→30%→0%）。
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* 判定フロー */}
+            {/* 判定フロー → チョップ推奨スタンス */}
             <div style={altCard} className="mb-3">
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>🔀 あなたはインボイス登録が必要？</p>
+              <div className="p-3 rounded-xl mb-2" style={{ backgroundColor: "#c3a78220", border: "1px solid #c3a78266" }}>
+                <p className="text-[11px] font-bold mb-1" style={{ color: "#c3a782" }}>💎 チョップからのお知らせ</p>
+                <p className="text-[9px]" style={{ color: T.textSub }}>
+                  チョップではセラピストさんのインボイス登録を<b>推奨</b>しています。
+                  未登録の場合はバック額の10%を控除していますが、登録すればこの控除がなくなり<b>毎月の手取りが増えます</b>。
+                </p>
+                <a href="/mypage/invoice-guide" style={{ color: "#c3a782", fontSize: "10px", textDecoration: "underline", display: "inline-block", marginTop: 4 }}>📖 詳しい手取りシミュレーション付きガイドはこちら</a>
+              </div>
+
+              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>🔀 お店からインボイス登録を求められていますか？</p>
               <div className="flex gap-2 mb-3">
                 <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: true })} style={yesNoBtn(profile.shopRequiresInvoice, true)}>求められている</button>
-                <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: false })} style={yesNoBtn(profile.shopRequiresInvoice, false)}>言われてない</button>
+                <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: false })} style={yesNoBtn(profile.shopRequiresInvoice, false)}>特に言われてない</button>
               </div>
 
               {profile.shopRequiresInvoice === true && (
@@ -1127,8 +1157,8 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                       {[
                         { step: "①", title: "登録申請書を提出", desc: "e-Taxまたは郵送で「適格請求書発行事業者の登録申請書」を提出" },
                         { step: "②", title: "登録番号を取得", desc: "「T＋13桁の数字」形式の番号が届きます（例: T1234567890123）" },
-                        { step: "③", title: "お店に番号を伝える", desc: "登録番号をお店に連絡してください" },
-                        { step: "④", title: "消費税の申告が必要に", desc: "確定申告に加えて消費税の申告・納付が必要になります" },
+                        { step: "③", title: "お店に番号を伝える", desc: "登録番号をお店に連絡 → 翌月からインボイス控除がなくなります" },
+                        { step: "④", title: "消費税の申告が必要に", desc: "2割特例（売上の約1.8%）で負担は軽い。詳細はインボイスガイドで" },
                       ].map((item, i) => (
                         <div key={i} className="flex gap-2 items-start">
                           <span className="text-[10px] font-bold flex-shrink-0" style={{ color: orange }}>{item.step}</span>
@@ -1153,15 +1183,16 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                         <p className="text-[8px] mt-1" style={{ color: green }}>例：年間売上300万 → 消費税30万の2割 = <b>6万円</b>の納付</p>
                       </div>
                       <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                        <p className="text-[9px] font-bold" style={{ color: T.text }}>簡易課税制度（2027年以降も使える）</p>
+                        <p className="text-[9px] font-bold" style={{ color: "#2563eb" }}>3割特例（2027〜2028年分・個人事業主限定）</p>
                         <p className="text-[8px]" style={{ color: T.textSub }}>
-                          業種ごとの「みなし仕入率」で計算。セラピストはサービス業（第5種：50%）なので、売上消費税の<b>50%を控除</b>。事前届出が必要。
+                          2割特例終了後のソフトランディング措置。売上消費税の<b>3割</b>を納付。届出不要。
                         </p>
-                        <p className="text-[8px] mt-1" style={{ color: T.textMuted }}>例：年間売上300万 → 消費税30万 − みなし仕入15万 = <b>15万円</b>の納付</p>
                       </div>
                       <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                        <p className="text-[9px] font-bold" style={{ color: T.textMuted }}>原則課税（複雑）</p>
-                        <p className="text-[8px]" style={{ color: T.textMuted }}>実際の経費の消費税分を差し引いて計算。帳簿が複雑になるのでセラピストには非推奨。</p>
+                        <p className="text-[9px] font-bold" style={{ color: T.text }}>簡易課税制度（2029年以降も使える）</p>
+                        <p className="text-[8px]" style={{ color: T.textSub }}>
+                          セラピストはサービス業（第5種：50%）。売上消費税の<b>50%を控除</b>。事前届出が必要。
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1169,15 +1200,21 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               )}
 
               {profile.shopRequiresInvoice === false && (
-                <div className="p-3 rounded-xl" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
-                  <p className="text-[10px] font-bold mb-1" style={{ color: green }}>✅ 今は登録不要！</p>
-                  <p className="text-[9px]" style={{ color: T.textSub }}>
-                    年間売上1,000万円以下の「免税事業者」のままでOK。消費税の申告は不要です。
-                  </p>
-                  <div className="mt-2 p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                    <p className="text-[8px] font-bold" style={{ color: orange }}>⚠️ ただし注意</p>
-                    <p className="text-[8px]" style={{ color: T.textSub }}>
-                      2029年10月以降は経過措置が終了するため、お店から登録を求められる可能性が高まります。状況を注視しましょう。
+                <div className="space-y-2">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: "#c3a78215", border: "1px solid #c3a78244" }}>
+                    <p className="text-[10px] font-bold mb-1" style={{ color: "#c3a782" }}>💎 チョップでは登録をおすすめしています</p>
+                    <p className="text-[9px]" style={{ color: T.textSub }}>
+                      現在、インボイス未登録のセラピストさんからはバック額の10%を控除しています。
+                      登録すればこの控除がなくなり、<b>手取りが増えます</b>。
+                    </p>
+                    <p className="text-[9px] mt-1" style={{ color: T.textSub }}>
+                      2割特例（売上の約1.8%を納税するだけ）を使えば、10%控除より<b>ずっとお得</b>です。
+                    </p>
+                    <a href="/mypage/invoice-guide" className="inline-block mt-2 text-[10px] px-3 py-1.5 rounded-lg" style={{ background: "linear-gradient(135deg, #c3a782, #b09672)", color: "#fff", fontWeight: 600, textDecoration: "none" }}>💎 インボイス登録ガイドを見る →</a>
+                  </div>
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
+                    <p className="text-[8px]" style={{ color: T.textMuted }}>
+                      ※ 免税事業者からの仕入控除経過措置は2031年10月完全終了予定。今後インボイス登録の重要性は増していきます。
                     </p>
                   </div>
                 </div>
@@ -1189,10 +1226,13 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📌 あなたのインボイス登録状況</p>
               <div className="flex gap-2">
                 <button onClick={() => saveProfile({ ...profile, hasInvoice: true })} style={yesNoBtn(profile.hasInvoice, true)}>登録済み</button>
-                <button onClick={() => saveProfile({ ...profile, hasInvoice: false })} style={yesNoBtn(profile.hasInvoice, false)}>まだ/不要</button>
+                <button onClick={() => saveProfile({ ...profile, hasInvoice: false })} style={yesNoBtn(profile.hasInvoice, false)}>まだ未登録</button>
               </div>
               {profile.hasInvoice === true && (
-                <p className="text-[9px] mt-2" style={{ color: green }}>✅ 登録済みの場合は、毎年の確定申告で消費税の申告もお忘れなく！</p>
+                <p className="text-[9px] mt-2" style={{ color: green }}>✅ 登録済み！毎年の確定申告で消費税の申告もお忘れなく。帳簿タブの「📄 申告」で消費税も自動計算されます。</p>
+              )}
+              {profile.hasInvoice === false && (
+                <p className="text-[9px] mt-2" style={{ color: "#c3a782" }}>💎 登録すると毎月の手取りが増えます。<a href="/mypage/invoice-guide" style={{ color: "#c3a782", textDecoration: "underline" }}>詳しくはこちら</a></p>
               )}
             </div>
 
@@ -1203,9 +1243,9 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 <div className="p-2" style={{ backgroundColor: red + "10" }}><span className="text-[9px] font-bold" style={{ color: red }}>登録するデメリット</span></div>
               </div>
               {[
-                ["お店との取引がスムーズ", "消費税の申告・納付が必要"],
-                ["報酬を下げられるリスク回避", "帳簿の管理が増える"],
-                ["取引先の信頼性UP", "手取りが消費税分減る"],
+                ["お店の控除10%がなくなり手取りUP", "消費税の申告・納付が必要"],
+                ["2割特例で負担は売上の約1.8%", "帳簿の管理が少し増える"],
+                ["プロとしての信頼性UP", "登録から2年は免税に戻れない"],
               ].map(([pro, con], i) => (
                 <div key={i} className="grid grid-cols-2" style={{ borderTop: `1px solid ${T.border}` }}>
                   <div className="p-2"><span className="text-[8px]" style={{ color: T.textSub }}>{pro}</span></div>
