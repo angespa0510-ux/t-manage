@@ -833,6 +833,30 @@ export default function TaxGuidePage() {
           </div>
         </section>
 
+        {/* ─── 関連リンク ─── */}
+        <section
+          className="rounded-2xl p-4 border"
+          style={{ backgroundColor: T.cardAlt, borderColor: T.border }}
+        >
+          <h2 className="text-[13px] font-semibold mb-3">🔗 関連ガイド</h2>
+          <Link
+            href="/mypage/spouse-guide"
+            className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
+            style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
+          >
+            <span style={{ fontSize: 20 }}>💑</span>
+            <div style={{ flex: 1 }}>
+              <p className="text-[12px] font-semibold" style={{ color: "#8b6cb7" }}>
+                配偶者控除・扶養 完全ガイド
+              </p>
+              <p className="text-[10px]" style={{ color: T.textSub }}>
+                旦那さんの扶養内で働く方向け。2026年最新制度・シミュレーター付き
+              </p>
+            </div>
+            <span style={{ color: T.textMuted, fontSize: 14 }}>→</span>
+          </Link>
+        </section>
+
         {/* ─── フッター ─── */}
         <section
           className="rounded-2xl p-4 border text-center"
