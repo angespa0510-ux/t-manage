@@ -282,9 +282,11 @@ export default function Dashboard() {
       const bldName = bl?.name || "";
       const rmName = rm?.name || "";
       const finalPay = ds?.final_payment || 0;
+      const reserveUsed = ds?.reserve_used_amount || 0;  // 豊橋予備金からの立替額
       const roomReplenish = assign ? replenishList.filter((r: any) => (rooms || []).find((x: any) => x.id === assign.room_id)?.id === r.id ? false : true, []).length >= 0 ? (repData || []).filter((r: any) => r.room_id === assign.room_id).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0) : 0 : 0;
-      const netAfterPay = tCash - finalPay;
-      return { id: tid, name: getThName(tid), room: `${bldName}${rmName}`, cash: tCash, back: tBack, finalPay, replenish: roomReplenish, netAfterPay, net: tCash - finalPay, salesCollected: !!ds?.sales_collected, changeCollected: !!ds?.change_collected, safeDeposited: !!ds?.safe_deposited };
+      // 売上残 = お客様現金 - セラピスト支払 + 予備金立替 (予備金で補充された分は実質0)
+      const netAfterPay = tCash - finalPay + reserveUsed;
+      return { id: tid, name: getThName(tid), room: `${bldName}${rmName}`, cash: tCash, back: tBack, finalPay, replenish: roomReplenish, netAfterPay, net: tCash - finalPay + reserveUsed, reserveUsed, salesCollected: !!ds?.sales_collected, changeCollected: !!ds?.change_collected, safeDeposited: !!ds?.safe_deposited };
     });
     const totalOut = totalReplenish + expenseTotal;
     const staffCollectedAmt = therapistData.filter(t => t.salesCollected && !t.safeDeposited).reduce((s, t) => s + (t.changeCollected ? t.replenish : 0) + t.netAfterPay, 0);
@@ -1004,16 +1006,16 @@ export default function Dashboard() {
                         {closingData.reserveUsedTotal > 0 && (
                           <div className="mt-2 pt-2" style={{ borderTop: `1px dashed ${T.border}` }}>
                             <div className="flex justify-between text-[11px]" style={{ color: "#d4687e" }}>
-                              <span>🏛 豊橋予備金からの立替</span>
-                              <span style={{ fontWeight: 500 }}>-{fmt(closingData.reserveUsedTotal)}</span>
+                              <span>🏛 豊橋予備金からの立替（上記に含む）</span>
+                              <span style={{ fontWeight: 500 }}>{fmt(closingData.reserveUsedTotal)}</span>
                             </div>
                             {closingData.reserveUsedList.map((r: any, i: number) => (
                               <div key={i} className="flex justify-between py-0.5 text-[10px] pl-3" style={{ color: T.textFaint }}>
                                 <span>{r.therapist}</span>
-                                <span>-{fmt(r.amount)}</span>
+                                <span>{fmt(r.amount)}</span>
                               </div>
                             ))}
-                            <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 本日豊橋予備金から立替した合計。後日スタッフ金庫から予備金へ補充してください。</p>
+                            <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ セラピストに全額渡済み。後日スタッフ金庫から予備金へ {fmt(closingData.reserveUsedTotal)} 補充してください。</p>
                           </div>
                         )}
                         {closingData.safeTotalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#a855f7" }}>🔐 金庫回収後の残金</span><span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected)}</span></div>}
