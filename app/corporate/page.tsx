@@ -592,6 +592,9 @@ function RPGCharacters() {
       const ease = (t: number) => t < 0.5 ? 2*t*t : 1 - (-2*t+2)**2/2;
       // PC（幅広い画面）ではゆっくり、スマホはそのまま
       const spd = window.innerWidth > 900 ? 0.18 : 0.4;
+      // 攻撃モーションもPCではゆっくり（2フレームに1回進行）
+      const atkRate = window.innerWidth > 900 ? 2 : 1;
+      const btl = r.tick % atkRate === 0; // バトル進行フレームか
       const faceDir = (dx: number, dy: number) => {
         const ang = Math.atan2(dy, dx) * 180 / Math.PI; // -180 to 180
         if (ang > -45 && ang <= 45) return { hdir: 1, hface: "side" };     // right
@@ -619,7 +622,7 @@ function RPGCharacters() {
         }
       }
       else if (r.phase === "encounter") {
-        r.ptick++;
+        if(btl) r.ptick++;
         const dx = r.sx - r.hx, d = dist2(r.hx,r.hy,r.sx,r.sy);
         const f = faceDir(dx, r.sy - r.hy); r.hdir = f.hdir; r.hface = "side"; r.walk = true;
         if (d > 80) { r.hx += (dx/d)*(spd*1.8); r.hy += ((r.sy-r.hy)/d)*(spd*1.8); }
@@ -627,7 +630,7 @@ function RPGCharacters() {
       }
       // ── HERO ATTACK: lunge + big sword swing ──
       else if (r.phase === "hero_atk") {
-        r.ptick++;
+        if(btl) r.ptick++;
         const lungeMax = 35;
         if (r.ptick <= 12) {
           // Lunge forward toward slime
@@ -664,7 +667,7 @@ function RPGCharacters() {
       }
       // ── SLIME ATTACK: sqush → big jump → body slam ──
       else if (r.phase === "slime_atk") {
-        r.ptick++;
+        if(btl) r.ptick++;
         const distToH = r.hdir === 1 ? r.sx - r.hx : r.hx - r.sx;
         if (r.ptick <= 10) {
           // Squish down (prepare)
@@ -704,7 +707,7 @@ function RPGCharacters() {
       }
       // ── SLIME DIE ──
       else if (r.phase === "slime_die") {
-        r.ptick++;
+        if(btl) r.ptick++;
         if (r.ptick === 1) ad(r.sx, r.sy - 10, "✦", "#67e8f9", 24);
         if (r.ptick === 18) { ad(r.sx - 15, r.sy - 35, "EXP +15", "#22c55e", 13); ad(r.sx + 20, r.sy - 20, "Gold +8", "#fbbf24", 13); }
         if (r.ptick > 55) {
@@ -715,7 +718,7 @@ function RPGCharacters() {
       }
       // ── HERO DIE ──
       else if (r.phase === "hero_die") {
-        r.ptick++;
+        if(btl) r.ptick++;
         r.heroDead = true; r.walk = false;
         if (r.ptick === 10) ad(r.hx - 10, r.hy - 30, "やられた…", "#94a3b8", 16);
         if (r.ptick === 40) ad(r.hx - 5, r.hy - 45, "GAME OVER", "#ef4444", 18);
@@ -728,7 +731,7 @@ function RPGCharacters() {
       }
       // ── COOLDOWN ──
       else if (r.phase === "cooldown") {
-        r.ptick++;
+        if(btl) r.ptick++;
         const dx = r.tx - r.hx, d = dist2(r.hx,r.hy,r.tx,r.ty);
         if (d > 10) { r.hx += (dx/d)*spd; r.hy += ((r.ty-r.hy)/d)*spd; const f = faceDir(dx, r.ty-r.hy); r.hdir = f.hdir; r.hface = f.hface; r.walk = true; }
         else r.walk = false;
