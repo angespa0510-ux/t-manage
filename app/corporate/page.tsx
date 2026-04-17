@@ -220,8 +220,12 @@ export default function CorporatePage() {
       </div>
 
       {/* ══════════ SERVICES ══════════ */}
-      <section id="service" data-a style={{ padding:"100px 24px",background:"#020617" }}>
-        <div className={`fu ${show("service")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto" }}>
+      <section id="service" data-a style={{ position:"relative",padding:"100px 24px",background:"#020617",overflow:"hidden" }}>
+        <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.2,zIndex:0 }}>
+          <source src="/corporate/services-bg.mp4" type="video/mp4"/>
+        </video>
+        <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(2,6,23,0.6) 0%,rgba(2,6,23,0.3) 50%,rgba(2,6,23,0.6) 100%)",zIndex:1 }}/>
+        <div className={`fu ${show("service")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto",position:"relative",zIndex:2 }}>
           <div style={{ textAlign:"center",marginBottom:64 }}>
             <span className={`sh ${show("service")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>SERVICES</span>
             <h2 className={`sh2 ${show("service")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>事業内容</h2>
