@@ -546,130 +546,267 @@ export default function CorporatePage() {
 
 /* ══════════ Pixel Art Hero Component ══════════ */
 function PixelHero() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const posRef = useRef({ x: 200, y: 400, dir: 0, frame: 0, tick: 0, targetX: 500, targetY: 600, idle: 0 });
-  const [pos, setPos] = useState({ x: 200, y: 400 });
+  const heroRef = useRef<HTMLCanvasElement>(null);
+  const slimeRef = useRef<HTMLCanvasElement>(null);
+  const state = useRef({
+    hx: 200, hy: 400, hdir: 0, hframe: 0, tick: 0,
+    tx: 500, ty: 600, idle: 0,
+    // Slime
+    sx: -100, sy: -100, salive: false, shp: 3, sbounce: 0,
+    // Battle
+    phase: "wander" as "wander"|"approach"|"hero_atk"|"slime_atk"|"slime_die"|"cooldown",
+    ptick: 0, nextSpawn: 300 + Math.floor(Math.random() * 400),
+    // Effects
+    dmgList: [] as {x:number,y:number,txt:string,color:string,t:number}[],
+    slashAng: 0, heroHit: false,
+  });
+  const [render, setRender] = useState(0);
 
   useEffect(() => {
-    /* ── 20x20 pixel hero sprite — 勇者（金冠・青鎧・赤マント・金剣） ── */
-    /* palette: 0=trans 1=outline 2=blue 3=lightblue 4=skin 5=skinshadow 6=gold
-       7=darkgold 8=red 9=darkred 10=silver 11=shine 12=boots 13=hair 14=pants 15=white */
-    const P = [
-      "transparent","#0f172a","#2563eb","#60a5fa","#FDBCB4","#E8A090",
+    /* ── COLOR PALETTES ── */
+    const HP = ["transparent","#0f172a","#2563eb","#60a5fa","#FDBCB4","#E8A090",
       "#FFD700","#DAA520","#dc2626","#991b1b","#B0B8C8","#E0E8FF",
-      "#3d1f00","#8B5E3C","#1a3050","#f8fafc"
-    ];
-    const S1: number[][] = [ // Stand / Walk frame A
-      [0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],
-      [0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],
-      [0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],
-      [0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],
-      [0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],
-      [0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],
-      [0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],
-      [0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],
-      [0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],
-      [0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],
-      [0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],
-      [0,0,0,0,0,14,14,0,0,14,14,0,0,0,11,0,0,0,0,0],
-      [0,0,0,0,0,14,0,0,0,0,14,0,0,0,10,0,0,0,0,0],
-      [0,0,0,0,12,12,0,0,0,0,12,12,0,0,0,0,0,0,0,0],
-      [0,0,0,0,12,12,1,0,0,1,12,12,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,0],
-    ];
-    const S2: number[][] = [ // Walk frame B — legs swapped
-      [0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],
-      [0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],
-      [0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],
-      [0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],
-      [0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],
-      [0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],
-      [0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],
-      [0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],
-      [0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],
-      [0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],
-      [0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],
-      [0,0,0,0,14,14,0,0,0,0,14,14,0,0,11,0,0,0,0,0],
-      [0,0,0,14,14,0,0,0,0,0,0,14,14,0,10,0,0,0,0,0],
-      [0,0,0,12,12,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0],
-      [0,0,0,12,12,1,0,0,0,0,1,12,12,0,0,0,0,0,0,0],
-      [0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0],
-    ];
-    const SPRITES = [S1, S2];
-    const W = 20, H = 20;
+      "#3d1f00","#8B5E3C","#1a3050","#f8fafc"];
+    const SP = ["transparent","#0f172a","#06b6d4","#22d3ee","#67e8f9","#f8fafc","#dc2626"];
+    // 0=trans 1=outline 2=cyan 3=lightcyan 4=highlight 5=white(eyes) 6=red(mouth)
 
-    const draw = (ctx: CanvasRenderingContext2D, sp: number[][], px: number, flip: boolean) => {
-      for (let r = 0; r < sp.length; r++) {
+    /* ── HERO SPRITES 20x20 ── */
+    const HS: number[][][] = [
+      [[0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],[0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],[0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],[0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],[0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],[0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],[0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],[0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],[0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],[0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],[0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],[0,0,0,0,0,14,14,0,0,14,14,0,0,0,11,0,0,0,0,0],[0,0,0,0,0,14,0,0,0,0,14,0,0,0,10,0,0,0,0,0],[0,0,0,0,12,12,0,0,0,0,12,12,0,0,0,0,0,0,0,0],[0,0,0,0,12,12,1,0,0,1,12,12,0,0,0,0,0,0,0,0],[0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,0]],
+      [[0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],[0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],[0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],[0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],[0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],[0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],[0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],[0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],[0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],[0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],[0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],[0,0,0,0,14,14,0,0,0,0,14,14,0,0,11,0,0,0,0,0],[0,0,0,14,14,0,0,0,0,0,0,14,14,0,10,0,0,0,0,0],[0,0,0,12,12,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0],[0,0,0,12,12,1,0,0,0,0,1,12,12,0,0,0,0,0,0,0],[0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0]],
+    ];
+
+    /* ── SLIME SPRITE 14x12 ── */
+    const SL: number[][][] = [
+      [ // Normal
+        [0,0,0,0,0,1,1,1,1,0,0,0,0,0],
+        [0,0,0,1,1,2,2,2,2,1,1,0,0,0],
+        [0,0,1,2,3,3,2,2,3,3,2,1,0,0],
+        [0,1,2,3,3,3,3,3,3,3,3,2,1,0],
+        [0,1,3,5,5,3,3,3,5,5,3,3,1,0],
+        [0,1,3,1,5,3,3,3,1,5,3,3,1,0],
+        [0,1,2,3,3,3,3,3,3,3,3,2,1,0],
+        [0,1,2,3,3,6,6,6,6,3,3,2,1,0],
+        [1,2,2,2,3,3,3,3,3,3,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [0,1,2,2,2,2,2,2,2,2,2,2,1,0],
+        [0,0,1,1,1,1,1,1,1,1,1,1,0,0],
+      ],
+      [ // Squished (bounce)
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
+        [0,0,0,1,2,3,2,2,3,2,1,0,0,0],
+        [0,0,1,3,3,3,3,3,3,3,3,1,0,0],
+        [0,1,3,3,5,5,3,5,5,3,3,3,1,0],
+        [0,1,3,3,1,5,3,1,5,3,3,3,1,0],
+        [1,2,3,3,3,3,3,3,3,3,3,2,2,1],
+        [1,2,2,3,6,6,6,6,6,3,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [0,1,1,1,1,1,1,1,1,1,1,1,1,0],
+      ],
+    ];
+
+    const draw = (ctx: CanvasRenderingContext2D, sp: number[][], pal: string[], w: number, px: number, flip: boolean) => {
+      for (let r = 0; r < sp.length; r++)
         for (let c = 0; c < sp[r].length; c++) {
-          if (sp[r][c] === 0) continue;
-          ctx.fillStyle = P[sp[r][c]];
-          ctx.fillRect(flip ? (W - 1 - c) * px : c * px, r * px, px, px);
+          if (!sp[r][c]) continue;
+          ctx.fillStyle = pal[sp[r][c]];
+          ctx.fillRect(flip ? (w-1-c)*px : c*px, r*px, px, px);
         }
-      }
     };
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const hCanvas = heroRef.current, sCanvas = slimeRef.current;
+    if (!hCanvas || !sCanvas) return;
+    const hCtx = hCanvas.getContext("2d"), sCtx = sCanvas.getContext("2d");
+    if (!hCtx || !sCtx) return;
 
     const pick = () => {
-      const p = posRef.current;
-      p.targetX = 40 + Math.random() * (window.innerWidth - 120);
-      p.targetY = 80 + Math.random() * Math.min(document.body.scrollHeight - 120, 5000);
-      p.idle = 0;
+      const s = state.current;
+      s.tx = 40 + Math.random() * (window.innerWidth - 120);
+      s.ty = 80 + Math.random() * Math.min(document.body.scrollHeight - 120, 5000);
+      s.idle = 0;
     };
     pick();
 
     let raf = 0;
     const loop = () => {
-      const p = posRef.current;
-      p.tick++;
+      const s = state.current;
+      s.tick++;
 
-      const dx = p.targetX - p.x;
-      const dy = p.targetY - p.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < 8) {
-        p.idle++;
-        if (p.idle > 120) pick(); // pause 2sec then pick new target
-      } else {
-        const speed = 0.45; // ← ゆっくり
-        p.x += (dx / dist) * speed;
-        p.y += (dy / dist) * speed;
-        p.idle = 0;
+      /* ── PHASE LOGIC ── */
+      if (s.phase === "wander") {
+        // Move hero
+        const dx = s.tx - s.hx, dy = s.ty - s.hy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 8) { s.idle++; if (s.idle > 120) pick(); }
+        else { s.hx += (dx/dist)*0.45; s.hy += (dy/dist)*0.45; s.idle = 0; s.hdir = dx >= 0 ? 0 : 1; }
+        if (s.tick % 18 === 0 && s.idle === 0) s.hframe = s.hframe === 0 ? 1 : 0;
+        // Spawn check
+        s.nextSpawn--;
+        if (s.nextSpawn <= 0) {
+          s.phase = "approach"; s.ptick = 0;
+          s.sx = s.hx + (Math.random() > 0.5 ? 150 : -150);
+          s.sy = s.hy + (Math.random() - 0.5) * 100;
+          s.salive = true; s.shp = 3; s.sbounce = 0;
+        }
+      }
+      else if (s.phase === "approach") {
+        // Hero walks toward slime
+        const dx = s.sx - s.hx, dy = s.sy - s.hy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        s.hdir = dx >= 0 ? 0 : 1;
+        if (dist > 65) { s.hx += (dx/dist)*0.8; s.hy += (dy/dist)*0.8; }
+        if (s.tick % 14 === 0) s.hframe = s.hframe === 0 ? 1 : 0;
+        s.ptick++;
+        if (s.ptick > 60 || dist <= 65) { s.phase = "hero_atk"; s.ptick = 0; s.slashAng = 0; }
+      }
+      else if (s.phase === "hero_atk") {
+        s.ptick++;
+        s.slashAng = Math.min(s.ptick * 8, 90);
+        if (s.ptick === 12) {
+          // Hit slime!
+          s.shp--;
+          const dmg = [3, 5, 8][2 - s.shp] || 8;
+          s.dmgList.push({ x: s.sx + 20, y: s.sy - 10, txt: `${dmg}`, color: "#FFD700", t: 40 });
+          s.sbounce = 8;
+        }
+        if (s.ptick > 30) {
+          if (s.shp <= 0) { s.phase = "slime_die"; s.ptick = 0; }
+          else { s.phase = "slime_atk"; s.ptick = 0; }
+        }
+      }
+      else if (s.phase === "slime_atk") {
+        s.ptick++;
+        const progress = s.ptick / 40;
+        // Slime bounces toward hero
+        if (s.ptick < 20) { s.sbounce = Math.sin(s.ptick * 0.3) * 12; }
+        if (s.ptick === 20) {
+          s.heroHit = true;
+          const dmg = [1, 2, 1][Math.floor(Math.random()*3)];
+          s.dmgList.push({ x: s.hx + 20, y: s.hy - 10, txt: `${dmg}`, color: "#dc2626", t: 40 });
+        }
+        if (s.ptick > 25) s.heroHit = false;
+        if (s.ptick > 45) { s.phase = "hero_atk"; s.ptick = 0; s.slashAng = 0; s.sbounce = 0; }
+      }
+      else if (s.phase === "slime_die") {
+        s.ptick++;
+        s.sbounce = s.ptick * 2;
+        if (s.ptick === 10) {
+          s.dmgList.push({ x: s.sx, y: s.sy - 20, txt: "EXP +10", color: "#22c55e", t: 60 });
+          s.dmgList.push({ x: s.sx + 30, y: s.sy - 5, txt: "Gold +5", color: "#FFD700", t: 60 });
+        }
+        if (s.ptick > 40) {
+          s.salive = false; s.phase = "cooldown"; s.ptick = 0;
+        }
+      }
+      else if (s.phase === "cooldown") {
+        // Resume wandering
+        const dx = s.tx - s.hx, dy = s.ty - s.hy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 8) { s.hx += (dx/dist)*0.45; s.hy += (dy/dist)*0.45; s.hdir = dx >= 0 ? 0 : 1; }
+        if (s.tick % 18 === 0) s.hframe = s.hframe === 0 ? 1 : 0;
+        s.ptick++;
+        if (s.ptick > 180) {
+          s.phase = "wander"; s.ptick = 0;
+          s.nextSpawn = 500 + Math.floor(Math.random() * 600);
+          pick();
+        }
       }
 
-      p.dir = dx >= 0 ? 0 : 1;
-      if (p.tick % 18 === 0 && p.idle === 0) p.frame = p.frame === 0 ? 1 : 0;
+      // Update damage numbers
+      s.dmgList = s.dmgList.filter(d => { d.t--; d.y -= 0.8; return d.t > 0; });
 
+      // Slime bounce
+      if (s.sbounce > 0 && s.phase !== "slime_die") s.sbounce = Math.max(0, s.sbounce - 0.5);
+
+      /* ── DRAW HERO ── */
       const px = 3;
-      canvas.width = W * px;
-      canvas.height = H * px;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      draw(ctx, SPRITES[p.idle > 0 ? 0 : p.frame], px, p.dir === 1);
+      hCanvas.width = 20 * px; hCanvas.height = 20 * px;
+      hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
+      draw(hCtx, HS[s.idle > 0 && s.phase === "wander" ? 0 : s.hframe], HP, 20, px, s.hdir === 1);
+      // Slash effect
+      if (s.phase === "hero_atk" && s.ptick < 20) {
+        hCtx.save();
+        const cx = s.hdir === 1 ? 10 : 50;
+        hCtx.translate(cx, 28);
+        hCtx.rotate(((s.hdir === 1 ? -1 : 1) * s.slashAng * Math.PI) / 180);
+        hCtx.fillStyle = "#E0E8FF";
+        hCtx.fillRect(-2, -20, 4, 22);
+        hCtx.fillStyle = "#FFD700";
+        hCtx.fillRect(-3, 0, 6, 6);
+        hCtx.restore();
+      }
 
-      setPos({ x: p.x, y: p.y });
+      /* ── DRAW SLIME ── */
+      sCanvas.width = 14 * px; sCanvas.height = 12 * px;
+      sCtx.clearRect(0, 0, sCanvas.width, sCanvas.height);
+      if (s.salive) {
+        if (s.phase === "slime_die") {
+          sCtx.globalAlpha = Math.max(0, 1 - s.ptick / 35);
+        }
+        const sFrame = (s.phase === "slime_atk" && s.ptick > 10 && s.ptick < 25) ? 1 : 0;
+        draw(sCtx, SL[sFrame], SP, 14, px, false);
+        sCtx.globalAlpha = 1;
+      }
+
+      // Trigger re-render
+      if (s.tick % 2 === 0) setRender(s.tick);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const s = state.current;
   return (
-    <canvas ref={canvasRef} style={{
-      position: "absolute", left: pos.x, top: pos.y,
-      width: 60, height: 60,
-      imageRendering: "pixelated", pointerEvents: "none", zIndex: 40,
-      filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 8px rgba(255,215,0,0.15))",
-    }} />
+    <>
+      {/* Hero */}
+      <canvas ref={heroRef} style={{
+        position:"absolute", left:s.hx, top:s.hy, width:60, height:60,
+        imageRendering:"pixelated", pointerEvents:"none", zIndex:41,
+        filter: s.heroHit
+          ? "drop-shadow(0 0 8px rgba(220,38,38,0.8)) brightness(1.5)"
+          : "drop-shadow(0 2px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 6px rgba(255,215,0,0.12))",
+        transition: "filter 0.15s",
+      }} />
+      {/* Slime */}
+      <canvas ref={slimeRef} style={{
+        position:"absolute",
+        left: s.sx,
+        top: s.sy - s.sbounce,
+        width: 42, height: 36,
+        imageRendering:"pixelated", pointerEvents:"none", zIndex:40,
+        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5)) drop-shadow(0 0 6px rgba(6,182,212,0.2))",
+        transform: s.phase === "slime_die" ? `scale(${Math.max(0, 1 - s.ptick/30)}) rotate(${s.ptick * 10}deg)` : "none",
+        transition: s.phase === "slime_die" ? "none" : "top 0.1s ease-out",
+        display: s.salive ? "block" : "none",
+      }} />
+      {/* Slime shadow */}
+      {s.salive && s.phase !== "slime_die" && (
+        <div style={{
+          position:"absolute", left: s.sx + 6, top: s.sy + 34,
+          width: 30, height: 6, borderRadius: "50%",
+          background: "rgba(0,0,0,0.25)",
+          transform: `scaleX(${1 - s.sbounce * 0.02})`,
+          pointerEvents: "none", zIndex: 39,
+        }} />
+      )}
+      {/* Damage numbers */}
+      {s.dmgList.map((d, i) => (
+        <div key={`${i}-${d.txt}-${d.t}`} style={{
+          position:"absolute", left: d.x, top: d.y,
+          color: d.color, fontSize: d.txt.includes("EXP") || d.txt.includes("Gold") ? 11 : 16,
+          fontWeight: 900, fontFamily: "Inter, monospace",
+          textShadow: `0 1px 4px rgba(0,0,0,0.8), 0 0 8px ${d.color}60`,
+          pointerEvents: "none", zIndex: 50,
+          opacity: Math.min(1, d.t / 15),
+          letterSpacing: 0.5,
+        }}>
+          {d.txt}
+        </div>
+      ))}
+    </>
   );
 }
