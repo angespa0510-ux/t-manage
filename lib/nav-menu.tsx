@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import { useStaffSession } from "./staff-session";
 
 // ── メニュー定義 ──────────────────────────────────
 // 並べ替えはここだけ変更すればOK
 // path が "DASHBOARD_PAGE:xxx" → ダッシュボード内タブ切替
 // category が変わる境目にセパレーターを自動表示
+// requiresTaxPortal: true の項目は 社長・経営責任者・税理士 のみ表示
 
-type NavItem = { icon: string; label: string; path: string; category: string };
+type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean };
 
 const NAV_ITEMS: NavItem[] = [
   // ── 日常業務（毎日使うもの）──
@@ -22,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   // ── 売上 ──
   { icon: "📊", label: "売上分析",  path: "/analytics",      category: "売上" },
   { icon: "📋", label: "バックオフィス",  path: "/tax-dashboard",  category: "売上" },
+  { icon: "📒", label: "税理士ポータル", path: "/tax-portal", category: "売上", requiresTaxPortal: true },
 
   // ── 顧客 ──
   { icon: "👥", label: "顧客一覧",       path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },
@@ -62,9 +65,16 @@ const NAV_ITEMS: NavItem[] = [
 
 function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
+  const { canAccessTaxPortal } = useStaffSession();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   if (!mounted || !open) return null;
+
+  // 権限に応じてメニューをフィルタリング
+  const visibleItems = NAV_ITEMS.filter(item => {
+    if (item.requiresTaxPortal && !canAccessTaxPortal) return false;
+    return true;
+  });
 
   const handleClick = (item: NavItem) => {
     if (item.path.startsWith("DASHBOARD_PAGE:")) {
@@ -107,7 +117,7 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
 
         {/* メニュー一覧 */}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px 16px" }}>
-          {NAV_ITEMS.map((item) => {
+          {visibleItems.map((item) => {
             const showCategory = item.category !== lastCategory;
             lastCategory = item.category;
             return (

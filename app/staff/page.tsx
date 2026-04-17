@@ -342,7 +342,7 @@ const openPaymentStatement = (sch: Schedule) => {
 
   const roleColors: Record<string, string> = { owner: "#c3a782", manager: "#85a8c4", leader: "#a855f7", staff: "#22c55e" };
   const roleLabels: Record<string, string> = { owner: "オーナー", manager: "店長", leader: "責任者", staff: "スタッフ" };
-  const POSITIONS = ["社長", "経営責任者", "社員", "契約社員", "業務委託"];
+  const POSITIONS = ["社長", "経営責任者", "社員", "契約社員", "業務委託", "税理士"];
   const statusColors: Record<string, string> = { scheduled: "#85a8c4", completed: "#22c55e", cancelled: "#c45555" };
   const statusLabels: Record<string, string> = { scheduled: "予定", completed: "完了", cancelled: "キャンセル" };
 
