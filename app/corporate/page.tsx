@@ -107,6 +107,14 @@ export default function CorporatePage() {
         @keyframes orbFloat{0%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.1)}66%{transform:translate(-20px,15px) scale(.95)}100%{transform:translate(0,0) scale(1)}}
         .fu{opacity:0;transform:translateY(40px);transition:opacity .8s cubic-bezier(.22,1,.36,1),transform .8s cubic-bezier(.22,1,.36,1)}
         .fu.on{opacity:1;transform:translateY(0)}
+        .sh{opacity:0;transform:translateX(80px);transition:opacity .7s cubic-bezier(.22,1,.36,1),transform .7s cubic-bezier(.22,1,.36,1)}
+        .sh.on{opacity:1;transform:translateX(0)}
+        .sh2{opacity:0;transform:translateX(80px);transition:opacity .7s cubic-bezier(.22,1,.36,1) .15s,transform .7s cubic-bezier(.22,1,.36,1) .15s}
+        .sh2.on{opacity:1;transform:translateX(0)}
+        .sh3{opacity:0;transform:translateX(80px);transition:opacity .7s cubic-bezier(.22,1,.36,1) .3s,transform .7s cubic-bezier(.22,1,.36,1) .3s}
+        .sh3.on{opacity:1;transform:translateX(0)}
+        .sline{width:0;transition:width .8s cubic-bezier(.22,1,.36,1) .4s}
+        .sline.on{width:60px}
         .ch{transition:transform .35s,box-shadow .35s,border-color .35s}
         .ch:hover{transform:translateY(-6px) scale(1.01);box-shadow:0 24px 80px rgba(37,99,235,0.18);border-color:rgba(96,165,250,0.4)!important}
         .shimmer-text{background:linear-gradient(90deg,#f8fafc 0%,#60a5fa 25%,#f8fafc 50%,#93c5fd 75%,#f8fafc 100%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:textShimmer 5s linear infinite}
@@ -209,9 +217,9 @@ export default function CorporatePage() {
       <section id="service" data-a style={{ padding:"100px 24px",background:"#020617" }}>
         <div className={`fu ${show("service")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:64 }}>
-            <span style={{ fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>SERVICES</span>
-            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>事業内容</h2>
-            <div style={{ width:60,height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
+            <span className={`sh ${show("service")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>SERVICES</span>
+            <h2 className={`sh2 ${show("service")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>事業内容</h2>
+            <div className={`sline ${show("service")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:24 }}>
             {[
@@ -243,10 +251,10 @@ export default function CorporatePage() {
       <section id="products" data-a style={{ padding:"100px 24px",background:"linear-gradient(180deg,#020617,#060e1f,#020617)" }}>
         <div className={`fu ${show("products")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:64 }}>
-            <span style={{ fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>PRODUCTS</span>
-            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>プロダクト</h2>
-            <div style={{ width:60,height:3,borderRadius:2,background:"linear-gradient(90deg,#06b6d4,#7c3aed)",margin:"16px auto 0" }}/>
-            <p style={{ fontSize:14,color:"#94a3b8",marginTop:16,lineHeight:1.8 }}>現場の課題から生まれた、3つのプロダクト</p>
+            <span className={`sh ${show("products")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>PRODUCTS</span>
+            <h2 className={`sh2 ${show("products")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>プロダクト</h2>
+            <div className={`sline ${show("products")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#06b6d4,#7c3aed)",margin:"16px auto 0" }}/>
+            <p className={`sh3 ${show("products")?"on":""}`} style={{ fontSize:14,color:"#94a3b8",marginTop:16,lineHeight:1.8 }}>現場の課題から生まれた、3つのプロダクト</p>
           </div>
 
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:24 }}>
@@ -332,8 +340,8 @@ export default function CorporatePage() {
       <section id="stats" data-a style={{ padding:"80px 24px",background:"linear-gradient(180deg,#020617,#0a1628,#020617)" }}>
         <div className={`fu ${show("stats")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:48 }}>
-            <span style={{ fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>ACHIEVEMENTS</span>
-            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>数字で見る実績</h2>
+            <span className={`sh ${show("stats")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>ACHIEVEMENTS</span>
+            <h2 className={`sh2 ${show("stats")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>数字で見る実績</h2>
           </div>
           <div className="stats-grid" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:20 }}>
             {[
@@ -361,10 +369,10 @@ export default function CorporatePage() {
       <section id="tech" data-a style={{ padding:"80px 24px",background:"#020617" }}>
         <div className={`fu ${show("tech")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:56 }}>
-            <span style={{ fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>TECHNOLOGY</span>
-            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>技術スタック</h2>
-            <div style={{ width:60,height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
-            <p style={{ fontSize:12,color:"#64748b",marginTop:14 }}>各技術にカーソルを合わせると詳細が表示されます</p>
+            <span className={`sh ${show("tech")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>TECHNOLOGY</span>
+            <h2 className={`sh2 ${show("tech")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>技術スタック</h2>
+            <div className={`sline ${show("tech")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
+            <p className={`sh3 ${show("tech")?"on":""}`} style={{ fontSize:12,color:"#64748b",marginTop:14 }}>各技術にカーソルを合わせると詳細が表示されます</p>
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:16 }}>
             {([
@@ -445,8 +453,8 @@ export default function CorporatePage() {
       <section id="company" data-a style={{ padding:"80px 24px",background:"#020617" }}>
         <div className={`fu ${show("company")?"on":""}`} style={{ maxWidth:900,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:56 }}>
-            <span style={{ fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>COMPANY</span>
-            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>会社概要</h2>
+            <span className={`sh ${show("company")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>COMPANY</span>
+            <h2 className={`sh2 ${show("company")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>会社概要</h2>
           </div>
           <div style={{ borderRadius:18,overflow:"hidden",border:"1px solid rgba(96,165,250,0.12)",boxShadow:"0 8px 40px rgba(0,0,0,0.3)",animation:"borderGlow 6s ease-in-out infinite" }}>
             <div style={{ padding:"36px 40px",background:"linear-gradient(135deg,#0f2847,#0a1628)",display:"flex",alignItems:"center",gap:20,borderBottom:"1px solid rgba(96,165,250,0.1)" }}>
@@ -483,9 +491,9 @@ export default function CorporatePage() {
       <section id="contact" data-a style={{ padding:"80px 24px",background:"radial-gradient(ellipse at 50% 0%,#0f2847,#020617 70%)" }}>
         <div className={`fu ${show("contact")?"on":""}`} style={{ maxWidth:640,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:48 }}>
-            <span style={{ fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:3 }}>CONTACT</span>
-            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>お問い合わせ</h2>
-            <p style={{ fontSize:14,color:"#94a3b8",marginTop:14,lineHeight:1.8 }}>ご相談・お見積もりなど、お気軽にご連絡ください。</p>
+            <span className={`sh ${show("contact")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:3 }}>CONTACT</span>
+            <h2 className={`sh2 ${show("contact")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>お問い合わせ</h2>
+            <p className={`sh3 ${show("contact")?"on":""}`} style={{ fontSize:14,color:"#94a3b8",marginTop:14,lineHeight:1.8 }}>ご相談・お見積もりなど、お気軽にご連絡ください。</p>
           </div>
           {!sent ? (
             <div style={{ background:"rgba(255,255,255,0.02)",borderRadius:18,border:"1px solid rgba(96,165,250,0.1)",padding:40,backdropFilter:"blur(8px)" }}>
