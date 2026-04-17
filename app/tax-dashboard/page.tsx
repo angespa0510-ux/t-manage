@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useRole } from "../../lib/use-role";
 import { useToast } from "../../lib/toast";
+import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -32,7 +33,7 @@ export default function TaxDashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
-  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll" | "withholding" | "calendar" | "company" | "mynumber">("summary");
+  const [dashTab, setDashTab] = useState<"summary" | "therapist_payroll" | "staff_payroll" | "withholding" | "calendar" | "company" | "mynumber" | "certificate">("summary");
   const [mode, setMode] = useState<"monthly" | "yearly">("monthly");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
@@ -170,7 +171,7 @@ export default function TaxDashboard() {
           <h1 className="text-[14px] font-medium">バックオフィス</h1>
           </div>
         <div className="flex items-center gap-2">
-          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"},{k:"withholding",l:"💰 源泉徴収納付"},{k:"calendar",l:"📆 年間スケジュール"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
+          {[{k:"summary",l:"📊 経理サマリー"},{k:"therapist_payroll",l:"📑 セラピスト支払調書"},{k:"staff_payroll",l:"📑 スタッフ支払調書"},{k:"withholding",l:"💰 源泉徴収納付"},{k:"calendar",l:"📆 年間スケジュール"},{k:"certificate",l:"📄 証明書発行"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
             <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
           ))}
         </div>
@@ -396,6 +397,11 @@ export default function TaxDashboard() {
       {dashTab === "mynumber" && (
         <div className="flex-1 overflow-y-auto p-4">
           <MyNumberManager T={T} />
+        </div>
+      )}
+      {dashTab === "certificate" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <CertificateManager T={T} />
         </div>
       )}
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
@@ -1581,6 +1587,174 @@ ${t.mynumber_photo_url_back ? `<div class="photo-box"><p class="photo-label">裏
           </div>
         </div>
       </>)}
+    </div>
+  );
+}
+
+function CertificateManager({ T }: { T: any }) {
+  const [therapists, setTherapists] = useState<any[]>([]);
+  const [storeInfo, setStoreInfo] = useState<any>(null);
+  const [selectedId, setSelectedId] = useState<number>(0);
+  const [certYear, setCertYear] = useState(new Date().getFullYear());
+  const [search, setSearch] = useState("");
+  const [issuing, setIssuing] = useState(false);
+  const toast = useToast();
+  const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
+
+  useEffect(() => {
+    const f = async () => {
+      const { data: th } = await supabase.from("therapists").select("id, name, real_name, address, entry_date, status, phone").neq("status", "trash").order("sort_order"); if (th) setTherapists(th);
+      const { data: st } = await supabase.from("stores").select("company_name, company_address, company_phone"); if (st?.[0]) setStoreInfo(st[0]);
+    }; f();
+  }, []);
+
+  const selected = therapists.find(t => t.id === selectedId);
+  const filtered = therapists.filter(t => !search || t.name.includes(search) || (t.real_name || "").includes(search));
+
+  const getStore = () => ({
+    company_name: storeInfo?.company_name || "",
+    company_address: storeInfo?.company_address || "",
+    company_phone: storeInfo?.company_phone || "",
+  });
+
+  const getTh = (th: any) => ({
+    real_name: th.real_name || th.name,
+    name: th.name,
+    address: th.address || "",
+    entry_date: th.entry_date || "",
+  });
+
+  const fetchPayment = async (thId: number) => {
+    const { data: sett } = await supabase.from("therapist_daily_settlements")
+      .select("date, total_back").eq("therapist_id", thId)
+      .gte("date", `${certYear}-01-01`).lte("date", `${certYear}-12-31`);
+    const months: { month: number; amount: number; days: number }[] = [];
+    for (let m = 1; m <= 12; m++) {
+      const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
+      months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length });
+    }
+    return { year: certYear, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months };
+  };
+
+  const issue = async (type: "contract" | "payment" | "transaction") => {
+    if (!selected || !storeInfo) { toast.show("セラピストを選択してください", "error"); return; }
+    setIssuing(true);
+    try {
+      if (type === "contract") {
+        generateContractCertificate(getStore(), getTh(selected));
+      } else {
+        const payment = await fetchPayment(selected.id);
+        if (type === "payment") generatePaymentCertificate(getStore(), getTh(selected), payment);
+        else generateTransactionCertificate(getStore(), getTh(selected), payment);
+      }
+      toast.show("証明書を発行しました", "success");
+    } catch { toast.show("発行に失敗しました", "error"); }
+    setIssuing(false);
+  };
+
+  const statusMap: Record<string, { label: string; color: string }> = {
+    active: { label: "稼働中", color: "#22c55e" },
+    inactive: { label: "休止中", color: "#f59e0b" },
+    retired: { label: "退職", color: "#888780" },
+  };
+
+  return (
+    <div style={{ maxWidth: 1000, margin: "0 auto", animation: "fadeIn 0.3s" }}>
+      <div className="flex items-center gap-3 mb-4">
+        <h2 className="text-[16px] font-medium">📄 証明書発行</h2>
+        <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>会社印が必要な書類</span>
+      </div>
+
+      <div className="grid gap-4" style={{ gridTemplateColumns: "320px 1fr" }}>
+        {/* Left: Therapist selector */}
+        <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[11px] font-medium mb-3">セラピストを選択</p>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 名前で検索" className="w-full px-3 py-2 rounded-lg text-[11px] outline-none mb-3 border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+          <div className="space-y-1 overflow-y-auto" style={{ maxHeight: 400 }}>
+            {filtered.map(th => {
+              const st = statusMap[th.status] || statusMap.active;
+              return (
+                <button key={th.id} onClick={() => setSelectedId(th.id)} className="w-full text-left px-3 py-2.5 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: selectedId === th.id ? "#c3a78215" : "transparent", color: T.text, border: `1px solid ${selectedId === th.id ? "#c3a78244" : "transparent"}` }}>
+                  <div>
+                    <span className="font-medium">{th.name}</span>
+                    {th.real_name && th.real_name !== th.name && <span className="ml-2 text-[9px]" style={{ color: T.textMuted }}>({th.real_name})</span>}
+                  </div>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: st.color + "18", color: st.color }}>{st.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right: Certificate actions */}
+        <div className="space-y-4">
+          {selected ? (
+            <>
+              <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-[15px] font-medium">{selected.name}</p>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>{selected.real_name || "本名未登録"} ・ {selected.address || "住所未登録"}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px]" style={{ color: T.textMuted }}>対象年度</span>
+                    <select value={certYear} onChange={e => setCertYear(Number(e.target.value))} className="px-2 py-1 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>
+                      {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}年</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  {/* 在籍証明 */}
+                  <button onClick={() => issue("contract")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#2563eb08", borderColor: "#2563eb30" }}>
+                    <div className="text-[20px] mb-2">📝</div>
+                    <p className="text-[12px] font-medium" style={{ color: "#2563eb" }}>業務委託契約証明書</p>
+                    <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>在籍証明として使用。賃貸契約・保育園申請・就業証明に。</p>
+                  </button>
+                  {/* 報酬支払証明 */}
+                  <button onClick={() => issue("payment")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#06b6d408", borderColor: "#06b6d430" }}>
+                    <div className="text-[20px] mb-2">💰</div>
+                    <p className="text-[12px] font-medium" style={{ color: "#06b6d4" }}>報酬支払証明書</p>
+                    <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>収入証明として使用。ローン審査・クレジットカード申込に。</p>
+                    <p className="text-[8px] mt-2" style={{ color: T.textFaint }}>※ {certYear}年の報酬データを使用</p>
+                  </button>
+                  {/* 取引実績証明 */}
+                  <button onClick={() => issue("transaction")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#7c3aed08", borderColor: "#7c3aed30" }}>
+                    <div className="text-[20px] mb-2">📊</div>
+                    <p className="text-[12px] font-medium" style={{ color: "#7c3aed" }}>取引実績証明書</p>
+                    <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>取引実績の証明。確定申告・融資申請・補助金申請に。</p>
+                    <p className="text-[8px] mt-2" style={{ color: T.textFaint }}>※ {certYear}年の取引データを使用</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* 注意事項 */}
+              <div className="rounded-xl border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+                <p className="text-[11px] font-medium mb-2">⚠️ 証明書発行時の注意</p>
+                <div className="space-y-1">
+                  {[
+                    "発行した証明書には会社の代表印（実印）を押印してください",
+                    "報酬支払証明書・取引実績証明書は清算済みデータを基に作成されます",
+                    "証明書の有効期限は発行日から3ヶ月です",
+                    "ブラウザの印刷機能（Ctrl+P）からPDFとして保存できます",
+                    "本名・住所が未登録の場合は先にセラピスト管理で登録してください",
+                  ].map((t, i) => (
+                    <p key={i} className="text-[10px] flex gap-2" style={{ color: T.textMuted }}>
+                      <span style={{ color: "#c3a782" }}>•</span>{t}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <p className="text-[32px] mb-3">📄</p>
+              <p className="text-[14px] font-medium mb-2">セラピストを選択してください</p>
+              <p className="text-[11px]" style={{ color: T.textMuted }}>左のリストから証明書を発行するセラピストを選択すると、発行できる証明書が表示されます。</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
