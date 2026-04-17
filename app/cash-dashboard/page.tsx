@@ -45,6 +45,30 @@ type Settlement = {
 type Replenish = { id: number; room_id: number; date: string; amount: number };
 type ExpenseRec = { id: number; date: string; amount: number; type: string; category: string };
 
+type ToyohashiMove = {
+  id: number;
+  movement_date: string;
+  movement_type: "withdraw" | "refund" | "initial" | "adjustment";
+  amount: number;
+  therapist_id: number | null;
+  recorded_by_name: string;
+  note: string;
+  created_at: string;
+};
+
+type BalanceCheck = {
+  id: number;
+  check_date: string;
+  manager_safe_actual: number | null;
+  staff_safe_actual: number | null;
+  toyohashi_reserve_actual: number | null;
+  checked_by_name: string;
+  note: string;
+  created_at: string;
+};
+
+type Therapist = { id: number; name: string };
+
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
 export default function CashDashboard() {
@@ -66,6 +90,31 @@ export default function CashDashboard() {
   const [atmAmount, setAtmAmount] = useState("");
   const [atmNote, setAtmNote] = useState("");
   const [atmSaving, setAtmSaving] = useState(false);
+
+  // 豊橋予備金データ
+  const [toyohashiMoves, setToyohashiMoves] = useState<ToyohashiMove[]>([]);
+  const [therapists, setTherapists] = useState<Therapist[]>([]);
+
+  // 豊橋予備金モーダル
+  const [showReserveModal, setShowReserveModal] = useState(false);
+  const [reserveType, setReserveType] = useState<"withdraw" | "refund" | "initial" | "adjustment">("withdraw");
+  const [reserveDate, setReserveDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [reserveAmount, setReserveAmount] = useState("");
+  const [reserveTherapistId, setReserveTherapistId] = useState<number | null>(null);
+  const [reserveNote, setReserveNote] = useState("");
+  const [reserveSaving, setReserveSaving] = useState(false);
+
+  // 金庫残高確認データ
+  const [balanceChecks, setBalanceChecks] = useState<BalanceCheck[]>([]);
+
+  // 金庫残高確認モーダル
+  const [showCheckModal, setShowCheckModal] = useState(false);
+  const [checkDate, setCheckDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [checkManagerSafe, setCheckManagerSafe] = useState("");
+  const [checkStaffSafe, setCheckStaffSafe] = useState("");
+  const [checkToyohashi, setCheckToyohashi] = useState("");
+  const [checkNote, setCheckNote] = useState("");
+  const [checkSaving, setCheckSaving] = useState(false);
 
   // 認証・権限チェック
   useEffect(() => {
@@ -100,6 +149,18 @@ export default function CashDashboard() {
       // 経費・収入
       const { data: exps } = await supabase.from("expenses").select("id,date,amount,type,category");
       if (exps) setExpensesAll(exps as ExpenseRec[]);
+
+      // 豊橋予備金取引履歴
+      const { data: toyos } = await supabase.from("toyohashi_reserve_movements").select("*").order("movement_date", { ascending: false });
+      if (toyos) setToyohashiMoves(toyos as ToyohashiMove[]);
+
+      // 金庫残高確認履歴
+      const { data: checks } = await supabase.from("cash_balance_checks").select("*").order("check_date", { ascending: false });
+      if (checks) setBalanceChecks(checks as BalanceCheck[]);
+
+      // セラピスト一覧
+      const { data: ths } = await supabase.from("therapists").select("id,name").order("name");
+      if (ths) setTherapists(ths as Therapist[]);
     } finally {
       setLoading(false);
     }
@@ -171,6 +232,71 @@ export default function CashDashboard() {
     fetchData();
   };
 
+  // 豊橋予備金の動き保存
+  const saveReserveMovement = async () => {
+    const amt = parseInt(reserveAmount.replace(/,/g, ""));
+    if (!amt || amt <= 0) { alert("金額を入力してください"); return; }
+    if (reserveType === "withdraw" && !reserveTherapistId) { alert("セラピストを選択してください"); return; }
+    setReserveSaving(true);
+    try {
+      await supabase.from("toyohashi_reserve_movements").insert({
+        movement_date: reserveDate,
+        movement_type: reserveType,
+        amount: amt,
+        therapist_id: reserveType === "withdraw" ? reserveTherapistId : null,
+        recorded_by_name: activeStaff?.name || "",
+        note: reserveNote.trim(),
+      });
+      setReserveAmount(""); setReserveNote(""); setReserveTherapistId(null);
+      setShowReserveModal(false);
+      fetchData();
+    } finally {
+      setReserveSaving(false);
+    }
+  };
+
+  const deleteReserveMovement = async (id: number) => {
+    if (!confirm("この記録を削除しますか？")) return;
+    await supabase.from("toyohashi_reserve_movements").delete().eq("id", id);
+    fetchData();
+  };
+
+  // 金庫残高確認の保存
+  const saveBalanceCheck = async () => {
+    const mgr = checkManagerSafe.trim() ? parseInt(checkManagerSafe.replace(/,/g, "")) : null;
+    const stf = checkStaffSafe.trim() ? parseInt(checkStaffSafe.replace(/,/g, "")) : null;
+    const toy = checkToyohashi.trim() ? parseInt(checkToyohashi.replace(/,/g, "")) : null;
+    if (mgr === null && stf === null && toy === null) { alert("少なくとも1つの金庫の実測値を入力してください"); return; }
+    setCheckSaving(true);
+    try {
+      await supabase.from("cash_balance_checks").insert({
+        check_date: checkDate,
+        manager_safe_actual: mgr,
+        staff_safe_actual: stf,
+        toyohashi_reserve_actual: toy,
+        checked_by_name: activeStaff?.name || "",
+        note: checkNote.trim(),
+      });
+      setCheckManagerSafe(""); setCheckStaffSafe(""); setCheckToyohashi(""); setCheckNote("");
+      setShowCheckModal(false);
+      fetchData();
+    } finally {
+      setCheckSaving(false);
+    }
+  };
+
+  const deleteBalanceCheck = async (id: number) => {
+    if (!confirm("この確認記録を削除しますか？")) return;
+    await supabase.from("cash_balance_checks").delete().eq("id", id);
+    fetchData();
+  };
+
+  // セラピスト名取得
+  const getThName = (id: number | null) => {
+    if (!id) return "";
+    return therapists.find(t => t.id === id)?.name || `ID:${id}`;
+  };
+
   // ─── 残高計算 ───
   // PayPay銀行残高（最新の銀行取引のbalance）
   const bankBalance = latestBankTx?.balance || 0;
@@ -214,8 +340,38 @@ export default function CashDashboard() {
   const unverifiedAtms = atmDeposits.length - verifiedAtms;
   const totalAtmAmount = atmDeposits.reduce((s, a) => s + a.amount, 0);
 
-  // 合計資産
-  const totalAssets = bankBalance + officeCashBalance + safeUncollected + roomUncollected;
+  // 豊橋予備金残高計算
+  // 残高 = initial + refund + adjustment(正数) - withdraw - adjustment(負数)
+  // adjustment は正負どちらもありうるが、今回は正数で記録し、amount に符号を持たせない設計
+  // 代わりに、typeで判定: initial/refund → 増、withdraw → 減、adjustment → note参照
+  // シンプル化: adjustment は「実測値に合わせる」調整なので、数値としては増減どちらも可能にするため
+  // 実際は note に方向を書く運用でOK。デフォルトは加算扱い。
+  const toyohashiBalance = toyohashiMoves.reduce((sum, m) => {
+    if (m.movement_type === "withdraw") return sum - m.amount;
+    // initial, refund, adjustment は加算
+    return sum + m.amount;
+  }, 0);
+
+  // 今月の立替・補充
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const thisMonthMoves = toyohashiMoves.filter(m => m.movement_date.startsWith(thisMonth));
+  const monthlyWithdraw = thisMonthMoves.filter(m => m.movement_type === "withdraw").reduce((s, m) => s + m.amount, 0);
+  const monthlyRefund = thisMonthMoves.filter(m => m.movement_type === "refund").reduce((s, m) => s + m.amount, 0);
+
+  // 最新の金庫残高確認（各金庫ごと最新）
+  const latestManagerCheck = balanceChecks.find(c => c.manager_safe_actual !== null);
+  const latestStaffCheck = balanceChecks.find(c => c.staff_safe_actual !== null);
+  const latestToyohashiCheck = balanceChecks.find(c => c.toyohashi_reserve_actual !== null);
+
+  // 実測値との差額
+  const managerDiff = latestManagerCheck?.manager_safe_actual !== null && latestManagerCheck?.manager_safe_actual !== undefined
+    ? latestManagerCheck.manager_safe_actual - officeCashBalance : null;
+  const toyohashiDiff = latestToyohashiCheck?.toyohashi_reserve_actual !== null && latestToyohashiCheck?.toyohashi_reserve_actual !== undefined
+    ? latestToyohashiCheck.toyohashi_reserve_actual - toyohashiBalance : null;
+
+  // 合計資産（豊橋予備金を追加）
+  const totalAssets = bankBalance + officeCashBalance + toyohashiBalance + safeUncollected + roomUncollected;
 
   if (!activeStaff || !canAccessCashDashboard) {
     return (
@@ -259,36 +415,70 @@ export default function CashDashboard() {
               <p className="text-[11px] mb-1" style={{ color: T.textSub }}>💰 チョップの現在の全資産</p>
               <p className="text-[32px] font-medium" style={{ color: "#c3a782", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAssets)}</p>
               <p className="text-[10px] mt-1" style={{ color: T.textFaint }}>
-                PayPay銀行 + 事務所残金 + 金庫未回収 + ルーム未回収
+                PayPay銀行 + 管理者金庫 + 豊橋予備金 + 金庫未回収 + ルーム未回収
               </p>
             </div>
 
-            {/* 4つの財布 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* 5つの財布 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               {/* PayPay銀行 */}
               <div className="rounded-xl p-4" style={cardStyle}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px]" style={{ color: "#4a7ca0" }}>🏦 PayPay銀行</p>
                 </div>
-                <p className="text-[20px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(bankBalance)}</p>
+                <p className="text-[18px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(bankBalance)}</p>
                 {latestBankTx ? (
                   <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>
-                    最新: {latestBankTx.transaction_date.slice(5)} / {latestBankTx.description.slice(0, 20)}
+                    最新: {latestBankTx.transaction_date.slice(5)}
                   </p>
                 ) : (
-                  <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>銀行取込データなし</p>
+                  <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>銀行取込なし</p>
                 )}
               </div>
 
-              {/* 事務所残金（管理者金庫） */}
+              {/* 管理者金庫 */}
               <div className="rounded-xl p-4" style={cardStyle}>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px]" style={{ color: "#f59e0b" }}>🗄 管理者金庫（事務所残金）</p>
+                  <p className="text-[11px]" style={{ color: "#f59e0b" }}>🗄 管理者金庫</p>
                 </div>
-                <p className="text-[20px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(officeCashBalance)}</p>
-                <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>
-                  累積収支 - ATM預入合計
-                </p>
+                <p className="text-[18px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(officeCashBalance)}</p>
+                {latestManagerCheck ? (
+                  <div className="text-[9px] mt-2">
+                    <p style={{ color: T.textFaint }}>
+                      実測: {fmt(latestManagerCheck.manager_safe_actual || 0)} ({latestManagerCheck.check_date.slice(5)})
+                    </p>
+                    {managerDiff !== null && Math.abs(managerDiff) > 0 && (
+                      <p style={{ color: Math.abs(managerDiff) > 10000 ? "#c45555" : "#f59e0b" }}>
+                        差額: {managerDiff > 0 ? "+" : ""}{fmt(managerDiff)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>実測未確認</p>
+                )}
+              </div>
+
+              {/* 豊橋予備金 */}
+              <div className="rounded-xl p-4" style={cardStyle}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px]" style={{ color: "#d4687e" }}>🏛 豊橋予備金</p>
+                </div>
+                <p className="text-[18px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(toyohashiBalance)}</p>
+                <div className="text-[9px] mt-2" style={{ color: T.textFaint }}>
+                  {monthlyWithdraw > 0 && <p>今月立替: -{fmt(monthlyWithdraw)}</p>}
+                  {monthlyRefund > 0 && <p>今月補充: +{fmt(monthlyRefund)}</p>}
+                  {monthlyWithdraw === 0 && monthlyRefund === 0 && <p>今月の動きなし</p>}
+                  {latestToyohashiCheck && (
+                    <p className="mt-1">
+                      実測: {fmt(latestToyohashiCheck.toyohashi_reserve_actual || 0)}
+                      {toyohashiDiff !== null && Math.abs(toyohashiDiff) > 0 && (
+                        <span style={{ color: Math.abs(toyohashiDiff) > 5000 ? "#c45555" : "#f59e0b", marginLeft: 4 }}>
+                          ({toyohashiDiff > 0 ? "+" : ""}{fmt(toyohashiDiff)})
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* 金庫未回収 */}
@@ -296,7 +486,7 @@ export default function CashDashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px]" style={{ color: "#a855f7" }}>🔐 金庫未回収</p>
                 </div>
-                <p className="text-[20px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(safeUncollected)}</p>
+                <p className="text-[18px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(safeUncollected)}</p>
                 <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>
                   {safeUncollectedSettlements.length}件の未回収
                 </p>
@@ -307,7 +497,7 @@ export default function CashDashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px]" style={{ color: "#22c55e" }}>🗄 ルーム未回収</p>
                 </div>
-                <p className="text-[20px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(roomUncollected)}</p>
+                <p className="text-[18px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(roomUncollected)}</p>
                 <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>
                   {uncollectedSettlements.length}件の未回収
                 </p>
@@ -319,6 +509,12 @@ export default function CashDashboard() {
               <button onClick={() => setShowAtmModal(true)} className="px-4 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer" style={{ backgroundColor: "#4a7ca0", color: "white", border: "none" }}>
                 🏦 ATM預入を記録
               </button>
+              <button onClick={() => setShowReserveModal(true)} className="px-4 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer" style={{ backgroundColor: "#d4687e", color: "white", border: "none" }}>
+                🏛 豊橋予備金の動きを記録
+              </button>
+              <button onClick={() => setShowCheckModal(true)} className="px-4 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer" style={{ backgroundColor: "#f59e0b", color: "white", border: "none" }}>
+                📋 金庫残高確認
+              </button>
               <button onClick={reVerifyAll} className="px-4 py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>
                 🔄 銀行側との照合を再実行
               </button>
@@ -326,6 +522,109 @@ export default function CashDashboard() {
               <Link href="/dashboard" className="px-4 py-2.5 rounded-xl text-[12px] cursor-pointer inline-flex items-center gap-1" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, textDecoration: "none" }}>
                 📋 日次集計画面を開く →
               </Link>
+            </div>
+
+            {/* 豊橋予備金 動き履歴 */}
+            <div className="rounded-xl overflow-hidden" style={cardStyle}>
+              <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+                <div>
+                  <span className="text-[12px] font-medium" style={{ color: "#d4687e" }}>🏛 豊橋予備金 動き履歴</span>
+                  <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>
+                    立替 {toyohashiMoves.filter(m => m.movement_type === "withdraw").length}件 / 補充 {toyohashiMoves.filter(m => m.movement_type === "refund").length}件 / 現在残高 {fmt(toyohashiBalance)}
+                  </p>
+                </div>
+              </div>
+              <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                <table className="w-full" style={{ fontSize: 11 }}>
+                  <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                    <tr style={{ color: T.textSub, fontSize: 10 }}>
+                      <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>日付</th>
+                      <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 80 }}>種別</th>
+                      <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: `1px solid ${T.border}` }}>金額</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>セラピスト</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>記録者</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>メモ</th>
+                      <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 60 }}>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {toyohashiMoves.length === 0 && <tr><td colSpan={7} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>豊橋予備金の動き記録がありません。「🏛 豊橋予備金の動きを記録」から初期残高を設定してください。</td></tr>}
+                    {toyohashiMoves.map((m, i) => {
+                      const typeLabel: Record<string, {label: string; color: string; sign: string}> = {
+                        withdraw: { label: "立替", color: "#c45555", sign: "-" },
+                        refund: { label: "補充", color: "#22c55e", sign: "+" },
+                        initial: { label: "初期", color: "#4a7ca0", sign: "+" },
+                        adjustment: { label: "調整", color: "#f59e0b", sign: "+" },
+                      };
+                      const t = typeLabel[m.movement_type] || typeLabel.withdraw;
+                      return (
+                        <tr key={m.id} style={{ borderTop: `1px solid ${T.border}`, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                          <td style={{ padding: "6px 10px", fontVariantNumeric: "tabular-nums" }}>{m.movement_date}</td>
+                          <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                            <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: t.color + "18", color: t.color }}>{t.label}</span>
+                          </td>
+                          <td style={{ padding: "6px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: t.color }}>{t.sign}{fmt(m.amount)}</td>
+                          <td style={{ padding: "6px 10px", color: T.textMuted }}>{getThName(m.therapist_id) || "—"}</td>
+                          <td style={{ padding: "6px 10px", color: T.textMuted }}>{m.recorded_by_name}</td>
+                          <td style={{ padding: "6px 10px", color: T.textMuted, fontSize: 10 }}>{m.note || "—"}</td>
+                          <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                            <button onClick={() => deleteReserveMovement(m.id)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 金庫残高確認履歴 */}
+            <div className="rounded-xl overflow-hidden" style={cardStyle}>
+              <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+                <div>
+                  <span className="text-[12px] font-medium" style={{ color: "#f59e0b" }}>📋 金庫残高確認履歴</span>
+                  <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>
+                    実測値と理論値のズレをチェックする記録 (全{balanceChecks.length}件)
+                  </p>
+                </div>
+              </div>
+              <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                <table className="w-full" style={{ fontSize: 11 }}>
+                  <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                    <tr style={{ color: T.textSub, fontSize: 10 }}>
+                      <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>確認日</th>
+                      <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: `1px solid ${T.border}` }}>🗄 管理者金庫</th>
+                      <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: `1px solid ${T.border}` }}>🗄 スタッフ金庫</th>
+                      <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: `1px solid ${T.border}` }}>🏛 豊橋予備金</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>確認者</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>メモ</th>
+                      <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 60 }}>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {balanceChecks.length === 0 && <tr><td colSpan={7} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>金庫残高確認の記録がありません。「📋 金庫残高確認」から実測値を入力してください。</td></tr>}
+                    {balanceChecks.map((c, i) => (
+                      <tr key={c.id} style={{ borderTop: `1px solid ${T.border}`, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                        <td style={{ padding: "6px 10px", fontVariantNumeric: "tabular-nums" }}>{c.check_date}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: c.manager_safe_actual !== null ? T.text : T.textFaint }}>
+                          {c.manager_safe_actual !== null ? fmt(c.manager_safe_actual) : "—"}
+                        </td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: c.staff_safe_actual !== null ? T.text : T.textFaint }}>
+                          {c.staff_safe_actual !== null ? fmt(c.staff_safe_actual) : "—"}
+                        </td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: c.toyohashi_reserve_actual !== null ? T.text : T.textFaint }}>
+                          {c.toyohashi_reserve_actual !== null ? fmt(c.toyohashi_reserve_actual) : "—"}
+                        </td>
+                        <td style={{ padding: "6px 10px", color: T.textMuted }}>{c.checked_by_name}</td>
+                        <td style={{ padding: "6px 10px", color: T.textMuted, fontSize: 10 }}>{c.note || "—"}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                          <button onClick={() => deleteBalanceCheck(c.id)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* ATM預入履歴 */}
@@ -453,6 +752,141 @@ export default function CashDashboard() {
               <button onClick={() => setShowAtmModal(false)} disabled={atmSaving} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>キャンセル</button>
               <button onClick={saveAtmDeposit} disabled={atmSaving || !atmAmount} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer font-medium disabled:opacity-50" style={{ backgroundColor: "#4a7ca0", color: "white", border: "none" }}>
                 {atmSaving ? "保存中..." : "💾 保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 豊橋予備金モーダル */}
+      {showReserveModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !reserveSaving && setShowReserveModal(false)}>
+          <div className="rounded-2xl p-5 w-full max-w-md" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
+            <p className="text-[14px] font-medium mb-1">🏛 豊橋予備金の動きを記録</p>
+            <p className="text-[10px] mb-4" style={{ color: T.textFaint }}>現在残高: {fmt(toyohashiBalance)}</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] mb-2" style={{ color: T.textSub }}>種別</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setReserveType("withdraw")} className="py-2 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: reserveType === "withdraw" ? "#c4555518" : T.cardAlt, color: reserveType === "withdraw" ? "#c45555" : T.textSub, border: `1px solid ${reserveType === "withdraw" ? "#c45555" : T.border}`, fontWeight: reserveType === "withdraw" ? 500 : 400 }}>
+                    📤 立替（予備金→セラピスト）
+                  </button>
+                  <button onClick={() => setReserveType("refund")} className="py-2 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: reserveType === "refund" ? "#22c55e18" : T.cardAlt, color: reserveType === "refund" ? "#22c55e" : T.textSub, border: `1px solid ${reserveType === "refund" ? "#22c55e" : T.border}`, fontWeight: reserveType === "refund" ? 500 : 400 }}>
+                    📥 補充（スタッフ金庫→予備金）
+                  </button>
+                  <button onClick={() => setReserveType("initial")} className="py-2 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: reserveType === "initial" ? "#4a7ca018" : T.cardAlt, color: reserveType === "initial" ? "#4a7ca0" : T.textSub, border: `1px solid ${reserveType === "initial" ? "#4a7ca0" : T.border}`, fontWeight: reserveType === "initial" ? 500 : 400 }}>
+                    🎯 初期残高設定
+                  </button>
+                  <button onClick={() => setReserveType("adjustment")} className="py-2 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: reserveType === "adjustment" ? "#f59e0b18" : T.cardAlt, color: reserveType === "adjustment" ? "#f59e0b" : T.textSub, border: `1px solid ${reserveType === "adjustment" ? "#f59e0b" : T.border}`, fontWeight: reserveType === "adjustment" ? 500 : 400 }}>
+                    📝 棚卸調整
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>日付</label>
+                <input type="date" value={reserveDate} onChange={(e) => setReserveDate(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+              </div>
+
+              <div>
+                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>金額（円）</label>
+                <input type="text" inputMode="numeric" value={reserveAmount} onChange={(e) => setReserveAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="例: 60000" className="w-full px-3 py-2 rounded-lg text-[16px] outline-none font-medium" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontVariantNumeric: "tabular-nums" }} />
+                {reserveAmount && <p className="text-[10px] mt-1" style={{ color: T.textSub }}>{fmt(parseInt(reserveAmount))}</p>}
+              </div>
+
+              {reserveType === "withdraw" && (
+                <div>
+                  <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト <span style={{ color: "#c45555" }}>*必須</span></label>
+                  <select value={reserveTherapistId || ""} onChange={(e) => setReserveTherapistId(e.target.value ? parseInt(e.target.value) : null)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }}>
+                    <option value="">— 選択してください —</option>
+                    {therapists.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>メモ（任意）</label>
+                <input type="text" value={reserveNote} onChange={(e) => setReserveNote(e.target.value)} placeholder={reserveType === "withdraw" ? "例: カード売上のため立替" : reserveType === "refund" ? "例: まとめて補充" : ""} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+              </div>
+
+              <div className="rounded-lg p-3 text-[10px]" style={{ backgroundColor: "#d4687e10", border: "1px solid #d4687e33", color: T.textSub }}>
+                💡 {reserveType === "withdraw" && "セラピストへカード/PayPay売上分を現金で立替た記録。後日スタッフ金庫から予備金に補充する時に「補充」で記録してください。"}
+                {reserveType === "refund" && "スタッフ金庫から豊橋予備金へ補充した記録。立替と補充の金額が合えば予備金残高は元に戻ります。"}
+                {reserveType === "initial" && "運用開始時の初期残高を設定。1回だけ記録すればOK。"}
+                {reserveType === "adjustment" && "棚卸で実測値に合わせる調整。差額の原因をメモに記載してください。"}
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4 justify-end">
+              <button onClick={() => setShowReserveModal(false)} disabled={reserveSaving} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>キャンセル</button>
+              <button onClick={saveReserveMovement} disabled={reserveSaving || !reserveAmount || (reserveType === "withdraw" && !reserveTherapistId)} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer font-medium disabled:opacity-50" style={{ backgroundColor: "#d4687e", color: "white", border: "none" }}>
+                {reserveSaving ? "保存中..." : "💾 保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 金庫残高確認モーダル */}
+      {showCheckModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !checkSaving && setShowCheckModal(false)}>
+          <div className="rounded-2xl p-5 w-full max-w-lg" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
+            <p className="text-[14px] font-medium mb-1">📋 金庫残高確認</p>
+            <p className="text-[10px] mb-4" style={{ color: T.textFaint }}>実測値を入力。確認した金庫だけ入力すればOK（空欄は記録されません）</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>確認日</label>
+                <input type="date" value={checkDate} onChange={(e) => setCheckDate(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+              </div>
+
+              <div className="rounded-lg p-3" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px]" style={{ color: "#f59e0b" }}>🗄 管理者金庫</label>
+                  <span className="text-[9px]" style={{ color: T.textFaint }}>理論値: {fmt(officeCashBalance)}</span>
+                </div>
+                <input type="text" inputMode="numeric" value={checkManagerSafe} onChange={(e) => setCheckManagerSafe(e.target.value.replace(/[^0-9]/g, ""))} placeholder="実測値（入力不要ならスキップ）" className="w-full px-3 py-2 rounded-lg text-[14px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}`, fontVariantNumeric: "tabular-nums" }} />
+                {checkManagerSafe && (
+                  <p className="text-[10px] mt-1" style={{ color: T.textSub }}>
+                    {fmt(parseInt(checkManagerSafe))} / 差額 {(parseInt(checkManagerSafe) - officeCashBalance) > 0 ? "+" : ""}{fmt(parseInt(checkManagerSafe) - officeCashBalance)}
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-lg p-3" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px]" style={{ color: "#22c55e" }}>🗄 スタッフ金庫</label>
+                </div>
+                <input type="text" inputMode="numeric" value={checkStaffSafe} onChange={(e) => setCheckStaffSafe(e.target.value.replace(/[^0-9]/g, ""))} placeholder="実測値（入力不要ならスキップ）" className="w-full px-3 py-2 rounded-lg text-[14px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}`, fontVariantNumeric: "tabular-nums" }} />
+                {checkStaffSafe && (
+                  <p className="text-[10px] mt-1" style={{ color: T.textSub }}>{fmt(parseInt(checkStaffSafe))}</p>
+                )}
+              </div>
+
+              <div className="rounded-lg p-3" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px]" style={{ color: "#d4687e" }}>🏛 豊橋予備金</label>
+                  <span className="text-[9px]" style={{ color: T.textFaint }}>理論値: {fmt(toyohashiBalance)}</span>
+                </div>
+                <input type="text" inputMode="numeric" value={checkToyohashi} onChange={(e) => setCheckToyohashi(e.target.value.replace(/[^0-9]/g, ""))} placeholder="実測値（入力不要ならスキップ）" className="w-full px-3 py-2 rounded-lg text-[14px] outline-none" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}`, fontVariantNumeric: "tabular-nums" }} />
+                {checkToyohashi && (
+                  <p className="text-[10px] mt-1" style={{ color: T.textSub }}>
+                    {fmt(parseInt(checkToyohashi))} / 差額 {(parseInt(checkToyohashi) - toyohashiBalance) > 0 ? "+" : ""}{fmt(parseInt(checkToyohashi) - toyohashiBalance)}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>メモ（任意）</label>
+                <input type="text" value={checkNote} onChange={(e) => setCheckNote(e.target.value)} placeholder="例: 月末棚卸" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4 justify-end">
+              <button onClick={() => setShowCheckModal(false)} disabled={checkSaving} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>キャンセル</button>
+              <button onClick={saveBalanceCheck} disabled={checkSaving || (!checkManagerSafe && !checkStaffSafe && !checkToyohashi)} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer font-medium disabled:opacity-50" style={{ backgroundColor: "#f59e0b", color: "white", border: "none" }}>
+                {checkSaving ? "保存中..." : "💾 保存"}
               </button>
             </div>
           </div>
