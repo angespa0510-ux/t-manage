@@ -380,7 +380,7 @@ export default function CorporatePage() {
           {/* ── 導入企業ロゴ ── */}
           <div style={{ marginTop:56,textAlign:"center" }}>
             <p className={`sh3 ${show("stats")?"on":""}`} style={{ fontSize:11,fontWeight:600,color:"#475569",letterSpacing:2,marginBottom:28 }}>TRUSTED BY</p>
-            <div style={{ display:"flex",flexWrap:"wrap",justifyContent:"center",alignItems:"center",gap:"28px 40px" }}>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"20px 24px",maxWidth:900,margin:"0 auto" }}>
               {[
                 { name:"東海フーズ", sub:"TOKAI FOODS", logo:"/corporate/logo-tokai.png" },
                 { name:"サクラメディカル", sub:"SAKURA MEDICAL", logo:"/corporate/logo-sakura.png" },
