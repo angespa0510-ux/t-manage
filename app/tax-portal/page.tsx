@@ -14,6 +14,40 @@ type Store = { id: number; name: string; company_name?: string; fiscal_month?: n
 type Therapist = { id: number; name: string; real_name?: string; has_withholding?: boolean; has_invoice?: boolean; therapist_invoice_number?: string; transport_fee?: number; address?: string };
 type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
 type TaxDoc = { id: number; category: string; file_name: string; file_url: string; file_path: string; file_size: number; fiscal_period: string; uploaded_by_name: string; notes: string; created_at: string };
+type TaxTaskStatus = { id: number; task_id: string; fiscal_year: number; status: string; note: string; updated_by_name: string; updated_at: string };
+type TaxTask = { id: string; timing: string; month: number; title: string; description: string; assignee: "税理士" | "会社" | "社労士" | "共同"; deadline: string; category: string; importance: "high" | "medium" | "low" };
+
+// 3月決算法人の年間税務タスクリスト
+const TAX_TASKS: TaxTask[] = [
+  // 毎月の業務
+  { id: "monthly-payroll", timing: "毎月", month: 0, title: "給与計算・給与振込", description: "スタッフ・社員の給与計算と振込処理", assignee: "会社", deadline: "月末", category: "給与", importance: "high" },
+  { id: "monthly-shakai", timing: "毎月", month: 0, title: "社会保険料納付", description: "健康保険・厚生年金の納付（翌月末）", assignee: "会社", deadline: "翌月末", category: "社保", importance: "high" },
+  { id: "monthly-trial", timing: "毎月", month: 0, title: "月次試算表作成", description: "前月分の試算表を税理士に提出", assignee: "会社", deadline: "翌月15日目安", category: "経理", importance: "medium" },
+  // 1月
+  { id: "jan-withhold-h2", timing: "1月", month: 1, title: "源泉所得税納付（納特・下半期）", description: "7〜12月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "1/20", category: "源泉", importance: "high" },
+  { id: "jan-shiharai-chosho", timing: "1月", month: 1, title: "法定調書合計表・支払調書提出", description: "セラピスト等への支払調書と法定調書を税務署に提出", assignee: "税理士", deadline: "1/31", category: "源泉", importance: "high" },
+  { id: "jan-kyuyo-hokoku", timing: "1月", month: 1, title: "給与支払報告書提出", description: "社員の前年給与を市区町村に報告（住民税用）", assignee: "税理士", deadline: "1/31", category: "住民税", importance: "high" },
+  { id: "jan-shoukyaku", timing: "1月", month: 1, title: "償却資産税申告", description: "該当資産がある場合、市区町村に申告", assignee: "税理士", deadline: "1/31", category: "固定資産", importance: "medium" },
+  // 3月
+  { id: "mar-tanaoroshi", timing: "3月末", month: 3, title: "棚卸実施", description: "3/31時点の在庫棚卸し", assignee: "会社", deadline: "3/31", category: "決算", importance: "high" },
+  { id: "mar-kessan", timing: "3月末", month: 3, title: "決算日（期末）", description: "期末日 - 決算整理スタート", assignee: "共同", deadline: "3/31", category: "決算", importance: "high" },
+  { id: "mar-kotei", timing: "3〜4月", month: 3, title: "固定資産台帳更新", description: "減価償却計算と台帳更新", assignee: "税理士", deadline: "4月上旬", category: "固定資産", importance: "high" },
+  // 5月
+  { id: "may-houjinzei", timing: "5月末", month: 5, title: "法人税・消費税・住民税・事業税申告", description: "決算から2ヶ月以内に確定申告・納税（最重要）", assignee: "税理士", deadline: "5/31", category: "法人税", importance: "high" },
+  { id: "may-kessan-doc", timing: "5月末", month: 5, title: "決算書・申告書の完成・保管", description: "完成した決算書・申告書を書類庫にアップ", assignee: "税理士", deadline: "5/31", category: "決算", importance: "high" },
+  { id: "may-sokai", timing: "5月", month: 5, title: "社員総会・期末報告", description: "合同会社の場合は年次報告", assignee: "会社", deadline: "5月中", category: "その他", importance: "medium" },
+  // 6月
+  { id: "jun-juminzei", timing: "6月", month: 6, title: "住民税特別徴収 年度切替", description: "新年度の住民税を給与から天引き開始", assignee: "会社", deadline: "6月給与", category: "住民税", importance: "high" },
+  { id: "jun-roudou", timing: "6〜7月", month: 6, title: "労働保険年度更新", description: "労災・雇用保険の概算・確定申告", assignee: "社労士", deadline: "7/10", category: "労保", importance: "high" },
+  // 7月
+  { id: "jul-withhold-h1", timing: "7月", month: 7, title: "源泉所得税納付（納特・上半期）", description: "1〜6月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "7/10", category: "源泉", importance: "high" },
+  { id: "jul-santei", timing: "7月", month: 7, title: "社会保険算定基礎届提出", description: "標準報酬月額の定時決定届", assignee: "社労士", deadline: "7/10", category: "社保", importance: "high" },
+  // 11月
+  { id: "nov-chukan", timing: "11月", month: 11, title: "法人税・消費税中間申告", description: "前期税額が一定以上なら中間申告・納付", assignee: "税理士", deadline: "11/30", category: "法人税", importance: "high" },
+  // 12月
+  { id: "dec-nenchou", timing: "12月", month: 12, title: "年末調整", description: "社員の年末調整処理", assignee: "税理士", deadline: "12月給与", category: "源泉", importance: "high" },
+  { id: "dec-shoyo", timing: "12月", month: 12, title: "賞与計算・源泉徴収", description: "冬季賞与の計算と源泉処理", assignee: "会社", deadline: "12月支給時", category: "給与", importance: "medium" },
+];
 
 const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "借入・融資", "保険", "納税通知", "その他"];
 
@@ -129,6 +163,11 @@ export default function TaxPortal() {
   // 会計ソフト出力形式
   const [accFormat, setAccFormat] = useState<AccFormat>("general");
 
+  // 年間スケジュール
+  const [taskStatuses, setTaskStatuses] = useState<TaxTaskStatus[]>([]);
+  const [scheduleFilter, setScheduleFilter] = useState<string>("all"); // all/税理士/会社/社労士/共同
+  const [scheduleMonthFilter, setScheduleMonthFilter] = useState<string>("all");
+
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
   // 認証・権限チェック
@@ -180,6 +219,41 @@ export default function TaxPortal() {
     if (data) setTaxDocs(data);
   }, []);
   useEffect(() => { if (canAccessTaxPortal) fetchDocs(); }, [fetchDocs, canAccessTaxPortal]);
+
+  // 期の算出（3月決算 = 4月始まり）
+  const getCurrentFiscalYear = useCallback(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    return currentMonth > fiscalMonth ? currentYear + 1 : currentYear;
+  }, [fiscalMonth]);
+
+  // タスクステータスのfetch（選択期分）
+  const fetchTaskStatuses = useCallback(async () => {
+    const fy = getCurrentFiscalYear();
+    const { data } = await supabase.from("tax_task_statuses").select("*").eq("fiscal_year", fy);
+    if (data) setTaskStatuses(data);
+  }, [getCurrentFiscalYear]);
+  useEffect(() => { if (canAccessTaxPortal) fetchTaskStatuses(); }, [fetchTaskStatuses, canAccessTaxPortal]);
+
+  // タスクステータス取得
+  const getTaskStatus = (taskId: string): string => {
+    const fy = getCurrentFiscalYear();
+    return taskStatuses.find(s => s.task_id === taskId && s.fiscal_year === fy)?.status || "pending";
+  };
+
+  // タスクステータス変更
+  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    if (!activeStaff) return;
+    const fy = getCurrentFiscalYear();
+    const existing = taskStatuses.find(s => s.task_id === taskId && s.fiscal_year === fy);
+    if (existing) {
+      await supabase.from("tax_task_statuses").update({ status: newStatus, updated_by_name: activeStaff.name, updated_at: new Date().toISOString() }).eq("id", existing.id);
+    } else {
+      await supabase.from("tax_task_statuses").insert({ task_id: taskId, fiscal_year: fy, status: newStatus, updated_by_name: activeStaff.name });
+    }
+    fetchTaskStatuses();
+  };
 
   // 書類アップロード
   const uploadDoc = async (file: File) => {
@@ -409,14 +483,6 @@ export default function TaxPortal() {
   const totalWithholding = therapistPayroll.reduce((s, p) => s + p.tax, 0);
   const totalInvoiceDed = therapistPayroll.reduce((s, p) => s + p.invoiceDed, 0);
 
-  // 期の算出（3月決算 = 4月始まり）
-  const getCurrentFiscalYear = () => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    return currentMonth > fiscalMonth ? currentYear + 1 : currentYear;
-  };
-
   if (!activeStaff || !canAccessTaxPortal) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.bg, color: T.text }}>
@@ -544,8 +610,8 @@ export default function TaxPortal() {
                 <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 このページについて</p>
                 <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
                   税理士ポータルは税務関連データの共有画面です。税理士の先生・社長・経営責任者のみアクセス可能です。<br/>
-                  月次サマリー・売上・経費・セラピスト支払/源泉徴収・インボイス・書類庫 の6シートと、4形式（汎用・弥生・freee・MFクラウド）のCSV出力が利用可能です。<br/>
-                  Phase 2Cで年間税務スケジュール（3月決算ベース）を実装予定。
+                  月次サマリー・売上・経費・セラピスト支払/源泉徴収・インボイス・年間スケジュール・書類庫 の<strong>7シートすべて実装完了</strong>。<br/>
+                  CSV出力は4形式（汎用・弥生・freee・MFクラウド）に対応、会計ソフトが変わっても柔軟に対応できます。
                 </p>
               </div>
             </div>
@@ -1075,15 +1141,135 @@ export default function TaxPortal() {
             </div>
           )}
 
-          {/* ── Sheet: 年間スケジュール（Phase 2C） ── */}
+          {/* ── Sheet: 年間税務スケジュール ── */}
           {sheet === "schedule" && (
-            <div className="rounded-xl p-10 text-center animate-[fadeIn_0.3s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-              <div className="text-[48px] mb-3">🚧</div>
-              <p className="text-[14px] font-medium mb-2">Phase 2Cで実装予定</p>
-              <p className="text-[11px]" style={{ color: T.textMuted }}>年間税務スケジュール（3月決算ベース）</p>
-              <p className="text-[10px] mt-3" style={{ color: T.textFaint }}>
-                現状の /tax-dashboard（バックオフィス）に類似機能があります。次のPhaseで統合予定です。
-              </p>
+            <div className="space-y-4 animate-[fadeIn_0.3s]">
+              {(() => {
+                const fy = getCurrentFiscalYear();
+                const allTasks = TAX_TASKS;
+                const filteredTasks = allTasks.filter(t => {
+                  if (scheduleFilter !== "all" && t.assignee !== scheduleFilter) return false;
+                  if (scheduleMonthFilter !== "all") {
+                    if (scheduleMonthFilter === "monthly" && t.month !== 0) return false;
+                    if (scheduleMonthFilter !== "monthly" && t.month !== parseInt(scheduleMonthFilter)) return false;
+                  }
+                  return true;
+                });
+                const doneCount = allTasks.filter(t => getTaskStatus(t.id) === "done").length;
+                const inProgressCount = allTasks.filter(t => getTaskStatus(t.id) === "in_progress").length;
+                const pendingCount = allTasks.length - doneCount - inProgressCount;
+
+                return (
+                  <>
+                    {/* サマリーカード */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                        <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>全タスク数</p>
+                        <p className="text-[18px] font-medium">{allTasks.length}件</p>
+                      </div>
+                      <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                        <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>完了</p>
+                        <p className="text-[18px] font-medium" style={{ color: "#22c55e" }}>{doneCount}件</p>
+                      </div>
+                      <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                        <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>準備中</p>
+                        <p className="text-[18px] font-medium" style={{ color: "#f59e0b" }}>{inProgressCount}件</p>
+                      </div>
+                      <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                        <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>未着手</p>
+                        <p className="text-[18px] font-medium" style={{ color: "#c45555" }}>{pendingCount}件</p>
+                      </div>
+                    </div>
+
+                    {/* フィルター */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px]" style={{ color: T.textSub }}>担当:</span>
+                      {["all", "税理士", "会社", "社労士", "共同"].map(a => (
+                        <button key={a} onClick={() => setScheduleFilter(a)} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: scheduleFilter === a ? "#c3a782" : T.cardAlt, color: scheduleFilter === a ? "white" : T.textSub, border: `1px solid ${scheduleFilter === a ? "#c3a782" : T.border}` }}>
+                          {a === "all" ? `すべて (${allTasks.length})` : `${a} (${allTasks.filter(t => t.assignee === a).length})`}
+                        </button>
+                      ))}
+                      <span className="text-[11px] ml-3" style={{ color: T.textSub }}>時期:</span>
+                      <select value={scheduleMonthFilter} onChange={(e) => setScheduleMonthFilter(e.target.value)} className="px-2 py-1 text-[10px] rounded-lg outline-none cursor-pointer" style={inputStyle}>
+                        <option value="all">すべて</option>
+                        <option value="monthly">毎月</option>
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}月</option>)}
+                      </select>
+                    </div>
+
+                    {/* タスク一覧 */}
+                    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                        <div>
+                          <span className="text-[12px] font-medium">📅 年間税務スケジュール（第{fy - 2023}期 / 3月決算）</span>
+                          <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>ステータス更新は画面上でクリックするだけ。第{fy - 2023}期分として記録されます。</p>
+                        </div>
+                        <span className="text-[10px]" style={{ color: T.textFaint }}>{filteredTasks.length}件表示中</span>
+                      </div>
+                      <div style={{ maxHeight: 600, overflowY: "auto" }}>
+                        <table className="w-full" style={{ fontSize: 12 }}>
+                          <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                            <tr style={{ color: T.textSub, fontSize: 11 }}>
+                              <th style={{ padding: "6px 10px", textAlign: "center", width: 40, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                              <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder, width: 90 }}>時期</th>
+                              <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>タスク</th>
+                              <th style={{ padding: "6px 10px", textAlign: "center", borderRight: gridBorder, borderBottom: gridBorder, width: 80 }}>担当</th>
+                              <th style={{ padding: "6px 10px", textAlign: "center", borderRight: gridBorder, borderBottom: gridBorder, width: 80 }}>カテゴリ</th>
+                              <th style={{ padding: "6px 10px", textAlign: "center", borderRight: gridBorder, borderBottom: gridBorder, width: 90 }}>期限</th>
+                              <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: gridBorder, width: 140 }}>ステータス</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredTasks.length === 0 && (
+                              <tr><td colSpan={7} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>該当するタスクがありません</td></tr>
+                            )}
+                            {filteredTasks.map((t, i) => {
+                              const status = getTaskStatus(t.id);
+                              const assigneeColors: Record<string, string> = { "税理士": "#85a8c4", "会社": "#c3a782", "社労士": "#7ab88f", "共同": "#a885c4" };
+                              const categoryColors: Record<string, string> = { "法人税": "#85a8c4", "消費税": "#85a8c4", "源泉": "#f59e0b", "社保": "#7ab88f", "労保": "#7ab88f", "住民税": "#c4a555", "決算": "#c3a782", "固定資産": "#a885c4", "給与": "#e091a8", "経理": "#888780", "その他": "#888780" };
+                              return (
+                                <tr key={t.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40", opacity: status === "done" ? 0.6 : 1 }}>
+                                  <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                                  <td style={{ padding: "5px 10px", borderRight: gridBorder, fontSize: 11, color: T.textSub }}>{t.timing}</td>
+                                  <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
+                                    <div style={{ fontWeight: 500, textDecoration: status === "done" ? "line-through" : "none" }}>{t.title}</div>
+                                    <div className="text-[10px]" style={{ color: T.textMuted }}>{t.description}</div>
+                                  </td>
+                                  <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (assigneeColors[t.assignee] || "#888") + "22", color: assigneeColors[t.assignee] || "#888" }}>{t.assignee}</span>
+                                  </td>
+                                  <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (categoryColors[t.category] || "#888") + "18", color: categoryColors[t.category] || "#888" }}>{t.category}</span>
+                                  </td>
+                                  <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder, fontSize: 11, fontWeight: 500, color: t.importance === "high" ? "#c45555" : T.textSub }}>{t.deadline}</td>
+                                  <td style={{ padding: "5px 10px", textAlign: "center" }}>
+                                    <div className="flex gap-1 justify-center">
+                                      <button onClick={() => updateTaskStatus(t.id, "pending")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "pending" ? "#c45555" : T.cardAlt, color: status === "pending" ? "white" : T.textFaint, border: "none" }}>未着手</button>
+                                      <button onClick={() => updateTaskStatus(t.id, "in_progress")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "in_progress" ? "#f59e0b" : T.cardAlt, color: status === "in_progress" ? "white" : T.textFaint, border: "none" }}>準備中</button>
+                                      <button onClick={() => updateTaskStatus(t.id, "done")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "done" ? "#22c55e" : T.cardAlt, color: status === "done" ? "white" : T.textFaint, border: "none" }}>完了</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* 案内 */}
+                    <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78233" }}>
+                      <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 年間スケジュールについて</p>
+                      <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+                        このスケジュールは<strong>3月決算法人</strong>（合同会社テラスライフ/チョップ）向けです。<br/>
+                        ステータスは<strong>期ごと</strong>に別々に記録されるので、毎年リセットされます（タスク一覧は固定）。<br/>
+                        <strong>担当別の役割分担:</strong> 税理士=江坂先生 / 社労士=大石さん / 会社=社内対応 / 共同=決算など連携が必要なもの<br/>
+                        重要度が高いタスクの期限は赤字で表示されます。
+                      </p>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -1098,7 +1284,7 @@ export default function TaxPortal() {
           { k: "expense" as SheetKey, l: "経費", icon: "💸", ready: true },
           { k: "therapist" as SheetKey, l: "セラピスト支払・源泉", icon: "👥", ready: true },
           { k: "invoice" as SheetKey, l: "インボイス", icon: "🧾", ready: true },
-          { k: "schedule" as SheetKey, l: "年間スケジュール", icon: "📅", ready: false },
+          { k: "schedule" as SheetKey, l: "年間スケジュール", icon: "📅", ready: true },
           { k: "docs" as SheetKey, l: "書類庫", icon: "📁", ready: true },
         ].map(t => {
           const active = sheet === t.k;
