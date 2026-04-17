@@ -13,6 +13,9 @@ type Expense = { id: number; date: string; category: string; name: string; amoun
 type Store = { id: number; name: string; company_name?: string; fiscal_month?: number };
 type Therapist = { id: number; name: string; real_name?: string; has_withholding?: boolean; has_invoice?: boolean; therapist_invoice_number?: string; transport_fee?: number; address?: string };
 type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
+type TaxDoc = { id: number; category: string; file_name: string; file_url: string; file_path: string; file_size: number; fiscal_period: string; uploaded_by_name: string; notes: string; created_at: string };
+
+const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "その他"];
 
 const ACCOUNT_MAP: Record<string, string> = {
   rent: "地代家賃", utilities: "水道光熱費", supplies: "消耗品費",
@@ -42,6 +45,15 @@ export default function TaxPortal() {
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [companyName, setCompanyName] = useState("合同会社テラスライフ");
   const [fiscalMonth, setFiscalMonth] = useState(3);
+
+  // 書類庫
+  const [taxDocs, setTaxDocs] = useState<TaxDoc[]>([]);
+  const [docFilter, setDocFilter] = useState<string>("all");
+  const [docPeriodFilter, setDocPeriodFilter] = useState<string>("all");
+  const [uploadCategory, setUploadCategory] = useState<string>("決算書");
+  const [uploadPeriod, setUploadPeriod] = useState<string>("");
+  const [uploadNotes, setUploadNotes] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
@@ -87,6 +99,55 @@ export default function TaxPortal() {
   }, [viewMode, selectedMonth, selectedYear, smYear, smMonth]);
 
   useEffect(() => { if (canAccessTaxPortal) fetchData(); }, [fetchData, canAccessTaxPortal]);
+
+  // 書類一覧のfetch（期間に依存しないため別で管理）
+  const fetchDocs = useCallback(async () => {
+    const { data } = await supabase.from("tax_documents").select("*").order("created_at", { ascending: false });
+    if (data) setTaxDocs(data);
+  }, []);
+  useEffect(() => { if (canAccessTaxPortal) fetchDocs(); }, [fetchDocs, canAccessTaxPortal]);
+
+  // 書類アップロード
+  const uploadDoc = async (file: File) => {
+    if (!file || !activeStaff) return;
+    if (file.size > 20 * 1024 * 1024) { alert("ファイルサイズは20MB以下にしてください"); return; }
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "";
+      const uuid = crypto.randomUUID();
+      const path = `${uploadCategory}/${uuid}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("tax-documents").upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) { alert("アップロードに失敗しました: " + upErr.message); setUploading(false); return; }
+      const { data: pu } = supabase.storage.from("tax-documents").getPublicUrl(path);
+      await supabase.from("tax_documents").insert({
+        category: uploadCategory,
+        file_name: file.name,
+        file_url: pu.publicUrl,
+        file_path: path,
+        file_size: file.size,
+        fiscal_period: uploadPeriod.trim(),
+        uploaded_by_id: activeStaff.id,
+        uploaded_by_name: activeStaff.name,
+        notes: uploadNotes.trim(),
+      });
+      setUploadPeriod(""); setUploadNotes("");
+      fetchDocs();
+    } catch (err) {
+      alert("エラー: " + String(err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // 書類削除
+  const deleteDoc = async (doc: TaxDoc) => {
+    if (!confirm(`「${doc.file_name}」を削除しますか？（元に戻せません）`)) return;
+    if (doc.file_path) {
+      await supabase.storage.from("tax-documents").remove([doc.file_path]);
+    }
+    await supabase.from("tax_documents").delete().eq("id", doc.id);
+    fetchDocs();
+  };
 
   const getCourse = (name: string) => courses.find((c) => c.name === name);
   const getPrice = (r: Reservation) => getCourse(r.course)?.price || 0;
@@ -281,8 +342,8 @@ export default function TaxPortal() {
                 <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 このページについて</p>
                 <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
                   税理士ポータルは税務関連データの共有画面です。税理士の先生・社長・経営責任者のみアクセス可能です。<br/>
-                  現在、月次サマリー・売上・経費・セラピスト支払/源泉徴収・インボイス の5シートが利用可能です。<br/>
-                  Phase 2B/2Cで書類庫（アップ/DL）・年間スケジュール・会計ソフト5形式出力（弥生/freee/MFクラウド/汎用/e-Tax）を実装予定。
+                  現在、月次サマリー・売上・経費・セラピスト支払/源泉徴収・インボイス・書類庫 の6シートが利用可能です。<br/>
+                  Phase 2Cで年間スケジュール、Phase 3で会計ソフト5形式出力（弥生/freee/MFクラウド/汎用/e-Tax）を実装予定。
                 </p>
               </div>
             </div>
@@ -588,15 +649,157 @@ export default function TaxPortal() {
             </div>
           )}
 
-          {/* ── Sheet: その他（Phase 2B/2C） ── */}
-          {(sheet === "schedule" || sheet === "docs") && (
+          {/* ── Sheet: 書類庫 ── */}
+          {sheet === "docs" && (
+            <div className="space-y-4 animate-[fadeIn_0.3s]">
+              {/* サマリーカード */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>登録書類数</p>
+                  <p className="text-[18px] font-medium">{taxDocs.length}件</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>決算書</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#c3a782" }}>{taxDocs.filter(d => d.category === "決算書").length}件</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>申告書</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#85a8c4" }}>{taxDocs.filter(d => d.category === "申告書").length}件</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>総容量</p>
+                  <p className="text-[18px] font-medium">{(taxDocs.reduce((s, d) => s + (d.file_size || 0), 0) / 1024 / 1024).toFixed(1)}MB</p>
+                </div>
+              </div>
+
+              {/* アップロードエリア */}
+              <div className="rounded-xl p-5" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <p className="text-[13px] font-medium mb-3">📤 書類アップロード</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>カテゴリ</label>
+                    <select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                      {DOC_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>期（任意）</label>
+                    <input type="text" value={uploadPeriod} onChange={(e) => setUploadPeriod(e.target.value)} placeholder="例: 第3期 / 2025年分" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>備考（任意）</label>
+                    <input type="text" value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder="メモ" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                </div>
+                <label className="block cursor-pointer">
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.csv,.xlsx,.xls,.docx,.doc" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) { uploadDoc(f); e.target.value = ""; } }} />
+                  <div className="rounded-lg py-8 text-center transition-colors" style={{ border: `2px dashed ${T.border}`, backgroundColor: uploading ? T.cardAlt : "transparent" }}>
+                    {uploading ? (
+                      <p className="text-[12px]" style={{ color: "#c3a782" }}>📤 アップロード中...</p>
+                    ) : (
+                      <>
+                        <p className="text-[12px]" style={{ color: T.textSub }}>📎 クリックしてファイルを選択</p>
+                        <p className="text-[10px] mt-1" style={{ color: T.textFaint }}>PDF・JPG・PNG・CSV・Excel・Word（最大20MB）</p>
+                      </>
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              {/* フィルター */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px]" style={{ color: T.textSub }}>カテゴリ:</span>
+                <button onClick={() => setDocFilter("all")} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: docFilter === "all" ? "#c3a782" : T.cardAlt, color: docFilter === "all" ? "white" : T.textSub, border: `1px solid ${docFilter === "all" ? "#c3a782" : T.border}` }}>すべて ({taxDocs.length})</button>
+                {DOC_CATEGORIES.map(c => {
+                  const count = taxDocs.filter(d => d.category === c).length;
+                  if (count === 0) return null;
+                  return <button key={c} onClick={() => setDocFilter(c)} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: docFilter === c ? "#c3a782" : T.cardAlt, color: docFilter === c ? "white" : T.textSub, border: `1px solid ${docFilter === c ? "#c3a782" : T.border}` }}>{c} ({count})</button>;
+                })}
+                {(() => {
+                  const periods = Array.from(new Set(taxDocs.map(d => d.fiscal_period).filter(p => p)));
+                  if (periods.length === 0) return null;
+                  return (
+                    <>
+                      <span className="text-[11px] ml-3" style={{ color: T.textSub }}>期:</span>
+                      <select value={docPeriodFilter} onChange={(e) => setDocPeriodFilter(e.target.value)} className="px-2 py-1 text-[10px] rounded-lg outline-none cursor-pointer" style={inputStyle}>
+                        <option value="all">すべて</option>
+                        {periods.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* 書類一覧 */}
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                  <span className="text-[12px] font-medium">📁 書類一覧</span>
+                  <span className="text-[10px]" style={{ color: T.textFaint }}>
+                    {(() => { const filtered = taxDocs.filter(d => (docFilter === "all" || d.category === docFilter) && (docPeriodFilter === "all" || d.fiscal_period === docPeriodFilter)); return `${filtered.length}件表示中`; })()}
+                  </span>
+                </div>
+                <div style={{ maxHeight: 500, overflowY: "auto" }}>
+                  <table className="w-full" style={{ fontSize: 12 }}>
+                    <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                      <tr style={{ color: T.textSub, fontSize: 11 }}>
+                        <th style={{ padding: "6px 10px", textAlign: "center", width: 40, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>カテゴリ</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>ファイル名</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>期</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>備考</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>アップ者</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>アップ日</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>サイズ</th>
+                        <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: gridBorder, width: 120 }}>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const filtered = taxDocs.filter(d => (docFilter === "all" || d.category === docFilter) && (docPeriodFilter === "all" || d.fiscal_period === docPeriodFilter));
+                        if (filtered.length === 0) return <tr><td colSpan={9} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>書類が登録されていません</td></tr>;
+                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "その他": "#888780" };
+                        return filtered.map((d, i) => (
+                          <tr key={d.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                            <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (catColors[d.category] || "#888") + "22", color: catColors[d.category] || "#888" }}>{d.category}</span>
+                            </td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.file_name}>{d.file_name}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textSub, fontSize: 11 }}>{d.fiscal_period || "—"}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 10, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.notes}>{d.notes || ""}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 11 }}>{d.uploaded_by_name || "—"}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 11, fontVariantNumeric: "tabular-nums" }}>{d.created_at?.slice(0, 10) || "—"}</td>
+                            <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: T.textSub, borderRight: gridBorder, fontSize: 11 }}>{((d.file_size || 0) / 1024).toFixed(0)}KB</td>
+                            <td style={{ padding: "5px 10px", textAlign: "center" }}>
+                              <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-1 rounded cursor-pointer mr-1" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", textDecoration: "none" }}>📄 開く</a>
+                              <button onClick={() => deleteDoc(d)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c433" }}>
+                <p className="text-[11px] font-medium mb-1" style={{ color: "#85a8c4" }}>💡 書類庫の使い方</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+                  税理士・社長・経営責任者のみアップロード/閲覧/削除が可能です。<br/>
+                  <strong>アップ時のコツ:</strong> カテゴリと「期（例：第3期）」を入れておくと、後で検索しやすくなります。<br/>
+                  <strong>セキュリティ:</strong> ファイル名はUUIDでランダム化されて保存されます。書類庫画面にアクセスできない人はURLも推測できません。<br/>
+                  <strong>保存容量:</strong> 1ファイル最大20MB。大きな書類はZIP圧縮してからアップしてください。
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Sheet: 年間スケジュール（Phase 2C） ── */}
+          {sheet === "schedule" && (
             <div className="rounded-xl p-10 text-center animate-[fadeIn_0.3s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
               <div className="text-[48px] mb-3">🚧</div>
-              <p className="text-[14px] font-medium mb-2">Phase 2{sheet === "docs" ? "B" : "C"}で実装予定</p>
-              <p className="text-[11px]" style={{ color: T.textMuted }}>
-                {sheet === "schedule" && "年間税務スケジュール（3月決算ベース）"}
-                {sheet === "docs" && "書類庫（決算書・申告書・契約書のアップ・DL）+ 会計ソフト5形式出力"}
-              </p>
+              <p className="text-[14px] font-medium mb-2">Phase 2Cで実装予定</p>
+              <p className="text-[11px]" style={{ color: T.textMuted }}>年間税務スケジュール（3月決算ベース）</p>
               <p className="text-[10px] mt-3" style={{ color: T.textFaint }}>
                 現状の /tax-dashboard（バックオフィス）に類似機能があります。次のPhaseで統合予定です。
               </p>
@@ -615,7 +818,7 @@ export default function TaxPortal() {
           { k: "therapist" as SheetKey, l: "セラピスト支払・源泉", icon: "👥", ready: true },
           { k: "invoice" as SheetKey, l: "インボイス", icon: "🧾", ready: true },
           { k: "schedule" as SheetKey, l: "年間スケジュール", icon: "📅", ready: false },
-          { k: "docs" as SheetKey, l: "書類庫", icon: "📁", ready: false },
+          { k: "docs" as SheetKey, l: "書類庫", icon: "📁", ready: true },
         ].map(t => {
           const active = sheet === t.k;
           return (
