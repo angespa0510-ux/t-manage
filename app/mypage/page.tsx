@@ -54,7 +54,7 @@ export default function TherapistMyPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual" | "tax">("home");
+  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual" | "tax" | "cert">("home");
   const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
@@ -153,7 +153,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const t = params.get("tab");
-      if (t && ["home", "shift", "schedule", "salary", "customers", "manual", "tax"].includes(t)) {
+      if (t && ["home", "shift", "schedule", "salary", "customers", "manual", "tax", "cert"].includes(t)) {
         setTab(t as typeof tab);
       }
     }
@@ -500,7 +500,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
         {(() => {
           const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
-          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }, { key: "tax" as const, label: "📊 確定申告" }].map((t) => (
+          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }, { key: "cert" as const, label: "📄 証明書" }, { key: "tax" as const, label: "📊 確定申告" }].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#e8849a")}>{t.label}</button>
         ));
         })()}
@@ -826,67 +826,10 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                   <button onClick={openPayslip} className="w-full py-3 rounded-xl text-[12px] font-medium cursor-pointer" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff" }}>📄 {salaryYear}年 支払調書を表示</button>
                 )}
 
-                {/* 証明書発行 */}
-                <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                  <p className="text-[11px] font-medium mb-2">📄 証明書を発行する</p>
-                  <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>賃貸契約・保育園申請・ローン審査などに使える証明書を発行できます。</p>
-
-                  {/* 条件チェック */}
-                  <div className="space-y-1 mb-3">
-                    {certChecks.map((c, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[10px]">
-                        <span style={{ color: c.ok ? "#22c55e" : "#c45555" }}>{c.ok ? "✅" : "❌"}</span>
-                        <span style={{ color: c.ok ? T.textMuted : "#c45555" }}>{c.label}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {certEligible ? (
-                    <div className="flex flex-col gap-2">
-                      <button onClick={() => {
-                        if (!storeInfo || !therapist) return;
-                        generateContractCertificate(
-                          { company_name: storeInfo.company_name || "", company_address: storeInfo.company_address || "", company_phone: storeInfo.company_phone || "" },
-                          { real_name: (therapist as any).real_name || therapist.name, name: therapist.name, address: (therapist as any).address || "", entry_date: (therapist as any).entry_date || "" }
-                        );
-                      }} className="w-full py-2.5 rounded-xl text-[11px] font-medium cursor-pointer" style={{ backgroundColor: "#2563eb12", color: "#2563eb", border: "1px solid #2563eb30" }}>
-                        📝 業務委託契約証明書（在籍証明）
-                      </button>
-                      <button onClick={async () => {
-                        if (!storeInfo || !therapist) return;
-                        const yr = salaryYear;
-                        const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", therapist.id).gte("date", `${yr}-01-01`).lte("date", `${yr}-12-31`);
-                        const months: { month: number; amount: number; days: number }[] = [];
-                        for (let m = 1; m <= 12; m++) { const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m); months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length }); }
-                        generatePaymentCertificate(
-                          { company_name: storeInfo.company_name || "", company_address: storeInfo.company_address || "", company_phone: storeInfo.company_phone || "" },
-                          { real_name: (therapist as any).real_name || therapist.name, name: therapist.name, address: (therapist as any).address || "", entry_date: (therapist as any).entry_date || "" },
-                          { year: yr, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months }
-                        );
-                      }} className="w-full py-2.5 rounded-xl text-[11px] font-medium cursor-pointer" style={{ backgroundColor: "#06b6d412", color: "#06b6d4", border: "1px solid #06b6d430" }}>
-                        💰 報酬支払証明書（収入証明）
-                      </button>
-                      <button onClick={async () => {
-                        if (!storeInfo || !therapist) return;
-                        const yr = salaryYear;
-                        const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", therapist.id).gte("date", `${yr}-01-01`).lte("date", `${yr}-12-31`);
-                        const months: { month: number; amount: number; days: number }[] = [];
-                        for (let m = 1; m <= 12; m++) { const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m); months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length }); }
-                        generateTransactionCertificate(
-                          { company_name: storeInfo.company_name || "", company_address: storeInfo.company_address || "", company_phone: storeInfo.company_phone || "" },
-                          { real_name: (therapist as any).real_name || therapist.name, name: therapist.name, address: (therapist as any).address || "", entry_date: (therapist as any).entry_date || "" },
-                          { year: yr, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months }
-                        );
-                      }} className="w-full py-2.5 rounded-xl text-[11px] font-medium cursor-pointer" style={{ backgroundColor: "#7c3aed12", color: "#7c3aed", border: "1px solid #7c3aed30" }}>
-                        📊 取引実績証明書
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl p-3" style={{ backgroundColor: "#c4555508", border: "1px solid #c4555520" }}>
-                      <p className="text-[10px]" style={{ color: "#c45555" }}>上記の条件をすべて満たすと証明書を発行できます。不足している項目についてはスタッフにお問い合わせください。</p>
-                    </div>
-                  )}
-                </div>
+                {/* 証明書発行 → タブへ */}
+                <button onClick={() => { setTab("cert"); window.location.hash = "cert"; }} className="w-full py-3 rounded-xl text-[11px] font-medium cursor-pointer flex items-center justify-center gap-2" style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, color: T.textSub }}>
+                  📄 証明書を発行する →
+                </button>
 
                 {/* 月別内訳 */}
                 {monthlyData.length > 0 && (
@@ -1386,6 +1329,91 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
       })()}
 
       {/* お客様接客履歴モーダル */}
+      {/* ── 証明書発行タブ ── */}
+      {tab === "cert" && therapist && (
+        <div className="space-y-4">
+          <h2 className="text-[14px] font-medium">📄 証明書発行</h2>
+          <p className="text-[11px]" style={{ color: T.textMuted }}>お店が公式に発行する証明書です。以下の書類をPDFで即座に発行できます。</p>
+
+          {/* 証明書の種類と用途 */}
+          {[
+            { icon: "📝", title: "業務委託契約証明書", sub: "在籍証明", color: "#2563eb", type: "contract" as const,
+              uses: ["🏠 賃貸マンション・アパートの契約", "👶 保育園・学童の就労証明", "💳 クレジットカードの申込", "📱 携帯電話の分割払い契約"],
+              merit: "「どこで働いているか」を証明する書類です。フリーランスは会社員と違って在籍証明が取りにくいですが、この証明書があれば賃貸審査もスムーズに通ります。" },
+            { icon: "💰", title: "報酬支払証明書", sub: "収入証明", color: "#06b6d4", type: "payment" as const,
+              uses: ["🏦 住宅ローン・カーローンの審査", "💳 クレジットカードの限度額アップ", "🏥 児童手当・医療費助成の申請", "📋 奨学金の保護者収入証明"],
+              merit: "「年間いくら稼いでいるか」を月別内訳つきで証明します。収入が安定していることを金融機関に示せるので、ローン審査の通過率が上がります。" },
+            { icon: "📊", title: "取引実績証明書", sub: "実績証明", color: "#7c3aed", type: "transaction" as const,
+              uses: ["📑 確定申告の補助資料", "🏦 事業融資・小規模企業共済の申請", "💰 補助金・助成金の申請", "📋 開業届・青色申告の添付資料"],
+              merit: "「どれだけ継続的に仕事をしているか」を証明します。月平均取引額や取引月数が記載されるので、安定した事業実績のアピールに使えます。" },
+          ].map((cert, i) => (
+            <div key={i} className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+                <span className="text-[18px]">{cert.icon}</span>
+                <div className="flex-1">
+                  <p className="text-[13px] font-medium">{cert.title}</p>
+                  <p className="text-[10px]" style={{ color: cert.color }}>{cert.sub}</p>
+                </div>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-[11px] mb-3" style={{ color: T.textMuted, lineHeight: 1.8 }}>{cert.merit}</p>
+                <p className="text-[10px] font-medium mb-2">こんな時に使えます</p>
+                <div className="grid grid-cols-2 gap-1 mb-3">
+                  {cert.uses.map((u, j) => <p key={j} className="text-[10px]" style={{ color: T.textMuted }}>{u}</p>)}
+                </div>
+                {certEligible ? (
+                  <button onClick={async () => {
+                    if (!storeInfo || !therapist) return;
+                    const store = { company_name: storeInfo.company_name || "", company_address: storeInfo.company_address || "", company_phone: storeInfo.company_phone || "" };
+                    const th = { real_name: (therapist as any).real_name || therapist.name, name: therapist.name, address: (therapist as any).address || "", entry_date: (therapist as any).entry_date || "" };
+                    if (cert.type === "contract") { generateContractCertificate(store, th); return; }
+                    const yr = new Date().getFullYear();
+                    const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", therapist.id).gte("date", `${yr}-01-01`).lte("date", `${yr}-12-31`);
+                    const months: { month: number; amount: number; days: number }[] = [];
+                    for (let m = 1; m <= 12; m++) { const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m); months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length }); }
+                    const payment = { year: yr, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months };
+                    if (cert.type === "payment") generatePaymentCertificate(store, th, payment);
+                    else generateTransactionCertificate(store, th, payment);
+                  }} className="w-full py-2.5 rounded-xl text-[11px] font-medium cursor-pointer" style={{ backgroundColor: cert.color + "12", color: cert.color, border: `1px solid ${cert.color}30` }}>
+                    {cert.icon} この証明書を発行する
+                  </button>
+                ) : (
+                  <div className="w-full py-2.5 rounded-xl text-[11px] text-center" style={{ backgroundColor: "#88878010", color: "#888780", border: "1px solid #88878020" }}>
+                    発行条件を満たすと発行できます ↓
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* 発行条件 */}
+          <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <p className="text-[12px] font-medium mb-3">✅ 発行条件</p>
+            <p className="text-[10px] mb-3" style={{ color: T.textMuted }}>以下の条件をすべて満たすと、証明書を自分で発行できるようになります。</p>
+            <div className="space-y-2">
+              {certChecks.map((c, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ backgroundColor: c.ok ? "#22c55e06" : "#c4555506", border: `1px solid ${c.ok ? "#22c55e15" : "#c4555515"}` }}>
+                  <span className="text-[14px]">{c.ok ? "✅" : "⬜"}</span>
+                  <div className="flex-1">
+                    <p className="text-[11px] font-medium" style={{ color: c.ok ? "#22c55e" : T.text }}>{c.label}</p>
+                    {!c.ok && i === 0 && <p className="text-[9px]" style={{ color: "#c45555" }}>身分証はスタッフに提出してください</p>}
+                    {!c.ok && i === 1 && <p className="text-[9px]" style={{ color: "#c45555" }}>契約書のリンクをスタッフからもらってください</p>}
+                    {!c.ok && i === 2 && <p className="text-[9px]" style={{ color: "#c45555" }}>スタッフに本名を伝えてください</p>}
+                    {!c.ok && i === 3 && <p className="text-[9px]" style={{ color: "#c45555" }}>スタッフに住所を伝えてください</p>}
+                    {!c.ok && i === 4 && <p className="text-[9px]" style={{ color: "#c45555" }}>出勤を重ねると条件を達成できます</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {certEligible && (
+              <div className="mt-3 px-3 py-2 rounded-xl text-center" style={{ backgroundColor: "#22c55e0c", border: "1px solid #22c55e20" }}>
+                <p className="text-[11px] font-medium" style={{ color: "#22c55e" }}>🎉 すべての条件を満たしています！上の証明書を発行できます。</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── 確定申告サポートタブ ── */}
       {tab === "tax" && therapist && (
         <div className="space-y-3">
