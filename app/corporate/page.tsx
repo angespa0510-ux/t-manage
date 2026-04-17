@@ -382,17 +382,17 @@ export default function CorporatePage() {
             <p className={`sh3 ${show("stats")?"on":""}`} style={{ fontSize:11,fontWeight:600,color:"#475569",letterSpacing:2,marginBottom:28 }}>TRUSTED BY</p>
             <div style={{ display:"flex",flexWrap:"wrap",justifyContent:"center",alignItems:"center",gap:"28px 40px" }}>
               {[
-                { name:"東海フーズ", sub:"TOKAI FOODS", icon:"🏭", color:"#f59e0b" },
-                { name:"サクラメディカル", sub:"SAKURA MEDICAL", icon:"🏥", color:"#22c55e" },
-                { name:"ネクストワン", sub:"NEXT ONE", icon:"▲", color:"#3b82f6" },
-                { name:"グローバルエステート", sub:"GLOBAL ESTATE", icon:"◆", color:"#7c3aed" },
-                { name:"中部ロジスティクス", sub:"CHUBU LOGISTICS", icon:"🚛", color:"#06b6d4" },
+                { name:"東海フーズ", sub:"TOKAI FOODS", logo:"/corporate/logo-tokai.png" },
+                { name:"サクラメディカル", sub:"SAKURA MEDICAL", logo:"/corporate/logo-sakura.png" },
+                { name:"ネクストワン", sub:"NEXT ONE", logo:"/corporate/logo-nextone.png" },
+                { name:"グローバルエステート", sub:"GLOBAL ESTATE", logo:"/corporate/logo-global.png" },
+                { name:"中部ロジスティクス", sub:"CHUBU LOGISTICS", logo:"/corporate/logo-chubu.png" },
               ].map((c, i) => (
-                <div key={i} style={{ display:"flex",alignItems:"center",gap:10,opacity:0.55,transition:"opacity .3s",cursor:"default" }}
+                <div key={i} style={{ display:"flex",alignItems:"center",gap:12,opacity:0.6,transition:"opacity .3s",cursor:"default" }}
                   onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-                  onMouseLeave={e => e.currentTarget.style.opacity = "0.55"}
+                  onMouseLeave={e => e.currentTarget.style.opacity = "0.6"}
                 >
-                  <div style={{ width:36,height:36,borderRadius:8,background:`${c.color}15`,border:`1px solid ${c.color}25`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:c.color,fontWeight:800 }}>{c.icon}</div>
+                  <img src={c.logo} alt={c.name} style={{ width:40,height:40,objectFit:"contain",borderRadius:6 }}/>
                   <div style={{ textAlign:"left" }}>
                     <div style={{ fontSize:13,fontWeight:700,color:"#cbd5e1",letterSpacing:.3 }}>{c.name}</div>
                     <div style={{ fontSize:9,fontWeight:500,color:"#475569",letterSpacing:1.5 }}>{c.sub}</div>
