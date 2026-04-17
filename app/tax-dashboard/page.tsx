@@ -1593,41 +1593,57 @@ ${t.mynumber_photo_url_back ? `<div class="photo-box"><p class="photo-label">裏
 
 function CertificateManager({ T }: { T: any }) {
   const [therapists, setTherapists] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
   const [storeInfo, setStoreInfo] = useState<any>(null);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [certYear, setCertYear] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
   const [issuing, setIssuing] = useState(false);
+  const [totalDaysMap, setTotalDaysMap] = useState<Record<number, number>>({});
+  const [recentMap, setRecentMap] = useState<Record<number, boolean>>({});
   const toast = useToast();
-  const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
   useEffect(() => {
     const f = async () => {
-      const { data: th } = await supabase.from("therapists").select("id, name, real_name, address, entry_date, status, phone").neq("status", "trash").order("sort_order"); if (th) setTherapists(th);
+      const { data: th } = await supabase.from("therapists").select("id, name, real_name, address, entry_date, status, phone, license_photo_url").neq("status", "trash").order("sort_order"); if (th) setTherapists(th);
       const { data: st } = await supabase.from("stores").select("company_name, company_address, company_phone"); if (st?.[0]) setStoreInfo(st[0]);
+      const { data: ct } = await supabase.from("contracts").select("therapist_id, status"); if (ct) setContracts(ct);
+      // Total days per therapist
+      const { data: sett } = await supabase.from("therapist_daily_settlements").select("therapist_id, date").eq("is_settled", true);
+      if (sett) {
+        const dm: Record<number, number> = {};
+        const rm: Record<number, boolean> = {};
+        const now = new Date();
+        const three = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().slice(0, 10);
+        sett.forEach((s: any) => { dm[s.therapist_id] = (dm[s.therapist_id] || 0) + 1; if (s.date >= three) rm[s.therapist_id] = true; });
+        setTotalDaysMap(dm); setRecentMap(rm);
+      }
     }; f();
   }, []);
 
   const selected = therapists.find(t => t.id === selectedId);
   const filtered = therapists.filter(t => !search || t.name.includes(search) || (t.real_name || "").includes(search));
 
-  const getStore = () => ({
-    company_name: storeInfo?.company_name || "",
-    company_address: storeInfo?.company_address || "",
-    company_phone: storeInfo?.company_phone || "",
-  });
+  const getChecks = (th: any) => {
+    const contract = contracts.find(c => c.therapist_id === th.id && c.status === "signed");
+    const totalDays = totalDaysMap[th.id] || 0;
+    const hasRecent = recentMap[th.id] || false;
+    return [
+      { label: "身分証提出済み", ok: !!th.license_photo_url, required: true },
+      { label: "業務委託契約署名済み", ok: !!contract, required: true },
+      { label: "本名登録済み", ok: !!(th.real_name && th.real_name.trim()), required: true },
+      { label: "住所登録済み", ok: !!(th.address && th.address.trim()), required: true },
+      { label: `総出勤30日以上（現在${totalDays}日）`, ok: totalDays >= 30, required: true },
+      { label: "直近3ヶ月以内の出勤あり", ok: hasRecent, required: false },
+      { label: "ステータスが稼働中", ok: th.status === "active", required: false },
+    ];
+  };
 
-  const getTh = (th: any) => ({
-    real_name: th.real_name || th.name,
-    name: th.name,
-    address: th.address || "",
-    entry_date: th.entry_date || "",
-  });
+  const getStore = () => ({ company_name: storeInfo?.company_name || "", company_address: storeInfo?.company_address || "", company_phone: storeInfo?.company_phone || "" });
+  const getTh = (th: any) => ({ real_name: th.real_name || th.name, name: th.name, address: th.address || "", entry_date: th.entry_date || "" });
 
   const fetchPayment = async (thId: number) => {
-    const { data: sett } = await supabase.from("therapist_daily_settlements")
-      .select("date, total_back").eq("therapist_id", thId)
-      .gte("date", `${certYear}-01-01`).lte("date", `${certYear}-12-31`);
+    const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", thId).gte("date", `${certYear}-01-01`).lte("date", `${certYear}-12-31`);
     const months: { month: number; amount: number; days: number }[] = [];
     for (let m = 1; m <= 12; m++) {
       const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
@@ -1640,44 +1656,62 @@ function CertificateManager({ T }: { T: any }) {
     if (!selected || !storeInfo) { toast.show("セラピストを選択してください", "error"); return; }
     setIssuing(true);
     try {
-      if (type === "contract") {
-        generateContractCertificate(getStore(), getTh(selected));
-      } else {
-        const payment = await fetchPayment(selected.id);
-        if (type === "payment") generatePaymentCertificate(getStore(), getTh(selected), payment);
-        else generateTransactionCertificate(getStore(), getTh(selected), payment);
-      }
+      if (type === "contract") { generateContractCertificate(getStore(), getTh(selected)); }
+      else { const payment = await fetchPayment(selected.id); if (type === "payment") generatePaymentCertificate(getStore(), getTh(selected), payment); else generateTransactionCertificate(getStore(), getTh(selected), payment); }
       toast.show("証明書を発行しました", "success");
     } catch { toast.show("発行に失敗しました", "error"); }
     setIssuing(false);
   };
 
-  const statusMap: Record<string, { label: string; color: string }> = {
-    active: { label: "稼働中", color: "#22c55e" },
-    inactive: { label: "休止中", color: "#f59e0b" },
-    retired: { label: "退職", color: "#888780" },
-  };
+  const statusMap: Record<string, { label: string; color: string }> = { active: { label: "稼働中", color: "#22c55e" }, inactive: { label: "休止中", color: "#f59e0b" }, retired: { label: "退職", color: "#888780" } };
+  const checks = selected ? getChecks(selected) : [];
+  const warnings = checks.filter(c => !c.ok);
+  const hasRequiredFail = checks.some(c => c.required && !c.ok);
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", animation: "fadeIn 0.3s" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", animation: "fadeIn 0.3s" }}>
       <div className="flex items-center gap-3 mb-4">
         <h2 className="text-[16px] font-medium">📄 証明書発行</h2>
         <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>会社印が必要な書類</span>
       </div>
 
+      {/* 発行ポリシー説明 */}
+      <div className="rounded-xl border p-4 mb-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+        <p className="text-[11px] font-medium mb-2">📋 証明書発行ポリシー</p>
+        <p className="text-[10px] mb-2" style={{ color: T.textMuted }}>証明書は会社の信用を担保に発行する公式書類です。以下の条件を確認してから発行してください。</p>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+          {[
+            { label: "身分証が提出済みであること", tag: "必須" },
+            { label: "業務委託契約書に署名済みであること", tag: "必須" },
+            { label: "本名・住所が登録されていること", tag: "必須" },
+            { label: "総出勤日数が30日以上であること", tag: "必須" },
+            { label: "直近3ヶ月以内に出勤実績があること", tag: "推奨" },
+            { label: "ステータスが「稼働中」であること", tag: "推奨" },
+          ].map((r, i) => (
+            <p key={i} className="text-[10px] flex items-center gap-2" style={{ color: T.textMuted }}>
+              <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: r.tag === "必須" ? "#c4555518" : "#f59e0b18", color: r.tag === "必須" ? "#c45555" : "#f59e0b" }}>{r.tag}</span>
+              {r.label}
+            </p>
+          ))}
+        </div>
+        <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>※ バックオフィスでは警告表示の上で発行可能です。セラピストマイページでは必須条件を満たさない場合は発行できません。</p>
+      </div>
+
       <div className="grid gap-4" style={{ gridTemplateColumns: "320px 1fr" }}>
-        {/* Left: Therapist selector */}
+        {/* Left */}
         <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
           <p className="text-[11px] font-medium mb-3">セラピストを選択</p>
           <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 名前で検索" className="w-full px-3 py-2 rounded-lg text-[11px] outline-none mb-3 border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
           <div className="space-y-1 overflow-y-auto" style={{ maxHeight: 400 }}>
             {filtered.map(th => {
               const st = statusMap[th.status] || statusMap.active;
+              const thChecks = getChecks(th);
+              const thWarn = thChecks.filter(c => !c.ok && c.required).length;
               return (
                 <button key={th.id} onClick={() => setSelectedId(th.id)} className="w-full text-left px-3 py-2.5 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: selectedId === th.id ? "#c3a78215" : "transparent", color: T.text, border: `1px solid ${selectedId === th.id ? "#c3a78244" : "transparent"}` }}>
-                  <div>
+                  <div className="flex items-center gap-2">
                     <span className="font-medium">{th.name}</span>
-                    {th.real_name && th.real_name !== th.name && <span className="ml-2 text-[9px]" style={{ color: T.textMuted }}>({th.real_name})</span>}
+                    {thWarn > 0 && <span className="text-[8px] px-1 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠{thWarn}</span>}
                   </div>
                   <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: st.color + "18", color: st.color }}>{st.label}</span>
                 </button>
@@ -1686,71 +1720,72 @@ function CertificateManager({ T }: { T: any }) {
           </div>
         </div>
 
-        {/* Right: Certificate actions */}
+        {/* Right */}
         <div className="space-y-4">
-          {selected ? (
-            <>
-              <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-[15px] font-medium">{selected.name}</p>
-                    <p className="text-[11px]" style={{ color: T.textMuted }}>{selected.real_name || "本名未登録"} ・ {selected.address || "住所未登録"}</p>
+          {selected ? (<>
+            {/* Requirement checks */}
+            <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <p className="text-[11px] font-medium mb-3">{selected.name} の発行条件チェック</p>
+              <div className="grid grid-cols-2 gap-2">
+                {checks.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px]" style={{ backgroundColor: c.ok ? "#22c55e08" : "#c4555508", border: `1px solid ${c.ok ? "#22c55e20" : "#c4555520"}` }}>
+                    <span style={{ color: c.ok ? "#22c55e" : "#c45555" }}>{c.ok ? "✅" : "❌"}</span>
+                    <span style={{ color: c.ok ? T.textMuted : "#c45555" }}>{c.label}</span>
+                    {c.required && !c.ok && <span className="text-[8px] px-1 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555", marginLeft: "auto" }}>必須</span>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px]" style={{ color: T.textMuted }}>対象年度</span>
-                    <select value={certYear} onChange={e => setCertYear(Number(e.target.value))} className="px-2 py-1 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>
-                      {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}年</option>)}
-                    </select>
-                  </div>
+                ))}
+              </div>
+              {hasRequiredFail && (
+                <div className="mt-3 px-3 py-2 rounded-lg" style={{ backgroundColor: "#f59e0b0c", border: "1px solid #f59e0b25" }}>
+                  <p className="text-[10px]" style={{ color: "#f59e0b" }}>⚠️ 必須条件を満たしていませんが、バックオフィスでは発行可能です。発行する場合は内容を十分に確認してください。</p>
                 </div>
+              )}
+            </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  {/* 在籍証明 */}
-                  <button onClick={() => issue("contract")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#2563eb08", borderColor: "#2563eb30" }}>
-                    <div className="text-[20px] mb-2">📝</div>
-                    <p className="text-[12px] font-medium" style={{ color: "#2563eb" }}>業務委託契約証明書</p>
-                    <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>在籍証明として使用。賃貸契約・保育園申請・就業証明に。</p>
-                  </button>
-                  {/* 報酬支払証明 */}
-                  <button onClick={() => issue("payment")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#06b6d408", borderColor: "#06b6d430" }}>
-                    <div className="text-[20px] mb-2">💰</div>
-                    <p className="text-[12px] font-medium" style={{ color: "#06b6d4" }}>報酬支払証明書</p>
-                    <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>収入証明として使用。ローン審査・クレジットカード申込に。</p>
-                    <p className="text-[8px] mt-2" style={{ color: T.textFaint }}>※ {certYear}年の報酬データを使用</p>
-                  </button>
-                  {/* 取引実績証明 */}
-                  <button onClick={() => issue("transaction")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#7c3aed08", borderColor: "#7c3aed30" }}>
-                    <div className="text-[20px] mb-2">📊</div>
-                    <p className="text-[12px] font-medium" style={{ color: "#7c3aed" }}>取引実績証明書</p>
-                    <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>取引実績の証明。確定申告・融資申請・補助金申請に。</p>
-                    <p className="text-[8px] mt-2" style={{ color: T.textFaint }}>※ {certYear}年の取引データを使用</p>
-                  </button>
+            {/* Certificate cards */}
+            <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[13px] font-medium">発行する証明書を選択</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px]" style={{ color: T.textMuted }}>対象年度</span>
+                  <select value={certYear} onChange={e => setCertYear(Number(e.target.value))} className="px-2 py-1 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>
+                    {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}年</option>)}
+                  </select>
                 </div>
               </div>
-
-              {/* 注意事項 */}
-              <div className="rounded-xl border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
-                <p className="text-[11px] font-medium mb-2">⚠️ 証明書発行時の注意</p>
-                <div className="space-y-1">
-                  {[
-                    "発行した証明書には会社の代表印（実印）を押印してください",
-                    "報酬支払証明書・取引実績証明書は清算済みデータを基に作成されます",
-                    "証明書の有効期限は発行日から3ヶ月です",
-                    "ブラウザの印刷機能（Ctrl+P）からPDFとして保存できます",
-                    "本名・住所が未登録の場合は先にセラピスト管理で登録してください",
-                  ].map((t, i) => (
-                    <p key={i} className="text-[10px] flex gap-2" style={{ color: T.textMuted }}>
-                      <span style={{ color: "#c3a782" }}>•</span>{t}
-                    </p>
-                  ))}
-                </div>
+              <div className="grid grid-cols-3 gap-3">
+                <button onClick={() => issue("contract")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#2563eb08", borderColor: "#2563eb30" }}>
+                  <div className="text-[20px] mb-2">📝</div>
+                  <p className="text-[12px] font-medium" style={{ color: "#2563eb" }}>業務委託契約証明書</p>
+                  <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>在籍証明。賃貸契約・保育園申請に。</p>
+                </button>
+                <button onClick={() => issue("payment")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#06b6d408", borderColor: "#06b6d430" }}>
+                  <div className="text-[20px] mb-2">💰</div>
+                  <p className="text-[12px] font-medium" style={{ color: "#06b6d4" }}>報酬支払証明書</p>
+                  <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>収入証明。ローン・カード審査に。</p>
+                </button>
+                <button onClick={() => issue("transaction")} disabled={issuing} className="rounded-xl border p-4 text-left cursor-pointer" style={{ backgroundColor: "#7c3aed08", borderColor: "#7c3aed30" }}>
+                  <div className="text-[20px] mb-2">📊</div>
+                  <p className="text-[12px] font-medium" style={{ color: "#7c3aed" }}>取引実績証明書</p>
+                  <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>融資・補助金申請に。</p>
+                </button>
               </div>
-            </>
-          ) : (
+            </div>
+
+            {/* 注意事項 */}
+            <div className="rounded-xl border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+              <p className="text-[11px] font-medium mb-2">⚠️ 発行後の手順</p>
+              <div className="space-y-1">
+                {["証明書を印刷（Ctrl+P → PDF保存も可）","代表印（実印）を押印","セラピストに手渡しまたはPDF送付","控えを会社で保管"].map((t, i) => (
+                  <p key={i} className="text-[10px] flex gap-2" style={{ color: T.textMuted }}><span style={{ color: "#c3a782" }}>{i+1}.</span>{t}</p>
+                ))}
+              </div>
+            </div>
+          </>) : (
             <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
               <p className="text-[32px] mb-3">📄</p>
               <p className="text-[14px] font-medium mb-2">セラピストを選択してください</p>
-              <p className="text-[11px]" style={{ color: T.textMuted }}>左のリストから証明書を発行するセラピストを選択すると、発行できる証明書が表示されます。</p>
+              <p className="text-[11px]" style={{ color: T.textMuted }}>左のリストから証明書を発行するセラピストを選択してください。</p>
             </div>
           )}
         </div>
