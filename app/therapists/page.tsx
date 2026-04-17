@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
+import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
 import { useToast } from "../../lib/toast";
 
 const TherapistImportPanel = lazy(() => import("../../lib/therapist-import-panel"));
@@ -752,6 +753,60 @@ const generatePassword = () => {
                   ) : (
                     <button onClick={() => generateInvoiceLink(detailTarget.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>📋 適格事業者リンクを発行</button>
                   )}
+                </div>
+              </div>
+
+              {/* ── 証明書発行 ── */}
+              <div className="pt-3 mt-3" style={{ borderTop: `1px solid ${T.border}` }}>
+                <p className="text-[11px] mb-3" style={{ color: T.textMuted }}>📄 証明書発行</p>
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => {
+                    if (!storeInfo) return;
+                    generateContractCertificate(
+                      { company_name: storeInfo.company_name, company_address: storeInfo.company_address, company_phone: storeInfo.company_phone },
+                      { real_name: detailTarget.real_name || detailTarget.name, name: detailTarget.name, address: detailTarget.address || "", entry_date: detailTarget.entry_date || "" }
+                    );
+                  }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#2563eb18", color: "#2563eb", border: "1px solid #2563eb44" }}>
+                    📝 在籍証明
+                  </button>
+                  <button onClick={async () => {
+                    if (!storeInfo || !detailTarget) return;
+                    const yr = new Date().getFullYear();
+                    const { data: sett } = await supabase.from("therapist_daily_settlements")
+                      .select("date, total_back").eq("therapist_id", detailTarget.id)
+                      .gte("date", `${yr}-01-01`).lte("date", `${yr}-12-31`);
+                    const months: { month: number; amount: number; days: number }[] = [];
+                    for (let m = 1; m <= 12; m++) {
+                      const ms = (sett || []).filter(s => new Date(s.date).getMonth() + 1 === m);
+                      months.push({ month: m, amount: ms.reduce((a, s) => a + (s.total_back || 0), 0), days: ms.length });
+                    }
+                    generatePaymentCertificate(
+                      { company_name: storeInfo.company_name, company_address: storeInfo.company_address, company_phone: storeInfo.company_phone },
+                      { real_name: detailTarget.real_name || detailTarget.name, name: detailTarget.name, address: detailTarget.address || "", entry_date: detailTarget.entry_date || "" },
+                      { year: yr, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months }
+                    );
+                  }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#06b6d418", color: "#06b6d4", border: "1px solid #06b6d444" }}>
+                    💰 報酬支払証明
+                  </button>
+                  <button onClick={async () => {
+                    if (!storeInfo || !detailTarget) return;
+                    const yr = new Date().getFullYear();
+                    const { data: sett } = await supabase.from("therapist_daily_settlements")
+                      .select("date, total_back").eq("therapist_id", detailTarget.id)
+                      .gte("date", `${yr}-01-01`).lte("date", `${yr}-12-31`);
+                    const months: { month: number; amount: number; days: number }[] = [];
+                    for (let m = 1; m <= 12; m++) {
+                      const ms = (sett || []).filter(s => new Date(s.date).getMonth() + 1 === m);
+                      months.push({ month: m, amount: ms.reduce((a, s) => a + (s.total_back || 0), 0), days: ms.length });
+                    }
+                    generateTransactionCertificate(
+                      { company_name: storeInfo.company_name, company_address: storeInfo.company_address, company_phone: storeInfo.company_phone },
+                      { real_name: detailTarget.real_name || detailTarget.name, name: detailTarget.name, address: detailTarget.address || "", entry_date: detailTarget.entry_date || "" },
+                      { year: yr, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months }
+                    );
+                  }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#7c3aed18", color: "#7c3aed", border: "1px solid #7c3aed44" }}>
+                    📊 取引実績証明
+                  </button>
                 </div>
               </div>
               <div className="flex gap-3 mt-6 flex-wrap">
