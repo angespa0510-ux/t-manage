@@ -556,6 +556,7 @@ function RPGCharacters() {
     atkOff: 0, swordAng: 0, slashVis: false, sparkVis: false,
     sJump: 0, sAtkOff: 0, sSquish: false,
     heroFlash: false, heroDead: false,
+    heroKB: 0, slimeKB: 0, heroPain: false, slimePain: false,
     cape: 0, idleCount: 0,
   });
   const ref = useRef(s); ref.current = s;
@@ -616,6 +617,7 @@ function RPGCharacters() {
         } else if (r.ptick === 21) {
           // HIT!
           r.slashVis = true; r.sparkVis = true; r.sSquish = true;
+          r.slimePain = true; r.slimeKB = 18;
           const crit = Math.random() > 0.75;
           const dmg = crit ? 6 + Math.floor(Math.random()*3) : 2 + Math.floor(Math.random()*3);
           r.shp = Math.max(0, r.shp - dmg);
@@ -623,7 +625,9 @@ function RPGCharacters() {
           else ad(r.sx+10, r.sy-25, `${dmg}`, "#FFD700", 20);
         } else if (r.ptick <= 30) {
           r.swordAng = 60;
+          r.slimeKB = Math.max(0, r.slimeKB - 1.2);
           if (r.ptick === 26) { r.slashVis = false; r.sparkVis = false; r.sSquish = false; }
+          if (r.ptick === 28) r.slimePain = false;
         } else if (r.ptick <= 45) {
           // Return
           r.atkOff = lerp(lungeMax, 0, ease((r.ptick - 30) / 15));
@@ -650,7 +654,7 @@ function RPGCharacters() {
           r.sJump = Math.sin(t * Math.PI) * 80; // Big arc!
         } else if (r.ptick === 29) {
           // SLAM!
-          r.sSquish = true; r.heroFlash = true;
+          r.sSquish = true; r.heroFlash = true; r.heroPain = true; r.heroKB = 20;
           const dmg = 2 + Math.floor(Math.random() * 3);
           r.hhp = Math.max(0, r.hhp - dmg);
           ad(r.hx + 10, r.hy - 20, `${dmg}`, "#ef4444", 20);
@@ -658,11 +662,13 @@ function RPGCharacters() {
         } else if (r.ptick <= 38) {
           // Bounce back
           r.sSquish = r.ptick < 33;
+          r.heroKB = Math.max(0, r.heroKB - 2.2);
           const t = (r.ptick - 29) / 9;
           r.sAtkOff = lerp(distToH * 0.7, 0, ease(t));
           r.sJump = lerp(0, 0, t);
         } else if (r.ptick === 39) {
-          r.heroFlash = false; r.sJump = 0; r.sAtkOff = 0;
+          r.heroFlash = false; r.heroPain = false; r.heroKB = 0;
+          r.sJump = 0; r.sAtkOff = 0;
         }
         if (r.ptick > 50) {
           r.sAtkOff = 0; r.sJump = 0; r.sSquish = false;
@@ -719,8 +725,8 @@ function RPGCharacters() {
   const slimeBob = s.salive && !s.sSquish ? Math.sin(s.tick * 0.1) * 3 : 0;
   const dieScale = s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 45) : 1;
   const dieRot = s.phase === "slime_die" ? s.ptick * 10 : 0;
-  const heroAtkX = s.atkOff * s.hdir;
-  const slimeAtkX = s.phase === "slime_atk" ? -s.sAtkOff * (s.hdir) : 0;
+  const heroAtkX = s.atkOff * s.hdir - s.heroKB * s.hdir;
+  const slimeAtkX = (s.phase === "slime_atk" ? -s.sAtkOff * s.hdir : 0) + s.slimeKB * s.hdir;
   const heroDieRot = s.heroDead ? Math.min(90, s.ptick * 3) : 0;
   const heroDieOp = s.heroDead && s.ptick > 140 ? Math.max(0, 1 - (s.ptick - 140) / 40) : 1;
 
@@ -761,11 +767,26 @@ function RPGCharacters() {
           <ellipse cx="40" cy="33" rx="5" ry="4" fill="#3b82f6"/>
           {/* Head */}
           <circle cx="30" cy="18" r="12" fill="#FDBCB4"/>
-          <ellipse cx="26" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
-          <ellipse cx="34" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
-          <circle cx="27" cy="16" r="0.8" fill="white"/>
-          <circle cx="35" cy="16" r="0.8" fill="white"/>
-          <path d={s.heroDead ? "M27 23 Q30 21 33 23" : "M27 22 Q30 25 33 22"} stroke="#c4786a" strokeWidth="1" fill="none"/>
+          {/* Eyes — pain or normal */}
+          {s.heroPain || s.heroDead ? (
+            <>{/* X eyes */}
+              <line x1="23" y1="15" x2="29" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="29" y1="15" x2="23" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="31" y1="15" x2="37" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="37" y1="15" x2="31" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
+            </>
+          ) : (
+            <>{/* Normal eyes */}
+              <ellipse cx="26" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
+              <ellipse cx="34" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
+              <circle cx="27" cy="16" r="0.8" fill="white"/>
+              <circle cx="35" cy="16" r="0.8" fill="white"/>
+            </>
+          )}
+          {/* Mouth */}
+          <path d={s.heroPain ? "M25 23 Q30 20 35 23" : s.heroDead ? "M27 23 Q30 20 33 23" : "M27 22 Q30 25 33 22"} stroke="#c4786a" strokeWidth={s.heroPain ? "1.5" : "1"} fill="none"/>
+          {/* Sweat drop when in pain */}
+          {s.heroPain && <path d="M40 12 Q42 16 40 18 Q38 16 40 12Z" fill="#60a5fa" opacity="0.7"/>}
           <ellipse cx="23" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
           <ellipse cx="37" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
           {/* Crown */}
@@ -810,10 +831,27 @@ function RPGCharacters() {
             <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36Z" fill="url(#sg)"/>
             <ellipse cx="18" cy="16" rx="8" ry="6" fill="url(#ss)"/>
             <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36Z" stroke="#0e7490" strokeWidth="1.2" fill="none"/>
-            <ellipse cx="18" cy="22" rx="4" ry="5" fill="white"/><ellipse cx="34" cy="22" rx="4" ry="5" fill="white"/>
-            <ellipse cx="19" cy="23" rx="2.5" ry="3" fill="#0f172a"/><ellipse cx="35" cy="23" rx="2.5" ry="3" fill="#0f172a"/>
-            <circle cx="20" cy="21.5" r="1.2" fill="white"/><circle cx="36" cy="21.5" r="1.2" fill="white"/>
-            <path d="M22 30 Q25 34 28 30" stroke="#0e7490" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+            {/* Eyes — pain or normal */}
+            {s.slimePain ? (
+              <>{/* Squeezed eyes */}
+                <line x1="14" y1="22" x2="22" y2="22" stroke="#0e7490" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="30" y1="22" x2="38" y2="22" stroke="#0e7490" strokeWidth="2.5" strokeLinecap="round"/>
+              </>
+            ) : (
+              <>{/* Normal eyes */}
+                <ellipse cx="18" cy="22" rx="4" ry="5" fill="white"/><ellipse cx="34" cy="22" rx="4" ry="5" fill="white"/>
+                <ellipse cx="19" cy="23" rx="2.5" ry="3" fill="#0f172a"/><ellipse cx="35" cy="23" rx="2.5" ry="3" fill="#0f172a"/>
+                <circle cx="20" cy="21.5" r="1.2" fill="white"/><circle cx="36" cy="21.5" r="1.2" fill="white"/>
+              </>
+            )}
+            {/* Mouth — pain or normal */}
+            {s.slimePain ? (
+              <ellipse cx="25" cy="31" rx="4" ry="3" fill="#0e7490" opacity="0.8"/>
+            ) : (
+              <path d="M22 30 Q25 34 28 30" stroke="#0e7490" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+            )}
+            {/* Sweat when hit */}
+            {s.slimePain && <path d="M40 12 Q42 17 40 19 Q38 17 40 12Z" fill="#60a5fa" opacity="0.6"/>}
             <ellipse cx="13" cy="28" rx="3" ry="1.5" fill="#f0abfc" opacity="0.35"/>
             <ellipse cx="39" cy="28" rx="3" ry="1.5" fill="#f0abfc" opacity="0.35"/>
           </svg>
