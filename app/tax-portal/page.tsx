@@ -17,6 +17,35 @@ type TaxDoc = { id: number; category: string; file_name: string; file_url: strin
 
 const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "借入・融資", "保険", "納税通知", "その他"];
 
+// 会計ソフト形式
+type AccFormat = "general" | "yayoi" | "freee" | "mf";
+const ACC_FORMAT_LABELS: Record<AccFormat, string> = {
+  general: "汎用CSV",
+  yayoi: "弥生会計",
+  freee: "freee",
+  mf: "MFクラウド",
+};
+
+// CSVエスケープ処理
+const csvEscape = (v: unknown): string => {
+  const s = String(v ?? "");
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+};
+
+// CSVダウンロード（UTF-8 BOM付き・Excel互換）
+const downloadCSV = (rows: (string | number)[][], filename: string) => {
+  const bom = "\uFEFF";
+  const csv = bom + rows.map(r => r.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+};
+
 // Supabase Storageはパスに日本語が使えないため、英語キーにマッピング
 const CATEGORY_PATH: Record<string, string> = {
   "決算書": "kessan",
@@ -96,6 +125,9 @@ export default function TaxPortal() {
   const [uploading, setUploading] = useState(false);
   const [editingDocId, setEditingDocId] = useState<number | null>(null);
   const [editingFileName, setEditingFileName] = useState<string>("");
+
+  // 会計ソフト出力形式
+  const [accFormat, setAccFormat] = useState<AccFormat>("general");
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
@@ -213,6 +245,103 @@ export default function TaxPortal() {
     }
     await supabase.from("tax_documents").delete().eq("id", doc.id);
     fetchDocs();
+  };
+
+  // 期間ラベル
+  const periodLabel = viewMode === "monthly" ? selectedMonth : `${selectedYear}年`;
+
+  // 売上明細CSV出力
+  const exportSalesCSV = () => {
+    const rows: (string | number)[][] = [];
+    if (accFormat === "general") {
+      rows.push(["日付", "開始時刻", "終了時刻", "顧客名", "コース", "金額", "バック"]);
+      reservations.forEach(r => rows.push([r.date, r.start_time?.slice(0,5) || "", r.end_time?.slice(0,5) || "", r.customer_name || "", r.course || "", getPrice(r), getBack(r)]));
+      rows.push(["合計", "", "", "", `${reservations.length}件`, totalSales, totalBack]);
+    } else if (accFormat === "yayoi") {
+      // 弥生会計・仕訳インポート形式（簡易版）
+      rows.push(["取引日付", "借方勘定科目", "借方金額", "貸方勘定科目", "貸方金額", "摘要"]);
+      reservations.forEach(r => {
+        const price = getPrice(r);
+        if (price > 0) rows.push([r.date, "売掛金", price, "売上高", price, `${r.customer_name || ""} ${r.course || ""}`]);
+      });
+    } else if (accFormat === "freee") {
+      // freee 取引インポート形式（収入）
+      rows.push(["発生日", "勘定科目", "税区分", "金額", "取引先", "備考"]);
+      reservations.forEach(r => {
+        const price = getPrice(r);
+        if (price > 0) rows.push([r.date, "売上高", "課税売上10%", price, r.customer_name || "", r.course || ""]);
+      });
+    } else if (accFormat === "mf") {
+      // MFクラウド・仕訳インポート形式（簡易版）
+      rows.push(["取引日", "借方勘定科目", "借方金額(円)", "貸方勘定科目", "貸方金額(円)", "摘要"]);
+      reservations.forEach(r => {
+        const price = getPrice(r);
+        if (price > 0) rows.push([r.date, "売掛金", price, "売上高", price, `${r.customer_name || ""} ${r.course || ""}`]);
+      });
+    }
+    downloadCSV(rows, `売上_${periodLabel}_${accFormat}.csv`);
+  };
+
+  // 経費明細CSV出力
+  const exportExpenseCSV = () => {
+    const items = expenses.filter(e => e.type !== "income");
+    const rows: (string | number)[][] = [];
+    if (accFormat === "general") {
+      rows.push(["日付", "勘定科目", "項目", "店舗", "金額", "備考"]);
+      items.forEach(e => rows.push([e.date, ACCOUNT_MAP[e.category] || "雑費", e.name || "", getStoreName(e.store_id) || "", e.amount, e.notes || ""]));
+      rows.push(["合計", "", "", "", totalExpenseOnly, ""]);
+    } else if (accFormat === "yayoi") {
+      rows.push(["取引日付", "借方勘定科目", "借方金額", "貸方勘定科目", "貸方金額", "摘要"]);
+      items.forEach(e => rows.push([e.date, ACCOUNT_MAP[e.category] || "雑費", e.amount, "現金", e.amount, `${e.name || ""} ${e.notes || ""}`.trim()]));
+    } else if (accFormat === "freee") {
+      rows.push(["発生日", "勘定科目", "税区分", "金額", "取引先", "備考"]);
+      items.forEach(e => rows.push([e.date, ACCOUNT_MAP[e.category] || "雑費", "課対仕入10%", e.amount, getStoreName(e.store_id) || "", `${e.name || ""} ${e.notes || ""}`.trim()]));
+    } else if (accFormat === "mf") {
+      rows.push(["取引日", "借方勘定科目", "借方金額(円)", "貸方勘定科目", "貸方金額(円)", "摘要"]);
+      items.forEach(e => rows.push([e.date, ACCOUNT_MAP[e.category] || "雑費", e.amount, "現金", e.amount, `${e.name || ""} ${e.notes || ""}`.trim()]));
+    }
+    downloadCSV(rows, `経費_${periodLabel}_${accFormat}.csv`);
+  };
+
+  // セラピスト支払CSV出力
+  const exportTherapistCSV = () => {
+    const rows: (string | number)[][] = [];
+    if (accFormat === "general") {
+      rows.push(["氏名", "源泉対象", "インボイス", "登録番号", "出勤日数", "報酬総額", "インボイス控除", "源泉徴収", "実支給額"]);
+      therapistPayroll.forEach(p => rows.push([p.realName, p.hasWithholding ? "対象" : "対象外", p.hasInvoice ? "登録済" : "未登録", p.invoiceNum, p.days, p.gross, p.invoiceDed, p.tax, p.final]));
+      rows.push(["合計", "", "", "", "", totalTherapistGross, totalInvoiceDed, totalWithholding, therapistPayroll.reduce((s, p) => s + p.final, 0)]);
+    } else if (accFormat === "yayoi" || accFormat === "mf") {
+      const dateCol = accFormat === "yayoi" ? "取引日付" : "取引日";
+      const debitAmtCol = accFormat === "yayoi" ? "借方金額" : "借方金額(円)";
+      const creditAmtCol = accFormat === "yayoi" ? "貸方金額" : "貸方金額(円)";
+      rows.push([dateCol, "借方勘定科目", debitAmtCol, "貸方勘定科目", creditAmtCol, "摘要"]);
+      const lastDay = viewMode === "monthly" ? `${selectedMonth}-${new Date(smYear, smMonth, 0).getDate()}` : `${selectedYear}-12-31`;
+      therapistPayroll.forEach(p => {
+        // 外注費 / 現金 + 源泉預り金
+        rows.push([lastDay, "外注費", p.gross, "現金", p.final, `${p.realName} 報酬`]);
+        if (p.tax > 0) rows.push([lastDay, "", "", "預り金", p.tax, `${p.realName} 源泉徴収`]);
+      });
+    } else if (accFormat === "freee") {
+      rows.push(["発生日", "勘定科目", "税区分", "金額", "取引先", "備考"]);
+      const lastDay = viewMode === "monthly" ? `${selectedMonth}-${new Date(smYear, smMonth, 0).getDate()}` : `${selectedYear}-12-31`;
+      therapistPayroll.forEach(p => {
+        rows.push([lastDay, "外注費", p.hasInvoice ? "課対仕入10%" : "対象外", p.gross, p.realName, `${p.days}日出勤`]);
+      });
+    }
+    downloadCSV(rows, `セラピスト支払_${periodLabel}_${accFormat}.csv`);
+  };
+
+  // 勘定科目集計CSV出力（月次サマリー用）
+  const exportSummaryCSV = () => {
+    const rows: (string | number)[][] = [];
+    rows.push(["勘定科目", "種別", "金額", "構成比(%)"]);
+    accountSummary.forEach(a => rows.push([a.account, a.category === "therapist_back" ? "外注（セラピスト）" : a.category, a.amount, totalExpenseAll > 0 ? Math.round(a.amount / totalExpenseAll * 100) : 0]));
+    rows.push(["経費合計", "", totalExpenseAll, 100]);
+    rows.push([]);
+    rows.push(["総売上", "", grossRevenue, ""]);
+    rows.push(["経費合計", "", totalExpenseAll, ""]);
+    rows.push(["差引利益", "", netProfit, ""]);
+    downloadCSV(rows, `月次サマリー_${periodLabel}.csv`);
   };
 
   const getCourse = (name: string) => courses.find((c) => c.name === name);
@@ -338,7 +467,11 @@ export default function TaxPortal() {
           </select>
         )}
         <div className="flex-1"></div>
-        <span className="text-[10px]" style={{ color: T.textFaint }}>今期: 第{getCurrentFiscalYear() - 2023}期（会計ソフト出力はPhase 2）</span>
+        <span className="text-[11px]" style={{ color: T.textSub }}>CSV形式:</span>
+        <select value={accFormat} onChange={(e) => setAccFormat(e.target.value as AccFormat)} className="px-3 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+          {(Object.keys(ACC_FORMAT_LABELS) as AccFormat[]).map(f => <option key={f} value={f}>{ACC_FORMAT_LABELS[f]}</option>)}
+        </select>
+        <span className="text-[10px]" style={{ color: T.textFaint }}>今期: 第{getCurrentFiscalYear() - 2023}期</span>
       </div>
 
       {/* ── Body: Sheet Content ── */}
@@ -366,7 +499,10 @@ export default function TaxPortal() {
               <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                 <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
                   <span className="text-[12px] font-medium">📊 勘定科目別集計（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
-                  <span className="text-[10px]" style={{ color: T.textFaint }}>{accountSummary.length}科目</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={exportSummaryCSV} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>💾 CSV出力</button>
+                    <span className="text-[10px]" style={{ color: T.textFaint }}>{accountSummary.length}科目</span>
+                  </div>
                 </div>
                 <table className="w-full" style={{ fontSize: 12 }}>
                   <thead>
@@ -408,8 +544,8 @@ export default function TaxPortal() {
                 <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 このページについて</p>
                 <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
                   税理士ポータルは税務関連データの共有画面です。税理士の先生・社長・経営責任者のみアクセス可能です。<br/>
-                  現在、月次サマリー・売上・経費・セラピスト支払/源泉徴収・インボイス・書類庫 の6シートが利用可能です。<br/>
-                  Phase 2Cで年間スケジュール、Phase 3で会計ソフト5形式出力（弥生/freee/MFクラウド/汎用/e-Tax）を実装予定。
+                  月次サマリー・売上・経費・セラピスト支払/源泉徴収・インボイス・書類庫 の6シートと、4形式（汎用・弥生・freee・MFクラウド）のCSV出力が利用可能です。<br/>
+                  Phase 2Cで年間税務スケジュール（3月決算ベース）を実装予定。
                 </p>
               </div>
             </div>
@@ -436,7 +572,10 @@ export default function TaxPortal() {
               <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                 <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
                   <span className="text-[12px] font-medium">💰 売上明細（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
-                  <span className="text-[10px]" style={{ color: T.textFaint }}>{reservations.length}件</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={exportSalesCSV} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>💾 {ACC_FORMAT_LABELS[accFormat]}でCSV出力</button>
+                    <span className="text-[10px]" style={{ color: T.textFaint }}>{reservations.length}件</span>
+                  </div>
                 </div>
                 <div style={{ maxHeight: 500, overflowY: "auto" }}>
                   <table className="w-full" style={{ fontSize: 12 }}>
@@ -506,7 +645,10 @@ export default function TaxPortal() {
               <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                 <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
                   <span className="text-[12px] font-medium">💸 経費明細（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
-                  <span className="text-[10px]" style={{ color: T.textFaint }}>{expenses.filter(e => e.type !== "income").length}件</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={exportExpenseCSV} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>💾 {ACC_FORMAT_LABELS[accFormat]}でCSV出力</button>
+                    <span className="text-[10px]" style={{ color: T.textFaint }}>{expenses.filter(e => e.type !== "income").length}件</span>
+                  </div>
                 </div>
                 <div style={{ maxHeight: 500, overflowY: "auto" }}>
                   <table className="w-full" style={{ fontSize: 12 }}>
@@ -578,7 +720,10 @@ export default function TaxPortal() {
                     <span className="text-[12px] font-medium">👥 セラピスト支払・源泉徴収集計（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
                     <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>根拠: 所得税法204条1項6号 / 月額5,000円控除 / 税率10.21%</p>
                   </div>
-                  <span className="text-[10px]" style={{ color: T.textFaint }}>{therapistPayroll.length}名</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={exportTherapistCSV} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>💾 {ACC_FORMAT_LABELS[accFormat]}でCSV出力</button>
+                    <span className="text-[10px]" style={{ color: T.textFaint }}>{therapistPayroll.length}名</span>
+                  </div>
                 </div>
                 <div style={{ maxHeight: 500, overflowY: "auto" }}>
                   <table className="w-full" style={{ fontSize: 12 }}>
