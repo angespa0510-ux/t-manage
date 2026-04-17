@@ -587,7 +587,7 @@ function RPGCharacters() {
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
       const ease = (t: number) => t < 0.5 ? 2*t*t : 1 - (-2*t+2)**2/2;
       // PC（幅広い画面）ではゆっくり、スマホはそのまま
-      const spd = window.innerWidth > 900 ? 0.28 : 0.5;
+      const spd = window.innerWidth > 900 ? 0.18 : 0.4;
       const faceDir = (dx: number, dy: number) => {
         const ang = Math.atan2(dy, dx) * 180 / Math.PI; // -180 to 180
         if (ang > -45 && ang <= 45) return { hdir: 1, hface: "side" };     // right
