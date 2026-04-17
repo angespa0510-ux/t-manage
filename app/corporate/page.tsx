@@ -238,238 +238,90 @@ export default function CorporatePage() {
       {/* ── Divider ── */}
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(6,182,212,0.3),rgba(124,58,237,0.3),transparent)" }}/>
 
-      {/* ══════════ PRODUCTS ══════════ */}
+      {/* ══════════ PRODUCTS (3 cards → detail pages) ══════════ */}
       <section id="products" data-a style={{ padding:"100px 24px",background:"linear-gradient(180deg,#020617,#060e1f,#020617)" }}>
-        <div className={`fu ${show("products")?"on":""}`} style={{ maxWidth:1200,margin:"0 auto" }}>
+        <div className={`fu ${show("products")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:64 }}>
             <span style={{ fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>PRODUCTS</span>
-            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>開発プロダクト</h2>
+            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>プロダクト</h2>
             <div style={{ width:60,height:3,borderRadius:2,background:"linear-gradient(90deg,#06b6d4,#7c3aed)",margin:"16px auto 0" }}/>
-            <p style={{ fontSize:14,color:"#94a3b8",marginTop:16,lineHeight:1.8 }}>実際の現場課題から生まれたプロダクトたち</p>
+            <p style={{ fontSize:14,color:"#94a3b8",marginTop:16,lineHeight:1.8 }}>現場の課題から生まれた、3つのプロダクト</p>
           </div>
 
-          {/* ── AI Solutions Products ── */}
-          <div style={{ marginBottom:64 }}>
-            <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:24 }}>
-              <div style={{ width:4,height:28,borderRadius:2,background:"linear-gradient(180deg,#3b82f6,#2563eb)" }}/>
-              <div>
-                <span style={{ fontSize:10,fontWeight:700,color:"#3b82f6",letterSpacing:2 }}>AI SOLUTIONS</span>
-                <h3 style={{ fontSize:18,fontWeight:700,color:"#f8fafc",marginTop:2 }}>AIソリューション開発</h3>
-              </div>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:20 }}>
-              {[
-                {
-                  name: "T-MANAGE AI Assistant",
-                  tagline: "業務特化型AIチャットボット",
-                  desc: "サロン運営のマニュアル・税務・経費をAIが即座に回答。RAG構造で社内ナレッジを学習し、スタッフの「今すぐ知りたい」に24時間対応。セラピスト向けには確定申告・副業バレ防止・インボイス制度まで網羅。",
-                  challenge: "最初はAIの回答精度が課題でした。マニュアル記事の構造化と、質問パターンの分析を繰り返し、現場のセラピストさんから『本当に助かる』と言ってもらえるまで3ヶ月かかりました。",
-                  devVoice: "「AIに聞けば分かる」という安心感が、スタッフの自立を促してくれています。問い合わせ件数は導入前の1/3に減りました。",
-                  userVoice: "確定申告のこと、誰にも聞けなかったけどAIが丁寧に教えてくれて本当に助かりました（20代セラピスト）",
-                  tags: ["Claude API","RAG","Supabase"],
-                  color: "#3b82f6",
-                },
-                {
-                  name: "AutoDoc Vision",
-                  tagline: "AI書類読取 & 自動分類システム",
-                  desc: "スキャンした書類画像をAIが瞬時に読み取り、カテゴリ分類・リネーム・PDF変換を自動実行。領収書・契約書・身分証など、バラバラの書類を秒で整理。業務委託の契約書署名・身分証提出もデジタル化。",
-                  challenge: "書類の種類が多岐にわたるため、分類精度の向上が大変でした。特にFAX画像や斜めに撮影された写真の認識率を95%以上に引き上げるまで、プロンプト調整を50回以上繰り返しました。",
-                  devVoice: "紙の書類をスマホで撮るだけで即PDF化。ファイル名も自動で付くので、あとから探すのも楽になりました。",
-                  userVoice: "今まで書類整理に毎月3時間かかっていたのが、10分で終わるようになりました（経理担当）",
-                  tags: ["画像認識","Claude Vision","PDF生成"],
-                  color: "#06b6d4",
-                },
-                {
-                  name: "Insight Engine",
-                  tagline: "売上予測 & データ分析AI",
-                  desc: "過去の予約・売上・セラピスト稼働データから、来月の売上予測・最適シフト配置・指名傾向を自動分析。ダッシュボードで一目瞭然。経営判断をデータドリブンに変える。",
-                  challenge: "データの蓄積が少ない初期段階での予測精度が課題。季節変動・曜日変動・イベントの影響など、変数が多く、モデルの調整に苦労しました。半年分のデータが溜まってからようやく実用レベルに。",
-                  devVoice: "「来週の月曜は忙しくなりそう」がデータで分かるので、シフト組みが圧倒的に楽になりました。",
-                  userVoice: "感覚でやっていたシフト調整が、数字で裏付けられるようになって安心です（店長）",
-                  tags: ["データ分析","予測モデル","可視化"],
-                  color: "#7c3aed",
-                },
-              ].map((p,i) => (
-                <div key={i} className="ch" style={{ background:"linear-gradient(135deg,rgba(15,28,47,0.8),rgba(10,22,40,0.9))",borderRadius:18,border:"1px solid rgba(96,165,250,0.08)",overflow:"hidden",transition:"all .4s" }}>
-                  {/* Header */}
-                  <div style={{ padding:"24px 24px 16px",borderBottom:`1px solid ${p.color}15` }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12 }}>
-                      <div style={{ width:10,height:10,borderRadius:"50%",background:p.color,boxShadow:`0 0 10px ${p.color}60` }}/>
-                      <span style={{ fontSize:10,fontWeight:700,color:p.color,letterSpacing:1.5 }}>{p.tagline}</span>
-                    </div>
-                    <h4 style={{ fontSize:19,fontWeight:800,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'",letterSpacing:-.3 }}>{p.name}</h4>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:24 }}>
+            {[
+              {
+                name: "TERA AI",
+                tagline: "AI 業務支援プラットフォーム",
+                desc: "社内ナレッジをAIが学習し、スタッフの問い合わせに24時間自動応答。書類のAI読取・自動分類、データ分析による経営予測まで。業務のあらゆる場面にAIを。",
+                features: ["社内AIチャットボット","書類AI読取・自動分類","売上予測・データ分析"],
+                color: "#3b82f6",
+                href: "/corporate/products/ai",
+                badge: "AI",
+              },
+              {
+                name: "TERA Cloud",
+                tagline: "クラウド業務管理システム",
+                desc: "予約管理・シフト・売上・顧客情報を一元化。リアルタイム同期でどこからでもアクセス。スマホ対応のお客様ポータルで、予約・通知・履歴管理をセルフサービス化。",
+                features: ["予約・シフト・売上管理","リアルタイム同期","顧客ポータル"],
+                color: "#06b6d4",
+                href: "/corporate/products/web",
+                badge: "Cloud",
+              },
+              {
+                name: "TERA DX",
+                tagline: "DX 推進パッケージ",
+                desc: "紙の契約書を電子署名に。手書き帳簿をAI自動記帳に。属人的なノウハウをナレッジベースに。御社のアナログ業務をゼロから再設計します。",
+                features: ["電子契約・書類管理","AI帳簿・税務支援","ナレッジベース構築"],
+                color: "#7c3aed",
+                href: "/corporate/products/dx",
+                badge: "DX",
+              },
+            ].map((p,i) => (
+              <a key={i} href={p.href} className="ch" style={{
+                display:"block",textDecoration:"none",
+                background:"linear-gradient(135deg,rgba(15,28,47,0.9),rgba(10,22,40,0.95))",
+                borderRadius:20,border:"1px solid rgba(96,165,250,0.08)",
+                overflow:"hidden",transition:"all .4s",cursor:"pointer",
+              }}>
+                {/* Top accent bar */}
+                <div style={{ height:3,background:`linear-gradient(90deg,${p.color},${p.color}80)` }}/>
+                <div style={{ padding:"32px 28px" }}>
+                  {/* Badge + tagline */}
+                  <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
+                    <span style={{
+                      fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:6,
+                      background:`${p.color}15`,color:p.color,border:`1px solid ${p.color}30`,
+                      letterSpacing:1.5,
+                    }}>{p.badge}</span>
+                    <span style={{ fontSize:10,fontWeight:600,color:"#94a3b8",letterSpacing:1 }}>{p.tagline}</span>
                   </div>
-                  {/* Body */}
-                  <div style={{ padding:"16px 24px 20px" }}>
-                    <p style={{ fontSize:12,lineHeight:1.85,color:"#94a3b8",marginBottom:16 }}>{p.desc}</p>
-                    {/* Challenge */}
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)",marginBottom:12 }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:"#f59e0b",letterSpacing:1,marginBottom:6 }}>CHALLENGE</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1" }}>{p.challenge}</p>
-                    </div>
-                    {/* Voices */}
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:`${p.color}08`,border:`1px solid ${p.color}15`,marginBottom:12 }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:p.color,letterSpacing:1,marginBottom:6 }}>DEVELOPER</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1",fontStyle:"italic" }}>"{p.devVoice}"</p>
-                    </div>
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.1)" }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:"#22c55e",letterSpacing:1,marginBottom:6 }}>USER VOICE</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1",fontStyle:"italic" }}>"{p.userVoice}"</p>
-                    </div>
-                    {/* Tags */}
-                    <div style={{ display:"flex",gap:6,marginTop:14,flexWrap:"wrap" }}>
-                      {p.tags.map(t => <span key={t} style={{ fontSize:9,fontWeight:600,padding:"3px 10px",borderRadius:4,background:`${p.color}10`,color:p.color,border:`1px solid ${p.color}20` }}>{t}</span>)}
-                    </div>
+                  {/* Product name */}
+                  <h3 style={{ fontSize:28,fontWeight:900,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'",letterSpacing:-0.5,marginBottom:16 }}>{p.name}</h3>
+                  {/* Description */}
+                  <p style={{ fontSize:13,lineHeight:1.85,color:"#94a3b8",marginBottom:24 }}>{p.desc}</p>
+                  {/* Features */}
+                  <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:24 }}>
+                    {p.features.map(f => (
+                      <div key={f} style={{ display:"flex",alignItems:"center",gap:10 }}>
+                        <div style={{ width:6,height:6,borderRadius:"50%",background:p.color,boxShadow:`0 0 8px ${p.color}50`,flexShrink:0 }}/>
+                        <span style={{ fontSize:12,fontWeight:500,color:"#cbd5e1" }}>{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* CTA */}
+                  <div style={{
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                    padding:"12px 0",borderRadius:10,
+                    background:`${p.color}10`,border:`1px solid ${p.color}25`,
+                    fontSize:13,fontWeight:700,color:p.color,letterSpacing:.5,
+                    transition:"all .3s",
+                  }}>
+                    詳しく見る →
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Web Design & Dev Products ── */}
-          <div style={{ marginBottom:64 }}>
-            <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:24 }}>
-              <div style={{ width:4,height:28,borderRadius:2,background:"linear-gradient(180deg,#06b6d4,#0891b2)" }}/>
-              <div>
-                <span style={{ fontSize:10,fontWeight:700,color:"#06b6d4",letterSpacing:2 }}>WEB DESIGN & DEV</span>
-                <h3 style={{ fontSize:18,fontWeight:700,color:"#f8fafc",marginTop:2 }}>Webデザイン・システム開発</h3>
-              </div>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:20 }}>
-              {[
-                {
-                  name: "T-MANAGE",
-                  tagline: "統合型サロン管理プラットフォーム",
-                  desc: "予約管理・タイムチャート・シフト管理・売上分析・セラピスト管理・お客様マイページ・マニュアルシステムを統合したWebアプリ。現場オーナーが自ら開発し、毎日の業務で磨き上げた実戦仕様。",
-                  challenge: "最も苦労したのはタイムチャートのドラッグ&ドロップ。5分刻みの予約ブロックを複数セラピスト間でリアルタイム移動させる実装は、Supabase Realtimeとの同期で何度もバグと格闘しました。",
-                  devVoice: "このアプリは机上の設計ではなく、毎日の現場で『ここが使いにくい』を拾い続けて育てたもの。30回以上のメジャーアップデートを経て今の形になりました。",
-                  userVoice: "紙のシフト表とExcelの売上管理から解放されて、本当に楽になりました。予約もスマホでぱっと見れる（スタッフ）",
-                  tags: ["Next.js","Supabase","Realtime","PWA"],
-                  color: "#06b6d4",
-                },
-                {
-                  name: "Room Commander",
-                  tagline: "リアルタイム部屋割り最適化",
-                  desc: "複数フロア・複数建物の部屋割りをリアルタイムで可視化。セラピストの施術状況・清掃ステータス・次の予約を一画面で把握。ドラッグ操作で即座に部屋変更が可能。",
-                  challenge: "建物が3棟あり、それぞれ部屋数が異なる中で、一画面に収めるUIが難しかった。フロアごとの色分け、セラピストアイコンの自動配置、清掃完了通知の連携など、見た目以上にロジックが複雑です。",
-                  devVoice: "前は受付スタッフが紙のボードで管理していたのですが、部屋の空き状況がリアルタイムで全員に共有されるようになり、ダブルブッキングが0件になりました。",
-                  userVoice: "どの部屋が空いてるか一目で分かるので、お客様をお待たせしなくなりました（受付スタッフ）",
-                  tags: ["Drag&Drop","リアルタイム","SVG"],
-                  color: "#3b82f6",
-                },
-                {
-                  name: "Customer Portal",
-                  tagline: "お客様専用マイページ",
-                  desc: "予約確認・お気に入りセラピスト登録・通知受信・予約履歴閲覧ができるお客様専用ポータル。LINEやメールからワンタップでアクセス。トークン認証で面倒なログイン不要。",
-                  challenge: "セキュリティと使いやすさの両立が最大の課題。パスワードなしでアクセスできる利便性を保ちつつ、他人の予約が見えない安全性を確保するため、有効期限付きトークン認証を独自実装しました。",
-                  devVoice: "電話予約からWEB予約への移行率が40%まで上がり、受付の電話対応工数が半減しました。お客様も自分の好きな時間に予約できて満足度UP。",
-                  userVoice: "LINEに届くリンクを押すだけで予約確認できるのが便利！前は電話しないと確認できなかった（30代女性）",
-                  tags: ["トークン認証","LINE連携","モバイルUI"],
-                  color: "#7c3aed",
-                },
-              ].map((p,i) => (
-                <div key={i} className="ch" style={{ background:"linear-gradient(135deg,rgba(15,28,47,0.8),rgba(10,22,40,0.9))",borderRadius:18,border:"1px solid rgba(96,165,250,0.08)",overflow:"hidden",transition:"all .4s" }}>
-                  <div style={{ padding:"24px 24px 16px",borderBottom:`1px solid ${p.color}15` }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12 }}>
-                      <div style={{ width:10,height:10,borderRadius:"50%",background:p.color,boxShadow:`0 0 10px ${p.color}60` }}/>
-                      <span style={{ fontSize:10,fontWeight:700,color:p.color,letterSpacing:1.5 }}>{p.tagline}</span>
-                    </div>
-                    <h4 style={{ fontSize:19,fontWeight:800,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'",letterSpacing:-.3 }}>{p.name}</h4>
-                  </div>
-                  <div style={{ padding:"16px 24px 20px" }}>
-                    <p style={{ fontSize:12,lineHeight:1.85,color:"#94a3b8",marginBottom:16 }}>{p.desc}</p>
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)",marginBottom:12 }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:"#f59e0b",letterSpacing:1,marginBottom:6 }}>CHALLENGE</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1" }}>{p.challenge}</p>
-                    </div>
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:`${p.color}08`,border:`1px solid ${p.color}15`,marginBottom:12 }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:p.color,letterSpacing:1,marginBottom:6 }}>DEVELOPER</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1",fontStyle:"italic" }}>"{p.devVoice}"</p>
-                    </div>
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.1)" }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:"#22c55e",letterSpacing:1,marginBottom:6 }}>USER VOICE</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1",fontStyle:"italic" }}>"{p.userVoice}"</p>
-                    </div>
-                    <div style={{ display:"flex",gap:6,marginTop:14,flexWrap:"wrap" }}>
-                      {p.tags.map(t => <span key={t} style={{ fontSize:9,fontWeight:600,padding:"3px 10px",borderRadius:4,background:`${p.color}10`,color:p.color,border:`1px solid ${p.color}20` }}>{t}</span>)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── DX Products ── */}
-          <div>
-            <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:24 }}>
-              <div style={{ width:4,height:28,borderRadius:2,background:"linear-gradient(180deg,#7c3aed,#6d28d9)" }}/>
-              <div>
-                <span style={{ fontSize:10,fontWeight:700,color:"#7c3aed",letterSpacing:2 }}>DIGITAL TRANSFORMATION</span>
-                <h3 style={{ fontSize:18,fontWeight:700,color:"#f8fafc",marginTop:2 }}>DX推進支援</h3>
-              </div>
-            </div>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:20 }}>
-              {[
-                {
-                  name: "SmartContract",
-                  tagline: "電子契約 & デジタル書類管理",
-                  desc: "業務委託契約書の電子署名、身分証アップロード、インボイス登録通知書の提出をすべてスマホで完結。入店前の書類手続きをLINEのリンク1つで一括送信。紙の契約書をゼロに。",
-                  challenge: "法的に有効な電子署名の要件を満たしつつ、ITに不慣れなセラピストさんでも迷わず操作できるUI設計が最大の課題。テスト段階で実際のセラピスト5名に使ってもらい、つまずくポイントを1つずつ潰していきました。",
-                  devVoice: "入店書類の手続きが『LINEにリンク送るだけ』になったのは革命的。以前は書類を印刷して、書いてもらって、スキャンして保存…という作業に1人30分かかっていました。",
-                  userVoice: "スマホでサインするだけで契約完了！こんな簡単でいいの？って思いました（新人セラピスト）",
-                  tags: ["電子署名","LINE連携","PDF生成"],
-                  color: "#7c3aed",
-                },
-                {
-                  name: "TaxNavi",
-                  tagline: "確定申告サポートシステム",
-                  desc: "個人事業主のセラピスト向けに、確定申告を7ステップで完全ガイド。状況に応じたアドバイスをAIが自動判定。経費の帳簿管理・レシートAI読取・源泉徴収の自動計算・支払調書PDF生成まで一気通貫。",
-                  challenge: "税制は毎年変わるため、情報の鮮度維持が大変。2026年のひとり親控除拡充・基礎控除の引き上げなど、改正のたびにロジックを更新。税理士の監修を受けながら正確性を担保しています。",
-                  devVoice: "『確定申告なんて無理』と思っていたセラピストさんが、ステップを追うだけで自分でe-Tax申告できるようになった時は本当に嬉しかったです。",
-                  userVoice: "還付金が5万円も戻ってきた！今まで申告してなかったのがもったいなかった…（30代セラピスト）",
-                  tags: ["税務AI","帳簿自動化","e-Tax連携"],
-                  color: "#06b6d4",
-                },
-                {
-                  name: "FlowBoard",
-                  tagline: "業務マニュアル & ナレッジ共有",
-                  desc: "操作マニュアル・業務手順書・ノウハウをカテゴリ別に整理し、スタッフが自分で学べるナレッジベースを構築。記事のドラッグ並替え・画像挿入・記事間リンク・AIチャットによる質疑応答を統合。",
-                  challenge: "『マニュアルを読まない問題』をどう解決するかが課題でした。答えは『AIに聞ける』こと。マニュアル記事の内容をAIが学習し、『精算の手順は？』と聞くだけで該当箇所を引用付きで回答してくれます。",
-                  devVoice: "新人スタッフの教育時間が約60%短縮。OJTで先輩が付きっきりで教える必要がなくなり、先輩スタッフの負担が大幅に減りました。",
-                  userVoice: "分からないことがあっても、いつでもAIに聞けるので安心して仕事を覚えられます（入店1ヶ月目スタッフ）",
-                  tags: ["ナレッジベース","AI検索","Markdown"],
-                  color: "#3b82f6",
-                },
-              ].map((p,i) => (
-                <div key={i} className="ch" style={{ background:"linear-gradient(135deg,rgba(15,28,47,0.8),rgba(10,22,40,0.9))",borderRadius:18,border:"1px solid rgba(96,165,250,0.08)",overflow:"hidden",transition:"all .4s" }}>
-                  <div style={{ padding:"24px 24px 16px",borderBottom:`1px solid ${p.color}15` }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12 }}>
-                      <div style={{ width:10,height:10,borderRadius:"50%",background:p.color,boxShadow:`0 0 10px ${p.color}60` }}/>
-                      <span style={{ fontSize:10,fontWeight:700,color:p.color,letterSpacing:1.5 }}>{p.tagline}</span>
-                    </div>
-                    <h4 style={{ fontSize:19,fontWeight:800,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'",letterSpacing:-.3 }}>{p.name}</h4>
-                  </div>
-                  <div style={{ padding:"16px 24px 20px" }}>
-                    <p style={{ fontSize:12,lineHeight:1.85,color:"#94a3b8",marginBottom:16 }}>{p.desc}</p>
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)",marginBottom:12 }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:"#f59e0b",letterSpacing:1,marginBottom:6 }}>CHALLENGE</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1" }}>{p.challenge}</p>
-                    </div>
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:`${p.color}08`,border:`1px solid ${p.color}15`,marginBottom:12 }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:p.color,letterSpacing:1,marginBottom:6 }}>DEVELOPER</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1",fontStyle:"italic" }}>"{p.devVoice}"</p>
-                    </div>
-                    <div style={{ padding:"12px 14px",borderRadius:10,background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.1)" }}>
-                      <p style={{ fontSize:9,fontWeight:700,color:"#22c55e",letterSpacing:1,marginBottom:6 }}>USER VOICE</p>
-                      <p style={{ fontSize:11,lineHeight:1.7,color:"#cbd5e1",fontStyle:"italic" }}>"{p.userVoice}"</p>
-                    </div>
-                    <div style={{ display:"flex",gap:6,marginTop:14,flexWrap:"wrap" }}>
-                      {p.tags.map(t => <span key={t} style={{ fontSize:9,fontWeight:600,padding:"3px 10px",borderRadius:4,background:`${p.color}10`,color:p.color,border:`1px solid ${p.color}20` }}>{t}</span>)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+              </a>
+            ))}
           </div>
         </div>
       </section>
