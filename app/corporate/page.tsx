@@ -880,7 +880,7 @@ function RPGCharacters() {
             <g transform={`rotate(${s.swordAng} 42 34)`}><rect x="43" y="12" width="3.5" height="22" rx="1.5" fill="#B0B8C8"/><rect x="43" y="12" width="3.5" height="7" rx="1.5" fill="#E0E8FF"/><rect x="41" y="32" width="7.5" height="4.5" rx="2" fill="#FFD700"/><rect x="43.5" y="36.5" width="2.5" height="7" rx="1" fill="#8B6914"/><circle cx="44.8" cy="14" r="1" fill="#fff" opacity="0.6"/></g>
           </>)}
           {/* ── FRONT VIEW (walking down / idle) ── */}
-          {s.hface === "front" && s.phase === "wander" && (<>
+          {s.hface === "front" && !["hero_atk","encounter","slime_atk"].includes(s.phase) && (<>
             <path d="M22 30 Q20 50 18 62 L30 60 L42 62 Q40 50 38 30Z" fill="#dc2626" opacity="0.6"/>
             {/* Legs — sitting or walking */}
             {isSitting ? (<>
@@ -922,7 +922,7 @@ function RPGCharacters() {
             </>)}
           </>)}
           {/* ── BACK VIEW (walking up) ── */}
-          {s.hface === "back" && s.phase === "wander" && (<>
+          {s.hface === "back" && !["hero_atk","encounter","slime_atk"].includes(s.phase) && (<>
             <path d={`M20 28 Q15 ${48+s.cape} ${10+s.cape*0.5} ${64+s.cape*0.3} L30 62 L${50-s.cape*0.5} ${64-s.cape*0.3} Q45 ${48-s.cape} 40 28Z`} fill="#dc2626" opacity="0.9"/>
             <path d={`M22 30 Q18 ${46+s.cape*0.8} ${14+s.cape*0.3} ${60+s.cape*0.4} L30 58 L${46-s.cape*0.3} ${60-s.cape*0.4} Q42 ${46-s.cape*0.8} 38 30Z`} fill="#b91c1c" opacity="0.5"/>
             <rect x="22" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepFwd*0.6}, 0)`}/>
