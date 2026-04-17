@@ -117,6 +117,9 @@ export default function CashDashboard() {
   const [checkNote, setCheckNote] = useState("");
   const [checkSaving, setCheckSaving] = useState(false);
 
+  // 管理者金庫 計算内訳モーダル
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+
   // 認証・権限チェック
   useEffect(() => {
     if (!activeStaff) { router.push("/dashboard"); return; }
@@ -449,9 +452,10 @@ export default function CashDashboard() {
               </div>
 
               {/* 管理者金庫 */}
-              <div className="rounded-xl p-4" style={cardStyle}>
+              <div className="rounded-xl p-4 cursor-pointer transition-all hover:shadow-md" style={cardStyle} onClick={() => setShowBreakdownModal(true)}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px]" style={{ color: "#f59e0b" }}>🗄 管理者金庫</p>
+                  <span className="text-[9px]" style={{ color: T.textFaint }}>🔍 内訳</span>
                 </div>
                 <p className="text-[18px] font-medium" style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(officeCashBalance)}</p>
                 {latestManagerCheck ? (
@@ -900,6 +904,159 @@ export default function CashDashboard() {
               <button onClick={saveBalanceCheck} disabled={checkSaving || (!checkManagerSafe && !checkStaffSafe && !checkToyohashi)} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer font-medium disabled:opacity-50" style={{ backgroundColor: "#f59e0b", color: "white", border: "none" }}>
                 {checkSaving ? "保存中..." : "💾 保存"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 管理者金庫 計算内訳モーダル */}
+      {showBreakdownModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowBreakdownModal(false)}>
+          <div className="rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <div>
+                <p className="text-[14px] font-medium" style={{ color: "#f59e0b" }}>🗄 管理者金庫 計算内訳</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>理論値 {fmt(officeCashBalance)} の計算元データ一覧</p>
+              </div>
+              <button onClick={() => setShowBreakdownModal(false)} className="text-[14px] cursor-pointer p-1" style={{ color: T.textSub, border: "none", backgroundColor: "transparent" }}>✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {/* 計算式サマリー */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#f59e0b10", border: "1px solid #f59e0b33" }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: "#f59e0b" }}>📊 計算式</p>
+                <div className="text-[11px] space-y-1" style={{ color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+                  <div className="flex justify-between"><span>＋ 累積現金収入（精算 sales_collected=true 全て）</span><span style={{ color: "#22c55e" }}>+{fmt(cumulativeCashIn)}</span></div>
+                  <div className="flex justify-between"><span>＋ 累積その他収入（経費管理の収入登録）</span><span style={{ color: "#22c55e" }}>+{fmt(cumulativeIncome)}</span></div>
+                  <div className="flex justify-between"><span>− 累積経費（経費管理の経費登録）</span><span style={{ color: "#c45555" }}>-{fmt(cumulativeExpense)}</span></div>
+                  <div className="flex justify-between"><span>− 累積釣銭補充（ルームへの補充）</span><span style={{ color: "#c45555" }}>-{fmt(totalReplenishAll)}</span></div>
+                  <div className="flex justify-between"><span>− 累積ATM預入（管理者金庫→PayPay銀行）</span><span style={{ color: "#c45555" }}>-{fmt(cumulativeAtmDeposit)}</span></div>
+                  <div className="flex justify-between"><span>− 累積予備金補充（スタッフ金庫→豊橋予備金）</span><span style={{ color: "#c45555" }}>-{fmt(totalReserveRefund)}</span></div>
+                  <div className="flex justify-between pt-2 font-medium text-[13px]" style={{ borderTop: `1px solid ${T.border}`, color: T.text }}>
+                    <span>= 管理者金庫 理論値</span>
+                    <span>{fmt(officeCashBalance)}</span>
+                  </div>
+                  {latestManagerCheck && (
+                    <>
+                      <div className="flex justify-between text-[10px]" style={{ color: T.textFaint }}>
+                        <span>実測値 ({latestManagerCheck.check_date})</span>
+                        <span>{fmt(latestManagerCheck.manager_safe_actual || 0)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium text-[12px]" style={{ color: Math.abs(managerDiff || 0) > 10000 ? "#c45555" : "#f59e0b" }}>
+                        <span>差額（実測 - 理論）</span>
+                        <span>{managerDiff !== null ? (managerDiff > 0 ? "+" : "") + fmt(managerDiff) : "—"}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* 精算データ内訳 */}
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+                  <p className="text-[11px] font-medium">＋ 累積現金収入 の内訳（{collectedSettlements.length}件）</p>
+                </div>
+                <div style={{ maxHeight: 250, overflowY: "auto" }}>
+                  <table className="w-full" style={{ fontSize: 10 }}>
+                    <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                      <tr style={{ color: T.textSub, fontSize: 9 }}>
+                        <th style={{ padding: "4px 8px", textAlign: "left" }}>日付</th>
+                        <th style={{ padding: "4px 8px", textAlign: "left" }}>セラピスト</th>
+                        <th style={{ padding: "4px 8px", textAlign: "right" }}>現金受取</th>
+                        <th style={{ padding: "4px 8px", textAlign: "right" }}>支払</th>
+                        <th style={{ padding: "4px 8px", textAlign: "right" }}>予備金</th>
+                        <th style={{ padding: "4px 8px", textAlign: "right" }}>金庫入金</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {collectedSettlements.length === 0 && <tr><td colSpan={6} style={{ padding: "16px", textAlign: "center", color: T.textFaint }}>精算データがありません</td></tr>}
+                      {collectedSettlements
+                        .sort((a, b) => b.date.localeCompare(a.date))
+                        .map((s, i) => {
+                          const ru = s.reserve_used_amount || 0;
+                          const net = Math.max((s.total_cash || 0) - (s.final_payment || 0) + ru, 0);
+                          const rep = s.change_collected ? replenishAll.filter(r => r.room_id === s.room_id && r.date === s.date).reduce((a, b) => a + (b.amount || 0), 0) : 0;
+                          const total = net + rep;
+                          return (
+                            <tr key={s.id} style={{ borderTop: `1px solid ${T.border}`, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                              <td style={{ padding: "4px 8px", fontVariantNumeric: "tabular-nums" }}>{s.date}</td>
+                              <td style={{ padding: "4px 8px", color: T.textMuted }}>{getThName(s.therapist_id)}</td>
+                              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(s.total_cash || 0)}</td>
+                              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#c45555" }}>-{fmt(s.final_payment || 0)}</td>
+                              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: ru > 0 ? "#d4687e" : T.textFaint }}>{ru > 0 ? "+" + fmt(ru) : "—"}</td>
+                              <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, color: total > 0 ? "#22c55e" : T.textFaint }}>+{fmt(total)}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 経費・収入 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+                  <div className="px-3 py-2" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium" style={{ color: "#c45555" }}>− 経費 ({expensesAll.filter(e => e.type === "expense").length}件 / {fmt(cumulativeExpense)})</p>
+                  </div>
+                  <div style={{ maxHeight: 150, overflowY: "auto", fontSize: 9 }}>
+                    {expensesAll.filter(e => e.type === "expense").sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20).map((e, i) => (
+                      <div key={e.id} className="flex justify-between px-3 py-1" style={{ borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                        <span style={{ color: T.textMuted }}>{e.date.slice(5)} {e.category}</span>
+                        <span style={{ color: "#c45555", fontVariantNumeric: "tabular-nums" }}>-{fmt(e.amount)}</span>
+                      </div>
+                    ))}
+                    {expensesAll.filter(e => e.type === "expense").length === 0 && <p className="px-3 py-2 text-center" style={{ color: T.textFaint }}>経費なし</p>}
+                  </div>
+                </div>
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+                  <div className="px-3 py-2" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium" style={{ color: "#22c55e" }}>＋ その他収入 ({expensesAll.filter(e => e.type === "income").length}件 / {fmt(cumulativeIncome)})</p>
+                  </div>
+                  <div style={{ maxHeight: 150, overflowY: "auto", fontSize: 9 }}>
+                    {expensesAll.filter(e => e.type === "income").sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20).map((e, i) => (
+                      <div key={e.id} className="flex justify-between px-3 py-1" style={{ borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                        <span style={{ color: T.textMuted }}>{e.date.slice(5)} {e.category}</span>
+                        <span style={{ color: "#22c55e", fontVariantNumeric: "tabular-nums" }}>+{fmt(e.amount)}</span>
+                      </div>
+                    ))}
+                    {expensesAll.filter(e => e.type === "income").length === 0 && <p className="px-3 py-2 text-center" style={{ color: T.textFaint }}>その他収入なし</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* 釣銭補充 */}
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+                <div className="px-3 py-2" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] font-medium" style={{ color: "#c45555" }}>− 釣銭補充 ({replenishAll.length}件 / {fmt(totalReplenishAll)})</p>
+                </div>
+                <div style={{ maxHeight: 120, overflowY: "auto", fontSize: 9 }}>
+                  {replenishAll.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20).map((r, i) => (
+                    <div key={r.id} className="flex justify-between px-3 py-1" style={{ borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                      <span style={{ color: T.textMuted }}>{r.date.slice(5)} / room_id:{r.room_id}</span>
+                      <span style={{ color: "#c45555", fontVariantNumeric: "tabular-nums" }}>-{fmt(r.amount)}</span>
+                    </div>
+                  ))}
+                  {replenishAll.length === 0 && <p className="px-3 py-2 text-center" style={{ color: T.textFaint }}>釣銭補充なし</p>}
+                </div>
+              </div>
+
+              {/* 差額の可能性がある原因 */}
+              {managerDiff !== null && Math.abs(managerDiff) > 1000 && (
+                <div className="rounded-xl p-4" style={{ backgroundColor: "#c4555510", border: "1px solid #c4555533" }}>
+                  <p className="text-[11px] font-medium mb-2" style={{ color: "#c45555" }}>⚠️ 差額 {fmt(managerDiff)} の原因として考えられること</p>
+                  <ul className="text-[10px] space-y-1 list-disc pl-5" style={{ color: T.textSub }}>
+                    <li>過去のATM預入が未登録（ダッシュボードの「🏦 ATM預入を記録」で追加）</li>
+                    <li>過去の精算が手動で金庫から補充・持ち出しされていた（「📋 金庫残高確認」で実測値を記録）</li>
+                    <li>テストデータが混ざっている（運用開始前の精算データ）</li>
+                    <li>経費が現金払い以外（振込・カード）なのに expenses に記録されていない</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 flex justify-end" style={{ borderTop: `1px solid ${T.border}` }}>
+              <button onClick={() => setShowBreakdownModal(false)} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>閉じる</button>
             </div>
           </div>
         </div>
