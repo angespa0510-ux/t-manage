@@ -527,6 +527,9 @@ export default function CorporatePage() {
         </div>
       </section>
 
+      {/* ══════════ PIXEL HERO ══════════ */}
+      <PixelHero />
+
       {/* ══════════ FOOTER ══════════ */}
       <footer style={{ padding:"40px 24px 28px",background:"#020617",borderTop:"1px solid rgba(96,165,250,0.08)" }}>
         <div style={{ maxWidth:1100,margin:"0 auto",display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"center",gap:20 }}>
@@ -538,5 +541,142 @@ export default function CorporatePage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/* ══════════ Pixel Art Hero Component ══════════ */
+function PixelHero() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const posRef = useRef({ x: 100, y: 300, dir: 0, frame: 0, tick: 0, targetX: 400, targetY: 500 });
+  const [pos, setPos] = useState({ x: 100, y: 300, dir: 0 });
+
+  useEffect(() => {
+    // Pixel art frames: hero facing 4 directions, 2 walk frames each
+    // 0=down, 1=left, 2=right, 3=up
+    const SPRITE: number[][][] = [
+      // Frame 0 (stand/walk1) — facing right
+      [
+        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
+        [0,0,0,0,9,4,4,4,4,9,0,0,0,0,0,0],
+        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
+        [0,0,0,9,4,1,4,4,1,4,9,0,0,0,0,0],
+        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
+        [0,0,0,0,9,4,3,3,4,9,0,0,0,0,0,0],
+        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
+        [0,0,0,2,2,2,5,5,2,2,2,0,0,0,0,0],
+        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
+        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
+        [0,0,0,2,2,2,6,6,2,2,2,0,8,0,0,0],
+        [0,0,0,0,2,2,6,6,2,2,0,0,8,0,0,0],
+        [0,0,0,0,0,6,6,6,6,0,0,0,8,0,0,0],
+        [0,0,0,0,0,6,0,0,6,0,0,0,0,0,0,0],
+        [0,0,0,0,3,3,0,0,3,3,0,0,0,0,0,0],
+        [0,0,0,0,3,3,0,0,3,3,0,0,0,0,0,0],
+      ],
+      // Frame 1 (walk2) — facing right, legs swapped
+      [
+        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
+        [0,0,0,0,9,4,4,4,4,9,0,0,0,0,0,0],
+        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
+        [0,0,0,9,4,1,4,4,1,4,9,0,0,0,0,0],
+        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
+        [0,0,0,0,9,4,3,3,4,9,0,0,0,0,0,0],
+        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
+        [0,0,0,2,2,2,5,5,2,2,2,0,0,0,0,0],
+        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
+        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
+        [0,0,0,2,2,2,6,6,2,2,2,0,8,0,0,0],
+        [0,0,0,0,2,2,6,6,2,2,0,0,8,0,0,0],
+        [0,0,0,0,0,6,6,6,6,0,0,0,8,0,0,0],
+        [0,0,0,0,6,0,0,0,0,6,0,0,0,0,0,0],
+        [0,0,0,3,3,0,0,0,0,3,3,0,0,0,0,0],
+        [0,0,0,3,3,0,0,0,0,3,3,0,0,0,0,0],
+      ],
+    ];
+
+    // Color palette: 0=transparent, 1=black(eyes), 2=blue(tunic), 3=brown(boots/hair),
+    // 4=skin, 5=belt(dark brown), 6=dark blue(pants), 7=gold(sword handle), 8=silver(blade), 9=red(headband)
+    const COLORS = ["transparent","#1a1a2e","#2563eb","#8B6914","#FDBCB4","#5C4033","#1e3a5f","#FFD700","#C0C0C0","#dc2626"];
+
+    const drawSprite = (ctx: CanvasRenderingContext2D, sprite: number[][], px: number, flipH: boolean) => {
+      for (let y = 0; y < sprite.length; y++) {
+        for (let x = 0; x < sprite[y].length; x++) {
+          if (sprite[y][x] === 0) continue;
+          ctx.fillStyle = COLORS[sprite[y][x]];
+          const dx = flipH ? (15 - x) * px : x * px;
+          ctx.fillRect(dx, y * px, px, px);
+        }
+      }
+    };
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const pickTarget = () => {
+      const maxX = window.innerWidth - 60;
+      const maxY = Math.max(document.body.scrollHeight - 100, window.innerHeight);
+      posRef.current.targetX = 60 + Math.random() * (maxX - 60);
+      posRef.current.targetY = 100 + Math.random() * Math.min(maxY, 4000);
+    };
+
+    pickTarget();
+
+    const loop = () => {
+      const p = posRef.current;
+      p.tick++;
+
+      // Move towards target
+      const dx = p.targetX - p.x;
+      const dy = p.targetY - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < 10) {
+        pickTarget();
+      } else {
+        const speed = 1.2;
+        p.x += (dx / dist) * speed;
+        p.y += (dy / dist) * speed;
+      }
+
+      // Determine direction (0=right, 1=left)
+      p.dir = dx >= 0 ? 0 : 1;
+
+      // Walk animation frame (toggle every 12 ticks)
+      if (p.tick % 12 === 0) p.frame = p.frame === 0 ? 1 : 0;
+
+      // Draw
+      const px = 3;
+      canvas.width = 16 * px;
+      canvas.height = 16 * px;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawSprite(ctx, SPRITE[p.frame], px, p.dir === 1);
+
+      setPos({ x: p.x, y: p.y, dir: p.dir });
+
+      requestAnimationFrame(loop);
+    };
+
+    const raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: "absolute",
+        left: pos.x,
+        top: pos.y,
+        width: 48,
+        height: 48,
+        imageRendering: "pixelated",
+        pointerEvents: "none",
+        zIndex: 40,
+        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
+        transition: "left 0.05s linear, top 0.05s linear",
+      }}
+    />
   );
 }
