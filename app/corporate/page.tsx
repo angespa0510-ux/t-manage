@@ -547,7 +547,7 @@ export default function CorporatePage() {
 /* ══════════ RPG Battle Characters ══════════ */
 function RPGCharacters() {
   const [s, setS] = useState({
-    hx: 200, hy: 400, tx: 600, ty: 800, hdir: 1, walk: false,
+    hx: 200, hy: 400, tx: 600, ty: 800, hdir: 1, hface: "front" as string, walk: false,
     sx: -200, sy: -200, salive: false, shp: 5, sMaxHp: 5,
     hhp: 15, hMaxHp: 15,
     phase: "wander" as string, ptick: 0, tick: 0, nextSpawn: 200,
@@ -580,12 +580,23 @@ function RPGCharacters() {
       const dist2 = (ax: number, ay: number, bx: number, by: number) => Math.sqrt((ax-bx)**2 + (ay-by)**2);
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
       const ease = (t: number) => t < 0.5 ? 2*t*t : 1 - (-2*t+2)**2/2;
+      const faceDir = (dx: number, dy: number) => {
+        const ang = Math.atan2(dy, dx) * 180 / Math.PI; // -180 to 180
+        if (ang > -45 && ang <= 45) return { hdir: 1, hface: "side" };     // right
+        if (ang > 45 && ang <= 135) return { hdir: 1, hface: "front" };    // down
+        if (ang > -135 && ang <= -45) return { hdir: 1, hface: "back" };   // up
+        return { hdir: -1, hface: "side" };                                 // left
+      };
 
       if (r.phase === "wander") {
         if (r.heroDead) { r.heroDead = false; r.hhp = r.hMaxHp; }
         const dx = r.tx - r.hx, dy = r.ty - r.hy, d = dist2(r.hx,r.hy,r.tx,r.ty);
         if (d < 10) { r.walk = false; r.idleCount++; if (r.idleCount > 150) pick(); }
-        else { r.hx += (dx/d)*0.5; r.hy += (dy/d)*0.5; r.hdir = dx >= 0 ? 1 : -1; r.walk = true; r.idleCount = 0; }
+        else {
+          r.hx += (dx/d)*0.5; r.hy += (dy/d)*0.5;
+          const f = faceDir(dx, dy); r.hdir = f.hdir; r.hface = f.hface;
+          r.walk = true; r.idleCount = 0;
+        }
         r.nextSpawn--;
         if (r.nextSpawn <= 0) {
           r.phase = "encounter"; r.ptick = 0;
@@ -598,7 +609,7 @@ function RPGCharacters() {
       else if (r.phase === "encounter") {
         r.ptick++;
         const dx = r.sx - r.hx, d = dist2(r.hx,r.hy,r.sx,r.sy);
-        r.hdir = dx >= 0 ? 1 : -1; r.walk = true;
+        const f = faceDir(dx, r.sy - r.hy); r.hdir = f.hdir; r.hface = "side"; r.walk = true;
         if (d > 80) { r.hx += (dx/d)*0.9; r.hy += ((r.sy-r.hy)/d)*0.9; }
         if (r.ptick > 40 || d <= 80) { r.phase = Math.random() > 0.45 ? "hero_atk" : "slime_atk"; r.ptick = 0; r.walk = false; r.atkOff = 0; r.swordAng = 0; }
       }
@@ -707,7 +718,7 @@ function RPGCharacters() {
       else if (r.phase === "cooldown") {
         r.ptick++;
         const dx = r.tx - r.hx, d = dist2(r.hx,r.hy,r.tx,r.ty);
-        if (d > 10) { r.hx += (dx/d)*0.5; r.hy += ((r.ty-r.hy)/d)*0.5; r.hdir = dx >= 0 ? 1 : -1; r.walk = true; }
+        if (d > 10) { r.hx += (dx/d)*0.5; r.hy += ((r.ty-r.hy)/d)*0.5; const f = faceDir(dx, r.ty-r.hy); r.hdir = f.hdir; r.hface = f.hface; r.walk = true; }
         else r.walk = false;
         if (r.ptick > 200) { r.phase = "wander"; r.ptick = 0; r.nextSpawn = 500 + Math.floor(Math.random() * 500); pick(); }
       }
@@ -719,9 +730,10 @@ function RPGCharacters() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const bobY = s.walk ? Math.sin(s.tick * 0.15) * 3 : 0;
-  const legL = s.walk ? Math.sin(s.tick * 0.15) * 14 : 0;
-  const legR = s.walk ? Math.sin(s.tick * 0.15 + Math.PI) * 14 : 0;
+  const bobY = s.walk ? Math.sin(s.tick * 0.15) * 2.5 : 0;
+  const walkCycle = s.walk ? Math.sin(s.tick * 0.15) : 0; // -1 to 1
+  const stepFwd = walkCycle * 5; // for side view legs
+  const stepBack = -walkCycle * 5;
   const slimeBob = s.salive && !s.sSquish ? Math.sin(s.tick * 0.1) * 3 : 0;
   const dieScale = s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 45) : 1;
   const dieRot = s.phase === "slime_die" ? s.ptick * 10 : 0;
@@ -742,67 +754,79 @@ function RPGCharacters() {
       <div style={{
         position:"absolute", left: s.hx - 30 + heroAtkX, top: s.hy - 40 + bobY,
         width: 60, height: 80, pointerEvents:"none", zIndex: 42,
-        transform: `scaleX(${s.hdir}) rotate(${heroDieRot}deg)`,
-        transformOrigin: "center bottom",
-        opacity: heroDieOp,
+        transform: `scaleX(${s.hface === "side" ? s.hdir : 1}) rotate(${heroDieRot}deg)`,
+        transformOrigin: "center bottom", opacity: heroDieOp,
         filter: s.heroFlash ? "brightness(2) drop-shadow(0 0 14px rgba(239,68,68,0.9))" : "drop-shadow(2px 3px 4px rgba(0,0,0,0.5))",
         transition: s.heroDead ? "transform 0.5s ease-in, opacity 0.5s" : "filter 0.12s",
       }}>
         <svg viewBox="0 0 60 80" width="60" height="80" fill="none">
-          {/* Cape */}
-          <path d={`M22 28 Q18 ${44+s.cape} ${14+s.cape*0.3} ${58+s.cape*0.5} L28 58 Q25 45 22 28Z`} fill="#dc2626" opacity="0.9"/>
-          <path d={`M22 28 Q16 ${46+s.cape} ${12+s.cape*0.4} ${60+s.cape*0.3} L${14+s.cape*0.3} ${58+s.cape*0.5} Q18 ${44+s.cape} 22 28Z`} fill="#991b1b" opacity="0.5"/>
-          {/* Legs */}
-          <rect x="22" y="54" width="6" height="16" rx="3" fill="#1e3a5f" transform={`rotate(${legL} 25 54)`}/>
-          <rect x="32" y="54" width="6" height="16" rx="3" fill="#1e3a5f" transform={`rotate(${legR} 35 54)`}/>
-          <ellipse cx={25+Math.sin(legL*Math.PI/180)*12} cy={69+Math.abs(Math.sin(legL*Math.PI/180))*2} rx="5" ry="3.5" fill="#5C3317"/>
-          <ellipse cx={35+Math.sin(legR*Math.PI/180)*12} cy={69+Math.abs(Math.sin(legR*Math.PI/180))*2} rx="5" ry="3.5" fill="#5C3317"/>
-          {/* Body */}
-          <rect x="20" y="30" width="20" height="26" rx="4" fill="#2563eb"/>
-          <rect x="22" y="32" width="16" height="10" rx="2" fill="#3b82f6"/>
-          <rect x="26" y="42" width="8" height="3" rx="1" fill="#60a5fa" opacity="0.5"/>
-          <rect x="20" y="48" width="20" height="4" rx="1" fill="#8B6914"/>
-          <rect x="28" y="47" width="5" height="6" rx="1.5" fill="#FFD700"/>
-          <ellipse cx="20" cy="33" rx="5" ry="4" fill="#3b82f6"/>
-          <ellipse cx="40" cy="33" rx="5" ry="4" fill="#3b82f6"/>
-          {/* Head */}
-          <circle cx="30" cy="18" r="12" fill="#FDBCB4"/>
-          {/* Eyes — pain or normal */}
-          {s.heroPain || s.heroDead ? (
-            <>{/* X eyes */}
-              <line x1="23" y1="15" x2="29" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="29" y1="15" x2="23" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="31" y1="15" x2="37" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="37" y1="15" x2="31" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/>
-            </>
-          ) : (
-            <>{/* Normal eyes */}
-              <ellipse cx="26" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
-              <ellipse cx="34" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
-              <circle cx="27" cy="16" r="0.8" fill="white"/>
-              <circle cx="35" cy="16" r="0.8" fill="white"/>
-            </>
-          )}
-          {/* Mouth */}
-          <path d={s.heroPain ? "M25 23 Q30 20 35 23" : s.heroDead ? "M27 23 Q30 20 33 23" : "M27 22 Q30 25 33 22"} stroke="#c4786a" strokeWidth={s.heroPain ? "1.5" : "1"} fill="none"/>
-          {/* Sweat drop when in pain */}
-          {s.heroPain && <path d="M40 12 Q42 16 40 18 Q38 16 40 12Z" fill="#60a5fa" opacity="0.7"/>}
-          <ellipse cx="23" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
-          <ellipse cx="37" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
-          {/* Crown */}
-          <path d="M18 12 L18 6 L22 9 L26 4 L30 8 L34 4 L38 9 L42 6 L42 12Z" fill="#FFD700"/>
-          <path d="M18 12 L42 12 L42 14 Q30 16 18 14Z" fill="#DAA520"/>
-          <circle cx="26" cy="8" r="1.5" fill="#dc2626"/><circle cx="34" cy="8" r="1.5" fill="#3b82f6"/><circle cx="30" cy="6" r="1.8" fill="#22c55e"/>
-          <path d="M18 14 Q18 8 22 10 L18 6Z" fill="#8B5E3C"/>
-          <path d="M42 14 Q42 8 38 10 L42 6Z" fill="#8B5E3C"/>
-          {/* Sword arm + sword (animated rotation) */}
-          <g transform={`rotate(${s.swordAng} 42 34)`}>
-            <rect x="43" y="12" width="3.5" height="22" rx="1.5" fill="#B0B8C8"/>
-            <rect x="43" y="12" width="3.5" height="7" rx="1.5" fill="#E0E8FF"/>
-            <rect x="41" y="32" width="7.5" height="4.5" rx="2" fill="#FFD700"/>
-            <rect x="43.5" y="36.5" width="2.5" height="7" rx="1" fill="#8B6914"/>
-            <circle cx="44.8" cy="14" r="1" fill="#ffffff" opacity="0.6"/>
-          </g>
+          {/* ── SIDE VIEW ── */}
+          {(s.hface === "side" || s.phase === "hero_atk" || s.phase === "encounter") && (<>
+            <path d={`M24 30 Q16 ${44+s.cape} ${10+s.cape*0.4} ${60+s.cape*0.4} L24 56 Z`} fill="#dc2626" opacity="0.9"/>
+            <path d={`M24 32 Q14 ${48+s.cape} ${8+s.cape*0.5} ${62+s.cape*0.3} L${10+s.cape*0.4} ${60+s.cape*0.4} Q16 ${44+s.cape} 24 30Z`} fill="#991b1b" opacity="0.5"/>
+            <rect x="28" y="54" width="7" height="14" rx="3.5" fill="#162d50" transform={`translate(${stepBack}, 0)`}/>
+            <ellipse cx={31.5+stepBack} cy="68" rx="5" ry="3" fill="#3d1f00"/>
+            <rect x="24" y="30" width="16" height="26" rx="4" fill="#2563eb"/>
+            <rect x="26" y="32" width="12" height="8" rx="2" fill="#3b82f6"/>
+            <rect x="24" y="48" width="16" height="4" rx="1" fill="#8B6914"/>
+            <rect x="30" y="47" width="4" height="6" rx="1.5" fill="#FFD700"/>
+            <ellipse cx="38" cy="33" rx="5" ry="4" fill="#3b82f6"/>
+            <rect x="30" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepFwd}, 0)`}/>
+            <ellipse cx={33.5+stepFwd} cy="68" rx="5" ry="3" fill="#5C3317"/>
+            <circle cx="32" cy="18" r="11" fill="#FDBCB4"/>
+            {s.heroPain || s.heroDead ? (<><line x1="33" y1="15" x2="38" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/><line x1="38" y1="15" x2="33" y2="19" stroke="#0f172a" strokeWidth="2" strokeLinecap="round"/></>) : (<><ellipse cx="36" cy="17" rx="2" ry="2.5" fill="#0f172a"/><circle cx="37" cy="16" r="0.8" fill="white"/></>)}
+            <path d={s.heroPain ? "M34 23 Q37 21 39 23" : "M34 22 Q37 24 39 22"} stroke="#c4786a" strokeWidth="1" fill="none"/>
+            {s.heroPain && <path d="M40 10 Q42 15 40 17 Q38 15 40 10Z" fill="#60a5fa" opacity="0.7"/>}
+            <ellipse cx="39" cy="20" rx="2" ry="1" fill="#f4a0a0" opacity="0.4"/>
+            <path d="M22 12 L22 7 L26 9 L30 5 L34 9 L38 5 L42 9 L42 12Z" fill="#FFD700"/>
+            <path d="M22 12 L42 12 L42 13.5 Q32 15 22 13.5Z" fill="#DAA520"/>
+            <circle cx="30" cy="7" r="1.5" fill="#dc2626"/><circle cx="36" cy="7.5" r="1.3" fill="#3b82f6"/>
+            <path d="M22 14 Q20 8 24 10 L22 6Z" fill="#8B5E3C"/>
+            <g transform={`rotate(${s.swordAng} 42 34)`}><rect x="43" y="12" width="3.5" height="22" rx="1.5" fill="#B0B8C8"/><rect x="43" y="12" width="3.5" height="7" rx="1.5" fill="#E0E8FF"/><rect x="41" y="32" width="7.5" height="4.5" rx="2" fill="#FFD700"/><rect x="43.5" y="36.5" width="2.5" height="7" rx="1" fill="#8B6914"/><circle cx="44.8" cy="14" r="1" fill="#fff" opacity="0.6"/></g>
+          </>)}
+          {/* ── FRONT VIEW (walking down) ── */}
+          {s.hface === "front" && s.phase === "wander" && (<>
+            <path d="M22 30 Q20 50 18 62 L30 60 L42 62 Q40 50 38 30Z" fill="#dc2626" opacity="0.6"/>
+            <rect x="22" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepFwd*0.6}, 0)`}/>
+            <rect x="31" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepBack*0.6}, 0)`}/>
+            <ellipse cx={25.5+stepFwd*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
+            <ellipse cx={34.5+stepBack*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
+            <rect x="20" y="30" width="20" height="26" rx="4" fill="#2563eb"/>
+            <rect x="22" y="32" width="16" height="10" rx="2" fill="#3b82f6"/>
+            <rect x="20" y="48" width="20" height="4" rx="1" fill="#8B6914"/>
+            <rect x="28" y="47" width="5" height="6" rx="1.5" fill="#FFD700"/>
+            <ellipse cx="20" cy="33" rx="5" ry="4" fill="#3b82f6"/>
+            <ellipse cx="40" cy="33" rx="5" ry="4" fill="#3b82f6"/>
+            <circle cx="30" cy="18" r="12" fill="#FDBCB4"/>
+            <ellipse cx="26" cy="17" rx="2" ry="2.5" fill="#0f172a"/><ellipse cx="34" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
+            <circle cx="27" cy="16" r="0.8" fill="white"/><circle cx="35" cy="16" r="0.8" fill="white"/>
+            <path d="M27 22 Q30 25 33 22" stroke="#c4786a" strokeWidth="1" fill="none"/>
+            <ellipse cx="23" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
+            <ellipse cx="37" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
+            <path d="M18 12 L18 6 L22 9 L26 4 L30 8 L34 4 L38 9 L42 6 L42 12Z" fill="#FFD700"/>
+            <path d="M18 12 L42 12 L42 14 Q30 16 18 14Z" fill="#DAA520"/>
+            <circle cx="26" cy="8" r="1.5" fill="#dc2626"/><circle cx="34" cy="8" r="1.5" fill="#3b82f6"/><circle cx="30" cy="6" r="1.8" fill="#22c55e"/>
+            <path d="M18 14 Q18 8 22 10 L18 6Z" fill="#8B5E3C"/><path d="M42 14 Q42 8 38 10 L42 6Z" fill="#8B5E3C"/>
+            <rect x="44" y="30" width="3" height="18" rx="1" fill="#B0B8C8"/><rect x="44" y="30" width="3" height="5" rx="1" fill="#E0E8FF"/><rect x="42.5" y="46" width="6" height="4" rx="1.5" fill="#FFD700"/>
+          </>)}
+          {/* ── BACK VIEW (walking up) ── */}
+          {s.hface === "back" && s.phase === "wander" && (<>
+            <path d={`M20 28 Q15 ${48+s.cape} ${10+s.cape*0.5} ${64+s.cape*0.3} L30 62 L${50-s.cape*0.5} ${64-s.cape*0.3} Q45 ${48-s.cape} 40 28Z`} fill="#dc2626" opacity="0.9"/>
+            <path d={`M22 30 Q18 ${46+s.cape*0.8} ${14+s.cape*0.3} ${60+s.cape*0.4} L30 58 L${46-s.cape*0.3} ${60-s.cape*0.4} Q42 ${46-s.cape*0.8} 38 30Z`} fill="#b91c1c" opacity="0.5"/>
+            <rect x="22" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepFwd*0.6}, 0)`}/>
+            <rect x="31" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepBack*0.6}, 0)`}/>
+            <ellipse cx={25.5+stepFwd*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
+            <ellipse cx={34.5+stepBack*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
+            <rect x="20" y="30" width="20" height="26" rx="4" fill="#2563eb"/>
+            <rect x="22" y="32" width="16" height="8" rx="2" fill="#1d4ed8"/>
+            <rect x="20" y="48" width="20" height="4" rx="1" fill="#8B6914"/>
+            <ellipse cx="20" cy="33" rx="5" ry="4" fill="#3b82f6"/><ellipse cx="40" cy="33" rx="5" ry="4" fill="#3b82f6"/>
+            <circle cx="30" cy="18" r="12" fill="#8B5E3C"/><circle cx="30" cy="19" r="10" fill="#6B4226"/>
+            <path d="M18 12 L18 6 L22 9 L26 4 L30 8 L34 4 L38 9 L42 6 L42 12Z" fill="#FFD700"/>
+            <path d="M18 12 L42 12 L42 14 Q30 16 18 14Z" fill="#DAA520"/>
+            <rect x="42" y="18" width="3" height="28" rx="1" fill="#B0B8C8" opacity="0.8" transform="rotate(10 42 18)"/>
+            <rect x="40" y="44" width="6" height="4" rx="1.5" fill="#FFD700" opacity="0.8"/>
+          </>)}
         </svg>
       </div>
 
