@@ -112,5 +112,5 @@ UPDATE stores SET
   company_fiscal = COALESCE(NULLIF(company_fiscal, ''), '3月決算'),
   company_business = COALESCE(NULLIF(company_business, ''), 'AIソリューション開発、Webデザイン・システム開発、DX推進支援、リラクゼーションサロン運営'),
   company_tagline = COALESCE(NULLIF(company_tagline, ''), 'テクノロジーで、ビジネスの未来をデザインする。'),
-  representative_message = COALESCE(NULLIF(representative_message, ''), 'テラスライフは「現場で役立つテクノロジー」を信条に、AIとWebの力で中小企業のDXを支援する会社です。私たち自身がリラクゼーションサロンを運営する事業者でもあるからこそ、現場の「こうだったらいいのに」を肌感覚で理解し、本当に使われるシステムを作ることができます。お客様一社一社の課題に真摯に向き合い、共に成長するパートナーでありたいと考えております。')
+  representative_message = COALESCE(NULLIF(representative_message, ''), 'テラスライフは「現場で役立つテクノロジー」を信条に、AIとWebの力で中小企業のDXを支援する会社です。私たち自身が営業会社で勤めていた経験をもとに、現場の「こうだったらいいのに」を肌感覚で理解し、本当に使われるシステムを作ることができます。お客様一社一社の課題に真摯に向き合い、共に成長するパートナーでありたいと考えております。')
 WHERE id = (SELECT id FROM stores ORDER BY id LIMIT 1);
