@@ -8,9 +8,10 @@ const StaffSessionCtx = createContext<{
   activeStaff: ActiveStaff;
   isManager: boolean;
   canAccessTaxPortal: boolean;
+  canAccessCashDashboard: boolean;
   login: (pin: string) => Promise<boolean>;
   logout: () => void;
-}>({ activeStaff: null, isManager: false, canAccessTaxPortal: false, login: async () => false, logout: () => {} });
+}>({ activeStaff: null, isManager: false, canAccessTaxPortal: false, canAccessCashDashboard: false, login: async () => false, logout: () => {} });
 
 export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const [activeStaff, setActiveStaff] = useState<ActiveStaff>(null);
@@ -53,9 +54,11 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const isManager = activeStaff?.role === "owner" || activeStaff?.role === "manager" || activeStaff?.role === "leader";
   // 税理士ポータル閲覧可: 社長・経営責任者・税理士のみ
   const canAccessTaxPortal = activeStaff?.company_position === "社長" || activeStaff?.company_position === "経営責任者" || activeStaff?.company_position === "税理士";
+  // 資金管理ダッシュボード閲覧可: 社長・経営責任者のみ（税理士は除外）
+  const canAccessCashDashboard = activeStaff?.company_position === "社長" || activeStaff?.company_position === "経営責任者";
 
   return (
-    <StaffSessionCtx.Provider value={{ activeStaff, isManager, canAccessTaxPortal, login, logout }}>
+    <StaffSessionCtx.Provider value={{ activeStaff, isManager, canAccessTaxPortal, canAccessCashDashboard, login, logout }}>
       {children}
     </StaffSessionCtx.Provider>
   );

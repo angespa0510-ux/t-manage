@@ -10,8 +10,9 @@ import { useStaffSession } from "./staff-session";
 // path が "DASHBOARD_PAGE:xxx" → ダッシュボード内タブ切替
 // category が変わる境目にセパレーターを自動表示
 // requiresTaxPortal: true の項目は 社長・経営責任者・税理士 のみ表示
+// requiresCashDashboard: true の項目は 社長・経営責任者 のみ表示 (税理士除外)
 
-type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean };
+type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean; requiresCashDashboard?: boolean };
 
 const NAV_ITEMS: NavItem[] = [
   // ── 日常業務（毎日使うもの）──
@@ -24,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   // ── 売上 ──
   { icon: "📊", label: "売上分析",  path: "/analytics",      category: "売上" },
   { icon: "📋", label: "バックオフィス",  path: "/tax-dashboard",  category: "売上" },
+  { icon: "💴", label: "資金管理", path: "/cash-dashboard", category: "売上", requiresCashDashboard: true },
   { icon: "📒", label: "税理士ポータル", path: "/tax-portal", category: "売上", requiresTaxPortal: true },
 
   // ── 顧客 ──
@@ -65,7 +67,7 @@ const NAV_ITEMS: NavItem[] = [
 
 function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
-  const { canAccessTaxPortal } = useStaffSession();
+  const { canAccessTaxPortal, canAccessCashDashboard } = useStaffSession();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   if (!mounted || !open) return null;
@@ -73,6 +75,7 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
   // 権限に応じてメニューをフィルタリング
   const visibleItems = NAV_ITEMS.filter(item => {
     if (item.requiresTaxPortal && !canAccessTaxPortal) return false;
+    if (item.requiresCashDashboard && !canAccessCashDashboard) return false;
     return true;
   });
 
