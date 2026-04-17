@@ -1,22 +1,58 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { supabase } from "../../lib/supabase";
 
 /* ═══════════════════════════════════════════
-   合同会社テラスライフ — コーポレートサイト v2
-   攻めのデザイン：光ビーム / パーティクル / グロー
+   合同会社テラスライフ — コーポレートサイト v3
+   DB連携 / 代表挨拶 / お知らせ / 地図 / FAQ
    ═══════════════════════════════════════════ */
 
-const CO = {
-  name: "合同会社テラスライフ",
-  nameEn: "Terrace Life LLC",
-  rep: "●● ●●",
-  addr: "愛知県安城市●●町●-●-●",
-  est: "20●●年●月",
-  capital: "●●●万円",
-  fiscal: "3月決算",
-  email: "info@example.com",
-  tel: "0566-●●-●●●●",
+type CompanyInfo = {
+  company_name: string;
+  company_name_en: string;
+  company_address: string;
+  company_phone: string;
+  company_email: string;
+  company_established: string;
+  company_capital: string;
+  company_fiscal: string;
+  company_business: string;
+  company_tagline: string;
+  company_employees: string;
+  company_main_bank: string;
+  company_website_url: string;
+  company_map_embed: string;
+  representative_name: string;
+  representative_name_kana: string;
+  representative_title: string;
+  representative_photo_url: string;
+  representative_message: string;
+};
+
+type NewsItem = { id: number; title: string; category: string; body: string; link_url: string; published_at: string };
+type FaqItem = { id: number; category: string; question: string; answer: string };
+
+const DEFAULT_CO: CompanyInfo = {
+  company_name: "合同会社テラスライフ",
+  company_name_en: "Terrace Life LLC",
+  company_address: "愛知県安城市",
+  company_phone: "",
+  company_email: "",
+  company_established: "",
+  company_capital: "",
+  company_fiscal: "3月決算",
+  company_business: "AIソリューション開発、Webデザイン・システム開発、DX推進支援",
+  company_tagline: "テクノロジーで、ビジネスの未来をデザインする。",
+  company_employees: "",
+  company_main_bank: "",
+  company_website_url: "",
+  company_map_embed: "",
+  representative_name: "",
+  representative_name_kana: "",
+  representative_title: "代表社員",
+  representative_photo_url: "",
+  representative_message: "",
 };
 
 /* ── AnimatedCounter ── */
@@ -51,6 +87,51 @@ export default function CorporatePage() {
   const [vis, setVis] = useState<Set<string>>(new Set());
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [hoveredTech, setHoveredTech] = useState<string | null>(null);
+  const [CO, setCO] = useState<CompanyInfo>(DEFAULT_CO);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [faqs, setFaqs] = useState<FaqItem[]>([]);
+  const [faqCategory, setFaqCategory] = useState<string>("all");
+  const [openFaqId, setOpenFaqId] = useState<number | null>(null);
+
+  // ── DB連携: 会社情報、お知らせ、FAQ を読込 ──
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: store } = await supabase.from("stores").select("*").order("id").limit(1).single();
+        if (store) {
+          setCO({
+            company_name: store.company_name || DEFAULT_CO.company_name,
+            company_name_en: store.company_name_en || DEFAULT_CO.company_name_en,
+            company_address: store.company_address || DEFAULT_CO.company_address,
+            company_phone: store.company_phone || DEFAULT_CO.company_phone,
+            company_email: store.company_email || DEFAULT_CO.company_email,
+            company_established: store.company_established || DEFAULT_CO.company_established,
+            company_capital: store.company_capital || DEFAULT_CO.company_capital,
+            company_fiscal: store.company_fiscal || DEFAULT_CO.company_fiscal,
+            company_business: store.company_business || DEFAULT_CO.company_business,
+            company_tagline: store.company_tagline || DEFAULT_CO.company_tagline,
+            company_employees: store.company_employees || "",
+            company_main_bank: store.company_main_bank || "",
+            company_website_url: store.company_website_url || "",
+            company_map_embed: store.company_map_embed || "",
+            representative_name: store.representative_name || "",
+            representative_name_kana: store.representative_name_kana || "",
+            representative_title: store.representative_title || "代表社員",
+            representative_photo_url: store.representative_photo_url || "",
+            representative_message: store.representative_message || "",
+          });
+        }
+      } catch (e) { console.log("stores not yet migrated:", e); }
+      try {
+        const { data: n } = await supabase.from("corporate_news").select("*").eq("is_published", true).order("published_at", { ascending: false }).limit(5);
+        if (n) setNews(n);
+      } catch (e) { console.log("corporate_news not yet created:", e); }
+      try {
+        const { data: f } = await supabase.from("corporate_faqs").select("*").eq("is_published", true).order("sort_order");
+        if (f) setFaqs(f);
+      } catch (e) { console.log("corporate_faqs not yet created:", e); }
+    })();
+  }, []);
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 60);
@@ -80,9 +161,12 @@ export default function CorporatePage() {
   const NAV = [
     { id: "service", label: "事業内容" },
     { id: "products", label: "プロダクト" },
+    { id: "message", label: "代表挨拶" },
     { id: "stats", label: "実績" },
     { id: "tech", label: "技術" },
+    { id: "news", label: "お知らせ" },
     { id: "company", label: "会社概要" },
+    { id: "faq", label: "FAQ" },
     { id: "contact", label: "お問い合わせ" },
   ];
 
@@ -233,15 +317,14 @@ export default function CorporatePage() {
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:24 }}>
             {[
-              { title:"AIソリューション開発",sub:"AI Solutions",grad:"135deg,#1e3a5f,#0c1929",desc:"業務特化型AIチャットボット、自動分類・レコメンドエンジン、データ分析AI。お客様の課題に合わせたAIソリューションを設計・開発します。",tags:["業務特化AI","自動分析","予測モデル","業務自動化"],ic:"#3b82f6",
-                svg:<svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect x="8" y="12" width="32" height="24" rx="5" stroke="#3b82f6" strokeWidth="1.5"/><circle cx="19" cy="24" r="4" stroke="#60a5fa" strokeWidth="1.5"/><circle cx="29" cy="24" r="4" stroke="#60a5fa" strokeWidth="1.5"/><path d="M16 32h16" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round"/><path d="M24 6v6" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/><circle cx="24" cy="5" r="2.5" fill="#2563eb" opacity=".4" stroke="#2563eb" strokeWidth="1"/><path d="M19 24h10" stroke="#2563eb" strokeWidth="1" strokeDasharray="2 2" opacity=".5"/></svg> },
-              { title:"Webデザイン・システム開発",sub:"Web Design & Dev",grad:"135deg,#1a2e4a,#0c1929",desc:"予約管理・顧客管理・業務効率化システムの設計から開発、運用まで。モダンな技術スタックで高速かつ美しいWebアプリケーションを構築。",tags:["業務システム","予約管理","モバイルUI","リアルタイム"],ic:"#06b6d4",
-                svg:<svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect x="8" y="8" width="32" height="32" rx="4" stroke="#06b6d4" strokeWidth="1.5"/><rect x="12" y="13" width="12" height="8" rx="2" fill="#06b6d4" opacity=".15" stroke="#06b6d4" strokeWidth="1"/><rect x="12" y="25" width="24" height="3" rx="1.5" fill="#64748b" opacity=".3"/><rect x="12" y="32" width="16" height="3" rx="1.5" fill="#64748b" opacity=".2"/><path d="M28 13l6 4-6 4" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg> },
-              { title:"DX推進支援",sub:"Digital Transformation",grad:"135deg,#1a2340,#0c1929",desc:"紙やExcelの業務をデジタル化。クラウドシステム導入から社内教育まで、DX推進をトータルサポートします。",tags:["プロセス改善","クラウド移行","データ可視化","DX教育"],ic:"#7c3aed",
-                svg:<svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect x="10" y="24" width="8" height="16" rx="2" fill="#7c3aed" opacity=".2" stroke="#7c3aed" strokeWidth="1"/><rect x="20" y="16" width="8" height="24" rx="2" fill="#3b82f6" opacity=".2" stroke="#3b82f6" strokeWidth="1"/><rect x="30" y="10" width="8" height="30" rx="2" fill="#06b6d4" opacity=".2" stroke="#06b6d4" strokeWidth="1"/><path d="M12 12l10 6 10-4 10 2" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="2.5" fill="#7c3aed"/><circle cx="22" cy="18" r="2.5" fill="#3b82f6"/><circle cx="32" cy="14" r="2.5" fill="#06b6d4"/></svg> },
+              { title:"AIソリューション開発",sub:"AI Solutions",grad:"135deg,#1e3a5f,#0c1929",desc:"業務特化型AIチャットボット、自動分類・レコメンドエンジン、データ分析AI。お客様の課題に合わせたAIソリューションを設計・開発します。",tags:["業務特化AI","自動分析","予測モデル","業務自動化"],ic:"#3b82f6",icon:"/corporate/icon-ai.png" },
+              { title:"Webデザイン・システム開発",sub:"Web Design & Dev",grad:"135deg,#1a2e4a,#0c1929",desc:"予約管理・顧客管理・業務効率化システムの設計から開発、運用まで。モダンな技術スタックで高速かつ美しいWebアプリケーションを構築。",tags:["業務システム","予約管理","モバイルUI","リアルタイム"],ic:"#06b6d4",icon:"/corporate/icon-web.png" },
+              { title:"DX推進支援",sub:"Digital Transformation",grad:"135deg,#1a2340,#0c1929",desc:"紙やExcelの業務をデジタル化。クラウドシステム導入から社内教育まで、DX推進をトータルサポートします。",tags:["プロセス改善","クラウド移行","データ可視化","DX教育"],ic:"#7c3aed",icon:"/corporate/icon-dx.png" },
             ].map((s,i) => (
               <div key={i} className="ch" style={{ background:`linear-gradient(${s.grad})`,borderRadius:18,border:"1px solid rgba(96,165,250,0.1)",padding:"36px 28px",display:"flex",flexDirection:"column",transition:"all .4s",transitionDelay:`${i*80}ms` }}>
-                <div style={{ width:72,height:72,borderRadius:16,background:`radial-gradient(circle at 30% 30%,${s.ic}15,transparent)`,border:`1px solid ${s.ic}25`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24,animation:"glow 4s ease-in-out infinite" }}>{s.svg}</div>
+                <div style={{ width:96,height:96,borderRadius:20,background:`radial-gradient(circle at 30% 30%,${s.ic}20,transparent 70%)`,border:`1px solid ${s.ic}25`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24,animation:"glow 4s ease-in-out infinite",overflow:"hidden" }}>
+                  <img src={s.icon} alt={s.sub} style={{ width:"90%",height:"90%",objectFit:"contain",filter:`drop-shadow(0 0 12px ${s.ic}60)` }}/>
+                </div>
                 <span style={{ fontSize:10,fontWeight:700,color:s.ic,letterSpacing:2.5,textTransform:"uppercase" }}>{s.sub}</span>
                 <h3 style={{ fontSize:21,fontWeight:800,marginTop:8,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'" }}>{s.title}</h3>
                 <p style={{ fontSize:13,lineHeight:1.85,color:"#94a3b8",marginTop:14,flex:1 }}>{s.desc}</p>
@@ -348,6 +431,49 @@ export default function CorporatePage() {
                 </div>
               </a>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.3),transparent)" }}/>
+
+      {/* ══════════ MESSAGE (代表挨拶) ══════════ */}
+      <section id="message" data-a style={{ padding:"100px 24px",background:"radial-gradient(ellipse at 30% 50%,#0f2847,#020617 70%)",position:"relative",overflow:"hidden" }}>
+        <div style={{ position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(37,99,235,0.1),transparent 70%)",top:"10%",right:"10%",animation:"orbFloat 14s ease-in-out infinite" }}/>
+        <div className={`fu ${show("message")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto",position:"relative",zIndex:2 }}>
+          <div style={{ textAlign:"center",marginBottom:56 }}>
+            <span className={`sh ${show("message")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:3 }}>MESSAGE</span>
+            <h2 className={`sh2 ${show("message")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>代表挨拶</h2>
+            <div className={`sline ${show("message")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:48,alignItems:"center" }}>
+            {/* 代表者写真 */}
+            <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:16 }}>
+              <div style={{ position:"relative",width:260,height:260,borderRadius:"50%",padding:4,background:"linear-gradient(135deg,#2563eb,#06b6d4,#7c3aed)",boxShadow:"0 0 40px rgba(37,99,235,0.3)" }}>
+                {CO.representative_photo_url ? (
+                  <img src={CO.representative_photo_url} alt={CO.representative_name} style={{ width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover",border:"4px solid #020617" }}/>
+                ) : (
+                  <div style={{ width:"100%",height:"100%",borderRadius:"50%",background:"linear-gradient(135deg,#0f2847,#020617)",border:"4px solid #020617",display:"flex",alignItems:"center",justifyContent:"center",fontSize:64,color:"#334155" }}>👤</div>
+                )}
+              </div>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontSize:11,fontWeight:600,color:"#60a5fa",letterSpacing:2,marginBottom:4 }}>{CO.representative_title || "代表社員"}</div>
+                <div style={{ fontSize:20,fontWeight:800,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'",letterSpacing:.5 }}>{CO.representative_name || "氏名未設定"}</div>
+                {CO.representative_name_kana && <div style={{ fontSize:11,color:"#64748b",marginTop:2,letterSpacing:1 }}>{CO.representative_name_kana}</div>}
+              </div>
+            </div>
+            {/* 挨拶文 */}
+            <div style={{ padding:"32px 0" }}>
+              <div style={{ fontSize:48,color:"#60a5fa",lineHeight:1,marginBottom:12,opacity:.4,fontFamily:"serif" }}>&ldquo;</div>
+              <p style={{ fontSize:15,lineHeight:2.1,color:"#cbd5e1",whiteSpace:"pre-wrap" }}>
+                {CO.representative_message || "代表メッセージを設定してください。スタッフページの「会社情報」タブから編集できます。"}
+              </p>
+              <div style={{ marginTop:28,display:"flex",alignItems:"center",gap:12 }}>
+                <div style={{ flex:1,height:1,background:"linear-gradient(90deg,rgba(96,165,250,0.3),transparent)" }}/>
+                <span style={{ fontSize:11,fontWeight:600,color:"#94a3b8",letterSpacing:1 }}>{CO.company_name}　{CO.representative_title} {CO.representative_name}</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -492,6 +618,49 @@ export default function CorporatePage() {
       {/* ── Divider ── */}
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(124,58,237,0.3),rgba(37,99,235,0.3),transparent)" }}/>
 
+      {/* ══════════ NEWS (お知らせ) ══════════ */}
+      <section id="news" data-a style={{ padding:"80px 24px",background:"linear-gradient(180deg,#020617,#0a1628)" }}>
+        <div className={`fu ${show("news")?"on":""}`} style={{ maxWidth:900,margin:"0 auto" }}>
+          <div style={{ textAlign:"center",marginBottom:48 }}>
+            <span className={`sh ${show("news")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>NEWS</span>
+            <h2 className={`sh2 ${show("news")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>お知らせ</h2>
+            <div className={`sline ${show("news")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#06b6d4,#7c3aed)",margin:"16px auto 0" }}/>
+          </div>
+          {news.length === 0 ? (
+            <div style={{ textAlign:"center",padding:"40px 0",color:"#475569",fontSize:13 }}>現在お知らせはありません</div>
+          ) : (
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              {news.map((n) => {
+                const cat = n.category === "press" ? { label:"プレス", color:"#f59e0b" } :
+                            n.category === "event" ? { label:"イベント", color:"#22c55e" } :
+                            n.category === "update" ? { label:"更新", color:"#06b6d4" } :
+                            { label:"お知らせ", color:"#60a5fa" };
+                const dateStr = n.published_at ? new Date(n.published_at).toLocaleDateString("ja-JP", { year:"numeric", month:"2-digit", day:"2-digit" }) : "";
+                return (
+                  <div key={n.id} className="ch" style={{ padding:"20px 24px",background:"rgba(255,255,255,0.02)",borderRadius:12,border:"1px solid rgba(255,255,255,0.06)",display:"flex",gap:20,alignItems:"flex-start",flexWrap:"wrap",transition:"all .3s" }}>
+                    <div style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:6,minWidth:140 }}>
+                      <span style={{ fontSize:12,color:"#94a3b8",fontFamily:"Inter",fontWeight:500 }}>{dateStr}</span>
+                      <span style={{ fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:4,background:`${cat.color}15`,color:cat.color,border:`1px solid ${cat.color}30`,letterSpacing:1 }}>{cat.label}</span>
+                    </div>
+                    <div style={{ flex:1,minWidth:200 }}>
+                      <h3 style={{ fontSize:15,fontWeight:700,color:"#f8fafc",marginBottom:6,lineHeight:1.5 }}>{n.title}</h3>
+                      {n.body && <p style={{ fontSize:12,lineHeight:1.8,color:"#94a3b8" }}>{n.body.length > 120 ? n.body.slice(0, 120) + "…" : n.body}</p>}
+                      {n.link_url && <a href={n.link_url} target="_blank" rel="noopener noreferrer" style={{ display:"inline-block",marginTop:8,fontSize:11,color:"#60a5fa",fontWeight:600 }}>詳しく見る →</a>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ textAlign:"center",marginTop:28 }}>
+            <a href="/corporate/news" style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"10px 24px",borderRadius:8,border:"1px solid rgba(96,165,250,0.25)",background:"rgba(37,99,235,0.08)",color:"#60a5fa",fontSize:12,fontWeight:600,letterSpacing:.5 }}>すべてのお知らせ →</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(124,58,237,0.3),rgba(37,99,235,0.3),transparent)" }}/>
+
       {/* ══════════ COMPANY ══════════ */}
       <section id="company" data-a style={{ padding:"80px 24px",background:"#020617" }}>
         <div className={`fu ${show("company")?"on":""}`} style={{ maxWidth:900,margin:"0 auto" }}>
@@ -506,17 +675,25 @@ export default function CorporatePage() {
             <div style={{ padding:"36px 40px",background:"linear-gradient(135deg,#0f2847,#0a1628)",display:"flex",alignItems:"center",gap:20,borderBottom:"1px solid rgba(96,165,250,0.1)" }}>
               <div style={{ width:60,height:60,borderRadius:14,background:"linear-gradient(135deg,#2563eb,#06b6d4)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:24,fontFamily:"Inter",boxShadow:"0 0 30px rgba(37,99,235,0.3)",flexShrink:0 }}>TL</div>
               <div>
-                <div style={{ fontSize:22,fontWeight:800,color:"#f8fafc",letterSpacing:.5 }}>{CO.name}</div>
-                <div style={{ fontSize:12,color:"#60a5fa",letterSpacing:2,marginTop:3,fontWeight:600 }}>{CO.nameEn}</div>
+                <div style={{ fontSize:22,fontWeight:800,color:"#f8fafc",letterSpacing:.5 }}>{CO.company_name}</div>
+                <div style={{ fontSize:12,color:"#60a5fa",letterSpacing:2,marginTop:3,fontWeight:600 }}>{CO.company_name_en}</div>
               </div>
             </div>
             <div style={{ padding:"0 40px",background:"rgba(10,22,40,0.5)" }}>
               {[
-                { l:"商号",v:CO.name },{ l:"代表者",v:CO.rep },{ l:"所在地",v:CO.addr },
-                { l:"設立",v:CO.est },{ l:"資本金",v:CO.capital },{ l:"決算期",v:CO.fiscal },
-                { l:"事業内容",v:"AIソリューション開発、Webデザイン・システム開発、DX推進支援" },
-                { l:"メール",v:CO.email },{ l:"電話",v:CO.tel },
-              ].map((r,i) => (
+                { l:"商号", v:CO.company_name },
+                { l:"代表者", v:CO.representative_name ? `${CO.representative_title} ${CO.representative_name}${CO.representative_name_kana ? `（${CO.representative_name_kana}）` : ""}` : "未設定" },
+                { l:"所在地", v:CO.company_address || "未設定" },
+                { l:"設立", v:CO.company_established || "未設定" },
+                { l:"資本金", v:CO.company_capital || "未設定" },
+                { l:"決算期", v:CO.company_fiscal },
+                { l:"従業員数", v:CO.company_employees || "—" },
+                { l:"事業内容", v:CO.company_business },
+                { l:"取引銀行", v:CO.company_main_bank || "—" },
+                { l:"メール", v:CO.company_email || "—" },
+                { l:"電話", v:CO.company_phone || "—" },
+                { l:"URL", v:CO.company_website_url || "https://ange-spa.com" },
+              ].filter(r => r.v && r.v !== "—" || ["取引銀行","従業員数","メール","電話"].includes(r.l)).map((r,i) => (
                 <div key={i} style={{ display:"flex",padding:"18px 0",borderBottom:"1px solid rgba(255,255,255,0.04)",gap:24,alignItems:"baseline" }}>
                   <span style={{ fontSize:12,fontWeight:700,color:"#60a5fa",minWidth:80,flexShrink:0,letterSpacing:.5 }}>{r.l}</span>
                   <span style={{ fontSize:14,fontWeight:500,color:"#e2e8f0",lineHeight:1.6 }}>{r.v}</span>
@@ -525,6 +702,73 @@ export default function CorporatePage() {
             </div>
             <div style={{ height:20,background:"rgba(10,22,40,0.5)" }}/>
           </div>
+
+          {/* ── Googleマップ ── */}
+          {CO.company_map_embed && (
+            <div style={{ marginTop:32,borderRadius:18,overflow:"hidden",border:"1px solid rgba(96,165,250,0.12)",boxShadow:"0 8px 40px rgba(0,0,0,0.3)" }}>
+              <div style={{ padding:"14px 20px",background:"linear-gradient(135deg,#0f2847,#0a1628)",display:"flex",alignItems:"center",gap:10,borderBottom:"1px solid rgba(96,165,250,0.08)" }}>
+                <span style={{ fontSize:16 }}>📍</span>
+                <span style={{ fontSize:12,fontWeight:700,color:"#60a5fa",letterSpacing:1 }}>ACCESS MAP</span>
+              </div>
+              <div style={{ position:"relative",paddingBottom:"50%",height:0,overflow:"hidden",background:"#0a1628" }}>
+                <iframe src={CO.company_map_embed} style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%",border:0,filter:"grayscale(20%) contrast(1.1) brightness(.85)" }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" title="所在地"/>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(124,58,237,0.3),rgba(37,99,235,0.3),transparent)" }}/>
+
+      {/* ══════════ FAQ ══════════ */}
+      <section id="faq" data-a style={{ padding:"80px 24px",background:"linear-gradient(180deg,#020617,#0a1628,#020617)" }}>
+        <div className={`fu ${show("faq")?"on":""}`} style={{ maxWidth:820,margin:"0 auto" }}>
+          <div style={{ textAlign:"center",marginBottom:48 }}>
+            <span className={`sh ${show("faq")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#7c3aed",letterSpacing:3 }}>FAQ</span>
+            <h2 className={`sh2 ${show("faq")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>よくあるご質問</h2>
+            <div className={`sline ${show("faq")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#7c3aed,#06b6d4)",margin:"16px auto 0" }}/>
+          </div>
+          {faqs.length === 0 ? (
+            <div style={{ textAlign:"center",padding:"40px 0",color:"#475569",fontSize:13 }}>FAQ準備中</div>
+          ) : (
+            <>
+              {/* カテゴリフィルタ */}
+              <div style={{ display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap",marginBottom:24 }}>
+                {["all", ...Array.from(new Set(faqs.map(f => f.category)))].map(c => (
+                  <button key={c} onClick={() => setFaqCategory(c)} style={{
+                    padding:"6px 16px",borderRadius:20,border:`1px solid ${faqCategory===c?"#7c3aed":"rgba(148,163,184,0.2)"}`,
+                    background:faqCategory===c?"rgba(124,58,237,0.15)":"transparent",
+                    color:faqCategory===c?"#a78bfa":"#94a3b8",
+                    fontSize:11,fontWeight:600,cursor:"pointer",letterSpacing:.5,transition:"all .25s"
+                  }}>{c === "all" ? "すべて" : c}</button>
+                ))}
+              </div>
+              {/* FAQ リスト（アコーディオン） */}
+              <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                {faqs.filter(f => faqCategory === "all" || f.category === faqCategory).map((f) => (
+                  <div key={f.id} style={{ borderRadius:12,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.02)",overflow:"hidden",transition:"border-color .25s" }}>
+                    <button onClick={() => setOpenFaqId(openFaqId === f.id ? null : f.id)} style={{
+                      width:"100%",padding:"18px 22px",background:"none",border:"none",cursor:"pointer",
+                      display:"flex",alignItems:"center",gap:14,textAlign:"left",color:"#f8fafc"
+                    }}>
+                      <span style={{ fontSize:14,fontWeight:800,color:"#7c3aed",fontFamily:"Inter",flexShrink:0 }}>Q.</span>
+                      <span style={{ flex:1,fontSize:14,fontWeight:500,lineHeight:1.6 }}>{f.question}</span>
+                      <span style={{ fontSize:18,color:"#64748b",transform:openFaqId===f.id?"rotate(180deg)":"rotate(0)",transition:"transform .25s",flexShrink:0 }}>⌄</span>
+                    </button>
+                    {openFaqId === f.id && (
+                      <div style={{ padding:"0 22px 22px 22px",animation:"fadeIn .3s ease" }}>
+                        <div style={{ display:"flex",gap:14,paddingTop:14,borderTop:"1px solid rgba(255,255,255,0.05)" }}>
+                          <span style={{ fontSize:14,fontWeight:800,color:"#06b6d4",fontFamily:"Inter",flexShrink:0 }}>A.</span>
+                          <p style={{ fontSize:13,lineHeight:1.95,color:"#cbd5e1",whiteSpace:"pre-wrap" }}>{f.answer}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -577,13 +821,61 @@ export default function CorporatePage() {
       <RPGCharacters />
 
       {/* ══════════ FOOTER ══════════ */}
-      <footer style={{ padding:"40px 24px 28px",background:"#020617",borderTop:"1px solid rgba(96,165,250,0.08)" }}>
-        <div style={{ maxWidth:1100,margin:"0 auto",display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"center",gap:20 }}>
-          <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-            <div style={{ width:28,height:28,borderRadius:6,background:"linear-gradient(135deg,#2563eb,#06b6d4)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:10,fontFamily:"Inter" }}>TL</div>
-            <div><div style={{ fontSize:11,fontWeight:700,color:"#64748b",letterSpacing:1 }}>TERRACE LIFE</div><div style={{ fontSize:9,color:"#334155" }}>{CO.name}</div></div>
+      <footer style={{ padding:"56px 24px 28px",background:"#020617",borderTop:"1px solid rgba(96,165,250,0.08)" }}>
+        <div style={{ maxWidth:1100,margin:"0 auto" }}>
+          {/* Top grid */}
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:40,marginBottom:40 }}>
+            {/* Brand */}
+            <div>
+              <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:14 }}>
+                <div style={{ width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,#2563eb,#06b6d4)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:12,fontFamily:"Inter",boxShadow:"0 0 20px rgba(37,99,235,0.3)" }}>TL</div>
+                <div>
+                  <div style={{ fontSize:13,fontWeight:700,color:"#cbd5e1",letterSpacing:1,fontFamily:"Inter" }}>TERRACE LIFE</div>
+                  <div style={{ fontSize:8,color:"#60a5fa",letterSpacing:2.5,fontWeight:600 }}>AI · DESIGN · DX</div>
+                </div>
+              </div>
+              <p style={{ fontSize:11,color:"#64748b",lineHeight:1.8,marginTop:14 }}>{CO.company_name}<br/>{CO.company_address}</p>
+              {CO.company_phone && <p style={{ fontSize:11,color:"#64748b",marginTop:10 }}>TEL: {CO.company_phone}</p>}
+              {CO.company_email && <p style={{ fontSize:11,color:"#64748b",marginTop:4 }}>Mail: {CO.company_email}</p>}
+            </div>
+            {/* Services */}
+            <div>
+              <h4 style={{ fontSize:10,fontWeight:800,color:"#60a5fa",letterSpacing:2,marginBottom:14 }}>SERVICES</h4>
+              <ul style={{ listStyle:"none",display:"flex",flexDirection:"column",gap:8 }}>
+                <li><a href="/corporate/products/ai" style={{ fontSize:12,color:"#94a3b8",transition:"color .2s" }} onMouseEnter={e => e.currentTarget.style.color="#60a5fa"} onMouseLeave={e => e.currentTarget.style.color="#94a3b8"}>TERA AI</a></li>
+                <li><a href="/corporate/products/web" style={{ fontSize:12,color:"#94a3b8",transition:"color .2s" }} onMouseEnter={e => e.currentTarget.style.color="#60a5fa"} onMouseLeave={e => e.currentTarget.style.color="#94a3b8"}>TERA Cloud</a></li>
+                <li><a href="/corporate/products/dx" style={{ fontSize:12,color:"#94a3b8",transition:"color .2s" }} onMouseEnter={e => e.currentTarget.style.color="#60a5fa"} onMouseLeave={e => e.currentTarget.style.color="#94a3b8"}>TERA DX</a></li>
+              </ul>
+            </div>
+            {/* Company */}
+            <div>
+              <h4 style={{ fontSize:10,fontWeight:800,color:"#60a5fa",letterSpacing:2,marginBottom:14 }}>COMPANY</h4>
+              <ul style={{ listStyle:"none",display:"flex",flexDirection:"column",gap:8 }}>
+                <li><a href="/corporate#message" style={{ fontSize:12,color:"#94a3b8" }}>代表挨拶</a></li>
+                <li><a href="/corporate#company" style={{ fontSize:12,color:"#94a3b8" }}>会社概要</a></li>
+                <li><a href="/corporate/news" style={{ fontSize:12,color:"#94a3b8" }}>お知らせ</a></li>
+                <li><a href="/corporate/careers" style={{ fontSize:12,color:"#94a3b8" }}>採用情報</a></li>
+              </ul>
+            </div>
+            {/* Support */}
+            <div>
+              <h4 style={{ fontSize:10,fontWeight:800,color:"#60a5fa",letterSpacing:2,marginBottom:14 }}>SUPPORT</h4>
+              <ul style={{ listStyle:"none",display:"flex",flexDirection:"column",gap:8 }}>
+                <li><a href="/corporate#contact" style={{ fontSize:12,color:"#94a3b8" }}>お問い合わせ</a></li>
+                <li><a href="/corporate/faq" style={{ fontSize:12,color:"#94a3b8" }}>よくあるご質問</a></li>
+                <li><a href="/corporate/privacy" style={{ fontSize:12,color:"#94a3b8" }}>プライバシーポリシー</a></li>
+                <li><a href="/corporate/legal" style={{ fontSize:12,color:"#94a3b8" }}>特定商取引法表記</a></li>
+              </ul>
+            </div>
           </div>
-          <p style={{ fontSize:11,color:"#334155" }}>© {new Date().getFullYear()} {CO.name}. All rights reserved.</p>
+          {/* Bottom */}
+          <div style={{ display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"center",gap:14,paddingTop:24,borderTop:"1px solid rgba(255,255,255,0.04)" }}>
+            <p style={{ fontSize:11,color:"#334155" }}>© {new Date().getFullYear()} {CO.company_name}. All rights reserved.</p>
+            <div style={{ display:"flex",gap:20,alignItems:"center" }}>
+              <span style={{ fontSize:10,color:"#334155" }}>🔒 SSL Secured</span>
+              <span style={{ fontSize:10,color:"#334155" }}>🛡 個人情報保護法準拠</span>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
