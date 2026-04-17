@@ -12,7 +12,7 @@ type Therapist = {
   real_name: string | null;
   has_invoice: boolean;
   has_withholding: boolean;
-  invoice_number: string | null;
+  therapist_invoice_number: string | null;
 };
 
 type Settlement = {
@@ -62,14 +62,24 @@ export default function FinalTaxReturnPage() {
       const { id } = JSON.parse(session);
       supabase
         .from("therapists")
-        .select("id,name,real_name,has_invoice,has_withholding,invoice_number")
+        .select("id,name,real_name,has_invoice,has_withholding,therapist_invoice_number")
         .eq("id", id)
         .maybeSingle()
-        .then(({ data }: { data: Therapist | null }) => {
-          if (data) setTherapist(data);
+        .then(({ data, error }: { data: Therapist | null; error: unknown }) => {
+          if (error) {
+            console.error("therapist fetch error:", error);
+            setLoading(false);
+            return;
+          }
+          if (data) {
+            setTherapist(data);
+          } else {
+            setLoading(false);  // セラピスト見つからない
+          }
         });
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.error("session parse error:", e);
+      setLoading(false);
     }
   }, []);
 
@@ -86,8 +96,15 @@ export default function FinalTaxReturnPage() {
       .gte("date", startDate)
       .lte("date", endDate)
       .order("date", { ascending: true })
-      .then(({ data }: { data: Settlement[] | null }) => {
-        if (data) setSettlements(data);
+      .then(({ data, error }: { data: Settlement[] | null; error: unknown }) => {
+        if (error) {
+          console.error("settlements fetch error:", error);
+          setSettlements([]);
+        } else if (data) {
+          setSettlements(data);
+        } else {
+          setSettlements([]);
+        }
         setLoading(false);
       });
   }, [therapist, selectedYear]);
