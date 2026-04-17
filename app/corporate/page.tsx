@@ -277,6 +277,7 @@ export default function CorporatePage() {
                 color: "#3b82f6",
                 href: "/corporate/products/ai",
                 badge: "AI",
+                img: "/corporate/product-ai.jpg",
               },
               {
                 name: "TERA Cloud",
@@ -286,6 +287,7 @@ export default function CorporatePage() {
                 color: "#06b6d4",
                 href: "/corporate/products/web",
                 badge: "Cloud",
+                img: "/corporate/product-cloud.jpg",
               },
               {
                 name: "TERA DX",
@@ -295,6 +297,7 @@ export default function CorporatePage() {
                 color: "#7c3aed",
                 href: "/corporate/products/dx",
                 badge: "DX",
+                img: "/corporate/product-dx.jpg",
               },
             ].map((p,i) => (
               <a key={i} href={p.href} className="ch" style={{
@@ -305,6 +308,10 @@ export default function CorporatePage() {
               }}>
                 {/* Top accent bar */}
                 <div style={{ height:3,background:`linear-gradient(90deg,${p.color},${p.color}80)` }}/>
+                {/* Product screenshot */}
+                <div style={{ padding:"16px 16px 0",overflow:"hidden" }}>
+                  <img src={p.img} alt={p.name} style={{ width:"100%",height:180,objectFit:"cover",borderRadius:10,border:"1px solid rgba(96,165,250,0.1)" }}/>
+                </div>
                 <div style={{ padding:"32px 28px" }}>
                   {/* Badge + tagline */}
                   <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
