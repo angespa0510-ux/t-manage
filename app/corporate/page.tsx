@@ -150,9 +150,15 @@ export default function CorporatePage() {
       </nav>
 
       {/* ══════════ HERO ══════════ */}
-      <section id="hero" style={{ position:"relative",minHeight:"100vh",background:"radial-gradient(ellipse at 50% 0%,#0f2847 0%,#0c1929 40%,#020617 100%)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden" }}>
+      <section id="hero" style={{ position:"relative",minHeight:"100vh",background:"#020617",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden" }}>
+        {/* Background video + image fallback */}
+        <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.35,zIndex:0 }} poster="/corporate/hero-bg.jpg">
+          <source src="/corporate/hero-bg.mp4" type="video/mp4"/>
+        </video>
+        {/* Darkening overlay */}
+        <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg, rgba(2,6,23,0.5) 0%, rgba(2,6,23,0.3) 50%, rgba(2,6,23,0.7) 100%)",zIndex:1 }}/>
         {/* Grid */}
-        <div style={{ position:"absolute",inset:0,opacity:0.05 }}>
+        <div style={{ position:"absolute",inset:0,opacity:0.05,zIndex:2 }}>
           <svg width="100%" height="100%"><defs><pattern id="g" width="80" height="80" patternUnits="userSpaceOnUse"><path d="M 80 0 L 0 0 0 80" fill="none" stroke="#60a5fa" strokeWidth="0.5"/></pattern></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>
         </div>
         {/* Perspective floor */}
@@ -580,6 +586,8 @@ function RPGCharacters() {
       const dist2 = (ax: number, ay: number, bx: number, by: number) => Math.sqrt((ax-bx)**2 + (ay-by)**2);
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
       const ease = (t: number) => t < 0.5 ? 2*t*t : 1 - (-2*t+2)**2/2;
+      // PC（幅広い画面）ではゆっくり、スマホはそのまま
+      const spd = window.innerWidth > 900 ? 0.28 : 0.5;
       const faceDir = (dx: number, dy: number) => {
         const ang = Math.atan2(dy, dx) * 180 / Math.PI; // -180 to 180
         if (ang > -45 && ang <= 45) return { hdir: 1, hface: "side" };     // right
@@ -593,7 +601,7 @@ function RPGCharacters() {
         const dx = r.tx - r.hx, dy = r.ty - r.hy, d = dist2(r.hx,r.hy,r.tx,r.ty);
         if (d < 10) { r.walk = false; r.idleCount++; if (r.idleCount > 150) pick(); }
         else {
-          r.hx += (dx/d)*0.5; r.hy += (dy/d)*0.5;
+          r.hx += (dx/d)*spd; r.hy += (dy/d)*spd;
           const f = faceDir(dx, dy); r.hdir = f.hdir; r.hface = f.hface;
           r.walk = true; r.idleCount = 0;
         }
@@ -610,7 +618,7 @@ function RPGCharacters() {
         r.ptick++;
         const dx = r.sx - r.hx, d = dist2(r.hx,r.hy,r.sx,r.sy);
         const f = faceDir(dx, r.sy - r.hy); r.hdir = f.hdir; r.hface = "side"; r.walk = true;
-        if (d > 80) { r.hx += (dx/d)*0.9; r.hy += ((r.sy-r.hy)/d)*0.9; }
+        if (d > 80) { r.hx += (dx/d)*(spd*1.8); r.hy += ((r.sy-r.hy)/d)*(spd*1.8); }
         if (r.ptick > 40 || d <= 80) { r.phase = Math.random() > 0.45 ? "hero_atk" : "slime_atk"; r.ptick = 0; r.walk = false; r.atkOff = 0; r.swordAng = 0; }
       }
       // ── HERO ATTACK: lunge + big sword swing ──
@@ -718,7 +726,7 @@ function RPGCharacters() {
       else if (r.phase === "cooldown") {
         r.ptick++;
         const dx = r.tx - r.hx, d = dist2(r.hx,r.hy,r.tx,r.ty);
-        if (d > 10) { r.hx += (dx/d)*0.5; r.hy += ((r.ty-r.hy)/d)*0.5; const f = faceDir(dx, r.ty-r.hy); r.hdir = f.hdir; r.hface = f.hface; r.walk = true; }
+        if (d > 10) { r.hx += (dx/d)*spd; r.hy += ((r.ty-r.hy)/d)*spd; const f = faceDir(dx, r.ty-r.hy); r.hdir = f.hdir; r.hface = f.hface; r.walk = true; }
         else r.walk = false;
         if (r.ptick > 200) { r.phase = "wander"; r.ptick = 0; r.nextSpawn = 500 + Math.floor(Math.random() * 500); pick(); }
       }
