@@ -189,6 +189,18 @@ export default function TaxPortal() {
   const [bankParsing, setBankParsing] = useState(false);
   const [bankStagedTxs, setBankStagedTxs] = useState<BankTransaction[]>([]);  // アップ後・確定前
   const [bankFilter, setBankFilter] = useState<"all" | "unconfirmed" | "confirmed">("unconfirmed");
+  // ルール編集
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [editRulePattern, setEditRulePattern] = useState("");
+  const [editRuleCategory, setEditRuleCategory] = useState("other");
+  const [editRuleLabel, setEditRuleLabel] = useState("");
+  const [editRulePriority, setEditRulePriority] = useState(50);
+  // 新規ルール追加
+  const [showNewRule, setShowNewRule] = useState(false);
+  const [newRulePattern, setNewRulePattern] = useState("");
+  const [newRuleCategory, setNewRuleCategory] = useState("other");
+  const [newRuleLabel, setNewRuleLabel] = useState("");
+  const [newRulePriority, setNewRulePriority] = useState(50);
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
@@ -481,6 +493,49 @@ export default function TaxPortal() {
   const deleteRule = async (id: number) => {
     if (!confirm("このルールを削除しますか？")) return;
     await supabase.from("bank_category_rules").delete().eq("id", id);
+    fetchBankData();
+  };
+
+  // ルール編集開始
+  const startEditRule = (r: BankRule) => {
+    setEditingRuleId(r.id);
+    setEditRulePattern(r.pattern);
+    setEditRuleCategory(r.account_category);
+    setEditRuleLabel(r.account_label || "");
+    setEditRulePriority(r.priority);
+  };
+
+  // ルール編集保存
+  const saveEditRule = async () => {
+    if (!editingRuleId || !editRulePattern.trim()) { alert("マッチ文字列を入力してください"); return; }
+    const label = editRuleLabel.trim() || EXPENSE_CATEGORIES.find(c => c.value === editRuleCategory)?.label || editRuleCategory;
+    const { error } = await supabase.from("bank_category_rules").update({
+      pattern: editRulePattern.trim(),
+      account_category: editRuleCategory,
+      account_label: label,
+      is_expense: editRuleCategory !== "income",
+      priority: editRulePriority,
+    }).eq("id", editingRuleId);
+    if (error) { alert("エラー: " + error.message); return; }
+    setEditingRuleId(null);
+    fetchBankData();
+  };
+
+  // 新規ルール追加
+  const addNewRule = async () => {
+    if (!newRulePattern.trim()) { alert("マッチ文字列を入力してください"); return; }
+    const label = newRuleLabel.trim() || EXPENSE_CATEGORIES.find(c => c.value === newRuleCategory)?.label || newRuleCategory;
+    const { error } = await supabase.from("bank_category_rules").insert({
+      pattern: newRulePattern.trim(),
+      account_category: newRuleCategory,
+      account_label: label,
+      is_expense: newRuleCategory !== "income",
+      priority: newRulePriority,
+      created_by_name: activeStaff?.name || "",
+    });
+    if (error) { alert("エラー: " + error.message + "（同じマッチ文字列のルールが既に存在する可能性があります）"); return; }
+    setNewRulePattern(""); setNewRuleLabel(""); setNewRuleCategory("other"); setNewRulePriority(50);
+    setShowNewRule(false);
     fetchBankData();
   };
 
@@ -1322,31 +1377,99 @@ export default function TaxPortal() {
               {/* 学習済みルール */}
               <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                 <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
-                  <span className="text-[12px] font-medium">🧠 学習済み仕訳ルール（{bankRules.length}件）</span>
-                  <span className="text-[10px]" style={{ color: T.textFaint }}>摘要マッチで自動分類</span>
+                  <div>
+                    <span className="text-[12px] font-medium">🧠 学習済み仕訳ルール（{bankRules.length}件）</span>
+                    <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>摘要マッチで自動分類 / 優先度が高い方が先に適用されます</p>
+                  </div>
+                  <button onClick={() => setShowNewRule(!showNewRule)} className="text-[11px] px-3 py-1.5 rounded cursor-pointer font-medium" style={{ backgroundColor: showNewRule ? T.cardAlt : "#22c55e", color: showNewRule ? T.textSub : "white", border: "none" }}>
+                    {showNewRule ? "✕ キャンセル" : "＋ 新規ルール追加"}
+                  </button>
                 </div>
-                <div style={{ maxHeight: 300, overflowY: "auto" }}>
+
+                {/* 新規追加フォーム */}
+                {showNewRule && (
+                  <div className="p-4" style={{ backgroundColor: "#22c55e10", borderBottom: gridBorder }}>
+                    <p className="text-[11px] font-medium mb-3" style={{ color: "#22c55e" }}>＋ 新規ルール作成</p>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>マッチ文字列（摘要に含まれる部分）</label>
+                        <input type="text" value={newRulePattern} onChange={(e) => setNewRulePattern(e.target.value)} placeholder="例: スギ薬局 / カ）◯◯" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>勘定科目</label>
+                        <select value={newRuleCategory} onChange={(e) => setNewRuleCategory(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                          {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>表示ラベル（任意）</label>
+                        <input type="text" value={newRuleLabel} onChange={(e) => setNewRuleLabel(e.target.value)} placeholder="例: 消耗品費（薬局）" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>優先度（0-100）</label>
+                        <input type="number" min="0" max="100" value={newRulePriority} onChange={(e) => setNewRulePriority(parseInt(e.target.value) || 50)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => { setShowNewRule(false); setNewRulePattern(""); setNewRuleLabel(""); }} className="text-[11px] px-3 py-1.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>キャンセル</button>
+                      <button onClick={addNewRule} className="text-[11px] px-3 py-1.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#22c55e", color: "white", border: "none" }}>✓ ルール追加</button>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ maxHeight: 400, overflowY: "auto" }}>
                   <table className="w-full" style={{ fontSize: 11 }}>
                     <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
                       <tr style={{ color: T.textSub, fontSize: 10 }}>
                         <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>マッチ文字列</th>
                         <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>勘定科目</th>
-                        <th style={{ padding: "5px 8px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, width: 80 }}>優先度</th>
-                        <th style={{ padding: "5px 8px", textAlign: "center", borderBottom: gridBorder, width: 80 }}>操作</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>表示ラベル</th>
+                        <th style={{ padding: "5px 8px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, width: 60 }}>優先度</th>
+                        <th style={{ padding: "5px 8px", textAlign: "center", borderBottom: gridBorder, width: 140 }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {bankRules.length === 0 && <tr><td colSpan={4} style={{ padding: "16px", textAlign: "center", color: T.textFaint, fontSize: 10 }}>ルールがありません</td></tr>}
-                      {bankRules.map((r, i) => (
-                        <tr key={r.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
-                          <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10 }}>{r.pattern}</td>
-                          <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10 }}>{r.account_label || EXPENSE_CATEGORIES.find(c => c.value === r.account_category)?.label}</td>
-                          <td style={{ padding: "4px 8px", borderRight: gridBorder, textAlign: "right", color: T.textSub }}>{r.priority}</td>
-                          <td style={{ padding: "4px 8px", textAlign: "center" }}>
-                            <button onClick={() => deleteRule(r.id)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
-                          </td>
-                        </tr>
-                      ))}
+                      {bankRules.length === 0 && <tr><td colSpan={5} style={{ padding: "16px", textAlign: "center", color: T.textFaint, fontSize: 10 }}>ルールがありません。「＋ 新規ルール追加」から作成してください。</td></tr>}
+                      {bankRules.map((r, i) => {
+                        const isEditing = editingRuleId === r.id;
+                        return (
+                          <tr key={r.id} style={{ borderTop: gridBorder, backgroundColor: isEditing ? "#c3a78218" : (i % 2 === 0 ? "transparent" : T.cardAlt + "40") }}>
+                            {isEditing ? (
+                              <>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder }}>
+                                  <input type="text" value={editRulePattern} onChange={(e) => setEditRulePattern(e.target.value)} className="w-full px-2 py-1 rounded text-[11px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid #c3a782` }} autoFocus />
+                                </td>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder }}>
+                                  <select value={editRuleCategory} onChange={(e) => setEditRuleCategory(e.target.value)} className="w-full px-2 py-1 rounded text-[11px] outline-none cursor-pointer" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid #c3a782` }}>
+                                    {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                                  </select>
+                                </td>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder }}>
+                                  <input type="text" value={editRuleLabel} onChange={(e) => setEditRuleLabel(e.target.value)} placeholder="表示ラベル" className="w-full px-2 py-1 rounded text-[11px] outline-none" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid #c3a782` }} />
+                                </td>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder }}>
+                                  <input type="number" min="0" max="100" value={editRulePriority} onChange={(e) => setEditRulePriority(parseInt(e.target.value) || 50)} className="w-full px-2 py-1 rounded text-[11px] outline-none text-right" style={{ backgroundColor: T.bg, color: T.text, border: `1px solid #c3a782` }} />
+                                </td>
+                                <td style={{ padding: "4px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
+                                  <button onClick={saveEditRule} className="text-[10px] px-2 py-1 rounded cursor-pointer mr-1" style={{ backgroundColor: "#22c55e", color: "white", border: "none" }}>✓ 保存</button>
+                                  <button onClick={() => setEditingRuleId(null)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>✕</button>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10 }}>{r.pattern}</td>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10 }}>{EXPENSE_CATEGORIES.find(c => c.value === r.account_category)?.label || r.account_category}</td>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10, color: T.textSub }}>{r.account_label || "—"}</td>
+                                <td style={{ padding: "4px 8px", borderRight: gridBorder, textAlign: "right", color: T.textSub }}>{r.priority}</td>
+                                <td style={{ padding: "4px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
+                                  <button onClick={() => startEditRule(r)} className="text-[10px] px-2 py-0.5 rounded cursor-pointer mr-1" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "none" }}>✏️ 編集</button>
+                                  <button onClick={() => deleteRule(r.id)} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
