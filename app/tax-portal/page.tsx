@@ -17,6 +17,16 @@ type TaxDoc = { id: number; category: string; file_name: string; file_url: strin
 
 const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "その他"];
 
+// Supabase Storageはパスに日本語が使えないため、英語キーにマッピング
+const CATEGORY_PATH: Record<string, string> = {
+  "決算書": "kessan",
+  "申告書": "shinkoku",
+  "契約書": "keiyaku",
+  "固定資産": "kotei",
+  "支払調書": "shiharai",
+  "その他": "other",
+};
+
 const ACCOUNT_MAP: Record<string, string> = {
   rent: "地代家賃", utilities: "水道光熱費", supplies: "消耗品費",
   transport: "旅費交通費", advertising: "広告宣伝費", therapist_back: "外注費",
@@ -113,9 +123,11 @@ export default function TaxPortal() {
     if (file.size > 20 * 1024 * 1024) { alert("ファイルサイズは20MB以下にしてください"); return; }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "";
+      const ext = (file.name.split(".").pop() || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "bin";
       const uuid = crypto.randomUUID();
-      const path = `${uploadCategory}/${uuid}.${ext}`;
+      // Storageパスは英数字のみ（日本語NG）。カテゴリは英語キーに変換
+      const pathCat = CATEGORY_PATH[uploadCategory] || "other";
+      const path = `${pathCat}/${uuid}.${ext}`;
       const { error: upErr } = await supabase.storage.from("tax-documents").upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) { alert("アップロードに失敗しました: " + upErr.message); setUploading(false); return; }
       const { data: pu } = supabase.storage.from("tax-documents").getPublicUrl(path);
