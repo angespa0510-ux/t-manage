@@ -9,7 +9,7 @@ import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 
 type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean };
-type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number; company_name_en?: string; company_established?: string; company_capital?: string; company_fiscal?: string; company_email?: string; company_business?: string; company_tagline?: string; company_employees?: string; company_main_bank?: string; company_website_url?: string; company_map_embed?: string; representative_name?: string; representative_name_kana?: string; representative_title?: string; representative_photo_url?: string; representative_message?: string };
+type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
 type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number; break_minutes: number };
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
 
@@ -18,7 +18,7 @@ export default function StaffPage() {
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "company">("staff");
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license">("staff");
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 
@@ -41,24 +41,6 @@ export default function StaffPage() {
 
   // Company states
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [licenseUnitPrice, setLicenseUnitPrice] = useState("50");
-  // Corporate Site states (コーポレートサイト用)
-  const [companyNameEn, setCompanyNameEn] = useState("");
-  const [companyEstablished, setCompanyEstablished] = useState("");
-  const [companyCapital, setCompanyCapital] = useState("");
-  const [companyFiscal, setCompanyFiscal] = useState("3月決算");
-  const [companyEmail, setCompanyEmail] = useState("");
-  const [companyBusiness, setCompanyBusiness] = useState("");
-  const [companyTagline, setCompanyTagline] = useState("");
-  const [companyEmployees, setCompanyEmployees] = useState("");
-  const [companyMainBank, setCompanyMainBank] = useState("");
-  const [companyWebsiteUrl, setCompanyWebsiteUrl] = useState("");
-  const [companyMapEmbed, setCompanyMapEmbed] = useState("");
-  const [representativeName, setRepresentativeName] = useState("");
-  const [representativeNameKana, setRepresentativeNameKana] = useState("");
-  const [representativeTitle, setRepresentativeTitle] = useState("代表社員");
-  const [representativeMessage, setRepresentativeMessage] = useState("");
-  const [representativePhotoUrl, setRepresentativePhotoUrl] = useState("");
-  const [representativePhotoFile, setRepresentativePhotoFile] = useState<File | null>(null);
 
   // Schedule states
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -231,31 +213,7 @@ export default function StaffPage() {
   const fetchData = useCallback(async () => {
     const { data: s } = await supabase.from("staff").select("*").order("id"); if (s) setStaffList(s);
     const { data: st } = await supabase.from("stores").select("*").limit(1).single();
-    if (st) {
-      setStoreInfo(st);
-      setCompanyName(st.company_name || "");
-      setCompanyAddress(st.company_address || "");
-      setCompanyPhone(st.company_phone || "");
-      setInvoiceNumber(st.invoice_number || "");
-      setLicenseUnitPrice(String(st.license_unit_price || 50));
-      // コーポレートサイト用フィールド
-      setCompanyNameEn(st.company_name_en || "");
-      setCompanyEstablished(st.company_established || "");
-      setCompanyCapital(st.company_capital || "");
-      setCompanyFiscal(st.company_fiscal || "3月決算");
-      setCompanyEmail(st.company_email || "");
-      setCompanyBusiness(st.company_business || "");
-      setCompanyTagline(st.company_tagline || "");
-      setCompanyEmployees(st.company_employees || "");
-      setCompanyMainBank(st.company_main_bank || "");
-      setCompanyWebsiteUrl(st.company_website_url || "");
-      setCompanyMapEmbed(st.company_map_embed || "");
-      setRepresentativeName(st.representative_name || "");
-      setRepresentativeNameKana(st.representative_name_kana || "");
-      setRepresentativeTitle(st.representative_title || "代表社員");
-      setRepresentativeMessage(st.representative_message || "");
-      setRepresentativePhotoUrl(st.representative_photo_url || "");
-    }
+    if (st) { setStoreInfo(st); setCompanyName(st.company_name || ""); setCompanyAddress(st.company_address || ""); setCompanyPhone(st.company_phone || ""); setInvoiceNumber(st.invoice_number || ""); setLicenseUnitPrice(String(st.license_unit_price || 50)); }
     const { data: oi } = await supabase.from("oiri_settings").select("*").eq("is_active", true).limit(1).single();
     if (oi) { setOiriSettings(oi); setOiriSales(String(oi.sales_threshold)); setOiriCount(String(oi.count_threshold)); setOiriBonus(String(oi.bonus_amount)); }
   }, []);
@@ -309,48 +267,7 @@ export default function StaffPage() {
     toast.show("スタッフ情報を更新しました", "success"); setEditStaff(null); fetchData();
   };
   const deleteStaffFn = async (id: number, name: string) => { if (!confirm(`${name}を削除しますか？`)) return; await supabase.from("staff").delete().eq("id", id); toast.show("スタッフを削除しました", "info"); fetchData(); };
-  const saveCompany = async () => {
-    if (!storeInfo) return;
-    let photoUrl = representativePhotoUrl;
-    // 代表者写真アップロード
-    if (representativePhotoFile) {
-      try {
-        const ext = representativePhotoFile.name.split('.').pop() || 'jpg';
-        const fileName = `representative_${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("staff-docs").upload(fileName, representativePhotoFile, { contentType: representativePhotoFile.type, upsert: true });
-        if (!upErr) {
-          const { data } = supabase.storage.from("staff-docs").getPublicUrl(fileName);
-          photoUrl = data.publicUrl;
-        }
-      } catch (e) { console.error("代表者写真アップロードエラー:", e); }
-    }
-    await supabase.from("stores").update({
-      company_name: companyName.trim(),
-      company_address: companyAddress.trim(),
-      company_phone: companyPhone.trim(),
-      invoice_number: invoiceNumber.trim(),
-      license_unit_price: parseInt(licenseUnitPrice) || 50,
-      company_name_en: companyNameEn.trim(),
-      company_established: companyEstablished.trim(),
-      company_capital: companyCapital.trim(),
-      company_fiscal: companyFiscal.trim(),
-      company_email: companyEmail.trim(),
-      company_business: companyBusiness.trim(),
-      company_tagline: companyTagline.trim(),
-      company_employees: companyEmployees.trim(),
-      company_main_bank: companyMainBank.trim(),
-      company_website_url: companyWebsiteUrl.trim(),
-      company_map_embed: companyMapEmbed.trim(),
-      representative_name: representativeName.trim(),
-      representative_name_kana: representativeNameKana.trim(),
-      representative_title: representativeTitle.trim(),
-      representative_message: representativeMessage.trim(),
-      representative_photo_url: photoUrl,
-    }).eq("id", storeInfo.id);
-    toast.show("会社情報を更新しました", "success");
-    setRepresentativePhotoFile(null);
-    fetchData();
-  };
+  const saveCompany = async () => { if (!storeInfo) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim(), license_unit_price: parseInt(licenseUnitPrice) || 50 }).eq("id", storeInfo.id); toast.show("会社情報を更新しました", "success"); fetchData(); };
   const saveOiri = async () => {
     const data = { sales_threshold: parseInt(oiriSales) || 0, count_threshold: parseInt(oiriCount) || 0, bonus_amount: parseInt(oiriBonus) || 1000 };
     if (oiriSettings) { await supabase.from("oiri_settings").update(data).eq("id", oiriSettings.id); }
@@ -493,9 +410,9 @@ const openPaymentStatement = (sch: Schedule) => {
 
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["staff", "schedule", "oiri", "license", "company"] as const).map(t => (
+          {(["staff", "schedule", "oiri", "license"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: tab === t ? "#c3a78222" : T.cardAlt, color: tab === t ? "#c3a782" : T.textMuted, border: `1px solid ${tab === t ? "#c3a782" : T.border}`, fontWeight: tab === t ? 700 : 400 }}>
-              {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : t === "license" ? "🚗 免許資格単価設定" : "🏢 会社情報"}
+              {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🚗 免許資格単価設定"}
             </button>
           ))}
         </div>
@@ -637,149 +554,6 @@ const openPaymentStatement = (sch: Schedule) => {
           </div>
         )}
 
-        {/* ========== Tab 5: Company Info (コーポレートサイト用会社情報) ========== */}
-        {tab === "company" && (
-          <div className="space-y-4">
-            <div className="rounded-xl border p-5" style={{ backgroundColor: "#c3a78208", borderColor: "#c3a78233" }}>
-              <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
-                🌐 ここで設定する情報は <a href="/corporate" target="_blank" className="underline" style={{ color: "#c3a782" }}>コーポレートサイト（/corporate）</a> に反映されます。代表挨拶・会社概要・地図などがここから動的に表示されます。
-              </p>
-            </div>
-
-            {/* ─── 基本情報 ─── */}
-            <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-              <h2 className="text-[15px] font-medium">🏢 基本情報</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>商号（日本語）</label>
-                  <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="合同会社テラスライフ" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>商号（英語）</label>
-                  <input type="text" value={companyNameEn} onChange={e => setCompanyNameEn(e.target.value)} placeholder="Terrace Life LLC" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>所在地</label>
-                  <input type="text" value={companyAddress} onChange={e => setCompanyAddress(e.target.value)} placeholder="愛知県安城市◯◯町◯-◯-◯" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>設立</label>
-                  <input type="text" value={companyEstablished} onChange={e => setCompanyEstablished(e.target.value)} placeholder="2020年4月" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>資本金</label>
-                  <input type="text" value={companyCapital} onChange={e => setCompanyCapital(e.target.value)} placeholder="100万円" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>決算期</label>
-                  <input type="text" value={companyFiscal} onChange={e => setCompanyFiscal(e.target.value)} placeholder="3月決算" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>従業員数</label>
-                  <input type="text" value={companyEmployees} onChange={e => setCompanyEmployees(e.target.value)} placeholder="5名（2025年4月時点）" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>電話番号</label>
-                  <input type="tel" value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} placeholder="0566-◯◯-◯◯◯◯" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メール</label>
-                  <input type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} placeholder="info@terrace-life.co.jp" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>Webサイト</label>
-                  <input type="url" value={companyWebsiteUrl} onChange={e => setCompanyWebsiteUrl(e.target.value)} placeholder="https://ange-spa.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>取引銀行</label>
-                  <input type="text" value={companyMainBank} onChange={e => setCompanyMainBank(e.target.value)} placeholder="◯◯銀行 安城支店" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>事業内容</label>
-                  <textarea value={companyBusiness} onChange={e => setCompanyBusiness(e.target.value)} rows={2} placeholder="AIソリューション開発、Webデザイン・システム開発、DX推進支援" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>キャッチコピー</label>
-                  <input type="text" value={companyTagline} onChange={e => setCompanyTagline(e.target.value)} placeholder="テクノロジーで、ビジネスの未来をデザインする。" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>適格請求書事業者番号（インボイス番号）</label>
-                  <input type="text" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                </div>
-              </div>
-            </div>
-
-            {/* ─── 代表者情報 ─── */}
-            <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-              <h2 className="text-[15px] font-medium">👔 代表者情報</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* 写真 */}
-                <div className="md:col-span-1">
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>代表者写真</label>
-                  <div className="flex flex-col items-center gap-3 p-4 rounded-xl" style={{ backgroundColor: T.cardAlt, border: `1px dashed ${T.border}` }}>
-                    {(representativePhotoFile || representativePhotoUrl) ? (
-                      <img src={representativePhotoFile ? URL.createObjectURL(representativePhotoFile) : representativePhotoUrl} alt="代表者" className="w-32 h-32 rounded-full object-cover" style={{ border: "3px solid #c3a782" }}/>
-                    ) : (
-                      <div className="w-32 h-32 rounded-full flex items-center justify-center text-[40px]" style={{ backgroundColor: T.cardAlt, border: `2px dashed ${T.border}`, color: T.textFaint }}>👤</div>
-                    )}
-                    <input type="file" accept="image/*" onChange={e => setRepresentativePhotoFile(e.target.files?.[0] || null)} className="text-[10px]" style={{ color: T.textSub }}/>
-                    <p className="text-[9px] text-center" style={{ color: T.textFaint }}>正方形推奨（800×800px）<br/>保存時にアップロードされます</p>
-                  </div>
-                </div>
-                {/* 代表者情報 */}
-                <div className="md:col-span-2 space-y-3">
-                  <div>
-                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>役職</label>
-                    <input type="text" value={representativeTitle} onChange={e => setRepresentativeTitle(e.target.value)} placeholder="代表社員" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>氏名 *</label>
-                    <input type="text" value={representativeName} onChange={e => setRepresentativeName(e.target.value)} placeholder="山田 太郎" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>氏名カナ</label>
-                    <input type="text" value={representativeNameKana} onChange={e => setRepresentativeNameKana(e.target.value)} placeholder="やまだ たろう" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                  </div>
-                </div>
-              </div>
-              {/* 代表挨拶 */}
-              <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>代表挨拶文</label>
-                <textarea value={representativeMessage} onChange={e => setRepresentativeMessage(e.target.value)} rows={8} placeholder="テラスライフは「現場で役立つテクノロジー」を信条に..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>改行も反映されます。200〜400字程度が適切です。</p>
-              </div>
-            </div>
-
-            {/* ─── 地図埋込 ─── */}
-            <div className="rounded-xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-              <h2 className="text-[15px] font-medium">📍 Googleマップ埋込</h2>
-              <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>Googleマップ埋込URL</label>
-                <textarea value={companyMapEmbed} onChange={e => setCompanyMapEmbed(e.target.value)} rows={3} placeholder="https://www.google.com/maps/embed?pb=..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle}/>
-                <div className="mt-2 p-3 rounded-xl text-[10px] leading-relaxed" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>
-                  <strong>埋込URL取得方法:</strong><br/>
-                  1. <a href="https://www.google.com/maps" target="_blank" className="underline" style={{ color: "#c3a782" }}>Googleマップ</a> で所在地を検索<br/>
-                  2. 「共有」→「地図を埋め込む」→「HTMLをコピー」<br/>
-                  3. コピーしたHTMLの <code>src=&quot;...&quot;</code> の中身（https://〜&nbsp;で始まる部分）だけを貼り付け
-                </div>
-              </div>
-              {companyMapEmbed && (
-                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
-                  <div style={{ position: "relative", paddingBottom: "50%", height: 0 }}>
-                    <iframe src={companyMapEmbed} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }} loading="lazy" title="プレビュー"/>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ─── 保存ボタン ─── */}
-            <div className="sticky bottom-4 z-10">
-              <button onClick={saveCompany} className="w-full px-6 py-3.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[13px] font-bold rounded-xl cursor-pointer shadow-lg">
-                💾 会社情報を保存する
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ===== Add Staff Modal ===== */}

@@ -38,13 +38,30 @@ export default function TaxDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
   const [corporateNumber, setCorporateNumber] = useState(""); const [fiscalMonth, setFiscalMonth] = useState(3); const [representativeName, setRepresentativeName] = useState(""); const [entityType, setEntityType] = useState("llc"); const [taxOffice, setTaxOffice] = useState(""); const [taxAccountantName, setTaxAccountantName] = useState(""); const [taxAccountantPhone, setTaxAccountantPhone] = useState(""); const [taxAccountantAddress, setTaxAccountantAddress] = useState(""); const [laborConsultantName, setLaborConsultantName] = useState(""); const [laborConsultantPhone, setLaborConsultantPhone] = useState("");
+  // コーポレートサイト用
+  const [companyNameEn, setCompanyNameEn] = useState("");
+  const [companyEstablished, setCompanyEstablished] = useState("");
+  const [companyCapital, setCompanyCapital] = useState("");
+  const [companyFiscal, setCompanyFiscal] = useState("3月決算");
+  const [companyEmail, setCompanyEmail] = useState("");
+  const [companyBusiness, setCompanyBusiness] = useState("");
+  const [companyTagline, setCompanyTagline] = useState("");
+  const [companyEmployees, setCompanyEmployees] = useState("");
+  const [companyMainBank, setCompanyMainBank] = useState("");
+  const [companyWebsiteUrl, setCompanyWebsiteUrl] = useState("");
+  const [companyMapEmbed, setCompanyMapEmbed] = useState("");
+  const [representativeNameKana, setRepresentativeNameKana] = useState("");
+  const [representativeTitle, setRepresentativeTitle] = useState("代表社員");
+  const [representativeMessage, setRepresentativeMessage] = useState("");
+  const [representativePhotoUrl, setRepresentativePhotoUrl] = useState("");
+  const [representativePhotoFile, setRepresentativePhotoFile] = useState<File | null>(null);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
   const fetchData = useCallback(async () => {
     const { data: c } = await supabase.from("courses").select("*"); if (c) setCourses(c);
-    const { data: s } = await supabase.from("stores").select("*"); if (s) { setStores(s); if (s[0]) { setCompanyName(s[0].company_name || ""); setCompanyAddress(s[0].company_address || ""); setCompanyPhone(s[0].company_phone || ""); setInvoiceNumber(s[0].invoice_number || ""); setCompanyStoreId(s[0].id); setCorporateNumber(s[0].corporate_number || ""); setFiscalMonth(s[0].fiscal_month || 3); setRepresentativeName(s[0].representative_name || ""); setEntityType(s[0].entity_type || "llc"); setTaxOffice(s[0].tax_office || ""); setTaxAccountantName(s[0].tax_accountant_name || ""); setTaxAccountantPhone(s[0].tax_accountant_phone || ""); setTaxAccountantAddress(s[0].tax_accountant_address || ""); setLaborConsultantName(s[0].labor_consultant_name || ""); setLaborConsultantPhone(s[0].labor_consultant_phone || ""); } }
+    const { data: s } = await supabase.from("stores").select("*"); if (s) { setStores(s); if (s[0]) { setCompanyName(s[0].company_name || ""); setCompanyAddress(s[0].company_address || ""); setCompanyPhone(s[0].company_phone || ""); setInvoiceNumber(s[0].invoice_number || ""); setCompanyStoreId(s[0].id); setCorporateNumber(s[0].corporate_number || ""); setFiscalMonth(s[0].fiscal_month || 3); setRepresentativeName(s[0].representative_name || ""); setEntityType(s[0].entity_type || "llc"); setTaxOffice(s[0].tax_office || ""); setTaxAccountantName(s[0].tax_accountant_name || ""); setTaxAccountantPhone(s[0].tax_accountant_phone || ""); setTaxAccountantAddress(s[0].tax_accountant_address || ""); setLaborConsultantName(s[0].labor_consultant_name || ""); setLaborConsultantPhone(s[0].labor_consultant_phone || ""); setCompanyNameEn(s[0].company_name_en || ""); setCompanyEstablished(s[0].company_established || ""); setCompanyCapital(s[0].company_capital || ""); setCompanyFiscal(s[0].company_fiscal || "3月決算"); setCompanyEmail(s[0].company_email || ""); setCompanyBusiness(s[0].company_business || ""); setCompanyTagline(s[0].company_tagline || ""); setCompanyEmployees(s[0].company_employees || ""); setCompanyMainBank(s[0].company_main_bank || ""); setCompanyWebsiteUrl(s[0].company_website_url || ""); setCompanyMapEmbed(s[0].company_map_embed || ""); setRepresentativeNameKana(s[0].representative_name_kana || ""); setRepresentativeTitle(s[0].representative_title || "代表社員"); setRepresentativeMessage(s[0].representative_message || ""); setRepresentativePhotoUrl(s[0].representative_photo_url || ""); } }
 
     let startDate: string, endDate: string;
     if (mode === "monthly") {
@@ -377,8 +394,171 @@ export default function TaxDashboard() {
               </div>
             </div>
 
-            {/* 保存ボタン */}
-            <button onClick={async () => { if (!companyStoreId) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim(), corporate_number: corporateNumber.trim(), fiscal_month: fiscalMonth, representative_name: representativeName.trim(), entity_type: entityType, tax_office: taxOffice.trim(), tax_accountant_name: taxAccountantName.trim(), tax_accountant_phone: taxAccountantPhone.trim(), tax_accountant_address: taxAccountantAddress.trim(), labor_consultant_name: laborConsultantName.trim(), labor_consultant_phone: laborConsultantPhone.trim() }).eq("id", companyStoreId); toast.show("会社情報を保存しました", "success"); fetchData(); }} className="w-full py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer font-medium">💾 保存する</button>
+            {/* 保存ボタン（税務用） */}
+            <button onClick={async () => {
+              if (!companyStoreId) return;
+              let photoUrl = representativePhotoUrl;
+              if (representativePhotoFile) {
+                try {
+                  const ext = representativePhotoFile.name.split('.').pop() || 'jpg';
+                  const fileName = `representative_${Date.now()}.${ext}`;
+                  const { error: upErr } = await supabase.storage.from("staff-docs").upload(fileName, representativePhotoFile, { contentType: representativePhotoFile.type, upsert: true });
+                  if (!upErr) {
+                    const { data } = supabase.storage.from("staff-docs").getPublicUrl(fileName);
+                    photoUrl = data.publicUrl;
+                  }
+                } catch (e) { console.error("代表者写真アップロードエラー:", e); }
+              }
+              await supabase.from("stores").update({
+                company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim(), corporate_number: corporateNumber.trim(), fiscal_month: fiscalMonth, representative_name: representativeName.trim(), entity_type: entityType, tax_office: taxOffice.trim(), tax_accountant_name: taxAccountantName.trim(), tax_accountant_phone: taxAccountantPhone.trim(), tax_accountant_address: taxAccountantAddress.trim(), labor_consultant_name: laborConsultantName.trim(), labor_consultant_phone: laborConsultantPhone.trim(),
+                // コーポレートサイト用
+                company_name_en: companyNameEn.trim(), company_established: companyEstablished.trim(), company_capital: companyCapital.trim(), company_fiscal: companyFiscal.trim(), company_email: companyEmail.trim(), company_business: companyBusiness.trim(), company_tagline: companyTagline.trim(), company_employees: companyEmployees.trim(), company_main_bank: companyMainBank.trim(), company_website_url: companyWebsiteUrl.trim(), company_map_embed: companyMapEmbed.trim(), representative_name_kana: representativeNameKana.trim(), representative_title: representativeTitle.trim(), representative_message: representativeMessage.trim(), representative_photo_url: photoUrl,
+              }).eq("id", companyStoreId);
+              toast.show("会社情報を保存しました", "success");
+              setRepresentativePhotoFile(null);
+              fetchData();
+            }} className="w-full py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer font-medium">💾 保存する</button>
+
+            {/* ══════════ コーポレートサイト用セクション ══════════ */}
+            <div className="rounded-2xl border p-5" style={{ backgroundColor: "#2563eb11", borderColor: "#2563eb55" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[16px]">🌐</span>
+                <h3 className="text-[13px] font-medium" style={{ color: "#60a5fa" }}>コーポレートサイト用設定</h3>
+              </div>
+              <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
+                以下は <a href="/corporate" target="_blank" className="underline" style={{ color: "#60a5fa" }}>コーポレートサイト（/corporate）</a> に反映される情報です。代表挨拶・会社概要・地図などがここから動的表示されます。
+              </p>
+            </div>
+
+            {/* コーポレート基本情報 */}
+            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium">🌐 コーポレート基本情報</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>会社名（英語）</label>
+                  <input type="text" value={companyNameEn} onChange={e => setCompanyNameEn(e.target.value)} placeholder="Terrace Life LLC" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>設立</label>
+                  <input type="text" value={companyEstablished} onChange={e => setCompanyEstablished(e.target.value)} placeholder="2020年4月" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>資本金</label>
+                  <input type="text" value={companyCapital} onChange={e => setCompanyCapital(e.target.value)} placeholder="100万円" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>決算期（表示用）</label>
+                  <input type="text" value={companyFiscal} onChange={e => setCompanyFiscal(e.target.value)} placeholder="3月決算" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>従業員数</label>
+                  <input type="text" value={companyEmployees} onChange={e => setCompanyEmployees(e.target.value)} placeholder="5名（2025年4月時点）" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>メールアドレス</label>
+                  <input type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} placeholder="info@terrace-life.co.jp" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>Webサイト</label>
+                <input type="url" value={companyWebsiteUrl} onChange={e => setCompanyWebsiteUrl(e.target.value)} placeholder="https://ange-spa.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>取引銀行</label>
+                <input type="text" value={companyMainBank} onChange={e => setCompanyMainBank(e.target.value)} placeholder="◯◯銀行 安城支店" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>事業内容</label>
+                <textarea value={companyBusiness} onChange={e => setCompanyBusiness(e.target.value)} rows={2} placeholder="AIソリューション開発、Webデザイン・システム開発、DX推進支援" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>キャッチコピー</label>
+                <input type="text" value={companyTagline} onChange={e => setCompanyTagline(e.target.value)} placeholder="テクノロジーで、ビジネスの未来をデザインする。" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+              </div>
+            </div>
+
+            {/* 代表者情報 */}
+            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium">👔 代表者情報（HP用）</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 写真 */}
+                <div className="md:col-span-1">
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>代表者写真</label>
+                  <div className="flex flex-col items-center gap-3 p-4 rounded-xl" style={{ backgroundColor: T.cardAlt, border: `1px dashed ${T.border}` }}>
+                    {(representativePhotoFile || representativePhotoUrl) ? (
+                      <img src={representativePhotoFile ? URL.createObjectURL(representativePhotoFile) : representativePhotoUrl} alt="代表者" className="w-32 h-32 rounded-full object-cover" style={{ border: "3px solid #c3a782" }}/>
+                    ) : (
+                      <div className="w-32 h-32 rounded-full flex items-center justify-center text-[40px]" style={{ backgroundColor: T.card, border: `2px dashed ${T.border}`, color: T.textFaint }}>👤</div>
+                    )}
+                    <input type="file" accept="image/*" onChange={e => setRepresentativePhotoFile(e.target.files?.[0] || null)} className="text-[10px]" style={{ color: T.textSub }}/>
+                    <p className="text-[9px] text-center" style={{ color: T.textFaint }}>正方形推奨（800×800px）<br/>保存時にアップロード</p>
+                  </div>
+                </div>
+                {/* 代表者情報 */}
+                <div className="md:col-span-2 space-y-3">
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>役職</label>
+                    <input type="text" value={representativeTitle} onChange={e => setRepresentativeTitle(e.target.value)} placeholder="代表社員" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>氏名カナ</label>
+                    <input type="text" value={representativeNameKana} onChange={e => setRepresentativeNameKana(e.target.value)} placeholder="やまだ たろう" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                  </div>
+                  <p className="text-[10px]" style={{ color: T.textFaint }}>※ 氏名は上の「基本情報」の代表者名が使用されます</p>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>代表挨拶文</label>
+                <textarea value={representativeMessage} onChange={e => setRepresentativeMessage(e.target.value)} rows={8} placeholder="テラスライフは「現場で役立つテクノロジー」を信条に..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>改行も反映されます。200〜400字程度が適切です。</p>
+              </div>
+            </div>
+
+            {/* Googleマップ */}
+            <div className="rounded-2xl border p-6 space-y-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <h2 className="text-[15px] font-medium">📍 Googleマップ埋込</h2>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>Googleマップ埋込URL</label>
+                <textarea value={companyMapEmbed} onChange={e => setCompanyMapEmbed(e.target.value)} rows={3} placeholder="https://www.google.com/maps/embed?pb=..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                <div className="mt-2 p-3 rounded-xl text-[10px] leading-relaxed" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>
+                  <strong>埋込URL取得方法:</strong><br/>
+                  1. <a href="https://www.google.com/maps" target="_blank" className="underline" style={{ color: "#c3a782" }}>Googleマップ</a>で所在地を検索<br/>
+                  2. 「共有」→「地図を埋め込む」→「HTMLをコピー」<br/>
+                  3. コピーしたHTMLの <code>src=&quot;...&quot;</code> の中身（https://〜 で始まる部分）だけを貼り付け
+                </div>
+              </div>
+              {companyMapEmbed && (
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+                  <div style={{ position: "relative", paddingBottom: "50%", height: 0 }}>
+                    <iframe src={companyMapEmbed} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }} loading="lazy" title="プレビュー"/>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* もう一度保存ボタン（コーポレート設定直下） */}
+            <button onClick={async () => {
+              if (!companyStoreId) return;
+              let photoUrl = representativePhotoUrl;
+              if (representativePhotoFile) {
+                try {
+                  const ext = representativePhotoFile.name.split('.').pop() || 'jpg';
+                  const fileName = `representative_${Date.now()}.${ext}`;
+                  const { error: upErr } = await supabase.storage.from("staff-docs").upload(fileName, representativePhotoFile, { contentType: representativePhotoFile.type, upsert: true });
+                  if (!upErr) {
+                    const { data } = supabase.storage.from("staff-docs").getPublicUrl(fileName);
+                    photoUrl = data.publicUrl;
+                  }
+                } catch (e) { console.error("代表者写真アップロードエラー:", e); }
+              }
+              await supabase.from("stores").update({
+                company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim(), corporate_number: corporateNumber.trim(), fiscal_month: fiscalMonth, representative_name: representativeName.trim(), entity_type: entityType, tax_office: taxOffice.trim(), tax_accountant_name: taxAccountantName.trim(), tax_accountant_phone: taxAccountantPhone.trim(), tax_accountant_address: taxAccountantAddress.trim(), labor_consultant_name: laborConsultantName.trim(), labor_consultant_phone: laborConsultantPhone.trim(),
+                company_name_en: companyNameEn.trim(), company_established: companyEstablished.trim(), company_capital: companyCapital.trim(), company_fiscal: companyFiscal.trim(), company_email: companyEmail.trim(), company_business: companyBusiness.trim(), company_tagline: companyTagline.trim(), company_employees: companyEmployees.trim(), company_main_bank: companyMainBank.trim(), company_website_url: companyWebsiteUrl.trim(), company_map_embed: companyMapEmbed.trim(), representative_name_kana: representativeNameKana.trim(), representative_title: representativeTitle.trim(), representative_message: representativeMessage.trim(), representative_photo_url: photoUrl,
+              }).eq("id", companyStoreId);
+              toast.show("会社情報を保存しました", "success");
+              setRepresentativePhotoFile(null);
+              fetchData();
+            }} className="w-full py-3 bg-gradient-to-r from-[#2563eb] to-[#06b6d4] text-white text-[12px] rounded-xl cursor-pointer font-medium">🌐 コーポレート情報を含めて保存</button>
 
             {/* 利用先の説明 */}
             <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
