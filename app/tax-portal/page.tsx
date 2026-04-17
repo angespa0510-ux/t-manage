@@ -1475,15 +1475,97 @@ export default function TaxPortal() {
                 </div>
               </div>
 
-              <div className="rounded-xl p-4" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c433" }}>
-                <p className="text-[11px] font-medium mb-1" style={{ color: "#85a8c4" }}>💡 使い方</p>
-                <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
-                  <strong>1. CSVアップロード:</strong> PayPay銀行の「入出金明細 CSVダウンロード」で出力したファイルを選択<br/>
-                  <strong>2. プレビューで確認:</strong> 自動仕訳が正しいか確認。勘定科目はクリックで変更可<br/>
-                  <strong>3. 取込確定:</strong> ボタンを押すと一覧に登録（重複は自動スキップ）<br/>
-                  <strong>4. 経費/売上登録:</strong> 「✓ 登録」ボタンで expenses テーブルに反映 → 月次サマリーや経費シートで集計される<br/>
-                  <strong>5. ルール学習:</strong> 「📝 学習」ボタンで摘要→勘定科目を記憶。次回から自動分類
-                </p>
+              {/* 使い方ガイド */}
+              <div className="rounded-xl p-5" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c433" }}>
+                <p className="text-[13px] font-medium mb-3" style={{ color: "#85a8c4" }}>📖 使い方ガイド</p>
+
+                {/* 毎月の運用フロー */}
+                <div className="mb-5">
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>🔄 毎月の運用フロー（3〜5分で完了）</p>
+                  <div className="rounded-lg p-3" style={{ backgroundColor: T.cardAlt }}>
+                    <ol className="text-[11px] leading-relaxed" style={{ color: T.textSub, paddingLeft: 20 }}>
+                      <li className="mb-1.5"><strong style={{ color: T.text }}>PayPay銀行から明細CSVをDL</strong> → マイページ → 入出金明細 → CSV出力（1ヶ月分）</li>
+                      <li className="mb-1.5"><strong style={{ color: T.text }}>「🏦 銀行取込」シートにアップ</strong> → ドロップゾーンにファイルを選択</li>
+                      <li className="mb-1.5"><strong style={{ color: T.text }}>プレビューで自動仕訳を確認</strong> → 50ルールが適用済みなので大半は緑色で表示される</li>
+                      <li className="mb-1.5"><strong style={{ color: T.text }}>「雑費（要確認）」だけ手動で勘定科目を変更</strong> → 新規取引先のみ対応</li>
+                      <li className="mb-1.5"><strong style={{ color: T.text }}>「✓ 取込確定」ボタン</strong> → 一覧に登録（同じCSVを2回入れても重複はスキップされる）</li>
+                      <li className="mb-1.5"><strong style={{ color: T.text }}>「✓ 未確定分を一括で経費/売上登録」</strong> → expensesテーブルに反映 → 月次サマリー・経費シートで自動集計</li>
+                      <li><strong style={{ color: T.text }}>新規取引先は「📝 学習」で記憶</strong> → 次回から自動仕訳される</li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* ルール管理のコツ */}
+                <div className="mb-5">
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>🎯 ルール管理のコツ</p>
+                  <div className="rounded-lg p-3 mb-2" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>優先度の使い分け</p>
+                    <table className="w-full text-[10px]" style={{ color: T.textSub }}>
+                      <tbody>
+                        <tr><td style={{ padding: "2px 8px", color: T.textFaint, width: 70 }}>100</td><td>必ず最優先（振込手数料・受取利息など明確なもの）</td></tr>
+                        <tr><td style={{ padding: "2px 8px", color: T.textFaint }}>85〜90</td><td>個人名・具体的取引先（誤マッチリスク低）</td></tr>
+                        <tr><td style={{ padding: "2px 8px", color: T.textFaint }}>70〜80</td><td>会社名・一般的なサービス名（Amazon、Google等）</td></tr>
+                        <tr><td style={{ padding: "2px 8px", color: T.textFaint }}>60〜70</td><td>カテゴリ判定したい広めのパターン</td></tr>
+                        <tr><td style={{ padding: "2px 8px", color: T.textFaint }}>50以下</td><td>汎用パターン（誤マッチの可能性あり）</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="rounded-lg p-3 mb-2" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>マッチ文字列の書き方</p>
+                    <ul className="text-[10px] leading-relaxed" style={{ color: T.textSub, paddingLeft: 18, listStyleType: "disc" }}>
+                      <li className="mb-0.5"><strong>姓名間は全角スペース</strong>（CSVの表示そのまま）。例：<code style={{ backgroundColor: T.bg, padding: "1px 4px", borderRadius: 3 }}>フクナガ　テツオ</code></li>
+                      <li className="mb-0.5"><strong>部分マッチで動作</strong>。長い文字列より、ユニークで短い部分を指定する方が安全</li>
+                      <li className="mb-0.5">半角カタカナ・全角カタカナ・英数字はCSVの表示に合わせる必要あり</li>
+                      <li>誤マッチ発見時は✏️編集で修正。削除より編集が推奨</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-lg p-3" style={{ backgroundColor: T.cardAlt }}>
+                    <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>同じ取引先が複数カテゴリにまたがる場合</p>
+                    <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
+                      例：「イズオカ ノブヒロ」は家賃、「イズオカ レイア」は水道代 → <strong>姓名まで含めて登録</strong>することで区別可能。「イズオカ」だけだと両方が同じ科目になってしまいます。
+                    </p>
+                  </div>
+                </div>
+
+                {/* トラブルシューティング */}
+                <div className="mb-5">
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>🔧 こんな時は</p>
+                  <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: T.cardAlt }}>
+                    <div>
+                      <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>Q. 自動仕訳されず「雑費（要確認）」になる</p>
+                      <p className="text-[10px]" style={{ color: T.textSub, paddingLeft: 14 }}>→ マッチするルールがない状態。手動で勘定科目を選んで「📝 学習」ボタンで記憶させる。次回から自動化されます。</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>Q. 違う勘定科目に自動仕訳されてしまう</p>
+                      <p className="text-[10px]" style={{ color: T.textSub, paddingLeft: 14 }}>→ 既存ルールの誤マッチ。学習済みルール一覧から該当ルールを✏️編集して修正するか、優先度を下げる。</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>Q. 確定済み取引を修正したい</p>
+                      <p className="text-[10px]" style={{ color: T.textSub, paddingLeft: 14 }}>→ 経費シート（/tax-dashboard のバックオフィス）から該当レコードを直接編集。銀行取込画面では確定済みは編集不可（二重操作防止のため）。</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>Q. 同じCSVを2回アップロードしてしまった</p>
+                      <p className="text-[10px]" style={{ color: T.textSub, paddingLeft: 14 }}>→ DB側でUNIQUE制約あり。日付・順番号・摘要・金額が同じ取引は自動スキップされるので安心してください。</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>Q. 業務委託スタッフとセラピストを区別したい</p>
+                      <p className="text-[10px]" style={{ color: T.textSub, paddingLeft: 14 }}>→ 両方とも勘定科目は「外注費」だが、表示ラベルで区別（例：「外注費（業務委託スタッフ）」「外注費（セラピスト）」）。源泉徴収の有無は別途、セラピスト支払・源泉シートで管理。</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 重要な注意事項 */}
+                <div>
+                  <p className="text-[12px] font-medium mb-2" style={{ color: T.text }}>⚠️ 重要な注意事項</p>
+                  <div className="rounded-lg p-3" style={{ backgroundColor: "#c4555510", border: "1px solid #c4555533" }}>
+                    <ul className="text-[10px] leading-relaxed space-y-1" style={{ color: T.textSub, paddingLeft: 18, listStyleType: "disc" }}>
+                      <li><strong style={{ color: "#c45555" }}>セラピスト支払は別管理が推奨</strong>：銀行取込でセラピストへの振込が混入した場合、セラピスト支払・源泉シートと二重計上にならないよう注意（源泉徴収計算は日次精算ベースで自動算出）</li>
+                      <li><strong style={{ color: "#c45555" }}>ATMからの現金入金</strong>：売上入金として登録されるが、実際はレジ売上の銀行預入。売上データと重複しないよう、経理上は「現金→預金」の振替仕訳として税理士さんに伝える</li>
+                      <li><strong style={{ color: "#c45555" }}>個人口座との混在に注意</strong>：法人口座のみを取込む。代表者個人の取引が含まれていないか確認</li>
+                      <li><strong style={{ color: "#c45555" }}>確定前に必ずプレビュー確認</strong>：自動仕訳が間違っていても画面上では気づかないことがある。特に新規取引先は要注意</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           )}
