@@ -122,6 +122,11 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   // Supabase Realtime 購読
   const lastCallRef = useRef<{ phone: string; time: number }>({ phone: "", time: 0 });
   useEffect(() => {
+    // CTIはスタッフページのみ起動（corporate/customer-mypage/mypage等では無効）
+    const path = window.location.pathname;
+    const noCtiPaths = ["/corporate", "/customer-mypage", "/mypage", "/public-schedule", "/confirm-email", "/confirm-staff-email", "/reservation-confirm", "/camera"];
+    if (noCtiPaths.some(p => path.startsWith(p))) return;
+
     const channel = supabase
       .channel("cti-calls-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "cti_calls" },
