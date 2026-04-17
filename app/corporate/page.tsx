@@ -547,64 +547,71 @@ export default function CorporatePage() {
 /* ══════════ Pixel Art Hero Component ══════════ */
 function PixelHero() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const posRef = useRef({ x: 100, y: 300, dir: 0, frame: 0, tick: 0, targetX: 400, targetY: 500 });
-  const [pos, setPos] = useState({ x: 100, y: 300, dir: 0 });
+  const posRef = useRef({ x: 200, y: 400, dir: 0, frame: 0, tick: 0, targetX: 500, targetY: 600, idle: 0 });
+  const [pos, setPos] = useState({ x: 200, y: 400 });
 
   useEffect(() => {
-    // Pixel art frames: hero facing 4 directions, 2 walk frames each
-    // 0=down, 1=left, 2=right, 3=up
-    const SPRITE: number[][][] = [
-      // Frame 0 (stand/walk1) — facing right
-      [
-        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
-        [0,0,0,0,9,4,4,4,4,9,0,0,0,0,0,0],
-        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
-        [0,0,0,9,4,1,4,4,1,4,9,0,0,0,0,0],
-        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
-        [0,0,0,0,9,4,3,3,4,9,0,0,0,0,0,0],
-        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
-        [0,0,0,2,2,2,5,5,2,2,2,0,0,0,0,0],
-        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
-        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
-        [0,0,0,2,2,2,6,6,2,2,2,0,8,0,0,0],
-        [0,0,0,0,2,2,6,6,2,2,0,0,8,0,0,0],
-        [0,0,0,0,0,6,6,6,6,0,0,0,8,0,0,0],
-        [0,0,0,0,0,6,0,0,6,0,0,0,0,0,0,0],
-        [0,0,0,0,3,3,0,0,3,3,0,0,0,0,0,0],
-        [0,0,0,0,3,3,0,0,3,3,0,0,0,0,0,0],
-      ],
-      // Frame 1 (walk2) — facing right, legs swapped
-      [
-        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
-        [0,0,0,0,9,4,4,4,4,9,0,0,0,0,0,0],
-        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
-        [0,0,0,9,4,1,4,4,1,4,9,0,0,0,0,0],
-        [0,0,0,9,4,4,4,4,4,4,9,0,0,0,0,0],
-        [0,0,0,0,9,4,3,3,4,9,0,0,0,0,0,0],
-        [0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,0],
-        [0,0,0,2,2,2,5,5,2,2,2,0,0,0,0,0],
-        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
-        [0,0,2,2,2,2,5,5,2,2,2,2,7,0,0,0],
-        [0,0,0,2,2,2,6,6,2,2,2,0,8,0,0,0],
-        [0,0,0,0,2,2,6,6,2,2,0,0,8,0,0,0],
-        [0,0,0,0,0,6,6,6,6,0,0,0,8,0,0,0],
-        [0,0,0,0,6,0,0,0,0,6,0,0,0,0,0,0],
-        [0,0,0,3,3,0,0,0,0,3,3,0,0,0,0,0],
-        [0,0,0,3,3,0,0,0,0,3,3,0,0,0,0,0],
-      ],
+    /* ── 20x20 pixel hero sprite — 勇者（金冠・青鎧・赤マント・金剣） ── */
+    /* palette: 0=trans 1=outline 2=blue 3=lightblue 4=skin 5=skinshadow 6=gold
+       7=darkgold 8=red 9=darkred 10=silver 11=shine 12=boots 13=hair 14=pants 15=white */
+    const P = [
+      "transparent","#0f172a","#2563eb","#60a5fa","#FDBCB4","#E8A090",
+      "#FFD700","#DAA520","#dc2626","#991b1b","#B0B8C8","#E0E8FF",
+      "#3d1f00","#8B5E3C","#1a3050","#f8fafc"
     ];
+    const S1: number[][] = [ // Stand / Walk frame A
+      [0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],
+      [0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],
+      [0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],
+      [0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],
+      [0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],
+      [0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],
+      [0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],
+      [0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],
+      [0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],
+      [0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],
+      [0,0,0,0,0,14,14,0,0,14,14,0,0,0,11,0,0,0,0,0],
+      [0,0,0,0,0,14,0,0,0,0,14,0,0,0,10,0,0,0,0,0],
+      [0,0,0,0,12,12,0,0,0,0,12,12,0,0,0,0,0,0,0,0],
+      [0,0,0,0,12,12,1,0,0,1,12,12,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,0],
+    ];
+    const S2: number[][] = [ // Walk frame B — legs swapped
+      [0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],
+      [0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],
+      [0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],
+      [0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],
+      [0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],
+      [0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],
+      [0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],
+      [0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],
+      [0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],
+      [0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],
+      [0,0,0,0,14,14,0,0,0,0,14,14,0,0,11,0,0,0,0,0],
+      [0,0,0,14,14,0,0,0,0,0,0,14,14,0,10,0,0,0,0,0],
+      [0,0,0,12,12,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0],
+      [0,0,0,12,12,1,0,0,0,0,1,12,12,0,0,0,0,0,0,0],
+      [0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0],
+    ];
+    const SPRITES = [S1, S2];
+    const W = 20, H = 20;
 
-    // Color palette: 0=transparent, 1=black(eyes), 2=blue(tunic), 3=brown(boots/hair),
-    // 4=skin, 5=belt(dark brown), 6=dark blue(pants), 7=gold(sword handle), 8=silver(blade), 9=red(headband)
-    const COLORS = ["transparent","#1a1a2e","#2563eb","#8B6914","#FDBCB4","#5C4033","#1e3a5f","#FFD700","#C0C0C0","#dc2626"];
-
-    const drawSprite = (ctx: CanvasRenderingContext2D, sprite: number[][], px: number, flipH: boolean) => {
-      for (let y = 0; y < sprite.length; y++) {
-        for (let x = 0; x < sprite[y].length; x++) {
-          if (sprite[y][x] === 0) continue;
-          ctx.fillStyle = COLORS[sprite[y][x]];
-          const dx = flipH ? (15 - x) * px : x * px;
-          ctx.fillRect(dx, y * px, px, px);
+    const draw = (ctx: CanvasRenderingContext2D, sp: number[][], px: number, flip: boolean) => {
+      for (let r = 0; r < sp.length; r++) {
+        for (let c = 0; c < sp[r].length; c++) {
+          if (sp[r][c] === 0) continue;
+          ctx.fillStyle = P[sp[r][c]];
+          ctx.fillRect(flip ? (W - 1 - c) * px : c * px, r * px, px, px);
         }
       }
     };
@@ -614,69 +621,55 @@ function PixelHero() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const pickTarget = () => {
-      const maxX = window.innerWidth - 60;
-      const maxY = Math.max(document.body.scrollHeight - 100, window.innerHeight);
-      posRef.current.targetX = 60 + Math.random() * (maxX - 60);
-      posRef.current.targetY = 100 + Math.random() * Math.min(maxY, 4000);
+    const pick = () => {
+      const p = posRef.current;
+      p.targetX = 40 + Math.random() * (window.innerWidth - 120);
+      p.targetY = 80 + Math.random() * Math.min(document.body.scrollHeight - 120, 5000);
+      p.idle = 0;
     };
+    pick();
 
-    pickTarget();
-
+    let raf = 0;
     const loop = () => {
       const p = posRef.current;
       p.tick++;
 
-      // Move towards target
       const dx = p.targetX - p.x;
       const dy = p.targetY - p.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist < 10) {
-        pickTarget();
+      if (dist < 8) {
+        p.idle++;
+        if (p.idle > 120) pick(); // pause 2sec then pick new target
       } else {
-        const speed = 1.2;
+        const speed = 0.45; // ← ゆっくり
         p.x += (dx / dist) * speed;
         p.y += (dy / dist) * speed;
+        p.idle = 0;
       }
 
-      // Determine direction (0=right, 1=left)
       p.dir = dx >= 0 ? 0 : 1;
+      if (p.tick % 18 === 0 && p.idle === 0) p.frame = p.frame === 0 ? 1 : 0;
 
-      // Walk animation frame (toggle every 12 ticks)
-      if (p.tick % 12 === 0) p.frame = p.frame === 0 ? 1 : 0;
-
-      // Draw
       const px = 3;
-      canvas.width = 16 * px;
-      canvas.height = 16 * px;
+      canvas.width = W * px;
+      canvas.height = H * px;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawSprite(ctx, SPRITE[p.frame], px, p.dir === 1);
+      draw(ctx, SPRITES[p.idle > 0 ? 0 : p.frame], px, p.dir === 1);
 
-      setPos({ x: p.x, y: p.y, dir: p.dir });
-
-      requestAnimationFrame(loop);
+      setPos({ x: p.x, y: p.y });
+      raf = requestAnimationFrame(loop);
     };
-
-    const raf = requestAnimationFrame(loop);
+    raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: "absolute",
-        left: pos.x,
-        top: pos.y,
-        width: 48,
-        height: 48,
-        imageRendering: "pixelated",
-        pointerEvents: "none",
-        zIndex: 40,
-        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))",
-        transition: "left 0.05s linear, top 0.05s linear",
-      }}
-    />
+    <canvas ref={canvasRef} style={{
+      position: "absolute", left: pos.x, top: pos.y,
+      width: 60, height: 60,
+      imageRendering: "pixelated", pointerEvents: "none", zIndex: 40,
+      filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 8px rgba(255,215,0,0.15))",
+    }} />
   );
 }
