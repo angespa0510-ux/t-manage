@@ -22,14 +22,39 @@ type BankRule = { id: number; pattern: string; account_category: string; account
 
 // 勘定科目リスト（expenses.category と対応）
 const EXPENSE_CATEGORIES: { value: string; label: string }[] = [
+  // 収益
+  { value: "income", label: "売上入金" },
+  { value: "misc_income", label: "雑収入（受取利息等）" },
+  // 固定費系
   { value: "rent", label: "地代家賃" },
   { value: "utilities", label: "水道光熱費" },
+  { value: "communication", label: "通信費" },
+  { value: "insurance", label: "保険料" },
+  { value: "lease", label: "リース料" },
+  // 消耗品・衛生系
   { value: "supplies", label: "消耗品費" },
+  { value: "sanitary", label: "衛生費" },
+  // 移動・交通
   { value: "transport", label: "旅費交通費" },
+  { value: "vehicle", label: "車両費" },
+  // 広告・営業
   { value: "advertising", label: "広告宣伝費" },
+  { value: "entertainment", label: "接待交際費" },
+  { value: "meeting", label: "会議費" },
+  // 人件費・外注系
   { value: "therapist_back", label: "外注費（セラピスト）" },
+  { value: "outsource", label: "外注費（業務委託スタッフ）" },
+  { value: "welfare", label: "福利厚生費" },
+  { value: "training", label: "研修費" },
+  // 専門・諸経費
+  { value: "professional", label: "支払報酬（税理士・社労士等）" },
+  { value: "fee", label: "支払手数料" },
+  { value: "tax_pub", label: "租税公課" },
+  { value: "books", label: "新聞図書費" },
+  { value: "repair", label: "修繕費" },
+  { value: "depreciation", label: "減価償却費" },
+  // 汎用
   { value: "other", label: "雑費" },
-  { value: "income", label: "売上入金" },
 ];
 
 // 3月決算法人の年間税務タスクリスト
@@ -135,9 +160,25 @@ const NOTES_PLACEHOLDER: Record<string, string> = {
 };
 
 const ACCOUNT_MAP: Record<string, string> = {
-  rent: "地代家賃", utilities: "水道光熱費", supplies: "消耗品費",
-  transport: "旅費交通費", advertising: "広告宣伝費", therapist_back: "外注費",
-  income: "売上高（入金）", other: "雑費",
+  // 収益
+  income: "売上高", misc_income: "雑収入",
+  // 固定費
+  rent: "地代家賃", utilities: "水道光熱費", communication: "通信費",
+  insurance: "保険料", lease: "リース料",
+  // 消耗品・衛生
+  supplies: "消耗品費", sanitary: "衛生費",
+  // 移動
+  transport: "旅費交通費", vehicle: "車両費",
+  // 広告・営業
+  advertising: "広告宣伝費", entertainment: "接待交際費", meeting: "会議費",
+  // 人件費・外注
+  therapist_back: "外注費", outsource: "外注費",
+  welfare: "福利厚生費", training: "研修費",
+  // 専門・諸経費
+  professional: "支払報酬", fee: "支払手数料", tax_pub: "租税公課",
+  books: "新聞図書費", repair: "修繕費", depreciation: "減価償却費",
+  // 汎用
+  other: "雑費",
 };
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
