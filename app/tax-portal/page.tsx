@@ -62,8 +62,11 @@ export default function TaxPortal() {
   const [docPeriodFilter, setDocPeriodFilter] = useState<string>("all");
   const [uploadCategory, setUploadCategory] = useState<string>("決算書");
   const [uploadPeriod, setUploadPeriod] = useState<string>("");
+  const [uploadDisplayName, setUploadDisplayName] = useState<string>("");
   const [uploadNotes, setUploadNotes] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+  const [editingDocId, setEditingDocId] = useState<number | null>(null);
+  const [editingFileName, setEditingFileName] = useState<string>("");
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
@@ -131,9 +134,15 @@ export default function TaxPortal() {
       const { error: upErr } = await supabase.storage.from("tax-documents").upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) { alert("アップロードに失敗しました: " + upErr.message); setUploading(false); return; }
       const { data: pu } = supabase.storage.from("tax-documents").getPublicUrl(path);
+      // 表示名: 入力があれば拡張子付きでその名前、なければ元のファイル名
+      let displayName = uploadDisplayName.trim();
+      if (displayName && !displayName.toLowerCase().endsWith(`.${ext}`)) {
+        displayName = `${displayName}.${ext}`;
+      }
+      const finalName = displayName || file.name;
       await supabase.from("tax_documents").insert({
         category: uploadCategory,
-        file_name: file.name,
+        file_name: finalName,
         file_url: pu.publicUrl,
         file_path: path,
         file_size: file.size,
@@ -142,13 +151,29 @@ export default function TaxPortal() {
         uploaded_by_name: activeStaff.name,
         notes: uploadNotes.trim(),
       });
-      setUploadPeriod(""); setUploadNotes("");
+      setUploadPeriod(""); setUploadNotes(""); setUploadDisplayName("");
       fetchDocs();
     } catch (err) {
       alert("エラー: " + String(err));
     } finally {
       setUploading(false);
     }
+  };
+
+  // ファイル名更新
+  const saveDocName = async (doc: TaxDoc) => {
+    const newName = editingFileName.trim();
+    if (!newName) { alert("ファイル名を入力してください"); return; }
+    // 元の拡張子を保持する（なければ自動付与）
+    const origExt = doc.file_name.includes(".") ? doc.file_name.split(".").pop() : "";
+    let finalName = newName;
+    if (origExt && !newName.toLowerCase().endsWith(`.${origExt.toLowerCase()}`)) {
+      finalName = `${newName}.${origExt}`;
+    }
+    await supabase.from("tax_documents").update({ file_name: finalName }).eq("id", doc.id);
+    setEditingDocId(null);
+    setEditingFileName("");
+    fetchDocs();
   };
 
   // 書類削除
@@ -687,12 +712,16 @@ export default function TaxPortal() {
               {/* アップロードエリア */}
               <div className="rounded-xl p-5" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                 <p className="text-[13px] font-medium mb-3">📤 書類アップロード</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
                   <div>
                     <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>カテゴリ</label>
                     <select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none cursor-pointer" style={inputStyle}>
                       {DOC_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>ファイル名（任意）</label>
+                    <input type="text" value={uploadDisplayName} onChange={(e) => setUploadDisplayName(e.target.value)} placeholder="例: 第3期決算書" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
                   </div>
                   <div>
                     <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>期（任意）</label>
@@ -712,6 +741,7 @@ export default function TaxPortal() {
                       <>
                         <p className="text-[12px]" style={{ color: T.textSub }}>📎 クリックしてファイルを選択</p>
                         <p className="text-[10px] mt-1" style={{ color: T.textFaint }}>PDF・JPG・PNG・CSV・Excel・Word（最大20MB）</p>
+                        <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ ファイル名が空欄の場合は元のファイル名のまま保存されます</p>
                       </>
                     )}
                   </div>
@@ -762,7 +792,7 @@ export default function TaxPortal() {
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>アップ者</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>アップ日</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>サイズ</th>
-                        <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: gridBorder, width: 120 }}>操作</th>
+                        <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: gridBorder, width: 180 }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -776,15 +806,39 @@ export default function TaxPortal() {
                             <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
                               <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (catColors[d.category] || "#888") + "22", color: catColors[d.category] || "#888" }}>{d.category}</span>
                             </td>
-                            <td style={{ padding: "5px 10px", borderRight: gridBorder, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.file_name}>{d.file_name}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, maxWidth: 260 }}>
+                              {editingDocId === d.id ? (
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={editingFileName}
+                                  onChange={(e) => setEditingFileName(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") saveDocName(d); if (e.key === "Escape") { setEditingDocId(null); setEditingFileName(""); } }}
+                                  className="w-full px-2 py-1 rounded text-[12px] outline-none"
+                                  style={{ backgroundColor: T.bg, color: T.text, border: `1px solid #c3a782` }}
+                                />
+                              ) : (
+                                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.file_name}>{d.file_name}</div>
+                              )}
+                            </td>
                             <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textSub, fontSize: 11 }}>{d.fiscal_period || "—"}</td>
                             <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 10, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.notes}>{d.notes || ""}</td>
                             <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 11 }}>{d.uploaded_by_name || "—"}</td>
                             <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 11, fontVariantNumeric: "tabular-nums" }}>{d.created_at?.slice(0, 10) || "—"}</td>
                             <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: T.textSub, borderRight: gridBorder, fontSize: 11 }}>{((d.file_size || 0) / 1024).toFixed(0)}KB</td>
-                            <td style={{ padding: "5px 10px", textAlign: "center" }}>
-                              <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-1 rounded cursor-pointer mr-1" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", textDecoration: "none" }}>📄 開く</a>
-                              <button onClick={() => deleteDoc(d)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
+                            <td style={{ padding: "5px 10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                              {editingDocId === d.id ? (
+                                <>
+                                  <button onClick={() => saveDocName(d)} className="text-[10px] px-2 py-1 rounded cursor-pointer mr-1" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>✓ 保存</button>
+                                  <button onClick={() => { setEditingDocId(null); setEditingFileName(""); }} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>✕</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => { setEditingDocId(d.id); setEditingFileName(d.file_name.replace(/\.[^.]+$/, "")); }} className="text-[10px] px-2 py-1 rounded cursor-pointer mr-1" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "none" }}>✏️</button>
+                                  <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-1 rounded cursor-pointer mr-1" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", textDecoration: "none" }}>📄 開く</a>
+                                  <button onClick={() => deleteDoc(d)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
+                                </>
+                              )}
                             </td>
                           </tr>
                         ));
