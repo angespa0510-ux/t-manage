@@ -17,6 +17,21 @@ type TaxDoc = { id: number; category: string; file_name: string; file_url: strin
 type TaxTaskStatus = { id: number; task_id: string; fiscal_year: number; status: string; note: string; updated_by_name: string; updated_at: string };
 type TaxTask = { id: string; timing: string; month: number; title: string; description: string; assignee: "税理士" | "会社" | "社労士" | "共同"; deadline: string; category: string; importance: "high" | "medium" | "low" };
 
+type BankTransaction = { id?: number; transaction_date: string; transaction_time: string; order_no: string; description: string; debit_amount: number; credit_amount: number; balance: number; memo: string; account_category: string; account_label: string; is_expense: boolean; is_confirmed: boolean; confirmed_expense_id?: number | null; imported_at?: string; imported_by_name?: string; _tempId?: string };
+type BankRule = { id: number; pattern: string; account_category: string; account_label: string; is_expense: boolean; priority: number; hit_count: number };
+
+// 勘定科目リスト（expenses.category と対応）
+const EXPENSE_CATEGORIES: { value: string; label: string }[] = [
+  { value: "rent", label: "地代家賃" },
+  { value: "utilities", label: "水道光熱費" },
+  { value: "supplies", label: "消耗品費" },
+  { value: "transport", label: "旅費交通費" },
+  { value: "advertising", label: "広告宣伝費" },
+  { value: "therapist_back", label: "外注費（セラピスト）" },
+  { value: "other", label: "雑費" },
+  { value: "income", label: "売上入金" },
+];
+
 // 3月決算法人の年間税務タスクリスト
 const TAX_TASKS: TaxTask[] = [
   // 毎月の業務
@@ -127,7 +142,7 @@ const ACCOUNT_MAP: Record<string, string> = {
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
-type SheetKey = "summary" | "sales" | "expense" | "therapist" | "invoice" | "schedule" | "docs";
+type SheetKey = "summary" | "sales" | "expense" | "therapist" | "invoice" | "schedule" | "docs" | "bank";
 
 export default function TaxPortal() {
   const router = useRouter();
@@ -167,6 +182,13 @@ export default function TaxPortal() {
   const [taskStatuses, setTaskStatuses] = useState<TaxTaskStatus[]>([]);
   const [scheduleFilter, setScheduleFilter] = useState<string>("all"); // all/税理士/会社/社労士/共同
   const [scheduleMonthFilter, setScheduleMonthFilter] = useState<string>("all");
+
+  // 銀行取込
+  const [bankTxs, setBankTxs] = useState<BankTransaction[]>([]);
+  const [bankRules, setBankRules] = useState<BankRule[]>([]);
+  const [bankParsing, setBankParsing] = useState(false);
+  const [bankStagedTxs, setBankStagedTxs] = useState<BankTransaction[]>([]);  // アップ後・確定前
+  const [bankFilter, setBankFilter] = useState<"all" | "unconfirmed" | "confirmed">("unconfirmed");
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
 
@@ -253,6 +275,213 @@ export default function TaxPortal() {
       await supabase.from("tax_task_statuses").insert({ task_id: taskId, fiscal_year: fy, status: newStatus, updated_by_name: activeStaff.name });
     }
     fetchTaskStatuses();
+  };
+
+  // ────────────────────────────────────────
+  // 銀行取込機能
+  // ────────────────────────────────────────
+  const fetchBankData = useCallback(async () => {
+    const { data: txs } = await supabase.from("bank_transactions").select("*").order("transaction_date", { ascending: false }).limit(500);
+    if (txs) setBankTxs(txs);
+    const { data: rules } = await supabase.from("bank_category_rules").select("*").order("priority", { ascending: false });
+    if (rules) setBankRules(rules);
+  }, []);
+  useEffect(() => { if (canAccessTaxPortal) fetchBankData(); }, [fetchBankData, canAccessTaxPortal]);
+
+  // 摘要 → 勘定科目の自動判定
+  const classifyTx = useCallback((description: string, isExpense: boolean): { category: string; label: string } => {
+    // ルールを優先度順にマッチ
+    for (const rule of bankRules) {
+      if (description.includes(rule.pattern)) {
+        return { category: rule.account_category, label: rule.account_label || EXPENSE_CATEGORIES.find(c => c.value === rule.account_category)?.label || rule.account_category };
+      }
+    }
+    // デフォルト: 出金=雑費、入金=売上入金
+    if (isExpense) return { category: "other", label: "雑費（要確認）" };
+    return { category: "income", label: "売上入金（要確認）" };
+  }, [bankRules]);
+
+  // PayPay銀行CSVパーサー（Shift-JIS対応）
+  const parsePayPayCSV = async (file: File) => {
+    setBankParsing(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      // Shift-JIS として読み込み
+      const decoder = new TextDecoder("shift-jis");
+      const text = decoder.decode(buffer);
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { alert("データが空です"); return; }
+
+      // ヘッダー行をスキップ、2行目以降を処理
+      const txs: BankTransaction[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        // CSVをパース（ダブルクォート対応）
+        const cells: string[] = [];
+        let cur = "", inQuote = false;
+        for (let j = 0; j < line.length; j++) {
+          const ch = line[j];
+          if (ch === '"') { inQuote = !inQuote; continue; }
+          if (ch === "," && !inQuote) { cells.push(cur); cur = ""; continue; }
+          cur += ch;
+        }
+        cells.push(cur);
+
+        if (cells.length < 11) continue;
+        const [year, month, day, hour, min, sec, orderNo, desc, debitStr, creditStr, balanceStr, memo] = cells;
+        if (!year || !month || !day || !desc) continue;
+
+        const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const timeStr = `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+        const debit = parseInt(debitStr?.replace(/,/g, "") || "0") || 0;
+        const credit = parseInt(creditStr?.replace(/,/g, "") || "0") || 0;
+        const balance = parseInt(balanceStr?.replace(/,/g, "") || "0") || 0;
+        const isExpense = debit > 0;
+        const classified = classifyTx(desc, isExpense);
+
+        txs.push({
+          transaction_date: dateStr,
+          transaction_time: timeStr,
+          order_no: orderNo || "",
+          description: desc,
+          debit_amount: debit,
+          credit_amount: credit,
+          balance: balance,
+          memo: memo || "",
+          account_category: classified.category,
+          account_label: classified.label,
+          is_expense: isExpense,
+          is_confirmed: false,
+          _tempId: crypto.randomUUID(),
+        });
+      }
+
+      if (txs.length === 0) { alert("取引データが見つかりませんでした"); return; }
+      setBankStagedTxs(txs);
+      alert(`${txs.length}件の取引を読み込みました。内容を確認して「取込確定」ボタンを押してください。`);
+    } catch (err) {
+      alert("CSV読込エラー: " + String(err));
+    } finally {
+      setBankParsing(false);
+    }
+  };
+
+  // ステージング中の取引の勘定科目変更
+  const updateStagedCategory = (tempId: string, category: string) => {
+    setBankStagedTxs(prev => prev.map(t => {
+      if (t._tempId !== tempId) return t;
+      const label = EXPENSE_CATEGORIES.find(c => c.value === category)?.label || category;
+      return { ...t, account_category: category, account_label: label };
+    }));
+  };
+
+  // ステージング取引をDBに確定（重複は UNIQUE制約でスキップ）
+  const confirmStagedTxs = async () => {
+    if (bankStagedTxs.length === 0) return;
+    if (!confirm(`${bankStagedTxs.length}件の取引を取り込みますか？（重複行は自動スキップ）`)) return;
+
+    const rows = bankStagedTxs.map(t => ({
+      transaction_date: t.transaction_date,
+      transaction_time: t.transaction_time,
+      order_no: t.order_no,
+      description: t.description,
+      debit_amount: t.debit_amount,
+      credit_amount: t.credit_amount,
+      balance: t.balance,
+      memo: t.memo,
+      account_category: t.account_category,
+      account_label: t.account_label,
+      is_expense: t.is_expense,
+      imported_by_name: activeStaff?.name || "",
+    }));
+
+    // 500件ずつバッチ挿入
+    let ok = 0, ng = 0;
+    for (let i = 0; i < rows.length; i += 100) {
+      const batch = rows.slice(i, i + 100);
+      const { error } = await supabase.from("bank_transactions").upsert(batch, { onConflict: "transaction_date,order_no,description,debit_amount,credit_amount", ignoreDuplicates: true });
+      if (error) { ng += batch.length; console.error(error); }
+      else ok += batch.length;
+    }
+
+    alert(`取込完了: ${ok}件\n${ng > 0 ? `失敗: ${ng}件` : ""}`);
+    setBankStagedTxs([]);
+    fetchBankData();
+  };
+
+  // 登録済み取引の勘定科目変更
+  const updateTxCategory = async (txId: number, category: string) => {
+    const label = EXPENSE_CATEGORIES.find(c => c.value === category)?.label || category;
+    await supabase.from("bank_transactions").update({ account_category: category, account_label: label }).eq("id", txId);
+    fetchBankData();
+  };
+
+  // 取引を経費として確定（expenses テーブルに登録）
+  const confirmExpense = async (tx: BankTransaction) => {
+    if (!tx.id || tx.is_confirmed) return;
+    if (tx.is_expense && tx.debit_amount > 0) {
+      const { data: newExp } = await supabase.from("expenses").insert({
+        date: tx.transaction_date,
+        category: tx.account_category,
+        name: tx.account_label || tx.description.slice(0, 40),
+        amount: tx.debit_amount,
+        notes: `[銀行取込] ${tx.description}`,
+        is_recurring: false,
+        type: "expense",
+      }).select().single();
+      if (newExp) {
+        await supabase.from("bank_transactions").update({ is_confirmed: true, confirmed_expense_id: newExp.id }).eq("id", tx.id);
+      }
+    } else if (!tx.is_expense && tx.credit_amount > 0) {
+      // 入金は expenses テーブルに type=income として登録
+      const { data: newInc } = await supabase.from("expenses").insert({
+        date: tx.transaction_date,
+        category: "income",
+        name: tx.account_label || tx.description.slice(0, 40),
+        amount: tx.credit_amount,
+        notes: `[銀行取込] ${tx.description}`,
+        is_recurring: false,
+        type: "income",
+      }).select().single();
+      if (newInc) {
+        await supabase.from("bank_transactions").update({ is_confirmed: true, confirmed_expense_id: newInc.id }).eq("id", tx.id);
+      }
+    }
+    fetchBankData();
+    fetchData(); // 経費シートのデータも更新
+  };
+
+  // 一括経費登録
+  const confirmAllExpenses = async () => {
+    const unconfirmed = bankTxs.filter(t => !t.is_confirmed);
+    if (unconfirmed.length === 0) { alert("未確定の取引がありません"); return; }
+    if (!confirm(`${unconfirmed.length}件の取引を経費/売上として一括登録しますか？`)) return;
+    for (const tx of unconfirmed) { await confirmExpense(tx); }
+    alert(`${unconfirmed.length}件を登録しました`);
+  };
+
+  // 摘要→勘定科目をルールとして学習
+  const learnRule = async (description: string, category: string) => {
+    // 摘要の先頭・識別可能な部分を抽出（例: "Vデビット Amazon..." → "Amazon"）
+    const suggested = prompt("このルールのマッチ文字列を入力してください（摘要に含まれる部分を指定）:", description.slice(0, 20));
+    if (!suggested || !suggested.trim()) return;
+    const label = EXPENSE_CATEGORIES.find(c => c.value === category)?.label || category;
+    await supabase.from("bank_category_rules").insert({
+      pattern: suggested.trim(),
+      account_category: category,
+      account_label: label,
+      is_expense: category !== "income",
+      priority: 50,
+      created_by_name: activeStaff?.name || "",
+    });
+    alert(`ルール「${suggested.trim()} → ${label}」を登録しました。次回から自動で分類されます。`);
+    fetchBankData();
+  };
+
+  const deleteRule = async (id: number) => {
+    if (!confirm("このルールを削除しますか？")) return;
+    await supabase.from("bank_category_rules").delete().eq("id", id);
+    fetchBankData();
   };
 
   // 書類アップロード
@@ -926,7 +1155,215 @@ export default function TaxPortal() {
             </div>
           )}
 
-          {/* ── Sheet: 書類庫 ── */}
+          {/* ── Sheet: 銀行取込（PayPay銀行） ── */}
+          {sheet === "bank" && (
+            <div className="space-y-4 animate-[fadeIn_0.3s]">
+              {/* サマリーカード */}
+              {(() => {
+                const unconfirmed = bankTxs.filter(t => !t.is_confirmed).length;
+                const confirmed = bankTxs.filter(t => t.is_confirmed).length;
+                const totalDebit = bankTxs.reduce((s, t) => s + (t.debit_amount || 0), 0);
+                const totalCredit = bankTxs.reduce((s, t) => s + (t.credit_amount || 0), 0);
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>登録取引数</p>
+                      <p className="text-[18px] font-medium">{bankTxs.length}件</p>
+                    </div>
+                    <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>未確定</p>
+                      <p className="text-[18px] font-medium" style={{ color: "#f59e0b" }}>{unconfirmed}件</p>
+                    </div>
+                    <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>出金合計</p>
+                      <p className="text-[18px] font-medium" style={{ color: "#c45555" }}>{fmt(totalDebit)}</p>
+                    </div>
+                    <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>入金合計</p>
+                      <p className="text-[18px] font-medium" style={{ color: "#22c55e" }}>{fmt(totalCredit)}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* CSVアップロード */}
+              <div className="rounded-xl p-5" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <p className="text-[13px] font-medium mb-2">🏦 PayPay銀行CSV取込</p>
+                <p className="text-[10px] mb-3" style={{ color: T.textMuted }}>PayPay銀行の「明細ダウンロード」で出力したCSV（Shift-JIS）をアップロードしてください。学習済みルールで自動仕訳されます。</p>
+                <label className="block cursor-pointer">
+                  <input type="file" accept=".csv" className="hidden" disabled={bankParsing} onChange={(e) => { const f = e.target.files?.[0]; if (f) { parsePayPayCSV(f); e.target.value = ""; } }} />
+                  <div className="rounded-lg py-8 text-center transition-colors" style={{ border: `2px dashed ${T.border}`, backgroundColor: bankParsing ? T.cardAlt : "transparent" }}>
+                    {bankParsing ? (
+                      <p className="text-[12px]" style={{ color: "#c3a782" }}>📥 読込中...</p>
+                    ) : (
+                      <>
+                        <p className="text-[12px]" style={{ color: T.textSub }}>📎 クリックしてPayPay銀行CSVを選択</p>
+                        <p className="text-[10px] mt-1" style={{ color: T.textFaint }}>Shift-JIS形式・12列（操作日/摘要/お支払金額/お預り金額/残高等）</p>
+                      </>
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              {/* ステージング（取込前プレビュー） */}
+              {bankStagedTxs.length > 0 && (
+                <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `2px solid #f59e0b` }}>
+                  <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: "#f59e0b18", borderBottom: gridBorder }}>
+                    <div>
+                      <span className="text-[12px] font-medium" style={{ color: "#f59e0b" }}>⚠️ 取込確認: {bankStagedTxs.length}件の取引</span>
+                      <p className="text-[9px] mt-0.5" style={{ color: T.textSub }}>自動仕訳結果を確認して「取込確定」を押してください。勘定科目はクリックで変更できます。</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setBankStagedTxs([])} className="text-[11px] px-3 py-1.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: "none" }}>キャンセル</button>
+                      <button onClick={confirmStagedTxs} className="text-[11px] px-3 py-1.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#22c55e", color: "white", border: "none" }}>✓ 取込確定（{bankStagedTxs.length}件）</button>
+                    </div>
+                  </div>
+                  <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                    <table className="w-full" style={{ fontSize: 11 }}>
+                      <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                        <tr style={{ color: T.textSub, fontSize: 10 }}>
+                          <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder, width: 80 }}>日付</th>
+                          <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>摘要</th>
+                          <th style={{ padding: "5px 8px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, width: 90 }}>出金</th>
+                          <th style={{ padding: "5px 8px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, width: 90 }}>入金</th>
+                          <th style={{ padding: "5px 8px", textAlign: "left", borderBottom: gridBorder, width: 160 }}>勘定科目</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bankStagedTxs.map((t, i) => (
+                          <tr key={t._tempId} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                            <td style={{ padding: "4px 8px", borderRight: gridBorder, fontVariantNumeric: "tabular-nums" }}>{t.transaction_date.slice(5)}</td>
+                            <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.description}>{t.description}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", borderRight: gridBorder, fontVariantNumeric: "tabular-nums", color: t.debit_amount > 0 ? "#c45555" : T.textFaint }}>{t.debit_amount > 0 ? fmt(t.debit_amount) : "—"}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", borderRight: gridBorder, fontVariantNumeric: "tabular-nums", color: t.credit_amount > 0 ? "#22c55e" : T.textFaint }}>{t.credit_amount > 0 ? fmt(t.credit_amount) : "—"}</td>
+                            <td style={{ padding: "4px 8px" }}>
+                              <select value={t.account_category} onChange={(e) => updateStagedCategory(t._tempId!, e.target.value)} className="w-full px-2 py-1 rounded text-[10px] outline-none cursor-pointer" style={inputStyle}>
+                                {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 登録済み取引一覧 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px]" style={{ color: T.textSub }}>表示:</span>
+                {[
+                  { v: "unconfirmed", l: `未確定 (${bankTxs.filter(t => !t.is_confirmed).length})` },
+                  { v: "confirmed", l: `確定済 (${bankTxs.filter(t => t.is_confirmed).length})` },
+                  { v: "all", l: `すべて (${bankTxs.length})` },
+                ].map(o => (
+                  <button key={o.v} onClick={() => setBankFilter(o.v as "all" | "unconfirmed" | "confirmed")} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: bankFilter === o.v ? "#c3a782" : T.cardAlt, color: bankFilter === o.v ? "white" : T.textSub, border: `1px solid ${bankFilter === o.v ? "#c3a782" : T.border}` }}>{o.l}</button>
+                ))}
+                <div className="flex-1"></div>
+                {bankTxs.filter(t => !t.is_confirmed).length > 0 && (
+                  <button onClick={confirmAllExpenses} className="text-[11px] px-3 py-1.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#22c55e", color: "white", border: "none" }}>✓ 未確定分を一括で経費/売上登録</button>
+                )}
+              </div>
+
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                  <span className="text-[12px] font-medium">💳 銀行取引一覧</span>
+                  <span className="text-[10px]" style={{ color: T.textFaint }}>{(() => { const f = bankTxs.filter(t => bankFilter === "all" || (bankFilter === "unconfirmed" && !t.is_confirmed) || (bankFilter === "confirmed" && t.is_confirmed)); return `${f.length}件表示中`; })()}</span>
+                </div>
+                <div style={{ maxHeight: 500, overflowY: "auto" }}>
+                  <table className="w-full" style={{ fontSize: 11 }}>
+                    <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                      <tr style={{ color: T.textSub, fontSize: 10 }}>
+                        <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder, width: 80 }}>日付</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>摘要</th>
+                        <th style={{ padding: "5px 8px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, width: 90 }}>出金</th>
+                        <th style={{ padding: "5px 8px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, width: 90 }}>入金</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder, width: 160 }}>勘定科目</th>
+                        <th style={{ padding: "5px 8px", textAlign: "center", borderBottom: gridBorder, width: 180 }}>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const filtered = bankTxs.filter(t => bankFilter === "all" || (bankFilter === "unconfirmed" && !t.is_confirmed) || (bankFilter === "confirmed" && t.is_confirmed));
+                        if (filtered.length === 0) return <tr><td colSpan={6} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>取引がありません。CSVをアップロードしてください。</td></tr>;
+                        return filtered.map((t, i) => (
+                          <tr key={t.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40", opacity: t.is_confirmed ? 0.7 : 1 }}>
+                            <td style={{ padding: "4px 8px", borderRight: gridBorder, fontVariantNumeric: "tabular-nums" }}>{t.transaction_date.slice(5)}</td>
+                            <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.description}>{t.description}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", borderRight: gridBorder, fontVariantNumeric: "tabular-nums", color: t.debit_amount > 0 ? "#c45555" : T.textFaint }}>{t.debit_amount > 0 ? fmt(t.debit_amount) : "—"}</td>
+                            <td style={{ padding: "4px 8px", textAlign: "right", borderRight: gridBorder, fontVariantNumeric: "tabular-nums", color: t.credit_amount > 0 ? "#22c55e" : T.textFaint }}>{t.credit_amount > 0 ? fmt(t.credit_amount) : "—"}</td>
+                            <td style={{ padding: "4px 8px", borderRight: gridBorder }}>
+                              {t.is_confirmed ? (
+                                <span className="text-[10px]">{t.account_label || EXPENSE_CATEGORIES.find(c => c.value === t.account_category)?.label}</span>
+                              ) : (
+                                <select value={t.account_category} onChange={(e) => t.id && updateTxCategory(t.id, e.target.value)} className="w-full px-2 py-1 rounded text-[10px] outline-none cursor-pointer" style={inputStyle}>
+                                  {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                                </select>
+                              )}
+                            </td>
+                            <td style={{ padding: "4px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
+                              {t.is_confirmed ? (
+                                <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✓ 登録済</span>
+                              ) : (
+                                <>
+                                  <button onClick={() => confirmExpense(t)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer mr-1" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>✓ 登録</button>
+                                  <button onClick={() => learnRule(t.description, t.account_category)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "none" }} title="この摘要のルールを学習">📝 学習</button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 学習済みルール */}
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                  <span className="text-[12px] font-medium">🧠 学習済み仕訳ルール（{bankRules.length}件）</span>
+                  <span className="text-[10px]" style={{ color: T.textFaint }}>摘要マッチで自動分類</span>
+                </div>
+                <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                  <table className="w-full" style={{ fontSize: 11 }}>
+                    <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                      <tr style={{ color: T.textSub, fontSize: 10 }}>
+                        <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>マッチ文字列</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>勘定科目</th>
+                        <th style={{ padding: "5px 8px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, width: 80 }}>優先度</th>
+                        <th style={{ padding: "5px 8px", textAlign: "center", borderBottom: gridBorder, width: 80 }}>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bankRules.length === 0 && <tr><td colSpan={4} style={{ padding: "16px", textAlign: "center", color: T.textFaint, fontSize: 10 }}>ルールがありません</td></tr>}
+                      {bankRules.map((r, i) => (
+                        <tr key={r.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                          <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10 }}>{r.pattern}</td>
+                          <td style={{ padding: "4px 8px", borderRight: gridBorder, fontSize: 10 }}>{r.account_label || EXPENSE_CATEGORIES.find(c => c.value === r.account_category)?.label}</td>
+                          <td style={{ padding: "4px 8px", borderRight: gridBorder, textAlign: "right", color: T.textSub }}>{r.priority}</td>
+                          <td style={{ padding: "4px 8px", textAlign: "center" }}>
+                            <button onClick={() => deleteRule(r.id)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "none" }}>🗑</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c433" }}>
+                <p className="text-[11px] font-medium mb-1" style={{ color: "#85a8c4" }}>💡 使い方</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+                  <strong>1. CSVアップロード:</strong> PayPay銀行の「入出金明細 CSVダウンロード」で出力したファイルを選択<br/>
+                  <strong>2. プレビューで確認:</strong> 自動仕訳が正しいか確認。勘定科目はクリックで変更可<br/>
+                  <strong>3. 取込確定:</strong> ボタンを押すと一覧に登録（重複は自動スキップ）<br/>
+                  <strong>4. 経費/売上登録:</strong> 「✓ 登録」ボタンで expenses テーブルに反映 → 月次サマリーや経費シートで集計される<br/>
+                  <strong>5. ルール学習:</strong> 「📝 学習」ボタンで摘要→勘定科目を記憶。次回から自動分類
+                </p>
+              </div>
+            </div>
+          )}
           {sheet === "docs" && (
             <div className="space-y-4 animate-[fadeIn_0.3s]">
               {/* サマリーカード */}
@@ -1286,6 +1723,7 @@ export default function TaxPortal() {
           { k: "invoice" as SheetKey, l: "インボイス", icon: "🧾", ready: true },
           { k: "schedule" as SheetKey, l: "年間スケジュール", icon: "📅", ready: true },
           { k: "docs" as SheetKey, l: "書類庫", icon: "📁", ready: true },
+          { k: "bank" as SheetKey, l: "銀行取込", icon: "🏦", ready: true },
         ].map(t => {
           const active = sheet === t.k;
           return (
