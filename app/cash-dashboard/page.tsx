@@ -322,7 +322,7 @@ export default function CashDashboard() {
   // 累積の現金収入 = 精算済み（sales_collected=true）の net_cash_after_pay の合計
   // 経費 = expenses.type='expense' で現金払いの分（現状すべて経費を現金払いと仮定）
   // ATM預入 = すべての atm_deposits の合計
-  // 事務所残金 = 累積現金収入 - 累積経費 + 累積収入 - 累積ATM預入
+  // 事務所残金 = 累積現金収入 - 累積経費 + 累積収入 - 累積ATM預入 + 豊橋予備金立替補正
   const collectedSettlements = settlements.filter(s => s.sales_collected);
   const cumulativeCashIn = collectedSettlements.reduce((sum, s) => {
     const net = Math.max((s.total_cash || 0) - (s.final_payment || 0), 0);
@@ -333,7 +333,18 @@ export default function CashDashboard() {
   const cumulativeExpense = expensesAll.filter(e => e.type === "expense").reduce((s, e) => s + (e.amount || 0), 0);
   const cumulativeIncome = expensesAll.filter(e => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
   const cumulativeAtmDeposit = atmDeposits.reduce((s, a) => s + (a.amount || 0), 0);
-  const officeCashBalance = cumulativeCashIn + cumulativeIncome - cumulativeExpense - totalReplenishAll - cumulativeAtmDeposit;
+
+  // 豊橋予備金の立替・補充累計 (補正用)
+  // 背景: 豊橋予備金から立替した場合、既存日次集計では netAfterPay がマイナスになり
+  //       事務所残金（管理者金庫）が実際より少なく計算される。
+  //       立替額だけ金庫には余分な現金が残っているので、立替分を加算する。
+  //       後日スタッフ金庫から予備金へ補充した時、その補充分はスタッフ金庫から消えるので減算する。
+  //       → 立替と補充が同額なら、最終的に影響ゼロ（既存計算通り）になる。
+  const totalReserveWithdraw = toyohashiMoves.filter(m => m.movement_type === "withdraw").reduce((s, m) => s + m.amount, 0);
+  const totalReserveRefund = toyohashiMoves.filter(m => m.movement_type === "refund").reduce((s, m) => s + m.amount, 0);
+  const reserveCorrection = totalReserveWithdraw - totalReserveRefund;
+
+  const officeCashBalance = cumulativeCashIn + cumulativeIncome - cumulativeExpense - totalReplenishAll - cumulativeAtmDeposit + reserveCorrection;
 
   // 検証済み/未検証のATM預入
   const verifiedAtms = atmDeposits.filter(a => a.bank_verified).length;
