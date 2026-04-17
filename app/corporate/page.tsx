@@ -549,129 +549,161 @@ function RPGCharacters() {
   const [s, setS] = useState({
     hx: 200, hy: 400, tx: 600, ty: 800, hdir: 1, walk: false,
     sx: -200, sy: -200, salive: false, shp: 5, sMaxHp: 5,
-    hhp: 20, hMaxHp: 20,
+    hhp: 15, hMaxHp: 15,
     phase: "wander" as string, ptick: 0, tick: 0, nextSpawn: 200,
-    dmgs: [] as { id: number; x: number; y: number; txt: string; color: string; t: number }[],
-    slashVis: false, sparkVis: false, heroFlash: false, sSquish: false,
+    dmgs: [] as { id: number; x: number; y: number; txt: string; color: string; t: number; sz?: number }[],
+    // Attack motion
+    atkOff: 0, swordAng: 0, slashVis: false, sparkVis: false,
+    sJump: 0, sAtkOff: 0, sSquish: false,
+    heroFlash: false, heroDead: false,
     cape: 0, idleCount: 0,
   });
-  const ref = useRef(s);
-  ref.current = s;
+  const ref = useRef(s); ref.current = s;
   const idRef = useRef(0);
 
   useEffect(() => {
     let raf = 0;
-    const addDmg = (x: number, y: number, txt: string, color: string) => {
+    const ad = (x: number, y: number, txt: string, color: string, sz?: number) => {
       idRef.current++;
-      ref.current.dmgs = [...ref.current.dmgs, { id: idRef.current, x, y, txt, color, t: 50 }];
+      ref.current.dmgs = [...ref.current.dmgs, { id: idRef.current, x, y, txt, color, t: 55, sz }];
     };
-    const pick = () => {
-      const r = ref.current;
-      r.tx = 60 + Math.random() * (window.innerWidth - 160);
-      r.ty = 120 + Math.random() * Math.min(document.body.scrollHeight - 160, 4500);
-      r.idleCount = 0;
-    };
+    const pick = () => { const r = ref.current; r.tx = 60 + Math.random() * (window.innerWidth - 160); r.ty = 120 + Math.random() * Math.min(document.body.scrollHeight - 160, 4500); r.idleCount = 0; };
     pick();
 
     const loop = () => {
       const r = { ...ref.current };
       r.tick++;
       r.cape = Math.sin(r.tick * 0.08) * 6;
-      r.dmgs = r.dmgs.map(d => ({ ...d, y: d.y - 0.7, t: d.t - 1 })).filter(d => d.t > 0);
+      r.dmgs = r.dmgs.map(d => ({ ...d, y: d.y - 0.6, t: d.t - 1 })).filter(d => d.t > 0);
+
+      const dist2 = (ax: number, ay: number, bx: number, by: number) => Math.sqrt((ax-bx)**2 + (ay-by)**2);
+      const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+      const ease = (t: number) => t < 0.5 ? 2*t*t : 1 - (-2*t+2)**2/2;
 
       if (r.phase === "wander") {
-        const dx = r.tx - r.hx, dy = r.ty - r.hy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 10) {
-          r.walk = false; r.idleCount++;
-          if (r.idleCount > 150) pick();
-        } else {
-          r.hx += (dx / dist) * 0.5; r.hy += (dy / dist) * 0.5;
-          r.hdir = dx >= 0 ? 1 : -1; r.walk = true; r.idleCount = 0;
-        }
+        if (r.heroDead) { r.heroDead = false; r.hhp = r.hMaxHp; }
+        const dx = r.tx - r.hx, dy = r.ty - r.hy, d = dist2(r.hx,r.hy,r.tx,r.ty);
+        if (d < 10) { r.walk = false; r.idleCount++; if (r.idleCount > 150) pick(); }
+        else { r.hx += (dx/d)*0.5; r.hy += (dy/d)*0.5; r.hdir = dx >= 0 ? 1 : -1; r.walk = true; r.idleCount = 0; }
         r.nextSpawn--;
         if (r.nextSpawn <= 0) {
           r.phase = "encounter"; r.ptick = 0;
-          r.sx = r.hx + (Math.random() > 0.5 ? 180 : -180);
-          r.sy = r.hy + (Math.random() - 0.5) * 80;
-          r.salive = true; r.shp = r.sMaxHp; r.sSquish = false;
+          const side = Math.random() > 0.5 ? 1 : -1;
+          r.sx = r.hx + side * (140 + Math.random()*60);
+          r.sy = r.hy + (Math.random()-0.5)*60;
+          r.salive = true; r.shp = r.sMaxHp; r.sSquish = false; r.sJump = 0; r.sAtkOff = 0;
         }
       }
       else if (r.phase === "encounter") {
         r.ptick++;
-        // Hero approaches
-        const dx = r.sx - r.hx, dy = r.sy - r.hy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dx = r.sx - r.hx, d = dist2(r.hx,r.hy,r.sx,r.sy);
         r.hdir = dx >= 0 ? 1 : -1; r.walk = true;
-        if (dist > 75) { r.hx += (dx / dist) * 0.9; r.hy += (dy / dist) * 0.9; }
-        if (r.ptick > 40 || dist <= 75) {
-          // Randomly decide who attacks first
-          r.phase = Math.random() > 0.4 ? "hero_atk" : "slime_atk";
-          r.ptick = 0; r.walk = false;
-        }
+        if (d > 80) { r.hx += (dx/d)*0.9; r.hy += ((r.sy-r.hy)/d)*0.9; }
+        if (r.ptick > 40 || d <= 80) { r.phase = Math.random() > 0.45 ? "hero_atk" : "slime_atk"; r.ptick = 0; r.walk = false; r.atkOff = 0; r.swordAng = 0; }
       }
+      // ── HERO ATTACK: lunge + big sword swing ──
       else if (r.phase === "hero_atk") {
         r.ptick++;
-        if (r.ptick === 8) r.slashVis = true;
-        if (r.ptick === 16) {
-          r.slashVis = false; r.sparkVis = true;
-          r.shp = Math.max(0, r.shp - (2 + Math.floor(Math.random() * 4)));
-          const dmg = r.sMaxHp - r.shp > 3 ? "CRITICAL!" : `${2 + Math.floor(Math.random() * 4)}`;
-          addDmg(r.sx + 10, r.sy - 20, dmg, dmg === "CRITICAL!" ? "#f59e0b" : "#FFD700");
-          r.sSquish = true;
+        const lungeMax = 35;
+        if (r.ptick <= 12) {
+          // Lunge forward toward slime
+          r.atkOff = lerp(0, lungeMax, ease(r.ptick / 12));
+          r.swordAng = lerp(0, -120, ease(r.ptick / 12)); // Wind up
+        } else if (r.ptick <= 20) {
+          // Sword swing down!
+          r.atkOff = lungeMax;
+          r.swordAng = lerp(-120, 60, ease((r.ptick - 12) / 8));
+        } else if (r.ptick === 21) {
+          // HIT!
+          r.slashVis = true; r.sparkVis = true; r.sSquish = true;
+          const crit = Math.random() > 0.75;
+          const dmg = crit ? 6 + Math.floor(Math.random()*3) : 2 + Math.floor(Math.random()*3);
+          r.shp = Math.max(0, r.shp - dmg);
+          if (crit) { ad(r.sx+5, r.sy-35, "CRITICAL!", "#f59e0b", 18); ad(r.sx+15, r.sy-15, `${dmg}`, "#FFD700", 22); }
+          else ad(r.sx+10, r.sy-25, `${dmg}`, "#FFD700", 20);
+        } else if (r.ptick <= 30) {
+          r.swordAng = 60;
+          if (r.ptick === 26) { r.slashVis = false; r.sparkVis = false; r.sSquish = false; }
+        } else if (r.ptick <= 45) {
+          // Return
+          r.atkOff = lerp(lungeMax, 0, ease((r.ptick - 30) / 15));
+          r.swordAng = lerp(60, 0, ease((r.ptick - 30) / 15));
         }
-        if (r.ptick === 22) { r.sparkVis = false; r.sSquish = false; }
-        if (r.ptick > 40) {
+        if (r.ptick > 50) {
+          r.atkOff = 0; r.swordAng = 0;
           if (r.shp <= 0) { r.phase = "slime_die"; r.ptick = 0; }
           else { r.phase = "slime_atk"; r.ptick = 0; }
         }
       }
+      // ── SLIME ATTACK: sqush → big jump → body slam ──
       else if (r.phase === "slime_atk") {
         r.ptick++;
-        // Slime bounces toward hero
-        if (r.ptick === 10) r.sSquish = true;
-        if (r.ptick === 16) r.sSquish = false;
-        if (r.ptick === 20) {
-          r.heroFlash = true;
-          const dmg = 1 + Math.floor(Math.random() * 3);
+        const distToH = r.hdir === 1 ? r.sx - r.hx : r.hx - r.sx;
+        if (r.ptick <= 10) {
+          // Squish down (prepare)
+          r.sSquish = true;
+        } else if (r.ptick <= 28) {
+          // Jump arc toward hero
+          r.sSquish = false;
+          const t = (r.ptick - 10) / 18;
+          r.sAtkOff = lerp(0, distToH * 0.7, ease(t));
+          r.sJump = Math.sin(t * Math.PI) * 80; // Big arc!
+        } else if (r.ptick === 29) {
+          // SLAM!
+          r.sSquish = true; r.heroFlash = true;
+          const dmg = 2 + Math.floor(Math.random() * 3);
           r.hhp = Math.max(0, r.hhp - dmg);
-          addDmg(r.hx + 10, r.hy - 15, `${dmg}`, "#ef4444");
-          if (Math.random() > 0.7) addDmg(r.hx + 30, r.hy - 5, "痛い！", "#fca5a5");
+          ad(r.hx + 10, r.hy - 20, `${dmg}`, "#ef4444", 20);
+          if (Math.random() > 0.6) ad(r.hx + 30, r.hy - 5, "痛っ！", "#fca5a5", 12);
+        } else if (r.ptick <= 38) {
+          // Bounce back
+          r.sSquish = r.ptick < 33;
+          const t = (r.ptick - 29) / 9;
+          r.sAtkOff = lerp(distToH * 0.7, 0, ease(t));
+          r.sJump = lerp(0, 0, t);
+        } else if (r.ptick === 39) {
+          r.heroFlash = false; r.sJump = 0; r.sAtkOff = 0;
         }
-        if (r.ptick === 28) r.heroFlash = false;
         if (r.ptick > 50) {
-          // Slime sometimes attacks twice!
-          if (r.shp > 2 && Math.random() > 0.6) {
+          r.sAtkOff = 0; r.sJump = 0; r.sSquish = false;
+          if (r.hhp <= 0) { r.phase = "hero_die"; r.ptick = 0; }
+          else if (r.shp > 2 && Math.random() > 0.55) {
             r.phase = "slime_atk"; r.ptick = 0;
-            addDmg(r.sx, r.sy - 30, "連続攻撃！", "#22d3ee");
-          } else {
-            r.phase = "hero_atk"; r.ptick = 0;
-          }
+            ad(r.sx, r.sy - 35, "連続攻撃！", "#22d3ee", 13);
+          } else { r.phase = "hero_atk"; r.ptick = 0; }
         }
       }
+      // ── SLIME DIE ──
       else if (r.phase === "slime_die") {
         r.ptick++;
-        if (r.ptick === 15) {
-          addDmg(r.sx - 10, r.sy - 30, "EXP +15", "#22c55e");
-          addDmg(r.sx + 20, r.sy - 15, "Gold +8", "#fbbf24");
-        }
-        if (r.ptick > 50) {
+        if (r.ptick === 1) ad(r.sx, r.sy - 10, "✦", "#67e8f9", 24);
+        if (r.ptick === 18) { ad(r.sx - 15, r.sy - 35, "EXP +15", "#22c55e", 13); ad(r.sx + 20, r.sy - 20, "Gold +8", "#fbbf24", 13); }
+        if (r.ptick > 55) {
           r.salive = false; r.phase = "cooldown"; r.ptick = 0;
           r.hhp = Math.min(r.hMaxHp, r.hhp + 5);
-          addDmg(r.hx, r.hy - 20, "HP回復 +5", "#34d399");
+          ad(r.hx, r.hy - 25, "HP回復 +5", "#34d399", 12);
         }
       }
+      // ── HERO DIE ──
+      else if (r.phase === "hero_die") {
+        r.ptick++;
+        r.heroDead = true; r.walk = false;
+        if (r.ptick === 10) ad(r.hx - 10, r.hy - 30, "やられた…", "#94a3b8", 16);
+        if (r.ptick === 40) ad(r.hx - 5, r.hy - 45, "GAME OVER", "#ef4444", 18);
+        if (r.ptick > 180) {
+          // Respawn!
+          r.heroDead = false; r.hhp = r.hMaxHp; r.salive = false;
+          r.phase = "cooldown"; r.ptick = 0;
+          ad(r.hx, r.hy - 30, "✦ 復活！", "#60a5fa", 16);
+        }
+      }
+      // ── COOLDOWN ──
       else if (r.phase === "cooldown") {
         r.ptick++;
-        const dx = r.tx - r.hx, dy = r.ty - r.hy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 10) { r.hx += (dx/dist)*0.5; r.hy += (dy/dist)*0.5; r.hdir = dx >= 0 ? 1 : -1; r.walk = true; }
+        const dx = r.tx - r.hx, d = dist2(r.hx,r.hy,r.tx,r.ty);
+        if (d > 10) { r.hx += (dx/d)*0.5; r.hy += ((r.ty-r.hy)/d)*0.5; r.hdir = dx >= 0 ? 1 : -1; r.walk = true; }
         else r.walk = false;
-        if (r.ptick > 200) {
-          r.phase = "wander"; r.ptick = 0;
-          r.nextSpawn = 400 + Math.floor(Math.random() * 500);
-          pick();
-        }
+        if (r.ptick > 200) { r.phase = "wander"; r.ptick = 0; r.nextSpawn = 500 + Math.floor(Math.random() * 500); pick(); }
       }
 
       setS(r);
@@ -682,178 +714,156 @@ function RPGCharacters() {
   }, []);
 
   const bobY = s.walk ? Math.sin(s.tick * 0.15) * 3 : 0;
-  const legL = s.walk ? Math.sin(s.tick * 0.15) * 12 : 0;
-  const legR = s.walk ? Math.sin(s.tick * 0.15 + Math.PI) * 12 : 0;
-  const slimeBob = s.salive ? Math.sin(s.tick * 0.1) * 4 : 0;
-  const dieScale = s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 40) : 1;
-  const dieRotate = s.phase === "slime_die" ? s.ptick * 8 : 0;
+  const legL = s.walk ? Math.sin(s.tick * 0.15) * 14 : 0;
+  const legR = s.walk ? Math.sin(s.tick * 0.15 + Math.PI) * 14 : 0;
+  const slimeBob = s.salive && !s.sSquish ? Math.sin(s.tick * 0.1) * 3 : 0;
+  const dieScale = s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 45) : 1;
+  const dieRot = s.phase === "slime_die" ? s.ptick * 10 : 0;
+  const heroAtkX = s.atkOff * s.hdir;
+  const slimeAtkX = s.phase === "slime_atk" ? -s.sAtkOff * (s.hdir) : 0;
+  const heroDieRot = s.heroDead ? Math.min(90, s.ptick * 3) : 0;
+  const heroDieOp = s.heroDead && s.ptick > 140 ? Math.max(0, 1 - (s.ptick - 140) / 40) : 1;
 
   return (
     <>
       <style>{`
-        @keyframes sparkle{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(2)}}
-        @keyframes slimeWobble{0%,100%{transform:scaleX(1) scaleY(1)}50%{transform:scaleX(1.06) scaleY(0.94)}}
-        .hero-slash{animation:sparkle .3s ease-out both}
+        @keyframes sparkle{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(2.5)}}
+        @keyframes slimeWobble{0%,100%{transform:scaleX(1) scaleY(1)}50%{transform:scaleX(1.08) scaleY(0.92)}}
+        .fx-slash{animation:sparkle .35s ease-out both}
       `}</style>
 
       {/* ══ HERO ══ */}
       <div style={{
-        position: "absolute", left: s.hx - 30, top: s.hy - 40 + bobY,
-        width: 60, height: 80, pointerEvents: "none", zIndex: 42,
-        transform: `scaleX(${s.hdir})`,
-        filter: s.heroFlash ? "brightness(1.8) drop-shadow(0 0 12px rgba(239,68,68,0.8))" : "drop-shadow(2px 3px 4px rgba(0,0,0,0.5))",
-        transition: "filter 0.1s",
+        position:"absolute", left: s.hx - 30 + heroAtkX, top: s.hy - 40 + bobY,
+        width: 60, height: 80, pointerEvents:"none", zIndex: 42,
+        transform: `scaleX(${s.hdir}) rotate(${heroDieRot}deg)`,
+        transformOrigin: "center bottom",
+        opacity: heroDieOp,
+        filter: s.heroFlash ? "brightness(2) drop-shadow(0 0 14px rgba(239,68,68,0.9))" : "drop-shadow(2px 3px 4px rgba(0,0,0,0.5))",
+        transition: s.heroDead ? "transform 0.5s ease-in, opacity 0.5s" : "filter 0.12s",
       }}>
         <svg viewBox="0 0 60 80" width="60" height="80" fill="none">
           {/* Cape */}
-          <path d={`M22 28 Q18 ${44 + s.cape} ${14 + s.cape * 0.3} ${58 + s.cape * 0.5} L28 58 Q25 45 22 28Z`} fill="#dc2626" opacity="0.9"/>
-          <path d={`M22 28 Q16 ${46 + s.cape} ${12 + s.cape * 0.4} ${60 + s.cape * 0.3} L${14 + s.cape * 0.3} ${58 + s.cape * 0.5} Q18 ${44 + s.cape} 22 28Z`} fill="#991b1b" opacity="0.5"/>
-
+          <path d={`M22 28 Q18 ${44+s.cape} ${14+s.cape*0.3} ${58+s.cape*0.5} L28 58 Q25 45 22 28Z`} fill="#dc2626" opacity="0.9"/>
+          <path d={`M22 28 Q16 ${46+s.cape} ${12+s.cape*0.4} ${60+s.cape*0.3} L${14+s.cape*0.3} ${58+s.cape*0.5} Q18 ${44+s.cape} 22 28Z`} fill="#991b1b" opacity="0.5"/>
           {/* Legs */}
           <rect x="22" y="54" width="6" height="16" rx="3" fill="#1e3a5f" transform={`rotate(${legL} 25 54)`}/>
           <rect x="32" y="54" width="6" height="16" rx="3" fill="#1e3a5f" transform={`rotate(${legR} 35 54)`}/>
-          {/* Boots */}
-          <ellipse cx={25 + Math.sin(legL * Math.PI/180) * 12} cy={69 + Math.abs(Math.sin(legL * Math.PI/180)) * 2} rx="5" ry="3.5" fill="#5C3317"/>
-          <ellipse cx={35 + Math.sin(legR * Math.PI/180) * 12} cy={69 + Math.abs(Math.sin(legR * Math.PI/180)) * 2} rx="5" ry="3.5" fill="#5C3317"/>
-
-          {/* Body / Armor */}
+          <ellipse cx={25+Math.sin(legL*Math.PI/180)*12} cy={69+Math.abs(Math.sin(legL*Math.PI/180))*2} rx="5" ry="3.5" fill="#5C3317"/>
+          <ellipse cx={35+Math.sin(legR*Math.PI/180)*12} cy={69+Math.abs(Math.sin(legR*Math.PI/180))*2} rx="5" ry="3.5" fill="#5C3317"/>
+          {/* Body */}
           <rect x="20" y="30" width="20" height="26" rx="4" fill="#2563eb"/>
           <rect x="22" y="32" width="16" height="10" rx="2" fill="#3b82f6"/>
           <rect x="26" y="42" width="8" height="3" rx="1" fill="#60a5fa" opacity="0.5"/>
-          {/* Belt */}
           <rect x="20" y="48" width="20" height="4" rx="1" fill="#8B6914"/>
           <rect x="28" y="47" width="5" height="6" rx="1.5" fill="#FFD700"/>
-          {/* Shoulder pads */}
           <ellipse cx="20" cy="33" rx="5" ry="4" fill="#3b82f6"/>
           <ellipse cx="40" cy="33" rx="5" ry="4" fill="#3b82f6"/>
-
           {/* Head */}
           <circle cx="30" cy="18" r="12" fill="#FDBCB4"/>
-          {/* Eyes */}
           <ellipse cx="26" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
           <ellipse cx="34" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
           <circle cx="27" cy="16" r="0.8" fill="white"/>
           <circle cx="35" cy="16" r="0.8" fill="white"/>
-          {/* Mouth */}
-          <path d="M27 22 Q30 25 33 22" stroke="#c4786a" strokeWidth="1" fill="none"/>
-          {/* Blush */}
+          <path d={s.heroDead ? "M27 23 Q30 21 33 23" : "M27 22 Q30 25 33 22"} stroke="#c4786a" strokeWidth="1" fill="none"/>
           <ellipse cx="23" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
           <ellipse cx="37" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
-
           {/* Crown */}
-          <path d="M18 12 L18 6 L22 9 L26 4 L30 8 L34 4 L38 9 L42 6 L42 12 Z" fill="#FFD700"/>
-          <path d="M18 12 L42 12 L42 14 Q30 16 18 14 Z" fill="#DAA520"/>
-          <circle cx="26" cy="8" r="1.5" fill="#dc2626"/>
-          <circle cx="34" cy="8" r="1.5" fill="#3b82f6"/>
-          <circle cx="30" cy="6" r="1.8" fill="#22c55e"/>
-
-          {/* Hair */}
-          <path d="M18 14 Q18 8 22 10 L18 6 Z" fill="#8B5E3C"/>
-          <path d="M42 14 Q42 8 38 10 L42 6 Z" fill="#8B5E3C"/>
-
-          {/* Sword (right hand) */}
-          <rect x="43" y="20" width="3" height="20" rx="1" fill="#B0B8C8"/>
-          <rect x="43" y="20" width="3" height="6" rx="1" fill="#E0E8FF"/>
-          <rect x="41" y="38" width="7" height="4" rx="1.5" fill="#FFD700"/>
-          <rect x="43.5" y="42" width="2" height="6" rx="1" fill="#8B6914"/>
+          <path d="M18 12 L18 6 L22 9 L26 4 L30 8 L34 4 L38 9 L42 6 L42 12Z" fill="#FFD700"/>
+          <path d="M18 12 L42 12 L42 14 Q30 16 18 14Z" fill="#DAA520"/>
+          <circle cx="26" cy="8" r="1.5" fill="#dc2626"/><circle cx="34" cy="8" r="1.5" fill="#3b82f6"/><circle cx="30" cy="6" r="1.8" fill="#22c55e"/>
+          <path d="M18 14 Q18 8 22 10 L18 6Z" fill="#8B5E3C"/>
+          <path d="M42 14 Q42 8 38 10 L42 6Z" fill="#8B5E3C"/>
+          {/* Sword arm + sword (animated rotation) */}
+          <g transform={`rotate(${s.swordAng} 42 34)`}>
+            <rect x="43" y="12" width="3.5" height="22" rx="1.5" fill="#B0B8C8"/>
+            <rect x="43" y="12" width="3.5" height="7" rx="1.5" fill="#E0E8FF"/>
+            <rect x="41" y="32" width="7.5" height="4.5" rx="2" fill="#FFD700"/>
+            <rect x="43.5" y="36.5" width="2.5" height="7" rx="1" fill="#8B6914"/>
+            <circle cx="44.8" cy="14" r="1" fill="#ffffff" opacity="0.6"/>
+          </g>
         </svg>
       </div>
 
-      {/* ══ HERO HP BAR ══ */}
-      <div style={{ position:"absolute", left: s.hx - 22, top: s.hy - 52, width: 44, height: 6, background:"rgba(0,0,0,0.5)", borderRadius: 3, zIndex: 50, pointerEvents:"none", border:"1px solid rgba(255,255,255,0.15)" }}>
-        <div style={{ width: `${(s.hhp / s.hMaxHp) * 100}%`, height: "100%", borderRadius: 2, background: s.hhp > 10 ? "linear-gradient(90deg,#22c55e,#4ade80)" : s.hhp > 5 ? "linear-gradient(90deg,#eab308,#facc15)" : "linear-gradient(90deg,#dc2626,#ef4444)", transition: "width 0.3s" }} />
-      </div>
+      {/* Hero HP */}
+      {!s.heroDead && <div style={{ position:"absolute", left:s.hx-22+heroAtkX, top:s.hy-52, width:44, height:6, background:"rgba(0,0,0,0.5)", borderRadius:3, zIndex:50, pointerEvents:"none", border:"1px solid rgba(255,255,255,0.15)" }}>
+        <div style={{ width:`${(s.hhp/s.hMaxHp)*100}%`, height:"100%", borderRadius:2, background: s.hhp > 8 ? "linear-gradient(90deg,#22c55e,#4ade80)" : s.hhp > 4 ? "linear-gradient(90deg,#eab308,#facc15)" : "linear-gradient(90deg,#dc2626,#ef4444)", transition:"width 0.3s" }}/>
+      </div>}
 
       {/* ══ SLIME ══ */}
       {s.salive && (
         <div style={{
-          position: "absolute", left: s.sx - 25, top: s.sy - 20 + slimeBob,
-          width: 50, height: 44, pointerEvents: "none", zIndex: 41,
-          transform: `scale(${dieScale}) rotate(${dieRotate}deg) ${s.sSquish ? "scaleX(1.2) scaleY(0.8)" : ""}`,
-          opacity: s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 35) : 1,
+          position:"absolute", left: s.sx - 25 + slimeAtkX, top: s.sy - 20 + slimeBob - s.sJump,
+          width: 50, height: 44, pointerEvents:"none", zIndex: 41,
+          transform: `scale(${dieScale}) rotate(${dieRot}deg) ${s.sSquish ? "scaleX(1.25) scaleY(0.75)" : ""}`,
+          transformOrigin: "center bottom",
+          opacity: s.phase === "slime_die" ? Math.max(0, 1 - s.ptick/40) : 1,
           filter: "drop-shadow(2px 3px 4px rgba(0,0,0,0.4)) drop-shadow(0 0 8px rgba(6,182,212,0.2))",
-          transition: s.phase === "slime_die" ? "none" : "transform 0.15s ease-out",
-          animation: s.phase !== "slime_die" && s.phase !== "hero_atk" ? "slimeWobble 1.2s ease-in-out infinite" : "none",
+          transition: s.phase === "slime_die" ? "none" : "transform 0.12s ease-out",
+          animation: s.phase !== "slime_die" && s.phase !== "hero_atk" && s.phase !== "slime_atk" ? "slimeWobble 1.2s ease-in-out infinite" : "none",
         }}>
           <svg viewBox="0 0 50 44" width="50" height="44" fill="none">
             <defs>
-              <radialGradient id="slimeGrad" cx="40%" cy="35%">
-                <stop offset="0%" stopColor="#67e8f9"/>
-                <stop offset="50%" stopColor="#22d3ee"/>
-                <stop offset="100%" stopColor="#0891b2"/>
-              </radialGradient>
-              <radialGradient id="slimeShine" cx="30%" cy="25%">
-                <stop offset="0%" stopColor="white" stopOpacity="0.5"/>
-                <stop offset="100%" stopColor="white" stopOpacity="0"/>
-              </radialGradient>
+              <radialGradient id="sg" cx="40%" cy="35%"><stop offset="0%" stopColor="#67e8f9"/><stop offset="50%" stopColor="#22d3ee"/><stop offset="100%" stopColor="#0891b2"/></radialGradient>
+              <radialGradient id="ss" cx="30%" cy="25%"><stop offset="0%" stopColor="white" stopOpacity="0.5"/><stop offset="100%" stopColor="white" stopOpacity="0"/></radialGradient>
             </defs>
-            {/* Body */}
-            <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36 Z" fill="url(#slimeGrad)"/>
-            {/* Shine */}
-            <ellipse cx="18" cy="16" rx="8" ry="6" fill="url(#slimeShine)"/>
-            {/* Outline */}
-            <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36 Z" stroke="#0e7490" strokeWidth="1.2" fill="none"/>
-            {/* Eyes */}
-            <ellipse cx="18" cy="22" rx="4" ry="5" fill="white"/>
-            <ellipse cx="34" cy="22" rx="4" ry="5" fill="white"/>
-            <ellipse cx="19" cy="23" rx="2.5" ry="3" fill="#0f172a"/>
-            <ellipse cx="35" cy="23" rx="2.5" ry="3" fill="#0f172a"/>
-            <circle cx="20" cy="21.5" r="1.2" fill="white"/>
-            <circle cx="36" cy="21.5" r="1.2" fill="white"/>
-            {/* Mouth */}
+            <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36Z" fill="url(#sg)"/>
+            <ellipse cx="18" cy="16" rx="8" ry="6" fill="url(#ss)"/>
+            <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36Z" stroke="#0e7490" strokeWidth="1.2" fill="none"/>
+            <ellipse cx="18" cy="22" rx="4" ry="5" fill="white"/><ellipse cx="34" cy="22" rx="4" ry="5" fill="white"/>
+            <ellipse cx="19" cy="23" rx="2.5" ry="3" fill="#0f172a"/><ellipse cx="35" cy="23" rx="2.5" ry="3" fill="#0f172a"/>
+            <circle cx="20" cy="21.5" r="1.2" fill="white"/><circle cx="36" cy="21.5" r="1.2" fill="white"/>
             <path d="M22 30 Q25 34 28 30" stroke="#0e7490" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
-            {/* Cheeks */}
             <ellipse cx="13" cy="28" rx="3" ry="1.5" fill="#f0abfc" opacity="0.35"/>
             <ellipse cx="39" cy="28" rx="3" ry="1.5" fill="#f0abfc" opacity="0.35"/>
           </svg>
         </div>
       )}
 
-      {/* ══ SLIME HP BAR ══ */}
+      {/* Slime HP */}
       {s.salive && s.phase !== "slime_die" && (
-        <div style={{ position:"absolute", left: s.sx - 18, top: s.sy - 30 + slimeBob, width: 36, height: 5, background:"rgba(0,0,0,0.5)", borderRadius: 3, zIndex: 50, pointerEvents:"none", border:"1px solid rgba(255,255,255,0.12)" }}>
-          <div style={{ width: `${(s.shp / s.sMaxHp) * 100}%`, height: "100%", borderRadius: 2, background: "linear-gradient(90deg,#06b6d4,#22d3ee)", transition: "width 0.3s" }} />
+        <div style={{ position:"absolute", left:s.sx-18+slimeAtkX, top:s.sy-30+slimeBob-s.sJump, width:36, height:5, background:"rgba(0,0,0,0.5)", borderRadius:3, zIndex:50, pointerEvents:"none", border:"1px solid rgba(255,255,255,0.12)" }}>
+          <div style={{ width:`${(s.shp/s.sMaxHp)*100}%`, height:"100%", borderRadius:2, background:"linear-gradient(90deg,#06b6d4,#22d3ee)", transition:"width 0.3s" }}/>
         </div>
       )}
 
-      {/* ══ SLIME SHADOW ══ */}
+      {/* Slime shadow */}
       {s.salive && s.phase !== "slime_die" && (
-        <div style={{ position:"absolute", left: s.sx - 14, top: s.sy + 22, width: 28, height: 6, borderRadius: "50%", background:"rgba(0,0,0,0.2)", zIndex: 39, pointerEvents:"none", transform: `scaleY(${1 - Math.abs(slimeBob) * 0.04})` }}/>
+        <div style={{ position:"absolute", left:s.sx-14+slimeAtkX, top:s.sy+22, width:28, height:6, borderRadius:"50%", background:"rgba(0,0,0,0.2)", zIndex:39, pointerEvents:"none", transform:`scaleX(${1+s.sJump*0.005}) scaleY(${Math.max(0.3,1-s.sJump*0.008)})` }}/>
       )}
 
-      {/* ══ SLASH EFFECT ══ */}
+      {/* Slash effect */}
       {s.slashVis && (
-        <div className="hero-slash" style={{ position:"absolute", left: s.sx - 20, top: s.sy - 30, width: 50, height: 50, zIndex: 52, pointerEvents:"none" }}>
-          <svg viewBox="0 0 50 50" width="50" height="50">
-            <path d="M5 45 Q25 20 45 5" stroke="#FFD700" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.9"/>
-            <path d="M10 40 Q28 22 42 10" stroke="#FEF3C7" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.7"/>
+        <div className="fx-slash" style={{ position:"absolute", left:s.sx-30+slimeAtkX, top:s.sy-40, width:70, height:70, zIndex:52, pointerEvents:"none" }}>
+          <svg viewBox="0 0 70 70" width="70" height="70">
+            <path d="M10 60 Q35 25 60 5" stroke="#FFD700" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.9"/>
+            <path d="M15 55 Q38 28 58 10" stroke="#FEF3C7" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.7"/>
+            <path d="M8 58 Q32 30 55 8" stroke="#fff" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.4"/>
           </svg>
         </div>
       )}
 
-      {/* ══ SPARK EFFECT ══ */}
+      {/* Spark */}
       {s.sparkVis && (
-        <div className="hero-slash" style={{ position:"absolute", left: s.sx - 10, top: s.sy - 10, width: 30, height: 30, zIndex: 52, pointerEvents:"none" }}>
-          <svg viewBox="0 0 30 30" width="30" height="30">
-            {[0, 45, 90, 135, 180, 225, 270, 315].map(a => (
-              <line key={a} x1="15" y1="15" x2={15 + Math.cos(a * Math.PI / 180) * 14} y2={15 + Math.sin(a * Math.PI / 180) * 14} stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" opacity="0.8"/>
+        <div className="fx-slash" style={{ position:"absolute", left:s.sx-15, top:s.sy-15, width:40, height:40, zIndex:52, pointerEvents:"none" }}>
+          <svg viewBox="0 0 40 40" width="40" height="40">
+            {[0,45,90,135,180,225,270,315].map(a => (
+              <line key={a} x1="20" y1="20" x2={20+Math.cos(a*Math.PI/180)*18} y2={20+Math.sin(a*Math.PI/180)*18} stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" opacity="0.8"/>
             ))}
+            <circle cx="20" cy="20" r="5" fill="#fff" opacity="0.6"/>
           </svg>
         </div>
       )}
 
-      {/* ══ DAMAGE NUMBERS ══ */}
+      {/* Damage numbers */}
       {s.dmgs.map(d => (
         <div key={d.id} style={{
-          position:"absolute", left: d.x, top: d.y,
-          fontSize: d.txt.includes("EXP") || d.txt.includes("Gold") || d.txt.includes("回復") || d.txt.includes("連続") || d.txt.includes("痛い") ? 11 : d.txt === "CRITICAL!" ? 14 : 16,
-          fontWeight: 800, fontFamily: "Inter, sans-serif", color: d.color,
-          textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 10px ${d.color}50`,
-          pointerEvents:"none", zIndex: 55, opacity: Math.min(1, d.t / 12),
-          letterSpacing: 0.3, whiteSpace: "nowrap",
-        }}>
-          {d.txt}
-        </div>
+          position:"absolute", left:d.x, top:d.y,
+          fontSize: d.sz || 14, fontWeight:900, fontFamily:"Inter,sans-serif", color:d.color,
+          textShadow:`0 1px 3px rgba(0,0,0,0.9), 0 0 12px ${d.color}50`,
+          pointerEvents:"none", zIndex:55, opacity:Math.min(1, d.t/12),
+          whiteSpace:"nowrap", letterSpacing:0.5,
+        }}>{d.txt}</div>
       ))}
     </>
   );
