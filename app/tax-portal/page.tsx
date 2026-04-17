@@ -11,6 +11,8 @@ type Reservation = { id: number; customer_name: string; therapist_id: number; da
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Expense = { id: number; date: string; category: string; name: string; amount: number; store_id: number; is_recurring: boolean; notes: string; type: string };
 type Store = { id: number; name: string; company_name?: string; fiscal_month?: number };
+type Therapist = { id: number; name: string; real_name?: string; has_withholding?: boolean; has_invoice?: boolean; therapist_invoice_number?: string; transport_fee?: number; address?: string };
+type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
 
 const ACCOUNT_MAP: Record<string, string> = {
   rent: "地代家賃", utilities: "水道光熱費", supplies: "消耗品費",
@@ -19,7 +21,6 @@ const ACCOUNT_MAP: Record<string, string> = {
 };
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
-const fmtN = (n: number) => (n || 0).toLocaleString();
 
 type SheetKey = "summary" | "sales" | "expense" | "therapist" | "invoice" | "schedule" | "docs";
 
@@ -37,6 +38,8 @@ export default function TaxPortal() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [companyName, setCompanyName] = useState("合同会社テラスライフ");
   const [fiscalMonth, setFiscalMonth] = useState(3);
 
@@ -71,6 +74,16 @@ export default function TaxPortal() {
     if (r) setReservations(r);
     const { data: e } = await supabase.from("expenses").select("*").gte("date", startDate).lte("date", endDate).order("date");
     if (e) setExpenses(e);
+
+    // セラピスト一覧
+    const { data: th } = await supabase.from("therapists").select("id,name,real_name,has_withholding,has_invoice,therapist_invoice_number,transport_fee,address");
+    if (th) setTherapists(th);
+
+    // 期間内のセラピスト日次清算
+    const { data: sts } = await supabase.from("therapist_daily_settlements")
+      .select("therapist_id,date,total_back,invoice_deduction,withholding_tax,adjustment,final_payment,transport_fee,welfare_fee")
+      .gte("date", startDate).lte("date", endDate).eq("is_settled", true);
+    if (sts) setSettlements(sts);
   }, [viewMode, selectedMonth, selectedYear, smYear, smMonth]);
 
   useEffect(() => { if (canAccessTaxPortal) fetchData(); }, [fetchData, canAccessTaxPortal]);
@@ -102,6 +115,43 @@ export default function TaxPortal() {
       category: cat, account: ACCOUNT_MAP[cat] || "雑費", amount,
     })).sort((a, b) => b.amount - a.amount);
   })();
+
+  // セラピスト支払・源泉徴収集計（期間内）
+  const therapistPayroll = (() => {
+    const map: Record<number, { name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }> = {};
+    settlements.forEach(s => {
+      const th = therapists.find(t => t.id === s.therapist_id);
+      if (!map[s.therapist_id]) {
+        map[s.therapist_id] = {
+          name: th?.name || "不明",
+          realName: th?.real_name || th?.name || "不明",
+          hasWithholding: !!th?.has_withholding,
+          hasInvoice: !!th?.has_invoice,
+          invoiceNum: th?.therapist_invoice_number || "",
+          gross: 0, invoiceDed: 0, tax: 0, welfare: 0, transport: 0, final: 0, days: 0,
+        };
+      }
+      const backAmt = (s.total_back || 0) + (s.adjustment || 0);
+      const transportFee = s.transport_fee || th?.transport_fee || 0;
+      let dayWT = s.withholding_tax || 0;
+      // 源泉徴収税額の自動計算（204条1項6号: (報酬 - インボイス控除 - 5000) * 10.21%）
+      if (dayWT === 0 && th?.has_withholding) {
+        dayWT = Math.floor(Math.max(backAmt - (s.invoice_deduction || 0) - 5000, 0) * 0.1021);
+      }
+      map[s.therapist_id].gross += backAmt;
+      map[s.therapist_id].invoiceDed += (s.invoice_deduction || 0);
+      map[s.therapist_id].tax += dayWT;
+      map[s.therapist_id].welfare += (s.welfare_fee || 0);
+      map[s.therapist_id].transport += transportFee;
+      map[s.therapist_id].final += (s.final_payment || 0);
+      map[s.therapist_id].days += 1;
+    });
+    return Object.entries(map).map(([id, d]) => ({ id: Number(id), ...d })).sort((a, b) => b.gross - a.gross);
+  })();
+
+  const totalTherapistGross = therapistPayroll.reduce((s, p) => s + p.gross, 0);
+  const totalWithholding = therapistPayroll.reduce((s, p) => s + p.tax, 0);
+  const totalInvoiceDed = therapistPayroll.reduce((s, p) => s + p.invoiceDed, 0);
 
   // 期の算出（3月決算 = 4月始まり）
   const getCurrentFiscalYear = () => {
@@ -231,7 +281,8 @@ export default function TaxPortal() {
                 <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 このページについて</p>
                 <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
                   税理士ポータルは税務関連データの共有画面です。税理士の先生・社長・経営責任者のみアクセス可能です。<br/>
-                  Phase 1 現在、月次サマリーと売上明細が利用可能です。Phase 2では経費・セラピスト支払・源泉徴収・インボイス集計・年間スケジュール・書類庫・会計ソフト出力（弥生/freee/MFクラウド）を実装予定。
+                  現在、月次サマリー・売上・経費・セラピスト支払/源泉徴収・インボイス の5シートが利用可能です。<br/>
+                  Phase 2B/2Cで書類庫（アップ/DL）・年間スケジュール・会計ソフト5形式出力（弥生/freee/MFクラウド/汎用/e-Tax）を実装予定。
                 </p>
               </div>
             </div>
@@ -303,20 +354,251 @@ export default function TaxPortal() {
             </div>
           )}
 
-          {/* ── Sheet: その他のタブ（Phase 2以降） ── */}
-          {(sheet === "expense" || sheet === "therapist" || sheet === "invoice" || sheet === "schedule" || sheet === "docs") && (
+          {/* ── Sheet: 経費 ── */}
+          {sheet === "expense" && (
+            <div className="space-y-4 animate-[fadeIn_0.3s]">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>経費件数</p>
+                  <p className="text-[18px] font-medium">{expenses.filter(e => e.type !== "income").length}件</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>経費合計（外注費除く）</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#c45555" }}>{fmt(totalExpenseOnly)}</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>外注費（セラピストバック）</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#e091a8" }}>{fmt(totalBack)}</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>経費総額</p>
+                  <p className="text-[18px] font-medium">{fmt(totalExpenseAll)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                  <span className="text-[12px] font-medium">💸 経費明細（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
+                  <span className="text-[10px]" style={{ color: T.textFaint }}>{expenses.filter(e => e.type !== "income").length}件</span>
+                </div>
+                <div style={{ maxHeight: 500, overflowY: "auto" }}>
+                  <table className="w-full" style={{ fontSize: 12 }}>
+                    <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                      <tr style={{ color: T.textSub, fontSize: 11 }}>
+                        <th style={{ padding: "6px 10px", textAlign: "center", width: 40, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>日付</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>勘定科目</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>項目</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>店舗</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>備考</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: gridBorder }}>金額</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expenses.filter(e => e.type !== "income").length === 0 && (
+                        <tr><td colSpan={7} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>経費データがありません</td></tr>
+                      )}
+                      {expenses.filter(e => e.type !== "income").map((e, i) => (
+                        <tr key={e.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                          <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                          <td style={{ padding: "5px 10px", borderRight: gridBorder, fontVariantNumeric: "tabular-nums" }}>{e.date}</td>
+                          <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textSub, fontSize: 11 }}>{ACCOUNT_MAP[e.category] || "雑費"}</td>
+                          <td style={{ padding: "5px 10px", borderRight: gridBorder }}>{e.name || "—"}</td>
+                          <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 11 }}>{getStoreName(e.store_id) || "—"}</td>
+                          <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 10 }}>{e.notes || ""}</td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#c45555" }}>{fmt(e.amount)}</td>
+                        </tr>
+                      ))}
+                      {expenses.filter(e => e.type !== "income").length > 0 && (
+                        <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: "#c4555510", fontWeight: 500 }}>
+                          <td style={{ padding: "8px 10px", borderRight: gridBorder }}></td>
+                          <td colSpan={5} style={{ padding: "8px 10px", borderRight: gridBorder }}>経費合計（外注費除く）</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#c45555" }}>{fmt(totalExpenseOnly)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Sheet: セラピスト支払・源泉徴収 ── */}
+          {sheet === "therapist" && (
+            <div className="space-y-4 animate-[fadeIn_0.3s]">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>対象セラピスト</p>
+                  <p className="text-[18px] font-medium">{therapistPayroll.length}名</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>報酬総額（支払総額）</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#e091a8" }}>{fmt(totalTherapistGross)}</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>源泉徴収税額</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#f59e0b" }}>{fmt(totalWithholding)}</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>インボイス控除額</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#85a8c4" }}>{fmt(totalInvoiceDed)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                  <div>
+                    <span className="text-[12px] font-medium">👥 セラピスト支払・源泉徴収集計（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
+                    <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>根拠: 所得税法204条1項6号 / 月額5,000円控除 / 税率10.21%</p>
+                  </div>
+                  <span className="text-[10px]" style={{ color: T.textFaint }}>{therapistPayroll.length}名</span>
+                </div>
+                <div style={{ maxHeight: 500, overflowY: "auto" }}>
+                  <table className="w-full" style={{ fontSize: 12 }}>
+                    <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                      <tr style={{ color: T.textSub, fontSize: 11 }}>
+                        <th style={{ padding: "6px 10px", textAlign: "center", width: 40, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>氏名</th>
+                        <th style={{ padding: "6px 10px", textAlign: "center", borderRight: gridBorder, borderBottom: gridBorder }}>源泉</th>
+                        <th style={{ padding: "6px 10px", textAlign: "center", borderRight: gridBorder, borderBottom: gridBorder }}>インボイス</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>出勤日数</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>報酬総額</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>インボイス控除</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>源泉徴収</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: gridBorder }}>実支給額</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {therapistPayroll.length === 0 && (
+                        <tr><td colSpan={9} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>対象期間の清算データがありません</td></tr>
+                      )}
+                      {therapistPayroll.map((p, i) => (
+                        <tr key={p.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                          <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                          <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
+                            <div>{p.realName}</div>
+                            {p.name !== p.realName && <div className="text-[9px]" style={{ color: T.textFaint }}>(源氏名: {p.name})</div>}
+                          </td>
+                          <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
+                            {p.hasWithholding ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>対象</span> : <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: T.cardAlt, color: T.textFaint }}>対象外</span>}
+                          </td>
+                          <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
+                            {p.hasInvoice ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }} title={p.invoiceNum}>登録済</span> : <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>未登録</span>}
+                          </td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: T.textSub }}>{p.days}日</td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder }}>{fmt(p.gross)}</td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#85a8c4" }}>{fmt(p.invoiceDed)}</td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#f59e0b" }}>{fmt(p.tax)}</td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmt(p.final)}</td>
+                        </tr>
+                      ))}
+                      {therapistPayroll.length > 0 && (
+                        <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: "#e091a810", fontWeight: 500 }}>
+                          <td style={{ padding: "8px 10px", borderRight: gridBorder }}></td>
+                          <td colSpan={4} style={{ padding: "8px 10px", borderRight: gridBorder }}>合計（{therapistPayroll.length}名）</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#e091a8" }}>{fmt(totalTherapistGross)}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#85a8c4" }}>{fmt(totalInvoiceDed)}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#f59e0b" }}>{fmt(totalWithholding)}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(therapistPayroll.reduce((s, p) => s + p.final, 0))}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Sheet: インボイス ── */}
+          {sheet === "invoice" && (
+            <div className="space-y-4 animate-[fadeIn_0.3s]">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>登録済セラピスト</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#22c55e" }}>{therapistPayroll.filter(p => p.hasInvoice).length}名</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>未登録セラピスト</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#c45555" }}>{therapistPayroll.filter(p => !p.hasInvoice).length}名</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>登録済への支払</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#22c55e" }}>{fmt(therapistPayroll.filter(p => p.hasInvoice).reduce((s, p) => s + p.gross, 0))}</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>未登録への支払（2割特例対象）</p>
+                  <p className="text-[18px] font-medium" style={{ color: "#f59e0b" }}>{fmt(therapistPayroll.filter(p => !p.hasInvoice).reduce((s, p) => s + p.gross, 0))}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                  <div>
+                    <span className="text-[12px] font-medium">🧾 インボイス登録状況・2割特例控除（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
+                    <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>インボイス未登録のセラピストへの支払は、買手側で仕入税額控除が制限されます（経過措置: 2026年9月まで80%控除可）</p>
+                  </div>
+                  <span className="text-[10px]" style={{ color: T.textFaint }}>{therapistPayroll.length}名</span>
+                </div>
+                <div style={{ maxHeight: 500, overflowY: "auto" }}>
+                  <table className="w-full" style={{ fontSize: 12 }}>
+                    <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
+                      <tr style={{ color: T.textSub, fontSize: 11 }}>
+                        <th style={{ padding: "6px 10px", textAlign: "center", width: 40, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>氏名</th>
+                        <th style={{ padding: "6px 10px", textAlign: "center", borderRight: gridBorder, borderBottom: gridBorder }}>ステータス</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>登録番号</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>支払総額</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>内消費税(10/110)</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: gridBorder }}>仕入控除可能額</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {therapistPayroll.length === 0 && (
+                        <tr><td colSpan={7} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>対象期間のデータがありません</td></tr>
+                      )}
+                      {therapistPayroll.map((p, i) => {
+                        const includedTax = Math.floor(p.gross * 10 / 110);
+                        const deductible = p.hasInvoice ? includedTax : Math.floor(includedTax * 0.8); // 経過措置80%
+                        return (
+                          <tr key={p.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                            <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder }}>{p.realName}</td>
+                            <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
+                              {p.hasInvoice ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✓ 適格</span> : <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>未登録</span>}
+                            </td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, fontFamily: "monospace", fontSize: 10, color: T.textMuted }}>{p.invoiceNum || "—"}</td>
+                            <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder }}>{fmt(p.gross)}</td>
+                            <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: T.textSub }}>{fmt(includedTax)}</td>
+                            <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: p.hasInvoice ? "#22c55e" : "#f59e0b" }}>{fmt(deductible)}{!p.hasInvoice && <span className="text-[9px] ml-1" style={{ color: T.textFaint }}>(80%)</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#f59e0b10", border: "1px solid #f59e0b33" }}>
+                <p className="text-[11px] font-medium mb-1" style={{ color: "#f59e0b" }}>💡 インボイス経過措置について</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+                  2026年10月1日〜2029年9月30日は、未登録事業者からの仕入について<strong>50%控除</strong>の経過措置期間に入ります。<br/>
+                  現在（2026年9月30日まで）は<strong>80%控除</strong>が適用可能です。未登録セラピストには早めの登録を案内することで、会社側の仕入控除を維持できます。
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Sheet: その他（Phase 2B/2C） ── */}
+          {(sheet === "schedule" || sheet === "docs") && (
             <div className="rounded-xl p-10 text-center animate-[fadeIn_0.3s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
               <div className="text-[48px] mb-3">🚧</div>
-              <p className="text-[14px] font-medium mb-2">Phase 2で実装予定</p>
+              <p className="text-[14px] font-medium mb-2">Phase 2{sheet === "docs" ? "B" : "C"}で実装予定</p>
               <p className="text-[11px]" style={{ color: T.textMuted }}>
-                {sheet === "expense" && "経費明細・勘定科目別の詳細表示"}
-                {sheet === "therapist" && "セラピスト支払・源泉徴収集計（204条1項6号・5000円控除対応）"}
-                {sheet === "invoice" && "インボイス登録状況・2割特例控除集計"}
                 {sheet === "schedule" && "年間税務スケジュール（3月決算ベース）"}
-                {sheet === "docs" && "書類庫（決算書・申告書・契約書のアップ・DL）"}
+                {sheet === "docs" && "書類庫（決算書・申告書・契約書のアップ・DL）+ 会計ソフト5形式出力"}
               </p>
               <p className="text-[10px] mt-3" style={{ color: T.textFaint }}>
-                現状の /tax-dashboard（バックオフィス）に類似機能があります。Phase 2でこのポータルに統合予定です。
+                現状の /tax-dashboard（バックオフィス）に類似機能があります。次のPhaseで統合予定です。
               </p>
             </div>
           )}
@@ -329,9 +611,9 @@ export default function TaxPortal() {
         {[
           { k: "summary" as SheetKey, l: "月次サマリー", icon: "📊", ready: true },
           { k: "sales" as SheetKey, l: "売上", icon: "💰", ready: true },
-          { k: "expense" as SheetKey, l: "経費", icon: "💸", ready: false },
-          { k: "therapist" as SheetKey, l: "セラピスト支払・源泉", icon: "👥", ready: false },
-          { k: "invoice" as SheetKey, l: "インボイス", icon: "🧾", ready: false },
+          { k: "expense" as SheetKey, l: "経費", icon: "💸", ready: true },
+          { k: "therapist" as SheetKey, l: "セラピスト支払・源泉", icon: "👥", ready: true },
+          { k: "invoice" as SheetKey, l: "インボイス", icon: "🧾", ready: true },
           { k: "schedule" as SheetKey, l: "年間スケジュール", icon: "📅", ready: false },
           { k: "docs" as SheetKey, l: "書類庫", icon: "📁", ready: false },
         ].map(t => {
