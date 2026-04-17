@@ -322,6 +322,13 @@ export default function Dashboard() {
     }
     const safeCollectedTodayTotal = safeCollectedTodayList.reduce((s: number, x: any) => s + x.amount, 0);
 
+    // 豊橋予備金使用額（本日、精算モーダルから立替された分）
+    const reserveUsedList = settledList.filter((s: any) => (s.reserve_used_amount || 0) > 0).map((s: any) => ({
+      therapist: getThName(s.therapist_id),
+      amount: s.reserve_used_amount || 0
+    }));
+    const reserveUsedTotal = reserveUsedList.reduce((s: number, x: any) => s + x.amount, 0);
+
     // セラピスト別売上
     const therapistSales = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
       const tRes = completed.filter(r => r.therapist_id === tid);
@@ -338,6 +345,7 @@ export default function Dashboard() {
       netProfit, therapistData, totalOut,
       staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
       therapistSales, safeUncollectedList, safeTotalUncollected, safeCollectedTodayList, safeCollectedTodayTotal,
+      reserveUsedList, reserveUsedTotal,
     });
     setClosingLoading(false);
   }, []);
@@ -993,6 +1001,21 @@ export default function Dashboard() {
                       <div className="pt-3 mt-2" style={{ borderTop: "2px solid #f59e0b44" }}>
                         <div className="flex justify-between font-bold text-[15px]"><span style={{ color: "#f59e0b" }}>💴 事務所の残金</span><span style={{ color: (closingData.cashOnHand + closingData.safeCollectedTodayTotal) >= 0 ? "#22c55e" : "#c45555" }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal)}</span></div>
                         <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 未回収の売上はルームにあるため含まれません。回収後に事務所の残金が増えます。</p>
+                        {closingData.reserveUsedTotal > 0 && (
+                          <div className="mt-2 pt-2" style={{ borderTop: `1px dashed ${T.border}` }}>
+                            <div className="flex justify-between text-[11px]" style={{ color: "#d4687e" }}>
+                              <span>🏛 豊橋予備金からの立替</span>
+                              <span style={{ fontWeight: 500 }}>-{fmt(closingData.reserveUsedTotal)}</span>
+                            </div>
+                            {closingData.reserveUsedList.map((r: any, i: number) => (
+                              <div key={i} className="flex justify-between py-0.5 text-[10px] pl-3" style={{ color: T.textFaint }}>
+                                <span>{r.therapist}</span>
+                                <span>-{fmt(r.amount)}</span>
+                              </div>
+                            ))}
+                            <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 本日豊橋予備金から立替した合計。後日スタッフ金庫から予備金へ補充してください。</p>
+                          </div>
+                        )}
                         {closingData.safeTotalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#a855f7" }}>🔐 金庫回収後の残金</span><span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected)}</span></div>}
                         {closingData.totalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#22c55e" }}>全額回収後の残金</span><span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected + closingData.totalUncollected)}</span></div>}
                       </div>
