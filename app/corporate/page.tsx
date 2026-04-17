@@ -567,7 +567,8 @@ function RPGCharacters() {
     sJump: 0, sAtkOff: 0, sSquish: false,
     heroFlash: false, heroDead: false,
     heroKB: 0, slimeKB: 0, heroPain: false, slimePain: false,
-    cape: 0, idleCount: 0,
+    cape: 0, idleCount: 0, idleAnim: 0 as number, // 0=stand 1=lookR 2=lookL 3=sit
+    sectionReact: "" as string, reactTimer: 0,
   });
   const ref = useRef(s); ref.current = s;
   const idRef = useRef(0);
@@ -578,14 +579,24 @@ function RPGCharacters() {
       idRef.current++;
       ref.current.dmgs = [...ref.current.dmgs, { id: idRef.current, x, y, txt, color, t: 55, sz }];
     };
-    const pick = () => { const r = ref.current; r.tx = 60 + Math.random() * (window.innerWidth - 160); r.ty = 120 + Math.random() * Math.min(document.body.scrollHeight - 160, 4500); r.idleCount = 0; };
+    const pick = () => { const r = ref.current; r.tx = 60 + Math.random() * (window.innerWidth - 160); r.ty = 120 + Math.random() * Math.min(document.body.scrollHeight - 160, 4500); r.idleCount = 0; r.idleAnim = 0; };
     pick();
+
+    // ── クリックで勇者が歩いてくる ──
+    const onClick = (e: MouseEvent) => {
+      const r = ref.current;
+      if (r.phase !== "wander" && r.phase !== "cooldown") return;
+      r.tx = e.pageX; r.ty = e.pageY;
+      r.idleCount = 0; r.idleAnim = 0;
+    };
+    document.addEventListener("click", onClick);
 
     const loop = () => {
       const r = { ...ref.current };
       r.tick++;
       r.cape = Math.sin(r.tick * 0.08) * 6;
       r.dmgs = r.dmgs.map(d => ({ ...d, y: d.y - 0.6, t: d.t - 1 })).filter(d => d.t > 0);
+      if (r.reactTimer > 0) r.reactTimer--;
 
       const dist2 = (ax: number, ay: number, bx: number, by: number) => Math.sqrt((ax-bx)**2 + (ay-by)**2);
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -596,21 +607,52 @@ function RPGCharacters() {
       const atkRate = window.innerWidth > 900 ? 2 : 1;
       const btl = r.tick % atkRate === 0; // バトル進行フレームか
       const faceDir = (dx: number, dy: number) => {
-        const ang = Math.atan2(dy, dx) * 180 / Math.PI; // -180 to 180
-        if (ang > -45 && ang <= 45) return { hdir: 1, hface: "side" };     // right
-        if (ang > 45 && ang <= 135) return { hdir: 1, hface: "front" };    // down
-        if (ang > -135 && ang <= -45) return { hdir: 1, hface: "back" };   // up
-        return { hdir: -1, hface: "side" };                                 // left
+        const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+        if (ang > -45 && ang <= 45) return { hdir: 1, hface: "side" };
+        if (ang > 45 && ang <= 135) return { hdir: 1, hface: "front" };
+        if (ang > -135 && ang <= -45) return { hdir: 1, hface: "back" };
+        return { hdir: -1, hface: "side" };
       };
+
+      // ── セクション検知 ──
+      if (r.phase === "wander" && r.reactTimer <= 0) {
+        const secs = [
+          { id: "service", emoji: "💡", text: "良いサービス..." },
+          { id: "products", emoji: "📦", text: "すごい製品だ！" },
+          { id: "stats", emoji: "📊", text: "実績すごいな" },
+          { id: "tech", emoji: "⚡", text: "最新技術！" },
+          { id: "company", emoji: "🏢", text: "しっかりした会社" },
+          { id: "contact", emoji: "✉️", text: "お問い合わせ..." },
+        ];
+        for (const sec of secs) {
+          const el = document.getElementById(sec.id);
+          if (!el) continue;
+          const top = el.offsetTop;
+          if (Math.abs(r.hy - top) < 40 && Math.abs(r.hx - el.offsetWidth / 2) < 300) {
+            r.sectionReact = `${sec.emoji} ${sec.text}`;
+            r.reactTimer = 120;
+            break;
+          }
+        }
+      }
 
       if (r.phase === "wander") {
         if (r.heroDead) { r.heroDead = false; r.hhp = r.hMaxHp; }
         const dx = r.tx - r.hx, dy = r.ty - r.hy, d = dist2(r.hx,r.hy,r.tx,r.ty);
-        if (d < 10) { r.walk = false; r.idleCount++; if (r.idleCount > 150) pick(); }
-        else {
+        if (d < 10) {
+          r.walk = false;
+          r.idleCount++;
+          // ── アイドルモーション ──
+          if (r.idleCount === 30) r.idleAnim = 1; // look right
+          else if (r.idleCount === 55) r.idleAnim = 2; // look left
+          else if (r.idleCount === 80) r.idleAnim = 1; // look right again
+          else if (r.idleCount === 100) r.idleAnim = 3; // sit down
+          else if (r.idleCount === 180) r.idleAnim = 0; // stand up
+          else if (r.idleCount > 200) { pick(); }
+        } else {
           r.hx += (dx/d)*spd; r.hy += (dy/d)*spd;
           const f = faceDir(dx, dy); r.hdir = f.hdir; r.hface = f.hface;
-          r.walk = true; r.idleCount = 0;
+          r.walk = true; r.idleCount = 0; r.idleAnim = 0;
         }
         r.nextSpawn--;
         if (r.nextSpawn <= 0) {
@@ -742,13 +784,15 @@ function RPGCharacters() {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); document.removeEventListener("click", onClick); };
   }, []);
 
-  const bobY = s.walk ? Math.sin(s.tick * 0.15) * 2.5 : 0;
+  const isSitting = s.idleAnim === 3 && !s.walk && s.phase === "wander";
+  const bobY = s.walk ? Math.sin(s.tick * 0.15) * 2.5 : (isSitting ? 12 : 0);
   const walkCycle = s.walk ? Math.sin(s.tick * 0.15) : 0; // -1 to 1
   const stepFwd = walkCycle * 5; // for side view legs
   const stepBack = -walkCycle * 5;
+  const eyeShiftX = s.idleAnim === 1 ? 2.5 : s.idleAnim === 2 ? -2.5 : 0;
   const slimeBob = s.salive && !s.sSquish ? Math.sin(s.tick * 0.1) * 3 : 0;
   const dieScale = s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 45) : 1;
   const dieRot = s.phase === "slime_die" ? s.ptick * 10 : 0;
@@ -799,13 +843,21 @@ function RPGCharacters() {
             <path d="M22 14 Q20 8 24 10 L22 6Z" fill="#8B5E3C"/>
             <g transform={`rotate(${s.swordAng} 42 34)`}><rect x="43" y="12" width="3.5" height="22" rx="1.5" fill="#B0B8C8"/><rect x="43" y="12" width="3.5" height="7" rx="1.5" fill="#E0E8FF"/><rect x="41" y="32" width="7.5" height="4.5" rx="2" fill="#FFD700"/><rect x="43.5" y="36.5" width="2.5" height="7" rx="1" fill="#8B6914"/><circle cx="44.8" cy="14" r="1" fill="#fff" opacity="0.6"/></g>
           </>)}
-          {/* ── FRONT VIEW (walking down) ── */}
+          {/* ── FRONT VIEW (walking down / idle) ── */}
           {s.hface === "front" && s.phase === "wander" && (<>
             <path d="M22 30 Q20 50 18 62 L30 60 L42 62 Q40 50 38 30Z" fill="#dc2626" opacity="0.6"/>
-            <rect x="22" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepFwd*0.6}, 0)`}/>
-            <rect x="31" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepBack*0.6}, 0)`}/>
-            <ellipse cx={25.5+stepFwd*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
-            <ellipse cx={34.5+stepBack*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
+            {/* Legs — sitting or walking */}
+            {isSitting ? (<>
+              <rect x="18" y="52" width="14" height="6" rx="3" fill="#1e3a5f"/>
+              <rect x="28" y="52" width="14" height="6" rx="3" fill="#1e3a5f"/>
+              <ellipse cx="17" cy="56" rx="4" ry="3" fill="#5C3317"/>
+              <ellipse cx="43" cy="56" rx="4" ry="3" fill="#5C3317"/>
+            </>) : (<>
+              <rect x="22" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepFwd*0.6}, 0)`}/>
+              <rect x="31" y="54" width="7" height="14" rx="3.5" fill="#1e3a5f" transform={`translate(${stepBack*0.6}, 0)`}/>
+              <ellipse cx={25.5+stepFwd*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
+              <ellipse cx={34.5+stepBack*0.6} cy="68" rx="5" ry="3" fill="#5C3317"/>
+            </>)}
             <rect x="20" y="30" width="20" height="26" rx="4" fill="#2563eb"/>
             <rect x="22" y="32" width="16" height="10" rx="2" fill="#3b82f6"/>
             <rect x="20" y="48" width="20" height="4" rx="1" fill="#8B6914"/>
@@ -813,16 +865,25 @@ function RPGCharacters() {
             <ellipse cx="20" cy="33" rx="5" ry="4" fill="#3b82f6"/>
             <ellipse cx="40" cy="33" rx="5" ry="4" fill="#3b82f6"/>
             <circle cx="30" cy="18" r="12" fill="#FDBCB4"/>
-            <ellipse cx="26" cy="17" rx="2" ry="2.5" fill="#0f172a"/><ellipse cx="34" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
-            <circle cx="27" cy="16" r="0.8" fill="white"/><circle cx="35" cy="16" r="0.8" fill="white"/>
-            <path d="M27 22 Q30 25 33 22" stroke="#c4786a" strokeWidth="1" fill="none"/>
+            {/* Eyes — shift with idle look direction */}
+            <ellipse cx={26+eyeShiftX} cy="17" rx="2" ry={isSitting ? 1.5 : 2.5} fill="#0f172a"/>
+            <ellipse cx={34+eyeShiftX} cy="17" rx="2" ry={isSitting ? 1.5 : 2.5} fill="#0f172a"/>
+            <circle cx={27+eyeShiftX} cy="16" r="0.8" fill="white"/>
+            <circle cx={35+eyeShiftX} cy="16" r="0.8" fill="white"/>
+            <path d={isSitting ? "M27 22 Q30 23 33 22" : "M27 22 Q30 25 33 22"} stroke="#c4786a" strokeWidth="1" fill="none"/>
             <ellipse cx="23" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
             <ellipse cx="37" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
             <path d="M18 12 L18 6 L22 9 L26 4 L30 8 L34 4 L38 9 L42 6 L42 12Z" fill="#FFD700"/>
             <path d="M18 12 L42 12 L42 14 Q30 16 18 14Z" fill="#DAA520"/>
             <circle cx="26" cy="8" r="1.5" fill="#dc2626"/><circle cx="34" cy="8" r="1.5" fill="#3b82f6"/><circle cx="30" cy="6" r="1.8" fill="#22c55e"/>
             <path d="M18 14 Q18 8 22 10 L18 6Z" fill="#8B5E3C"/><path d="M42 14 Q42 8 38 10 L42 6Z" fill="#8B5E3C"/>
-            <rect x="44" y="30" width="3" height="18" rx="1" fill="#B0B8C8"/><rect x="44" y="30" width="3" height="5" rx="1" fill="#E0E8FF"/><rect x="42.5" y="46" width="6" height="4" rx="1.5" fill="#FFD700"/>
+            {/* Sword — laid down when sitting */}
+            {isSitting ? (<>
+              <rect x="10" y="60" width="18" height="3" rx="1" fill="#B0B8C8" transform="rotate(-15 10 60)"/>
+              <rect x="26" y="58" width="5" height="4" rx="1.5" fill="#FFD700"/>
+            </>) : (<>
+              <rect x="44" y="30" width="3" height="18" rx="1" fill="#B0B8C8"/><rect x="44" y="30" width="3" height="5" rx="1" fill="#E0E8FF"/><rect x="42.5" y="46" width="6" height="4" rx="1.5" fill="#FFD700"/>
+            </>)}
           </>)}
           {/* ── BACK VIEW (walking up) ── */}
           {s.hface === "back" && s.phase === "wander" && (<>
@@ -844,6 +905,42 @@ function RPGCharacters() {
           </>)}
         </svg>
       </div>
+
+      {/* ══ IDLE THOUGHT BUBBLES ══ */}
+      {!s.walk && s.phase === "wander" && s.idleAnim > 0 && !s.heroDead && (
+        <div style={{
+          position:"absolute", left: s.hx - 5, top: s.hy - 65 + bobY,
+          fontSize: 14, fontWeight: 700, color: "#94a3b8", pointerEvents:"none", zIndex: 52,
+          textShadow: "0 1px 3px rgba(0,0,0,0.8)",
+          opacity: 0.9, whiteSpace: "nowrap",
+        }}>
+          {s.idleAnim === 1 || s.idleAnim === 2 ? "❓" : ""}
+          {isSitting && (
+            <span style={{ fontSize: 13, letterSpacing: 2 }}>
+              {s.tick % 60 < 20 ? "z" : s.tick % 60 < 40 ? "zZ" : "zZz"}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ══ SECTION REACTION BUBBLE ══ */}
+      {s.sectionReact && s.reactTimer > 0 && (
+        <div style={{
+          position:"absolute", left: s.hx + 25, top: s.hy - 60,
+          padding: "6px 12px", borderRadius: 12, fontSize: 12, fontWeight: 600,
+          background: "rgba(15,23,42,0.9)", border: "1px solid rgba(96,165,250,0.2)",
+          color: "#e2e8f0", pointerEvents:"none", zIndex: 52, whiteSpace: "nowrap",
+          opacity: s.reactTimer < 20 ? s.reactTimer / 20 : 1,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}>
+          {s.sectionReact}
+          <div style={{
+            position:"absolute", left: -6, top: "50%", marginTop: -4,
+            width: 0, height: 0, borderRight: "6px solid rgba(15,23,42,0.9)",
+            borderTop: "4px solid transparent", borderBottom: "4px solid transparent",
+          }}/>
+        </div>
+      )}
 
       {/* Hero HP */}
       {!s.heroDead && <div style={{ position:"absolute", left:s.hx-22+heroAtkX, top:s.hy-52, width:44, height:6, background:"rgba(0,0,0,0.5)", borderRadius:3, zIndex:50, pointerEvents:"none", border:"1px solid rgba(255,255,255,0.15)" }}>
