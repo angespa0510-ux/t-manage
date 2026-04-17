@@ -50,6 +50,7 @@ export default function CorporatePage() {
   const [sent, setSent] = useState(false);
   const [vis, setVis] = useState<Set<string>>(new Set());
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [hoveredTech, setHoveredTech] = useState<string | null>(null);
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 60);
@@ -363,21 +364,72 @@ export default function CorporatePage() {
             <span style={{ fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>TECHNOLOGY</span>
             <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>技術スタック</h2>
             <div style={{ width:60,height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
+            <p style={{ fontSize:12,color:"#64748b",marginTop:14 }}>各技術にカーソルを合わせると詳細が表示されます</p>
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:16 }}>
-            {[
-              { cat:"Frontend",items:["Next.js (React)","TypeScript","Tailwind CSS"],color:"#3b82f6",icon:"◈" },
-              { cat:"Backend / DB",items:["Supabase (PostgreSQL)","Edge Functions","Realtime"],color:"#06b6d4",icon:"◇" },
-              { cat:"AI / ML",items:["Anthropic Claude API","自然言語処理 (NLP)","RAG 構築"],color:"#7c3aed",icon:"◆" },
-              { cat:"Infrastructure",items:["Vercel","GitHub CI/CD","CDN 配信"],color:"#059669",icon:"▣" },
-            ].map((t,i) => (
+            {([
+              { cat:"Frontend",color:"#3b82f6",icon:"◈",items:[
+                { name:"Next.js (React)", tip:"Reactベースのフルスタックフレームワーク。サーバーサイドレンダリング（SSR）とスタティック生成（SSG）を自動最適化し、SEOと表示速度を両立。App Routerによるファイルベースのルーティングで、開発効率も抜群です。" },
+                { name:"TypeScript", tip:"JavaScriptに「型」を加えた言語。コードを書いている段階でエラーを検出できるため、バグの発生率を大幅に低減。チーム開発でもコードの意図が明確になり、保守性が飛躍的に向上します。" },
+                { name:"Tailwind CSS", tip:"ユーティリティファーストのCSSフレームワーク。クラス名を組み合わせるだけで美しいUIを高速構築。デザインの一貫性を保ちながら、カスタムデザインの自由度も確保。ファイルサイズも最小限に最適化されます。" },
+              ]},
+              { cat:"Backend / DB",color:"#06b6d4",icon:"◇",items:[
+                { name:"Supabase (PostgreSQL)", tip:"Firebase代替のオープンソースBaaS。世界最高峰のリレーショナルDB「PostgreSQL」をベースに、認証・ストレージ・リアルタイム同期をワンパッケージで提供。SQL の柔軟性とNoSQLの手軽さを両立します。" },
+                { name:"Edge Functions", tip:"ユーザーに最も近いサーバーでコードを実行する技術。APIのレスポンスが従来の1/3〜1/5に高速化。サーバーレスなのでインフラ管理不要、アクセス増にも自動スケール対応です。" },
+                { name:"Realtime", tip:"WebSocketを活用したリアルタイムデータ同期。DBの変更が全クライアントに瞬時に反映されるため、予約の変更やチャットメッセージが即座に画面に表示。複数人同時操作でもデータの整合性を保証します。" },
+              ]},
+              { cat:"AI / ML",color:"#7c3aed",icon:"◆",items:[
+                { name:"Anthropic Claude API", tip:"世界最高水準のAIモデル「Claude」のAPI。日本語理解力が非常に高く、長文の文脈把握やニュアンスの理解に優れています。安全性に特化した設計で、ビジネス用途に最適。当社の全AIプロダクトのエンジンです。" },
+                { name:"自然言語処理 (NLP)", tip:"人間が普段使う言葉（自然言語）をAIに理解させる技術。「売上の推移を教えて」のような曖昧な質問でも、意図を正確に解釈してデータを取得・回答。専門用語や業界固有の表現にも対応できるよう学習させています。" },
+                { name:"RAG 構築", tip:"Retrieval-Augmented Generation（検索拡張生成）。AIが回答する際に、まず社内データベースから関連情報を検索し、その情報を根拠にして回答を生成する技術。「AIの幻覚（ハルシネーション）」を防ぎ、正確で信頼できる回答を実現します。" },
+              ]},
+              { cat:"Infrastructure",color:"#059669",icon:"▣",items:[
+                { name:"Vercel", tip:"Next.jsの開発元が運営するホスティングプラットフォーム。GitHubにコードをプッシュするだけで自動デプロイ。世界中のCDNで配信されるため、日本からも海外からも高速アクセス。SSL証明書も自動設定でセキュリティ万全。" },
+                { name:"GitHub CI/CD", tip:"コードの変更を自動でテスト・デプロイする仕組み。開発者がコードを書いてプッシュすると、自動テスト→ビルド→本番反映まで完全自動化。人為的なデプロイミスをゼロにし、リリースサイクルを高速化します。" },
+                { name:"CDN 配信", tip:"Content Delivery Network。世界中に分散配置されたサーバーから、ユーザーに最も近い拠点からコンテンツを配信。ページの読み込み速度を劇的に向上させ、アクセス集中時にもサーバーダウンしない高い可用性を実現します。" },
+              ]},
+            ] as const).map((t,i) => (
               <div key={i} className="ch" style={{ background:"rgba(255,255,255,0.02)",borderRadius:14,padding:"28px 22px",border:"1px solid rgba(255,255,255,0.06)",transition:"all .35s" }}>
                 <div style={{ fontSize:10,fontWeight:800,color:t.color,letterSpacing:2,textTransform:"uppercase",marginBottom:16,paddingBottom:12,borderBottom:`2px solid ${t.color}20`,display:"flex",alignItems:"center",gap:8 }}>
                   <span style={{ fontSize:14,filter:`drop-shadow(0 0 4px ${t.color})` }}>{t.icon}</span>{t.cat}
                 </div>
                 {t.items.map((item) => (
-                  <div key={item} style={{ fontSize:13,fontWeight:500,color:"#cbd5e1",padding:"9px 0",borderBottom:"1px solid rgba(255,255,255,0.04)",display:"flex",alignItems:"center",gap:10 }}>
-                    <div style={{ width:5,height:5,borderRadius:"50%",background:t.color,boxShadow:`0 0 6px ${t.color}60` }}/>{item}
+                  <div key={item.name} style={{ position:"relative" }}
+                    onMouseEnter={() => setHoveredTech(item.name)}
+                    onMouseLeave={() => setHoveredTech(null)}
+                  >
+                    <div style={{
+                      fontSize:13,fontWeight:500,color:hoveredTech === item.name ? "#f8fafc" : "#cbd5e1",
+                      padding:"10px 8px",borderBottom:"1px solid rgba(255,255,255,0.04)",
+                      display:"flex",alignItems:"center",gap:10,cursor:"pointer",
+                      borderRadius:8,transition:"all .25s",
+                      background:hoveredTech === item.name ? `${t.color}12` : "transparent",
+                    }}>
+                      <div style={{ width:6,height:6,borderRadius:"50%",background:t.color,boxShadow:hoveredTech === item.name ? `0 0 12px ${t.color}` : `0 0 6px ${t.color}60`,transition:"all .25s",flexShrink:0 }}/>
+                      {item.name}
+                      <span style={{ marginLeft:"auto",fontSize:10,color:hoveredTech === item.name ? t.color : "#475569",transition:"color .25s" }}>ⓘ</span>
+                    </div>
+                    {/* Tooltip */}
+                    {hoveredTech === item.name && (
+                      <div style={{
+                        position:"absolute",left:0,right:0,top:"100%",zIndex:30,
+                        marginTop:4,padding:"16px 18px",borderRadius:14,
+                        background:"rgba(15,23,42,0.97)",backdropFilter:"blur(16px)",
+                        border:`1px solid ${t.color}30`,
+                        boxShadow:`0 12px 40px rgba(0,0,0,0.5), 0 0 20px ${t.color}15`,
+                        animation:"fadeUp .25s ease both",
+                      }}>
+                        <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
+                          <div style={{ width:8,height:8,borderRadius:"50%",background:t.color,boxShadow:`0 0 10px ${t.color}` }}/>
+                          <span style={{ fontSize:12,fontWeight:700,color:t.color }}>{item.name}</span>
+                        </div>
+                        <p style={{ fontSize:12,lineHeight:1.85,color:"#cbd5e1" }}>{item.tip}</p>
+                        <div style={{ marginTop:10,display:"flex",alignItems:"center",gap:6 }}>
+                          <div style={{ flex:1,height:2,borderRadius:1,background:`linear-gradient(90deg,${t.color}40,transparent)` }}/>
+                          <span style={{ fontSize:9,color:"#475569",fontWeight:600,letterSpacing:1 }}>{t.cat}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
