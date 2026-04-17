@@ -527,8 +527,8 @@ export default function CorporatePage() {
         </div>
       </section>
 
-      {/* ══════════ PIXEL HERO ══════════ */}
-      <PixelHero />
+      {/* ══════════ RPG CHARACTERS ══════════ */}
+      <RPGCharacters />
 
       {/* ══════════ FOOTER ══════════ */}
       <footer style={{ padding:"40px 24px 28px",background:"#020617",borderTop:"1px solid rgba(96,165,250,0.08)" }}>
@@ -544,265 +544,313 @@ export default function CorporatePage() {
   );
 }
 
-/* ══════════ Pixel Art Hero Component ══════════ */
-function PixelHero() {
-  const heroRef = useRef<HTMLCanvasElement>(null);
-  const slimeRef = useRef<HTMLCanvasElement>(null);
-  const state = useRef({
-    hx: 200, hy: 400, hdir: 0, hframe: 0, tick: 0,
-    tx: 500, ty: 600, idle: 0,
-    // Slime
-    sx: -100, sy: -100, salive: false, shp: 3, sbounce: 0,
-    // Battle
-    phase: "wander" as "wander"|"approach"|"hero_atk"|"slime_atk"|"slime_die"|"cooldown",
-    ptick: 0, nextSpawn: 300 + Math.floor(Math.random() * 400),
-    // Effects
-    dmgList: [] as {x:number,y:number,txt:string,color:string,t:number}[],
-    slashAng: 0, heroHit: false,
+/* ══════════ RPG Battle Characters ══════════ */
+function RPGCharacters() {
+  const [s, setS] = useState({
+    hx: 200, hy: 400, tx: 600, ty: 800, hdir: 1, walk: false,
+    sx: -200, sy: -200, salive: false, shp: 5, sMaxHp: 5,
+    hhp: 20, hMaxHp: 20,
+    phase: "wander" as string, ptick: 0, tick: 0, nextSpawn: 200,
+    dmgs: [] as { id: number; x: number; y: number; txt: string; color: string; t: number }[],
+    slashVis: false, sparkVis: false, heroFlash: false, sSquish: false,
+    cape: 0, idleCount: 0,
   });
-  const [render, setRender] = useState(0);
+  const ref = useRef(s);
+  ref.current = s;
+  const idRef = useRef(0);
 
   useEffect(() => {
-    /* ── COLOR PALETTES ── */
-    const HP = ["transparent","#0f172a","#2563eb","#60a5fa","#FDBCB4","#E8A090",
-      "#FFD700","#DAA520","#dc2626","#991b1b","#B0B8C8","#E0E8FF",
-      "#3d1f00","#8B5E3C","#1a3050","#f8fafc"];
-    const SP = ["transparent","#0f172a","#06b6d4","#22d3ee","#67e8f9","#f8fafc","#dc2626"];
-    // 0=trans 1=outline 2=cyan 3=lightcyan 4=highlight 5=white(eyes) 6=red(mouth)
-
-    /* ── HERO SPRITES 20x20 ── */
-    const HS: number[][][] = [
-      [[0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],[0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],[0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],[0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],[0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],[0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],[0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],[0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],[0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],[0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],[0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],[0,0,0,0,0,14,14,0,0,14,14,0,0,0,11,0,0,0,0,0],[0,0,0,0,0,14,0,0,0,0,14,0,0,0,10,0,0,0,0,0],[0,0,0,0,12,12,0,0,0,0,12,12,0,0,0,0,0,0,0,0],[0,0,0,0,12,12,1,0,0,1,12,12,0,0,0,0,0,0,0,0],[0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,0]],
-      [[0,0,0,0,0,0,6,6,6,6,6,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,6,6,7,6,7,6,6,0,0,0,0,0,0,0,0],[0,0,0,0,13,6,6,6,6,6,6,13,0,0,0,0,0,0,0,0],[0,0,0,0,13,13,4,4,4,4,13,13,0,0,0,0,0,0,0,0],[0,0,0,0,1,4,1,4,4,1,4,1,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,15,15,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,4,4,5,5,4,4,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,0,0,0,0],[0,0,0,8,8,2,2,3,3,2,2,8,8,0,0,0,0,0,0,0],[0,0,8,8,2,2,3,3,3,3,2,2,8,8,0,0,0,0,0,0],[0,0,9,8,2,3,3,3,3,3,3,2,8,9,6,0,0,0,0,0],[0,0,9,8,2,2,3,6,6,3,2,2,8,9,7,0,0,0,0,0],[0,0,0,9,2,2,2,7,7,2,2,2,9,0,7,0,0,0,0,0],[0,0,0,9,0,2,14,14,14,14,2,0,9,0,10,0,0,0,0,0],[0,0,0,0,0,14,14,14,14,14,14,0,0,0,10,0,0,0,0,0],[0,0,0,0,14,14,0,0,0,0,14,14,0,0,11,0,0,0,0,0],[0,0,0,14,14,0,0,0,0,0,0,14,14,0,10,0,0,0,0,0],[0,0,0,12,12,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0],[0,0,0,12,12,1,0,0,0,0,1,12,12,0,0,0,0,0,0,0],[0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0]],
-    ];
-
-    /* ── SLIME SPRITE 14x12 ── */
-    const SL: number[][][] = [
-      [ // Normal
-        [0,0,0,0,0,1,1,1,1,0,0,0,0,0],
-        [0,0,0,1,1,2,2,2,2,1,1,0,0,0],
-        [0,0,1,2,3,3,2,2,3,3,2,1,0,0],
-        [0,1,2,3,3,3,3,3,3,3,3,2,1,0],
-        [0,1,3,5,5,3,3,3,5,5,3,3,1,0],
-        [0,1,3,1,5,3,3,3,1,5,3,3,1,0],
-        [0,1,2,3,3,3,3,3,3,3,3,2,1,0],
-        [0,1,2,3,3,6,6,6,6,3,3,2,1,0],
-        [1,2,2,2,3,3,3,3,3,3,2,2,2,1],
-        [1,2,2,2,2,2,2,2,2,2,2,2,2,1],
-        [0,1,2,2,2,2,2,2,2,2,2,2,1,0],
-        [0,0,1,1,1,1,1,1,1,1,1,1,0,0],
-      ],
-      [ // Squished (bounce)
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
-        [0,0,0,1,2,3,2,2,3,2,1,0,0,0],
-        [0,0,1,3,3,3,3,3,3,3,3,1,0,0],
-        [0,1,3,3,5,5,3,5,5,3,3,3,1,0],
-        [0,1,3,3,1,5,3,1,5,3,3,3,1,0],
-        [1,2,3,3,3,3,3,3,3,3,3,2,2,1],
-        [1,2,2,3,6,6,6,6,6,3,2,2,2,1],
-        [1,2,2,2,2,2,2,2,2,2,2,2,2,1],
-        [1,2,2,2,2,2,2,2,2,2,2,2,2,1],
-        [0,1,1,1,1,1,1,1,1,1,1,1,1,0],
-      ],
-    ];
-
-    const draw = (ctx: CanvasRenderingContext2D, sp: number[][], pal: string[], w: number, px: number, flip: boolean) => {
-      for (let r = 0; r < sp.length; r++)
-        for (let c = 0; c < sp[r].length; c++) {
-          if (!sp[r][c]) continue;
-          ctx.fillStyle = pal[sp[r][c]];
-          ctx.fillRect(flip ? (w-1-c)*px : c*px, r*px, px, px);
-        }
+    let raf = 0;
+    const addDmg = (x: number, y: number, txt: string, color: string) => {
+      idRef.current++;
+      ref.current.dmgs = [...ref.current.dmgs, { id: idRef.current, x, y, txt, color, t: 50 }];
     };
-
-    const hCanvas = heroRef.current, sCanvas = slimeRef.current;
-    if (!hCanvas || !sCanvas) return;
-    const hCtx = hCanvas.getContext("2d"), sCtx = sCanvas.getContext("2d");
-    if (!hCtx || !sCtx) return;
-
     const pick = () => {
-      const s = state.current;
-      s.tx = 40 + Math.random() * (window.innerWidth - 120);
-      s.ty = 80 + Math.random() * Math.min(document.body.scrollHeight - 120, 5000);
-      s.idle = 0;
+      const r = ref.current;
+      r.tx = 60 + Math.random() * (window.innerWidth - 160);
+      r.ty = 120 + Math.random() * Math.min(document.body.scrollHeight - 160, 4500);
+      r.idleCount = 0;
     };
     pick();
 
-    let raf = 0;
     const loop = () => {
-      const s = state.current;
-      s.tick++;
+      const r = { ...ref.current };
+      r.tick++;
+      r.cape = Math.sin(r.tick * 0.08) * 6;
+      r.dmgs = r.dmgs.map(d => ({ ...d, y: d.y - 0.7, t: d.t - 1 })).filter(d => d.t > 0);
 
-      /* ── PHASE LOGIC ── */
-      if (s.phase === "wander") {
-        // Move hero
-        const dx = s.tx - s.hx, dy = s.ty - s.hy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < 8) { s.idle++; if (s.idle > 120) pick(); }
-        else { s.hx += (dx/dist)*0.45; s.hy += (dy/dist)*0.45; s.idle = 0; s.hdir = dx >= 0 ? 0 : 1; }
-        if (s.tick % 18 === 0 && s.idle === 0) s.hframe = s.hframe === 0 ? 1 : 0;
-        // Spawn check
-        s.nextSpawn--;
-        if (s.nextSpawn <= 0) {
-          s.phase = "approach"; s.ptick = 0;
-          s.sx = s.hx + (Math.random() > 0.5 ? 150 : -150);
-          s.sy = s.hy + (Math.random() - 0.5) * 100;
-          s.salive = true; s.shp = 3; s.sbounce = 0;
+      if (r.phase === "wander") {
+        const dx = r.tx - r.hx, dy = r.ty - r.hy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 10) {
+          r.walk = false; r.idleCount++;
+          if (r.idleCount > 150) pick();
+        } else {
+          r.hx += (dx / dist) * 0.5; r.hy += (dy / dist) * 0.5;
+          r.hdir = dx >= 0 ? 1 : -1; r.walk = true; r.idleCount = 0;
+        }
+        r.nextSpawn--;
+        if (r.nextSpawn <= 0) {
+          r.phase = "encounter"; r.ptick = 0;
+          r.sx = r.hx + (Math.random() > 0.5 ? 180 : -180);
+          r.sy = r.hy + (Math.random() - 0.5) * 80;
+          r.salive = true; r.shp = r.sMaxHp; r.sSquish = false;
         }
       }
-      else if (s.phase === "approach") {
-        // Hero walks toward slime
-        const dx = s.sx - s.hx, dy = s.sy - s.hy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        s.hdir = dx >= 0 ? 0 : 1;
-        if (dist > 65) { s.hx += (dx/dist)*0.8; s.hy += (dy/dist)*0.8; }
-        if (s.tick % 14 === 0) s.hframe = s.hframe === 0 ? 1 : 0;
-        s.ptick++;
-        if (s.ptick > 60 || dist <= 65) { s.phase = "hero_atk"; s.ptick = 0; s.slashAng = 0; }
-      }
-      else if (s.phase === "hero_atk") {
-        s.ptick++;
-        s.slashAng = Math.min(s.ptick * 8, 90);
-        if (s.ptick === 12) {
-          // Hit slime!
-          s.shp--;
-          const dmg = [3, 5, 8][2 - s.shp] || 8;
-          s.dmgList.push({ x: s.sx + 20, y: s.sy - 10, txt: `${dmg}`, color: "#FFD700", t: 40 });
-          s.sbounce = 8;
-        }
-        if (s.ptick > 30) {
-          if (s.shp <= 0) { s.phase = "slime_die"; s.ptick = 0; }
-          else { s.phase = "slime_atk"; s.ptick = 0; }
+      else if (r.phase === "encounter") {
+        r.ptick++;
+        // Hero approaches
+        const dx = r.sx - r.hx, dy = r.sy - r.hy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        r.hdir = dx >= 0 ? 1 : -1; r.walk = true;
+        if (dist > 75) { r.hx += (dx / dist) * 0.9; r.hy += (dy / dist) * 0.9; }
+        if (r.ptick > 40 || dist <= 75) {
+          // Randomly decide who attacks first
+          r.phase = Math.random() > 0.4 ? "hero_atk" : "slime_atk";
+          r.ptick = 0; r.walk = false;
         }
       }
-      else if (s.phase === "slime_atk") {
-        s.ptick++;
-        const progress = s.ptick / 40;
+      else if (r.phase === "hero_atk") {
+        r.ptick++;
+        if (r.ptick === 8) r.slashVis = true;
+        if (r.ptick === 16) {
+          r.slashVis = false; r.sparkVis = true;
+          r.shp = Math.max(0, r.shp - (2 + Math.floor(Math.random() * 4)));
+          const dmg = r.sMaxHp - r.shp > 3 ? "CRITICAL!" : `${2 + Math.floor(Math.random() * 4)}`;
+          addDmg(r.sx + 10, r.sy - 20, dmg, dmg === "CRITICAL!" ? "#f59e0b" : "#FFD700");
+          r.sSquish = true;
+        }
+        if (r.ptick === 22) { r.sparkVis = false; r.sSquish = false; }
+        if (r.ptick > 40) {
+          if (r.shp <= 0) { r.phase = "slime_die"; r.ptick = 0; }
+          else { r.phase = "slime_atk"; r.ptick = 0; }
+        }
+      }
+      else if (r.phase === "slime_atk") {
+        r.ptick++;
         // Slime bounces toward hero
-        if (s.ptick < 20) { s.sbounce = Math.sin(s.ptick * 0.3) * 12; }
-        if (s.ptick === 20) {
-          s.heroHit = true;
-          const dmg = [1, 2, 1][Math.floor(Math.random()*3)];
-          s.dmgList.push({ x: s.hx + 20, y: s.hy - 10, txt: `${dmg}`, color: "#dc2626", t: 40 });
+        if (r.ptick === 10) r.sSquish = true;
+        if (r.ptick === 16) r.sSquish = false;
+        if (r.ptick === 20) {
+          r.heroFlash = true;
+          const dmg = 1 + Math.floor(Math.random() * 3);
+          r.hhp = Math.max(0, r.hhp - dmg);
+          addDmg(r.hx + 10, r.hy - 15, `${dmg}`, "#ef4444");
+          if (Math.random() > 0.7) addDmg(r.hx + 30, r.hy - 5, "痛い！", "#fca5a5");
         }
-        if (s.ptick > 25) s.heroHit = false;
-        if (s.ptick > 45) { s.phase = "hero_atk"; s.ptick = 0; s.slashAng = 0; s.sbounce = 0; }
+        if (r.ptick === 28) r.heroFlash = false;
+        if (r.ptick > 50) {
+          // Slime sometimes attacks twice!
+          if (r.shp > 2 && Math.random() > 0.6) {
+            r.phase = "slime_atk"; r.ptick = 0;
+            addDmg(r.sx, r.sy - 30, "連続攻撃！", "#22d3ee");
+          } else {
+            r.phase = "hero_atk"; r.ptick = 0;
+          }
+        }
       }
-      else if (s.phase === "slime_die") {
-        s.ptick++;
-        s.sbounce = s.ptick * 2;
-        if (s.ptick === 10) {
-          s.dmgList.push({ x: s.sx, y: s.sy - 20, txt: "EXP +10", color: "#22c55e", t: 60 });
-          s.dmgList.push({ x: s.sx + 30, y: s.sy - 5, txt: "Gold +5", color: "#FFD700", t: 60 });
+      else if (r.phase === "slime_die") {
+        r.ptick++;
+        if (r.ptick === 15) {
+          addDmg(r.sx - 10, r.sy - 30, "EXP +15", "#22c55e");
+          addDmg(r.sx + 20, r.sy - 15, "Gold +8", "#fbbf24");
         }
-        if (s.ptick > 40) {
-          s.salive = false; s.phase = "cooldown"; s.ptick = 0;
+        if (r.ptick > 50) {
+          r.salive = false; r.phase = "cooldown"; r.ptick = 0;
+          r.hhp = Math.min(r.hMaxHp, r.hhp + 5);
+          addDmg(r.hx, r.hy - 20, "HP回復 +5", "#34d399");
         }
       }
-      else if (s.phase === "cooldown") {
-        // Resume wandering
-        const dx = s.tx - s.hx, dy = s.ty - s.hy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist > 8) { s.hx += (dx/dist)*0.45; s.hy += (dy/dist)*0.45; s.hdir = dx >= 0 ? 0 : 1; }
-        if (s.tick % 18 === 0) s.hframe = s.hframe === 0 ? 1 : 0;
-        s.ptick++;
-        if (s.ptick > 180) {
-          s.phase = "wander"; s.ptick = 0;
-          s.nextSpawn = 500 + Math.floor(Math.random() * 600);
+      else if (r.phase === "cooldown") {
+        r.ptick++;
+        const dx = r.tx - r.hx, dy = r.ty - r.hy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 10) { r.hx += (dx/dist)*0.5; r.hy += (dy/dist)*0.5; r.hdir = dx >= 0 ? 1 : -1; r.walk = true; }
+        else r.walk = false;
+        if (r.ptick > 200) {
+          r.phase = "wander"; r.ptick = 0;
+          r.nextSpawn = 400 + Math.floor(Math.random() * 500);
           pick();
         }
       }
 
-      // Update damage numbers
-      s.dmgList = s.dmgList.filter(d => { d.t--; d.y -= 0.8; return d.t > 0; });
-
-      // Slime bounce
-      if (s.sbounce > 0 && s.phase !== "slime_die") s.sbounce = Math.max(0, s.sbounce - 0.5);
-
-      /* ── DRAW HERO ── */
-      const px = 3;
-      hCanvas.width = 20 * px; hCanvas.height = 20 * px;
-      hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
-      draw(hCtx, HS[s.idle > 0 && s.phase === "wander" ? 0 : s.hframe], HP, 20, px, s.hdir === 1);
-      // Slash effect
-      if (s.phase === "hero_atk" && s.ptick < 20) {
-        hCtx.save();
-        const cx = s.hdir === 1 ? 10 : 50;
-        hCtx.translate(cx, 28);
-        hCtx.rotate(((s.hdir === 1 ? -1 : 1) * s.slashAng * Math.PI) / 180);
-        hCtx.fillStyle = "#E0E8FF";
-        hCtx.fillRect(-2, -20, 4, 22);
-        hCtx.fillStyle = "#FFD700";
-        hCtx.fillRect(-3, 0, 6, 6);
-        hCtx.restore();
-      }
-
-      /* ── DRAW SLIME ── */
-      sCanvas.width = 14 * px; sCanvas.height = 12 * px;
-      sCtx.clearRect(0, 0, sCanvas.width, sCanvas.height);
-      if (s.salive) {
-        if (s.phase === "slime_die") {
-          sCtx.globalAlpha = Math.max(0, 1 - s.ptick / 35);
-        }
-        const sFrame = (s.phase === "slime_atk" && s.ptick > 10 && s.ptick < 25) ? 1 : 0;
-        draw(sCtx, SL[sFrame], SP, 14, px, false);
-        sCtx.globalAlpha = 1;
-      }
-
-      // Trigger re-render
-      if (s.tick % 2 === 0) setRender(s.tick);
+      setS(r);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const s = state.current;
+  const bobY = s.walk ? Math.sin(s.tick * 0.15) * 3 : 0;
+  const legL = s.walk ? Math.sin(s.tick * 0.15) * 12 : 0;
+  const legR = s.walk ? Math.sin(s.tick * 0.15 + Math.PI) * 12 : 0;
+  const slimeBob = s.salive ? Math.sin(s.tick * 0.1) * 4 : 0;
+  const dieScale = s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 40) : 1;
+  const dieRotate = s.phase === "slime_die" ? s.ptick * 8 : 0;
+
   return (
     <>
-      {/* Hero */}
-      <canvas ref={heroRef} style={{
-        position:"absolute", left:s.hx, top:s.hy, width:60, height:60,
-        imageRendering:"pixelated", pointerEvents:"none", zIndex:41,
-        filter: s.heroHit
-          ? "drop-shadow(0 0 8px rgba(220,38,38,0.8)) brightness(1.5)"
-          : "drop-shadow(0 2px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 6px rgba(255,215,0,0.12))",
-        transition: "filter 0.15s",
-      }} />
-      {/* Slime */}
-      <canvas ref={slimeRef} style={{
-        position:"absolute",
-        left: s.sx,
-        top: s.sy - s.sbounce,
-        width: 42, height: 36,
-        imageRendering:"pixelated", pointerEvents:"none", zIndex:40,
-        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5)) drop-shadow(0 0 6px rgba(6,182,212,0.2))",
-        transform: s.phase === "slime_die" ? `scale(${Math.max(0, 1 - s.ptick/30)}) rotate(${s.ptick * 10}deg)` : "none",
-        transition: s.phase === "slime_die" ? "none" : "top 0.1s ease-out",
-        display: s.salive ? "block" : "none",
-      }} />
-      {/* Slime shadow */}
-      {s.salive && s.phase !== "slime_die" && (
+      <style>{`
+        @keyframes sparkle{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(2)}}
+        @keyframes slimeWobble{0%,100%{transform:scaleX(1) scaleY(1)}50%{transform:scaleX(1.06) scaleY(0.94)}}
+        .hero-slash{animation:sparkle .3s ease-out both}
+      `}</style>
+
+      {/* ══ HERO ══ */}
+      <div style={{
+        position: "absolute", left: s.hx - 30, top: s.hy - 40 + bobY,
+        width: 60, height: 80, pointerEvents: "none", zIndex: 42,
+        transform: `scaleX(${s.hdir})`,
+        filter: s.heroFlash ? "brightness(1.8) drop-shadow(0 0 12px rgba(239,68,68,0.8))" : "drop-shadow(2px 3px 4px rgba(0,0,0,0.5))",
+        transition: "filter 0.1s",
+      }}>
+        <svg viewBox="0 0 60 80" width="60" height="80" fill="none">
+          {/* Cape */}
+          <path d={`M22 28 Q18 ${44 + s.cape} ${14 + s.cape * 0.3} ${58 + s.cape * 0.5} L28 58 Q25 45 22 28Z`} fill="#dc2626" opacity="0.9"/>
+          <path d={`M22 28 Q16 ${46 + s.cape} ${12 + s.cape * 0.4} ${60 + s.cape * 0.3} L${14 + s.cape * 0.3} ${58 + s.cape * 0.5} Q18 ${44 + s.cape} 22 28Z`} fill="#991b1b" opacity="0.5"/>
+
+          {/* Legs */}
+          <rect x="22" y="54" width="6" height="16" rx="3" fill="#1e3a5f" transform={`rotate(${legL} 25 54)`}/>
+          <rect x="32" y="54" width="6" height="16" rx="3" fill="#1e3a5f" transform={`rotate(${legR} 35 54)`}/>
+          {/* Boots */}
+          <ellipse cx={25 + Math.sin(legL * Math.PI/180) * 12} cy={69 + Math.abs(Math.sin(legL * Math.PI/180)) * 2} rx="5" ry="3.5" fill="#5C3317"/>
+          <ellipse cx={35 + Math.sin(legR * Math.PI/180) * 12} cy={69 + Math.abs(Math.sin(legR * Math.PI/180)) * 2} rx="5" ry="3.5" fill="#5C3317"/>
+
+          {/* Body / Armor */}
+          <rect x="20" y="30" width="20" height="26" rx="4" fill="#2563eb"/>
+          <rect x="22" y="32" width="16" height="10" rx="2" fill="#3b82f6"/>
+          <rect x="26" y="42" width="8" height="3" rx="1" fill="#60a5fa" opacity="0.5"/>
+          {/* Belt */}
+          <rect x="20" y="48" width="20" height="4" rx="1" fill="#8B6914"/>
+          <rect x="28" y="47" width="5" height="6" rx="1.5" fill="#FFD700"/>
+          {/* Shoulder pads */}
+          <ellipse cx="20" cy="33" rx="5" ry="4" fill="#3b82f6"/>
+          <ellipse cx="40" cy="33" rx="5" ry="4" fill="#3b82f6"/>
+
+          {/* Head */}
+          <circle cx="30" cy="18" r="12" fill="#FDBCB4"/>
+          {/* Eyes */}
+          <ellipse cx="26" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
+          <ellipse cx="34" cy="17" rx="2" ry="2.5" fill="#0f172a"/>
+          <circle cx="27" cy="16" r="0.8" fill="white"/>
+          <circle cx="35" cy="16" r="0.8" fill="white"/>
+          {/* Mouth */}
+          <path d="M27 22 Q30 25 33 22" stroke="#c4786a" strokeWidth="1" fill="none"/>
+          {/* Blush */}
+          <ellipse cx="23" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
+          <ellipse cx="37" cy="20" rx="2.5" ry="1.2" fill="#f4a0a0" opacity="0.4"/>
+
+          {/* Crown */}
+          <path d="M18 12 L18 6 L22 9 L26 4 L30 8 L34 4 L38 9 L42 6 L42 12 Z" fill="#FFD700"/>
+          <path d="M18 12 L42 12 L42 14 Q30 16 18 14 Z" fill="#DAA520"/>
+          <circle cx="26" cy="8" r="1.5" fill="#dc2626"/>
+          <circle cx="34" cy="8" r="1.5" fill="#3b82f6"/>
+          <circle cx="30" cy="6" r="1.8" fill="#22c55e"/>
+
+          {/* Hair */}
+          <path d="M18 14 Q18 8 22 10 L18 6 Z" fill="#8B5E3C"/>
+          <path d="M42 14 Q42 8 38 10 L42 6 Z" fill="#8B5E3C"/>
+
+          {/* Sword (right hand) */}
+          <rect x="43" y="20" width="3" height="20" rx="1" fill="#B0B8C8"/>
+          <rect x="43" y="20" width="3" height="6" rx="1" fill="#E0E8FF"/>
+          <rect x="41" y="38" width="7" height="4" rx="1.5" fill="#FFD700"/>
+          <rect x="43.5" y="42" width="2" height="6" rx="1" fill="#8B6914"/>
+        </svg>
+      </div>
+
+      {/* ══ HERO HP BAR ══ */}
+      <div style={{ position:"absolute", left: s.hx - 22, top: s.hy - 52, width: 44, height: 6, background:"rgba(0,0,0,0.5)", borderRadius: 3, zIndex: 50, pointerEvents:"none", border:"1px solid rgba(255,255,255,0.15)" }}>
+        <div style={{ width: `${(s.hhp / s.hMaxHp) * 100}%`, height: "100%", borderRadius: 2, background: s.hhp > 10 ? "linear-gradient(90deg,#22c55e,#4ade80)" : s.hhp > 5 ? "linear-gradient(90deg,#eab308,#facc15)" : "linear-gradient(90deg,#dc2626,#ef4444)", transition: "width 0.3s" }} />
+      </div>
+
+      {/* ══ SLIME ══ */}
+      {s.salive && (
         <div style={{
-          position:"absolute", left: s.sx + 6, top: s.sy + 34,
-          width: 30, height: 6, borderRadius: "50%",
-          background: "rgba(0,0,0,0.25)",
-          transform: `scaleX(${1 - s.sbounce * 0.02})`,
-          pointerEvents: "none", zIndex: 39,
-        }} />
+          position: "absolute", left: s.sx - 25, top: s.sy - 20 + slimeBob,
+          width: 50, height: 44, pointerEvents: "none", zIndex: 41,
+          transform: `scale(${dieScale}) rotate(${dieRotate}deg) ${s.sSquish ? "scaleX(1.2) scaleY(0.8)" : ""}`,
+          opacity: s.phase === "slime_die" ? Math.max(0, 1 - s.ptick / 35) : 1,
+          filter: "drop-shadow(2px 3px 4px rgba(0,0,0,0.4)) drop-shadow(0 0 8px rgba(6,182,212,0.2))",
+          transition: s.phase === "slime_die" ? "none" : "transform 0.15s ease-out",
+          animation: s.phase !== "slime_die" && s.phase !== "hero_atk" ? "slimeWobble 1.2s ease-in-out infinite" : "none",
+        }}>
+          <svg viewBox="0 0 50 44" width="50" height="44" fill="none">
+            <defs>
+              <radialGradient id="slimeGrad" cx="40%" cy="35%">
+                <stop offset="0%" stopColor="#67e8f9"/>
+                <stop offset="50%" stopColor="#22d3ee"/>
+                <stop offset="100%" stopColor="#0891b2"/>
+              </radialGradient>
+              <radialGradient id="slimeShine" cx="30%" cy="25%">
+                <stop offset="0%" stopColor="white" stopOpacity="0.5"/>
+                <stop offset="100%" stopColor="white" stopOpacity="0"/>
+              </radialGradient>
+            </defs>
+            {/* Body */}
+            <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36 Z" fill="url(#slimeGrad)"/>
+            {/* Shine */}
+            <ellipse cx="18" cy="16" rx="8" ry="6" fill="url(#slimeShine)"/>
+            {/* Outline */}
+            <path d="M6 36 Q2 36 4 28 Q4 16 12 10 Q18 4 25 4 Q32 4 38 10 Q46 16 46 28 Q48 36 44 36 Z" stroke="#0e7490" strokeWidth="1.2" fill="none"/>
+            {/* Eyes */}
+            <ellipse cx="18" cy="22" rx="4" ry="5" fill="white"/>
+            <ellipse cx="34" cy="22" rx="4" ry="5" fill="white"/>
+            <ellipse cx="19" cy="23" rx="2.5" ry="3" fill="#0f172a"/>
+            <ellipse cx="35" cy="23" rx="2.5" ry="3" fill="#0f172a"/>
+            <circle cx="20" cy="21.5" r="1.2" fill="white"/>
+            <circle cx="36" cy="21.5" r="1.2" fill="white"/>
+            {/* Mouth */}
+            <path d="M22 30 Q25 34 28 30" stroke="#0e7490" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+            {/* Cheeks */}
+            <ellipse cx="13" cy="28" rx="3" ry="1.5" fill="#f0abfc" opacity="0.35"/>
+            <ellipse cx="39" cy="28" rx="3" ry="1.5" fill="#f0abfc" opacity="0.35"/>
+          </svg>
+        </div>
       )}
-      {/* Damage numbers */}
-      {s.dmgList.map((d, i) => (
-        <div key={`${i}-${d.txt}-${d.t}`} style={{
+
+      {/* ══ SLIME HP BAR ══ */}
+      {s.salive && s.phase !== "slime_die" && (
+        <div style={{ position:"absolute", left: s.sx - 18, top: s.sy - 30 + slimeBob, width: 36, height: 5, background:"rgba(0,0,0,0.5)", borderRadius: 3, zIndex: 50, pointerEvents:"none", border:"1px solid rgba(255,255,255,0.12)" }}>
+          <div style={{ width: `${(s.shp / s.sMaxHp) * 100}%`, height: "100%", borderRadius: 2, background: "linear-gradient(90deg,#06b6d4,#22d3ee)", transition: "width 0.3s" }} />
+        </div>
+      )}
+
+      {/* ══ SLIME SHADOW ══ */}
+      {s.salive && s.phase !== "slime_die" && (
+        <div style={{ position:"absolute", left: s.sx - 14, top: s.sy + 22, width: 28, height: 6, borderRadius: "50%", background:"rgba(0,0,0,0.2)", zIndex: 39, pointerEvents:"none", transform: `scaleY(${1 - Math.abs(slimeBob) * 0.04})` }}/>
+      )}
+
+      {/* ══ SLASH EFFECT ══ */}
+      {s.slashVis && (
+        <div className="hero-slash" style={{ position:"absolute", left: s.sx - 20, top: s.sy - 30, width: 50, height: 50, zIndex: 52, pointerEvents:"none" }}>
+          <svg viewBox="0 0 50 50" width="50" height="50">
+            <path d="M5 45 Q25 20 45 5" stroke="#FFD700" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.9"/>
+            <path d="M10 40 Q28 22 42 10" stroke="#FEF3C7" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.7"/>
+          </svg>
+        </div>
+      )}
+
+      {/* ══ SPARK EFFECT ══ */}
+      {s.sparkVis && (
+        <div className="hero-slash" style={{ position:"absolute", left: s.sx - 10, top: s.sy - 10, width: 30, height: 30, zIndex: 52, pointerEvents:"none" }}>
+          <svg viewBox="0 0 30 30" width="30" height="30">
+            {[0, 45, 90, 135, 180, 225, 270, 315].map(a => (
+              <line key={a} x1="15" y1="15" x2={15 + Math.cos(a * Math.PI / 180) * 14} y2={15 + Math.sin(a * Math.PI / 180) * 14} stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" opacity="0.8"/>
+            ))}
+          </svg>
+        </div>
+      )}
+
+      {/* ══ DAMAGE NUMBERS ══ */}
+      {s.dmgs.map(d => (
+        <div key={d.id} style={{
           position:"absolute", left: d.x, top: d.y,
-          color: d.color, fontSize: d.txt.includes("EXP") || d.txt.includes("Gold") ? 11 : 16,
-          fontWeight: 900, fontFamily: "Inter, monospace",
-          textShadow: `0 1px 4px rgba(0,0,0,0.8), 0 0 8px ${d.color}60`,
-          pointerEvents: "none", zIndex: 50,
-          opacity: Math.min(1, d.t / 15),
-          letterSpacing: 0.5,
+          fontSize: d.txt.includes("EXP") || d.txt.includes("Gold") || d.txt.includes("回復") || d.txt.includes("連続") || d.txt.includes("痛い") ? 11 : d.txt === "CRITICAL!" ? 14 : 16,
+          fontWeight: 800, fontFamily: "Inter, sans-serif", color: d.color,
+          textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 10px ${d.color}50`,
+          pointerEvents:"none", zIndex: 55, opacity: Math.min(1, d.t / 12),
+          letterSpacing: 0.3, whiteSpace: "nowrap",
         }}>
           {d.txt}
         </div>
