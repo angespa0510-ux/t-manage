@@ -15,7 +15,7 @@ type Therapist = { id: number; name: string; real_name?: string; has_withholding
 type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
 type TaxDoc = { id: number; category: string; file_name: string; file_url: string; file_path: string; file_size: number; fiscal_period: string; uploaded_by_name: string; notes: string; created_at: string };
 
-const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "その他"];
+const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "借入・融資", "保険", "納税通知", "その他"];
 
 // Supabase Storageはパスに日本語が使えないため、英語キーにマッピング
 const CATEGORY_PATH: Record<string, string> = {
@@ -24,7 +24,36 @@ const CATEGORY_PATH: Record<string, string> = {
   "契約書": "keiyaku",
   "固定資産": "kotei",
   "支払調書": "shiharai",
+  "借入・融資": "shakkin",
+  "保険": "hoken",
+  "納税通知": "nouzei",
   "その他": "other",
+};
+
+// カテゴリ別の入力プレースホルダー（命名ルールガイド）
+const NAME_PLACEHOLDER: Record<string, string> = {
+  "決算書": "例: 第3期 決算書",
+  "申告書": "例: 第3期 法人税申告書",
+  "契約書": "例: 本店賃貸借契約書（オアシス）",
+  "固定資産": "例: 固定資産台帳 第3期",
+  "支払調書": "例: 2025年分 支払調書",
+  "借入・融資": "例: 〇〇銀行 返済予定表 2026年4月",
+  "保険": "例: 火災保険証券（店舗）",
+  "納税通知": "例: 2025年度 固定資産税通知",
+  "その他": "例: ファイル名",
+};
+const PERIOD_PLACEHOLDER: Record<string, string> = {
+  "契約書": "全期共通",
+  "保険": "全期共通",
+  "借入・融資": "例: 第3期",
+  "納税通知": "例: 第3期",
+};
+const NOTES_PLACEHOLDER: Record<string, string> = {
+  "決算書": "例: 2024年度",
+  "契約書": "例: 本店・2024/4契約 / 車両リース",
+  "借入・融資": "例: 残高○○万円",
+  "保険": "例: 契約期間2025-2027",
+  "納税通知": "例: 年税額○○円 4期分納",
 };
 
 const ACCOUNT_MAP: Record<string, string> = {
@@ -721,15 +750,15 @@ export default function TaxPortal() {
                   </div>
                   <div>
                     <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>ファイル名（任意）</label>
-                    <input type="text" value={uploadDisplayName} onChange={(e) => setUploadDisplayName(e.target.value)} placeholder="例: 第3期決算書" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                    <input type="text" value={uploadDisplayName} onChange={(e) => setUploadDisplayName(e.target.value)} placeholder={NAME_PLACEHOLDER[uploadCategory] || "例: ファイル名"} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
                   </div>
                   <div>
                     <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>期（任意）</label>
-                    <input type="text" value={uploadPeriod} onChange={(e) => setUploadPeriod(e.target.value)} placeholder="例: 第3期 / 2025年分" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                    <input type="text" value={uploadPeriod} onChange={(e) => setUploadPeriod(e.target.value)} placeholder={PERIOD_PLACEHOLDER[uploadCategory] || "例: 第3期 / 2025年分"} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
                   </div>
                   <div>
                     <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>備考（任意）</label>
-                    <input type="text" value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder="メモ" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                    <input type="text" value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder={NOTES_PLACEHOLDER[uploadCategory] || "メモ"} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
                   </div>
                 </div>
                 <label className="block cursor-pointer">
@@ -799,7 +828,7 @@ export default function TaxPortal() {
                       {(() => {
                         const filtered = taxDocs.filter(d => (docFilter === "all" || d.category === docFilter) && (docPeriodFilter === "all" || d.fiscal_period === docPeriodFilter));
                         if (filtered.length === 0) return <tr><td colSpan={9} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>書類が登録されていません</td></tr>;
-                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "その他": "#888780" };
+                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "その他": "#888780" };
                         return filtered.map((d, i) => (
                           <tr key={d.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
                             <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
@@ -849,12 +878,53 @@ export default function TaxPortal() {
               </div>
 
               <div className="rounded-xl p-4" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c433" }}>
-                <p className="text-[11px] font-medium mb-1" style={{ color: "#85a8c4" }}>💡 書類庫の使い方</p>
-                <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
-                  税理士・社長・経営責任者のみアップロード/閲覧/削除が可能です。<br/>
-                  <strong>アップ時のコツ:</strong> カテゴリと「期（例：第3期）」を入れておくと、後で検索しやすくなります。<br/>
-                  <strong>セキュリティ:</strong> ファイル名はUUIDでランダム化されて保存されます。書類庫画面にアクセスできない人はURLも推測できません。<br/>
-                  <strong>保存容量:</strong> 1ファイル最大20MB。大きな書類はZIP圧縮してからアップしてください。
+                <p className="text-[11px] font-medium mb-2" style={{ color: "#85a8c4" }}>💡 書類庫の使い方</p>
+                <p className="text-[11px] leading-relaxed mb-3" style={{ color: T.textSub }}>
+                  税理士・社長・経営責任者のみアップロード/閲覧/削除が可能です。ファイル名はUUIDでランダム化されて保存されます。1ファイル最大20MB。
+                </p>
+                <p className="text-[11px] font-medium mb-2" style={{ color: "#85a8c4" }}>📝 カテゴリ別おすすめ命名ルール</p>
+                <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+                  <table className="w-full" style={{ fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, color: T.textSub, fontSize: 10 }}>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder }}>カテゴリ</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder }}>入れるもの</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder }}>ファイル名例</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder }}>期の例</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left" }}>備考の例</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { c: "決算書", w: "決算書・事業概況・勘定科目内訳", n: "第2期 決算書", p: "第2期", m: "2024年度" },
+                        { c: "申告書", w: "法人税・消費税・住民税申告書", n: "第2期 法人税申告書", p: "第2期", m: "電子申告済" },
+                        { c: "契約書", w: "賃貸借・リース・業務委託など", n: "本店賃貸借契約書（オアシス）", p: "全期共通", m: "2024/4契約" },
+                        { c: "固定資産", w: "固定資産台帳、減価償却資料", n: "固定資産台帳 第3期", p: "第3期", m: "期末時点" },
+                        { c: "支払調書", w: "セラピスト・外注先の支払調書", n: "2025年分 支払調書", p: "2025年分", m: "全セラピスト分" },
+                        { c: "借入・融資", w: "借入契約書、返済予定表", n: "〇〇銀行 返済予定表 2026年4月", p: "第3期", m: "残高○○万円" },
+                        { c: "保険", w: "法人保険証券、節税保険、火災保険", n: "火災保険証券（店舗）", p: "全期共通", m: "契約2025-2027" },
+                        { c: "納税通知", w: "固定資産税・住民税・事業税など", n: "2025年度 固定資産税通知", p: "第3期", m: "年税額○○円" },
+                        { c: "その他", w: "上記に当てはまらないもの", n: "任意", p: "任意", m: "自由" },
+                      ].map((r, i) => {
+                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "その他": "#888780" };
+                        return (
+                          <tr key={r.c} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: catColors[r.c] + "22", color: catColors[r.c] }}>{r.c}</span>
+                            </td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textSub, fontSize: 10 }}>{r.w}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, fontSize: 10 }}>{r.n}</td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 10 }}>{r.p}</td>
+                            <td style={{ padding: "5px 10px", color: T.textMuted, fontSize: 10 }}>{r.m}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] mt-3" style={{ color: T.textFaint }}>
+                  💡 <strong>毎年増える書類（借入返済表・保険証券・納税通知など）</strong>は、アップ時に<strong>年月を入れる</strong>と更新履歴として管理できます。<br/>
+                  💡 カテゴリを選ぶとファイル名欄に命名例が表示されます（例に沿って入れると検索しやすくなります）。
                 </p>
               </div>
             </div>
