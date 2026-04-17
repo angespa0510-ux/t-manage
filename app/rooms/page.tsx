@@ -8,7 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
-type Room = { id: number; store_id: number; building_id: number; name: string };
+type Room = { id: number; store_id: number; building_id: number; name: string; key_number?: string };
 type ParkingSpot = { id: number; store_id: number; building_id: number; number: string; type: string };
 
 export default function RoomManagement() {
@@ -24,6 +24,7 @@ export default function RoomManagement() {
   const [newBuildingStoreId, setNewBuildingStoreId] = useState<number>(0);
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomBuildingId, setNewRoomBuildingId] = useState<number>(0);
+  const [newRoomKeyNumber, setNewRoomKeyNumber] = useState("");
   const [newParkingNumber, setNewParkingNumber] = useState("");
   const [newParkingBuildingId, setNewParkingBuildingId] = useState<number>(0);
   const [newParkingType, setNewParkingType] = useState<string>("therapist");
@@ -34,6 +35,7 @@ export default function RoomManagement() {
   const [editBuildingName, setEditBuildingName] = useState("");
   const [editRoom, setEditRoom] = useState<Room | null>(null);
   const [editRoomName, setEditRoomName] = useState("");
+  const [editRoomKeyNumber, setEditRoomKeyNumber] = useState("");
 
   const fetchData = useCallback(async () => {
     const { data: s } = await supabase.from("stores").select("*").order("id"); if (s) setStores(s);
@@ -52,8 +54,8 @@ export default function RoomManagement() {
   const updateBuilding = async () => { if (!editBuilding || !editBuildingName.trim()) return; await supabase.from("buildings").update({ name: editBuildingName.trim() }).eq("id", editBuilding.id); setEditBuilding(null); fetchData(); };
   const deleteBuilding = async (id: number) => { if (!confirm("この建物を削除しますか？関連する部屋・駐車場も削除されます。")) return; await supabase.from("rooms").delete().eq("building_id", id); await supabase.from("parking_spots").delete().eq("building_id", id); await supabase.from("buildings").delete().eq("id", id); fetchData(); };
 
-  const addRoom = async () => { if (!newRoomName.trim() || !newRoomBuildingId) return; const bld = buildings.find((b) => b.id === newRoomBuildingId); await supabase.from("rooms").insert({ name: newRoomName.trim(), building_id: newRoomBuildingId, store_id: bld?.store_id || 0 }); setNewRoomName(""); fetchData(); };
-  const updateRoom = async () => { if (!editRoom || !editRoomName.trim()) return; await supabase.from("rooms").update({ name: editRoomName.trim() }).eq("id", editRoom.id); setEditRoom(null); fetchData(); };
+  const addRoom = async () => { if (!newRoomName.trim() || !newRoomBuildingId) return; const bld = buildings.find((b) => b.id === newRoomBuildingId); await supabase.from("rooms").insert({ name: newRoomName.trim(), building_id: newRoomBuildingId, store_id: bld?.store_id || 0, key_number: newRoomKeyNumber.trim() }); setNewRoomName(""); setNewRoomKeyNumber(""); fetchData(); };
+  const updateRoom = async () => { if (!editRoom || !editRoomName.trim()) return; await supabase.from("rooms").update({ name: editRoomName.trim(), key_number: editRoomKeyNumber.trim() }).eq("id", editRoom.id); setEditRoom(null); fetchData(); };
   const deleteRoom = async (id: number) => { if (!confirm("この部屋を削除しますか？")) return; await supabase.from("rooms").delete().eq("id", id); fetchData(); };
 
   const addParking = async () => { if (!newParkingNumber.trim() || !newParkingBuildingId) return; const bld = buildings.find((b) => b.id === newParkingBuildingId); await supabase.from("parking_spots").insert({ number: newParkingNumber.trim(), store_id: bld?.store_id || 0, building_id: newParkingBuildingId, type: newParkingType }); setNewParkingNumber(""); fetchData(); };
@@ -145,6 +147,7 @@ export default function RoomManagement() {
             <div className="flex gap-3 mt-4 mb-4">
               <select value={newRoomBuildingId} onChange={(e) => setNewRoomBuildingId(Number(e.target.value))} className="px-4 py-3 rounded-xl text-[13px] outline-none cursor-pointer min-w-[200px]" style={inputStyle}><option value={0}>建物を選択</option>{stores.map((s) => buildings.filter((b) => b.store_id === s.id).map((b) => (<option key={b.id} value={b.id}>{s.name} / {b.name}</option>)))}</select>
               <input type="text" value={newRoomName} onChange={(e) => setNewRoomName(e.target.value)} placeholder="部屋名（例：201号室）" className="flex-1 px-4 py-3 rounded-xl text-[13px] outline-none transition-all" style={inputStyle} onKeyDown={(e) => e.key === "Enter" && addRoom()} />
+              <input type="text" value={newRoomKeyNumber} onChange={(e) => setNewRoomKeyNumber(e.target.value)} placeholder="🔑 鍵番号（任意）" className="w-36 px-4 py-3 rounded-xl text-[13px] outline-none transition-all" style={inputStyle} onKeyDown={(e) => e.key === "Enter" && addRoom()} />
               <button onClick={addRoom} className="px-5 py-3 bg-gradient-to-r from-[#85a8c4] to-[#6890b0] text-white text-[12px] rounded-xl cursor-pointer">追加</button>
             </div>
             {stores.map((s, si) => { const sb = buildings.filter((b) => b.store_id === s.id); const has = sb.some((b) => rooms.some((r) => r.building_id === b.id)); if (!has) return null; return (
@@ -154,7 +157,8 @@ export default function RoomManagement() {
                     <div className="flex flex-wrap gap-2 ml-2">{br.map((r) => (
                       <div key={r.id} className="flex items-center gap-1.5 px-3 py-2 rounded-xl group transition-colors" style={{ backgroundColor: T.cardAlt }}>
                         <span className="text-[12px]">{r.name}</span>
-                        <button onClick={() => { setEditRoom(r); setEditRoomName(r.name); }} className="w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#3d6b9f" strokeWidth="2.5" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                        {r.key_number && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>🔑 {r.key_number}</span>}
+                        <button onClick={() => { setEditRoom(r); setEditRoomName(r.name); setEditRoomKeyNumber(r.key_number || ""); }} className="w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#3d6b9f" strokeWidth="2.5" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                         <button onClick={() => deleteRoom(r.id)} className="w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#c45555" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                       </div>
                     ))}</div>
@@ -240,8 +244,11 @@ export default function RoomManagement() {
       {editRoom && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditRoom(null)}>
           <div className="rounded-2xl border p-8 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-4">部屋名を変更</h2>
-            <input type="text" value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none mb-4" style={inputStyle} />
+            <h2 className="text-[16px] font-medium mb-4">部屋情報を変更</h2>
+            <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>部屋名</label>
+            <input type="text" value={editRoomName} onChange={(e) => setEditRoomName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none mb-3" style={inputStyle} />
+            <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🔑 鍵番号（任意）</label>
+            <input type="text" value={editRoomKeyNumber} onChange={(e) => setEditRoomKeyNumber(e.target.value)} placeholder="例: A-12" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none mb-4" style={inputStyle} />
             <div className="flex gap-3"><button onClick={updateRoom} className="px-7 py-3 bg-gradient-to-r from-[#85a8c4] to-[#6890b0] text-white text-[12px] rounded-xl cursor-pointer">更新</button><button onClick={() => setEditRoom(null)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button></div>
           </div>
         </div>
