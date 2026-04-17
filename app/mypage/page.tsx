@@ -517,25 +517,6 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           {todayShift ? ((() => { const bldName = getBuildingForDate(today); const rmName = getRoomForDate(today); const keyNum = getKeyNumberForDate(today); return (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: T.textMuted }}>{todayShift.store_id > 0 && <span>🏠 {getStoreName(todayShift.store_id)}</span>}{bldName && <span>🏢 {bldName}</span>}{rmName && <span>🚪 {rmName}</span>}{keyNum && <span style={{ color: "#c3a782", fontWeight: 500 }}>🔑 {keyNum}</span>}</div></div>); })()) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
           <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
 
-          {/* 確定申告まとめへのリンク（年末〜春先は特に目立つよう表示） */}
-          {(() => {
-            const m = new Date().getMonth() + 1;
-            const isTaxSeason = m >= 11 || m <= 4; // 11月〜4月は目立たせる
-            return (
-              <a href="/mypage/final-tax-return" className="block rounded-2xl border p-4" style={{ backgroundColor: isTaxSeason ? "#e8849a15" : T.card, borderColor: isTaxSeason ? "#e8849a44" : T.border, textDecoration: "none", color: T.text }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[12px] font-medium" style={{ color: isTaxSeason ? "#e8849a" : T.text }}>📋 確定申告まとめ</p>
-                    <p className="text-[10px] mt-1" style={{ color: T.textSub }}>
-                      {isTaxSeason ? "今年の収入・源泉徴収をチェック" : "年間の報酬・源泉徴収・実受取額を確認"}
-                    </p>
-                  </div>
-                  <span className="text-[16px]" style={{ color: isTaxSeason ? "#e8849a" : T.textMuted }}>→</span>
-                </div>
-              </a>
-            );
-          })()}
-
           {/* マニュアル未読通知 */}
           {(() => {
             const unreadArticles = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id));
@@ -1441,14 +1422,14 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
 
       {/* ── 確定申告サポートタブ ── */}
       {tab === "tax" && therapist && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <h2 className="text-[14px] font-medium">📊 確定申告サポート</h2>
           <div className="flex gap-2">
             <button onClick={() => setTaxSubTab("support")} className="flex-1 py-2.5 text-[11px] rounded-xl cursor-pointer border"
               style={{ backgroundColor: taxSubTab === "support" ? "#e8849a20" : "transparent", color: taxSubTab === "support" ? "#e8849a" : T.textMuted, borderColor: taxSubTab === "support" ? "#e8849a" : T.border, fontWeight: taxSubTab === "support" ? 600 : 400 }}>
               📊 申告サポート
             </button>
-            <button onClick={() => setTaxSubTab("ledger")} className="flex-1 py-2 text-[11px] rounded-xl cursor-pointer border"
+            <button onClick={() => setTaxSubTab("ledger")} className="flex-1 py-2.5 text-[11px] rounded-xl cursor-pointer border"
               style={{ backgroundColor: taxSubTab === "ledger" ? "#22c55e20" : "transparent", color: taxSubTab === "ledger" ? "#22c55e" : T.textMuted, borderColor: taxSubTab === "ledger" ? "#22c55e" : T.border, fontWeight: taxSubTab === "ledger" ? 600 : 400 }}>
               📒 帳簿・経費管理
             </button>

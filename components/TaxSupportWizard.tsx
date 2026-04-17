@@ -63,7 +63,7 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
   const saveChecklist = useCallback((c: { [key: string]: boolean }) => { setChecklist(c); localStorage.setItem(checklistId, JSON.stringify(c)); }, [checklistId]);
   const toggleCheck = (key: string) => { const c = { ...checklist, [key]: !checklist[key] }; saveChecklist(c); };
 
-  // ── スタイル ──
+  // ── スタイル（他マイページと統一） ──
   const pink = "#e8849a";
   const pinkLight = "#e8849a20";
   const pinkBorder = "#e8849a44";
@@ -71,9 +71,10 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
   const orange = "#f59e0b";
   const red = "#ef4444";
 
-  const cardBase = { backgroundColor: T.card, borderColor: T.border, borderRadius: "16px", border: `1px solid ${T.border}` };
-  const altCard = { backgroundColor: T.cardAlt, borderRadius: "12px", padding: "12px" };
-  const btnPink = { background: `linear-gradient(135deg, ${pink}, #d4687e)`, color: "#fff", border: "none", borderRadius: "12px", padding: "10px 20px", fontSize: "12px", cursor: "pointer", fontWeight: 600 };
+  // マイページ共通の rounded-2xl (16px) / rounded-xl (12px) に揃える
+  const cardBase = { backgroundColor: T.card, border: `1px solid ${T.border}`, borderRadius: "16px" };
+  const altCard = { backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "14px" };
+  const btnPink = { background: `linear-gradient(135deg, ${pink}, #d4687e)`, color: "#fff", border: "none", borderRadius: "12px", padding: "10px 20px", fontSize: "12px", cursor: "pointer", fontWeight: 500 };
   const btnOutline = { backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "10px 20px", fontSize: "12px", cursor: "pointer" };
   const yesNoBtn = (active: boolean | null, target: boolean) => ({
     backgroundColor: active === target ? (target ? green + "20" : red + "20") : "transparent",
@@ -361,7 +362,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {/* ── 進捗バー ── */}
       <div style={{ ...cardBase, padding: "16px" }}>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[13px] font-bold" style={{ color: T.text }}>📊 確定申告サポート</span>
+          <span className="text-[13px] font-medium" style={{ color: T.text }}>📊 確定申告サポート</span>
           <span className="text-[10px] font-medium" style={{ color: pink }}>{progressPct}% 完了</span>
         </div>
         <div style={{ height: "6px", borderRadius: "3px", backgroundColor: T.cardAlt, overflow: "hidden" }}>
@@ -387,11 +388,11 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 0 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-3" style={{ color: T.text }}>🌸 はじめに — なぜ確定申告するの？</h2>
+            <h2 className="text-[14px] font-medium mb-3" style={{ color: T.text }}>🌸 はじめに — なぜ確定申告するの？</h2>
 
             {/* 核心の説明 */}
-            <div className="p-4 rounded-2xl mb-4" style={{ background: `linear-gradient(135deg, ${pink}15, ${pink}05)`, border: `2px solid ${pinkBorder}` }}>
-              <p className="text-[12px] font-bold mb-2" style={{ color: pink }}>💡 一番大事なこと</p>
+            <div className="p-4 rounded-2xl mb-4" style={{ background: `linear-gradient(135deg, ${pink}15, ${pink}05)`, border: `1px solid ${pinkBorder}` }}>
+              <p className="text-[12px] font-medium mb-2" style={{ color: pink }}>💡 一番大事なこと</p>
               <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
                 あなたのお給料から、お店は毎回<b style={{ color: red }}>源泉徴収（約10%）</b>を天引きして税務署に納めています。
                 でもこれは<b>「経費ゼロ」前提</b>の税額です。
@@ -404,11 +405,11 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 図解：お金の流れ */}
             <div style={{ ...altCard, marginBottom: "12px" }}>
-              <p className="text-[11px] font-bold mb-3" style={{ color: T.text }}>📊 お金の流れ（図解）</p>
+              <p className="text-[11px] font-medium mb-3" style={{ color: T.text }}>📊 お金の流れ（図解）</p>
               <div className="space-y-2">
                 {/* 今の状態 */}
                 <div className="p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
-                  <p className="text-[10px] font-bold mb-1" style={{ color: red }}>❌ 今（確定申告しない場合）</p>
+                  <p className="text-[10px] font-medium mb-1" style={{ color: red }}>❌ 今（確定申告しない場合）</p>
                   <div className="space-y-1 text-[9px]" style={{ color: T.textSub }}>
                     <p>あなたの1日のバック 例：¥30,000</p>
                     <p style={{ color: red }}>　→ 源泉徴収：(¥30,000 − ¥5,000) × 10.21% = ¥2,552</p>
@@ -419,7 +420,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 </div>
                 {/* 申告後 */}
                 <div className="p-3 rounded-xl" style={{ backgroundColor: green + "08", border: `1px solid ${green}33` }}>
-                  <p className="text-[10px] font-bold mb-1" style={{ color: green }}>✅ 確定申告すると</p>
+                  <p className="text-[10px] font-medium mb-1" style={{ color: green }}>✅ 確定申告すると</p>
                   <div className="space-y-1 text-[9px]" style={{ color: T.textSub }}>
                     <p>年間報酬 ¥3,600,000（日バック¥20,000 × 月15日 × 12ヶ月）</p>
                     <p style={{ color: green }}>　→ 自己負担経費を引く（美容・衣装等 −¥500,000）</p>
@@ -428,7 +429,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <p style={{ color: green }}>　→ 基礎控除を引く（−¥950,000〜）</p>
                     <p>　→ 本来の税額は<b style={{ color: green }}>大幅に減額</b></p>
                     <p>　→ 源泉徴収で<b style={{ color: red }}>¥276,000</b>も払い済み</p>
-                    <p className="mt-1 text-[10px] font-bold" style={{ color: green }}>
+                    <p className="mt-1 text-[10px] font-medium" style={{ color: green }}>
                       💰 差額の約¥182,000が銀行口座に還付される！
                     </p>
                   </div>
@@ -438,7 +439,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* メリット一覧 */}
             <div style={{ ...altCard, marginBottom: "12px" }}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>✅ 確定申告するメリット</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: green }}>✅ 確定申告するメリット</p>
               <ul className="space-y-1.5">
                 {[
                   "払いすぎた税金が還付金として戻ってくる💰",
@@ -456,7 +457,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             <div style={{ ...altCard, marginBottom: "12px", borderLeft: `3px solid ${red}` }}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: red }}>❌ しないとどうなる？</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: red }}>❌ しないとどうなる？</p>
               <ul className="space-y-1.5">
                 {[
                   "払いすぎた税金がそのまま戻ってこない（大損！）",
@@ -472,12 +473,12 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             {/* 還付金シミュレーター */}
-            <button onClick={() => setShowCalc(!showCalc)} style={{ ...altCard, width: "100%", cursor: "pointer", textAlign: "left", border: `2px solid ${green}44` }}>
-              <p className="text-[12px] font-bold" style={{ color: green }}>💰 還付金シミュレーター {showCalc ? "▲" : "▼"}</p>
+            <button onClick={() => setShowCalc(!showCalc)} style={{ ...altCard, width: "100%", cursor: "pointer", textAlign: "left", border: `1px solid ${green}44` }}>
+              <p className="text-[12px] font-medium" style={{ color: green }}>💰 還付金シミュレーター {showCalc ? "▲" : "▼"}</p>
               <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>あなたの収入と経費を入力すると、いくら戻ってくるか分かります！</p>
             </button>
             {showCalc && (
-              <div className="mt-3 space-y-3" style={{ ...altCard, border: `2px solid ${green}44` }}>
+              <div className="mt-3 space-y-3" style={{ ...altCard, border: `1px solid ${green}44` }}>
                 <div>
                   <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>年間の報酬合計（お店からもらうバックの合計）</label>
                   <div className="flex gap-2 flex-wrap">
@@ -535,7 +536,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                         <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>お店が天引き済みの合計額</p>
                         {c.invoiceDed > 0 && <p className="text-[8px]" style={{ color: T.textMuted }}>インボイス控除（10%）: {fmt(c.invoiceDed)}</p>}
                         <p className="text-[8px]" style={{ color: T.textMuted }}>源泉徴収: {fmt(c.withheld)}{c.days > 0 && ` （1日: (${fmt(Math.round(c.dailyAdj))} − ¥5,000) × 10.21% × ${c.days}日）`}</p>
-                        <p className="text-[16px] font-bold mt-1" style={{ color: red }}>天引き合計 {fmt(c.invoiceDed + c.withheld)}</p>
+                        <p className="text-[16px] font-medium mt-1" style={{ color: red }}>天引き合計 {fmt(c.invoiceDed + c.withheld)}</p>
                       </div>
                       {/* 計算過程 */}
                       <div className="space-y-1">
@@ -562,10 +563,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                         ))}
                       </div>
                       {/* 還付金 */}
-                      <div className="rounded-2xl p-4 text-center" style={{ background: `linear-gradient(135deg, ${green}20, ${green}08)`, border: `2px solid ${green}44` }}>
+                      <div className="rounded-2xl p-4 text-center" style={{ background: `linear-gradient(135deg, ${green}20, ${green}08)`, border: `1px solid ${green}44` }}>
                         <p className="text-[9px]" style={{ color: T.textMuted }}>源泉徴収{fmt(c.withheld)} − 本来の税額{fmt(c.aoiroTotal)}</p>
                         <p className="text-[10px] mt-1" style={{ color: green }}>💰 あなたに戻ってくる還付金</p>
-                        <p className="text-[28px] font-bold" style={{ color: green }}>{fmt(c.refund)}</p>
+                        <p className="text-[28px] font-medium" style={{ color: green }}>{fmt(c.refund)}</p>
                         {c.healthSaving > 0 && (
                           <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>
                             ＋ 国民健康保険料も約{fmt(c.healthSaving)}安くなる → 合計 <b style={{ color: green }}>{fmt(c.totalBenefit)}お得！</b>
@@ -579,7 +580,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                       )}
                       {profile.isSingleParent && (
                         <div className="rounded-xl p-3 mt-2" style={{ backgroundColor: "#0d948810", border: "1px solid #0d948833" }}>
-                          <p className="text-[9px] font-bold" style={{ color: "#0d9488" }}>
+                          <p className="text-[9px] font-medium" style={{ color: "#0d9488" }}>
                             🌸 さらに「ひとり親控除」で所得税・住民税合わせて約5〜8万円/年の追加節税！
                           </p>
                           <p className="text-[8px]" style={{ color: T.textMuted }}>
@@ -597,7 +598,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
           {/* ガイドページへの誘導 */}
           <div style={{ ...cardBase, padding: "16px" }}>
-            <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📚 詳しくはガイドページもご覧ください</p>
+            <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>📚 詳しくはガイドページもご覧ください</p>
             <div className="space-y-1.5">
               {[
                 { href: "/mypage/tax-guide", icon: "🔒", label: "副業がバレない 完全ガイド", color: pink },
@@ -607,7 +608,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               ].map((g) => (
                 <a key={g.href} href={g.href} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer" style={{ backgroundColor: g.color + "10", border: `1px solid ${g.color}33`, textDecoration: "none" }}>
                   <span style={{ fontSize: 16 }}>{g.icon}</span>
-                  <span className="text-[10px] font-bold" style={{ color: g.color }}>{g.label}</span>
+                  <span className="text-[10px] font-medium" style={{ color: g.color }}>{g.label}</span>
                   <span className="ml-auto text-[10px]" style={{ color: g.color }}>→</span>
                 </a>
               ))}
@@ -624,7 +625,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 1 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>📋 あなたの状況を教えてください</h2>
+            <h2 className="text-[14px] font-medium mb-1" style={{ color: T.text }}>📋 あなたの状況を教えてください</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>回答に応じて、必要な手続きをご案内します</p>
 
             {/* Q1: 副業？ */}
@@ -710,10 +711,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </div>
               {profile.isDependent === true && (
                 <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
-                  <p className="text-[11px] font-bold mb-2" style={{ color: orange }}>⚠️ 扶養に入っている方の注意点</p>
+                  <p className="text-[11px] font-medium mb-2" style={{ color: orange }}>⚠️ 扶養に入っている方の注意点</p>
                   <div className="space-y-2">
                     <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                      <p className="text-[9px] font-bold" style={{ color: red }}>🔴 税金の扶養（扶養控除）</p>
+                      <p className="text-[9px] font-medium" style={{ color: red }}>🔴 税金の扶養（扶養控除）</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>
                         あなたの<b>合計所得（収入−経費）が48万円</b>を超えると、親や配偶者の扶養控除から外れます。
                         外れると、親や配偶者の税金が増えます。
@@ -721,7 +722,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                       <p className="text-[8px] mt-1" style={{ color: green }}>💡 経費をしっかり計上すれば「収入が多くても所得は48万以下」にできることも！</p>
                     </div>
                     <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                      <p className="text-[9px] font-bold" style={{ color: red }}>🔴 健康保険の扶養（社会保険）</p>
+                      <p className="text-[9px] font-medium" style={{ color: red }}>🔴 健康保険の扶養（社会保険）</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>
                         年間収入が<b>130万円</b>を超えると、家族の社会保険の扶養から外れ、自分で国民健康保険に加入する必要があります。
                       </p>
@@ -729,7 +730,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     </div>
                     {profile.isStudent && (
                       <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                        <p className="text-[9px] font-bold" style={{ color: "#2563eb" }}>📚 学生の場合の特別ルール</p>
+                        <p className="text-[9px] font-medium" style={{ color: "#2563eb" }}>📚 学生の場合の特別ルール</p>
                         <p className="text-[9px]" style={{ color: T.textSub }}>
                           「勤労学生控除（27万円）」がありますが、セラピストの収入は<b>事業所得</b>のため、事業所得が10万円を超えると使えません。
                         </p>
@@ -739,7 +740,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                       </div>
                     )}
                     <div className="p-2.5 rounded-lg" style={{ backgroundColor: green + "10" }}>
-                      <p className="text-[9px] font-bold" style={{ color: green }}>✅ 結論：扶養内で働きたい場合</p>
+                      <p className="text-[9px] font-medium" style={{ color: green }}>✅ 結論：扶養内で働きたい場合</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>
                         ① 年間の収入から経費を引いた「所得」を<b>48万円以下</b>に抑える{"\n"}
                         ② 経費をしっかり記録・計上する（美容費・衣装代・交通費など）{"\n"}
@@ -762,10 +763,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </div>
               {profile.isSingleParent === true && (
                 <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: "#0d948810", border: "1px solid #0d948833" }}>
-                  <p className="text-[11px] font-bold mb-2" style={{ color: "#0d9488" }}>🌸 ひとり親のあなたへ — 使える制度がたくさんあります！</p>
+                  <p className="text-[11px] font-medium mb-2" style={{ color: "#0d9488" }}>🌸 ひとり親のあなたへ — 使える制度がたくさんあります！</p>
                   <div className="space-y-2">
                     <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                      <p className="text-[9px] font-bold" style={{ color: green }}>💰 ひとり親控除（2026年〜拡充）</p>
+                      <p className="text-[9px] font-medium" style={{ color: green }}>💰 ひとり親控除（2026年〜拡充）</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>
                         所得税<b>38万円</b>＋住民税<b>33万円</b>が控除されます。{"\n"}
                         確定申告で申告するだけで<b>年間約5〜8万円の節税</b>に！{"\n"}
@@ -773,21 +774,21 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                       </p>
                     </div>
                     <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                      <p className="text-[9px] font-bold" style={{ color: pink }}>👶 児童扶養手当（国の制度）</p>
+                      <p className="text-[9px] font-medium" style={{ color: pink }}>👶 児童扶養手当（国の制度）</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>
                         子ども1人で最大<b>月48,050円</b>支給。{"\n"}
                         経費をしっかり計上して所得を下げれば受給額UP！
                       </p>
                     </div>
                     <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                      <p className="text-[9px] font-bold" style={{ color: orange }}>🏛️ 愛知県遺児手当 + 市の手当</p>
+                      <p className="text-[9px] font-medium" style={{ color: orange }}>🏛️ 愛知県遺児手当 + 市の手当</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>
                         愛知県遺児手当（月4,350円〜）＋市独自の手当も。{"\n"}
                         児童扶養手当と<b>同時に受給OK</b>！
                       </p>
                     </div>
                     <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                      <p className="text-[9px] font-bold" style={{ color: red }}>🏥 医療費助成 + 保育料無償化</p>
+                      <p className="text-[9px] font-medium" style={{ color: red }}>🏥 医療費助成 + 保育料無償化</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>
                         ひとり親家庭の医療費助成、3〜5歳の保育料無料、{"\n"}
                         国民年金の免除制度なども利用できます。
@@ -795,7 +796,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     </div>
                     <a href="/mypage/single-mother-guide" className="flex items-center gap-2 p-2.5 rounded-lg cursor-pointer" style={{ backgroundColor: "#0d948815", border: "1px solid #0d948833", textDecoration: "none" }}>
                       <span style={{ fontSize: 16 }}>🌸</span>
-                      <span className="text-[10px] font-bold" style={{ color: "#0d9488" }}>シングルマザー完全サポートガイドを見る</span>
+                      <span className="text-[10px] font-medium" style={{ color: "#0d9488" }}>シングルマザー完全サポートガイドを見る</span>
                       <span className="ml-auto text-[10px]" style={{ color: "#0d9488" }}>→</span>
                     </a>
                   </div>
@@ -815,7 +816,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             {/* 判定結果 */}
             {profile.annualIncome && profile.hasKaigyou !== null && (
               <div className="mt-4 p-4 rounded-2xl" style={{ background: `linear-gradient(135deg, ${pink}10, ${pink}05)`, border: `1px solid ${pinkBorder}` }}>
-                <p className="text-[12px] font-bold mb-2" style={{ color: pink }}>📌 あなたに必要な手続き</p>
+                <p className="text-[12px] font-medium mb-2" style={{ color: pink }}>📌 あなたに必要な手続き</p>
                 <div className="space-y-1.5">
                   {!profile.hasKaigyou && (
                     <button onClick={() => setStep(2)} className="w-full text-left text-[11px] flex gap-1.5 py-1 cursor-pointer" style={{ color: T.textSub, background: "none", border: "none" }}>
@@ -865,7 +866,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 2 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>📝 開業届の出し方</h2>
+            <h2 className="text-[14px] font-medium mb-1" style={{ color: T.text }}>📝 開業届の出し方</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>個人事業を始めたら原則1ヶ月以内に提出。でも遅れても罰則なし！今からでもOK</p>
 
             {/* ダウンロードボタン */}
@@ -874,7 +875,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#dc262620", border: "1px solid #dc262644", textDecoration: "none" }}>
                 <span className="text-[24px]">📄</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: "#dc2626" }}>開業届 PDFダウンロード</p>
+                  <p className="text-[11px] font-medium" style={{ color: "#dc2626" }}>開業届 PDFダウンロード</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公式「個人事業の開業・廃業等届出書」</p>
                 </div>
                 <span className="text-[10px]" style={{ color: "#dc2626" }}>↗</span>
@@ -883,7 +884,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
                 <span className="text-[24px]">📘</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>青色申告承認申請書 PDFダウンロード</p>
+                  <p className="text-[11px] font-medium" style={{ color: "#2563eb" }}>青色申告承認申請書 PDFダウンロード</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>開業届と一緒に提出がベスト！</p>
                 </div>
                 <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
@@ -892,7 +893,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: green + "15", border: `1px solid ${green}44`, textDecoration: "none" }}>
                 <span className="text-[24px]">💻</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: green }}>e-Tax（電子申告）で提出</p>
+                  <p className="text-[11px] font-medium" style={{ color: green }}>e-Tax（電子申告）で提出</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>マイナンバーカード＋スマホで自宅から提出可能（おすすめ！）</p>
                 </div>
                 <span className="text-[10px]" style={{ color: green }}>↗</span>
@@ -901,7 +902,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 必要なもの */}
             <div style={altCard} className="mb-3">
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📋 必要なもの</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>📋 必要なもの</p>
               <ul className="space-y-1">
                 {["マイナンバーカード（または通知カード＋身分証明書）", "印鑑（認印でOK・e-Taxなら不要）", "開業届の用紙（上のボタンからDL or 税務署で入手）"].map((t, i) => (
                   <li key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}><span style={{ color: pink }}>•</span>{t}</li>
@@ -910,15 +911,15 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             {/* ===== 開業届の記入ガイド ===== */}
-            <div style={{ ...altCard, border: `2px solid ${pink}44` }} className="mb-3">
-              <p className="text-[12px] font-bold mb-3" style={{ color: pink }}>✍️ 開業届の記入ガイド（セラピスト用）</p>
+            <div style={{ ...altCard, border: `1px solid ${pink}44` }} className="mb-3">
+              <p className="text-[12px] font-medium mb-3" style={{ color: pink }}>✍️ 開業届の記入ガイド（セラピスト用）</p>
               <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>「個人事業の開業・廃業等届出書」の各項目の書き方です</p>
 
               {/* フォーム風ビジュアル */}
               <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}`, backgroundColor: T.card }}>
                 {/* ヘッダー */}
                 <div className="p-2 text-center" style={{ backgroundColor: "#f8f0f2", borderBottom: `1px solid ${T.border}` }}>
-                  <p className="text-[10px] font-bold" style={{ color: "#333" }}>個人事業の開業・廃業等届出書</p>
+                  <p className="text-[10px] font-medium" style={{ color: "#333" }}>個人事業の開業・廃業等届出書</p>
                   <p className="text-[7px]" style={{ color: "#999" }}>（正式名称）</p>
                 </div>
 
@@ -939,10 +940,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 ].map((item, i) => (
                   <div key={i} className="p-2.5" style={{ borderBottom: `1px solid ${T.border}` }}>
                     <div className="flex items-start gap-2">
-                      <span className="text-[10px] font-bold flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: pink, color: "#fff" }}>{item.num}</span>
+                      <span className="text-[10px] font-medium flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: pink, color: "#fff" }}>{item.num}</span>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[10px] font-bold" style={{ color: T.text }}>{item.field}</span>
+                          <span className="text-[10px] font-medium" style={{ color: T.text }}>{item.field}</span>
                           <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f0f0f0", color: "#666" }}>記入例: {item.example}</span>
                         </div>
                         <p className="text-[9px]" style={{ color: T.textSub }}>{item.guide}</p>
@@ -956,10 +957,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 提出方法 */}
             <div style={altCard} className="mb-3">
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📤 提出方法（3つ）</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>📤 提出方法（3つ）</p>
               <div className="space-y-2">
                 <div className="p-2.5 rounded-lg" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
-                  <p className="text-[11px] font-bold" style={{ color: green }}>① e-Tax（おすすめ！）</p>
+                  <p className="text-[11px] font-medium" style={{ color: green }}>① e-Tax（おすすめ！）</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>マイナンバーカード＋スマホで自宅から提出。2025年から紙の収受印が廃止されたため、e-Taxが最も確実な提出証明になります。</p>
                 </div>
                 <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
@@ -990,7 +991,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 3 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>📘 青色申告 vs 白色申告</h2>
+            <h2 className="text-[14px] font-medium mb-1" style={{ color: T.text }}>📘 青色申告 vs 白色申告</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>結論：<b style={{ color: green }}>青色申告（65万円控除）</b>が圧倒的におすすめ！</p>
 
             {/* DLボタン */}
@@ -999,7 +1000,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
                 <span className="text-[24px]">📘</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>青色申告承認申請書 PDFダウンロード</p>
+                  <p className="text-[11px] font-medium" style={{ color: "#2563eb" }}>青色申告承認申請書 PDFダウンロード</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公式「所得税の青色申告承認申請書」</p>
                 </div>
                 <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
@@ -1010,8 +1011,8 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             <div className="rounded-xl overflow-hidden mb-4" style={{ border: `1px solid ${T.border}` }}>
               <div className="grid grid-cols-3 text-center">
                 <div className="p-2" style={{ backgroundColor: T.cardAlt }}><span className="text-[9px]" style={{ color: T.textMuted }}>&nbsp;</span></div>
-                <div className="p-2" style={{ backgroundColor: T.cardAlt }}><span className="text-[10px] font-bold" style={{ color: T.text }}>白色申告</span></div>
-                <div className="p-2" style={{ backgroundColor: green + "15" }}><span className="text-[10px] font-bold" style={{ color: green }}>青色申告 ★</span></div>
+                <div className="p-2" style={{ backgroundColor: T.cardAlt }}><span className="text-[10px] font-medium" style={{ color: T.text }}>白色申告</span></div>
+                <div className="p-2" style={{ backgroundColor: green + "15" }}><span className="text-[10px] font-medium" style={{ color: green }}>青色申告 ★</span></div>
               </div>
               {[
                 ["特別控除", "なし", "最大65万円"],
@@ -1032,7 +1033,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 具体的な節税額の例 */}
             <div className="p-3 rounded-xl mb-4" style={{ background: `linear-gradient(135deg, ${green}10, ${green}05)`, border: `1px solid ${green}33` }}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>💰 青色申告でどれくらい得する？（具体例）</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: green }}>💰 青色申告でどれくらい得する？（具体例）</p>
               <div className="space-y-1.5">
                 {[
                   { income: "年収200万", white: "約7.2万", blue: "約3.9万", save: "約3.3万" },
@@ -1044,7 +1045,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <span style={{ color: red }}>白色 {row.white}</span>
                     <span>→</span>
                     <span style={{ color: green }}>青色 {row.blue}</span>
-                    <span className="font-bold" style={{ color: green }}>（{row.save}お得！）</span>
+                    <span className="font-medium" style={{ color: green }}>（{row.save}お得！）</span>
                   </div>
                 ))}
               </div>
@@ -1052,8 +1053,8 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             {/* 65万控除の3つの条件 */}
-            <div style={{ ...altCard, border: `2px solid ${green}33` }} className="mb-3">
-              <p className="text-[11px] font-bold mb-2" style={{ color: green }}>✅ 青色申告特別控除 3つのランク</p>
+            <div style={{ ...altCard, border: `1px solid ${green}33` }} className="mb-3">
+              <p className="text-[11px] font-medium mb-2" style={{ color: green }}>✅ 青色申告特別控除 3つのランク</p>
               <div className="space-y-2">
                 {[
                   { num: "10万円", title: "簡易簿記で記帳", desc: "単式簿記（お小遣い帳レベル）でもOK。でも控除額は最少", color: T.textMuted },
@@ -1061,9 +1062,9 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                   { num: "65万円", title: "複式簿記 ＋ e-Tax提出", desc: "複式簿記で記帳し、e-Taxで電子申告した場合 ★最大控除！", color: green },
                 ].map((item, i) => (
                   <div key={i} className="flex gap-2 items-start p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                    <span className="text-[12px] font-bold flex-shrink-0" style={{ color: item.color }}>{item.num}</span>
+                    <span className="text-[12px] font-medium flex-shrink-0" style={{ color: item.color }}>{item.num}</span>
                     <div>
-                      <p className="text-[10px] font-bold" style={{ color: T.text }}>{item.title}</p>
+                      <p className="text-[10px] font-medium" style={{ color: T.text }}>{item.title}</p>
                       <p className="text-[9px]" style={{ color: T.textSub }}>{item.desc}</p>
                     </div>
                   </div>
@@ -1073,11 +1074,11 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             {/* 青色申告承認申請書 記入ガイド */}
-            <div style={{ ...altCard, border: `2px solid #2563eb33` }} className="mb-3">
-              <p className="text-[12px] font-bold mb-3" style={{ color: "#2563eb" }}>✍️ 青色申告承認申請書 記入ガイド</p>
+            <div style={{ ...altCard, border: `1px solid #2563eb33` }} className="mb-3">
+              <p className="text-[12px] font-medium mb-3" style={{ color: "#2563eb" }}>✍️ 青色申告承認申請書 記入ガイド</p>
               <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}`, backgroundColor: T.card }}>
                 <div className="p-2 text-center" style={{ backgroundColor: "#eef2ff", borderBottom: `1px solid ${T.border}` }}>
-                  <p className="text-[10px] font-bold" style={{ color: "#333" }}>所得税の青色申告承認申請書</p>
+                  <p className="text-[10px] font-medium" style={{ color: "#333" }}>所得税の青色申告承認申請書</p>
                 </div>
                 {[
                   { num: "①", field: "提出先・提出日", example: "○○税務署長 / 提出日", guide: "開業届と同じ税務署名・提出する日を記入" },
@@ -1092,10 +1093,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 ].map((item, i) => (
                   <div key={i} className="p-2.5" style={{ borderBottom: `1px solid ${T.border}` }}>
                     <div className="flex items-start gap-2">
-                      <span className="text-[10px] font-bold flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "#2563eb", color: "#fff" }}>{item.num}</span>
+                      <span className="text-[10px] font-medium flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: "#2563eb", color: "#fff" }}>{item.num}</span>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[10px] font-bold" style={{ color: T.text }}>{item.field}</span>
+                          <span className="text-[10px] font-medium" style={{ color: T.text }}>{item.field}</span>
                           <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f0f0f0", color: "#666" }}>{item.example}</span>
                         </div>
                         <p className="text-[9px]" style={{ color: T.textSub }}>{item.guide}</p>
@@ -1109,7 +1110,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 提出期限 */}
             <div className="p-3 rounded-xl mb-3" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
-              <p className="text-[11px] font-bold" style={{ color: red }}>⏰ 提出期限に注意！</p>
+              <p className="text-[11px] font-medium" style={{ color: red }}>⏰ 提出期限に注意！</p>
               <div className="mt-2 space-y-1">
                 <p className="text-[9px]" style={{ color: T.textSub }}>• <b>新規開業の場合</b>：開業日から2ヶ月以内</p>
                 <p className="text-[9px]" style={{ color: T.textSub }}>• <b>既に開業済みの場合</b>：その年の3月15日まで（翌年分から適用）</p>
@@ -1118,7 +1119,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             <div className="p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
-              <p className="text-[11px] font-bold" style={{ color: orange }}>💡 「複式簿記」は怖くない！</p>
+              <p className="text-[11px] font-medium" style={{ color: orange }}>💡 「複式簿記」は怖くない！</p>
               <p className="text-[10px] mt-1" style={{ color: T.textSub }}>
                 T-MANAGEの帳簿機能が自動的に複式簿記（借方・貸方）で記帳します。
                 仕訳帳・総勘定元帳もPDFで出力可能。わざわざ会計ソフトを別に契約する必要はありません！
@@ -1144,7 +1145,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 4 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>🧾 インボイス制度</h2>
+            <h2 className="text-[14px] font-medium mb-1" style={{ color: T.text }}>🧾 インボイス制度</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>2023年10月開始。お店との関係で登録が必要かどうか変わります</p>
 
             {/* DLボタン */}
@@ -1153,7 +1154,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: green + "15", border: `1px solid ${green}44`, textDecoration: "none" }}>
                 <span className="text-[24px]">💻</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: green }}>e-Taxでインボイス登録申請</p>
+                  <p className="text-[11px] font-medium" style={{ color: green }}>e-Taxでインボイス登録申請</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>オンラインで登録申請が可能（おすすめ）</p>
                 </div>
                 <span className="text-[10px]" style={{ color: green }}>↗</span>
@@ -1162,7 +1163,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: orange + "15", border: `1px solid ${orange}44`, textDecoration: "none" }}>
                 <span className="text-[24px]">📄</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: orange }}>インボイス登録申請書 ダウンロード</p>
+                  <p className="text-[11px] font-medium" style={{ color: orange }}>インボイス登録申請書 ダウンロード</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁「適格請求書発行事業者の登録申請書」</p>
                 </div>
                 <span className="text-[10px]" style={{ color: orange }}>↗</span>
@@ -1171,7 +1172,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
                 <span className="text-[24px]">🔍</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>インボイス登録番号を検索</p>
+                  <p className="text-[11px] font-medium" style={{ color: "#2563eb" }}>インボイス登録番号を検索</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公表サイトで登録済みか確認</p>
                 </div>
                 <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
@@ -1179,21 +1180,21 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             {/* そもそもインボイスとは？ */}
-            <div style={{ ...altCard, border: `2px solid ${orange}33` }} className="mb-3">
-              <p className="text-[12px] font-bold mb-2" style={{ color: orange }}>🧾 そもそもインボイスって何？</p>
+            <div style={{ ...altCard, border: `1px solid ${orange}33` }} className="mb-3">
+              <p className="text-[12px] font-medium mb-2" style={{ color: orange }}>🧾 そもそもインボイスって何？</p>
               <div className="space-y-2">
                 <p className="text-[10px]" style={{ color: T.textSub }}>
                   インボイス＝「適格請求書」のこと。消費税の仕入税額控除を受けるために必要な書類です。
                 </p>
                 <div className="p-2.5 rounded-lg" style={{ backgroundColor: T.card }}>
-                  <p className="text-[9px] font-bold mb-1" style={{ color: T.text }}>セラピストにとっての影響</p>
+                  <p className="text-[9px] font-medium mb-1" style={{ color: T.text }}>セラピストにとっての影響</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>
                     お店側があなたに支払う報酬の消費税分を、お店の経費（仕入税額控除）として計上するには、
                     あなたが「インボイス登録事業者」である必要があります。
                   </p>
                 </div>
                 <div className="p-2.5 rounded-lg" style={{ backgroundColor: T.card }}>
-                  <p className="text-[9px] font-bold mb-1" style={{ color: T.text }}>登録しないとどうなる？</p>
+                  <p className="text-[9px] font-medium mb-1" style={{ color: T.text }}>登録しないとどうなる？</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>
                     お店があなたの消費税分を控除できなくなる → お店の負担が増える → 報酬が下がる可能性があります。
                     ただし2031年10月まで段階的に経過措置があります（80%→70%→50%→30%→0%）。
@@ -1205,7 +1206,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             {/* 判定フロー → チョップ推奨スタンス */}
             <div style={altCard} className="mb-3">
               <div className="p-3 rounded-xl mb-2" style={{ backgroundColor: "#c3a78220", border: "1px solid #c3a78266" }}>
-                <p className="text-[11px] font-bold mb-1" style={{ color: "#c3a782" }}>💎 チョップからのお知らせ</p>
+                <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💎 チョップからのお知らせ</p>
                 <p className="text-[9px]" style={{ color: T.textSub }}>
                   チョップではセラピストさんのインボイス登録を<b>推奨</b>しています。
                   未登録の場合はバック額の10%を控除していますが、登録すればこの控除がなくなり<b>毎月の手取りが増えます</b>。
@@ -1213,7 +1214,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 <a href="/mypage/invoice-guide" style={{ color: "#c3a782", fontSize: "10px", textDecoration: "underline", display: "inline-block", marginTop: 4 }}>📖 詳しい手取りシミュレーション付きガイドはこちら</a>
               </div>
 
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>🔀 お店からインボイス登録を求められていますか？</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>🔀 お店からインボイス登録を求められていますか？</p>
               <div className="flex gap-2 mb-3">
                 <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: true })} style={yesNoBtn(profile.shopRequiresInvoice, true)}>求められている</button>
                 <button onClick={() => saveProfile({ ...profile, shopRequiresInvoice: false })} style={yesNoBtn(profile.shopRequiresInvoice, false)}>特に言われてない</button>
@@ -1222,7 +1223,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               {profile.shopRequiresInvoice === true && (
                 <div className="space-y-2">
                   <div className="p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
-                    <p className="text-[10px] font-bold mb-2" style={{ color: orange }}>📝 登録が必要な場合の手順</p>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: orange }}>📝 登録が必要な場合の手順</p>
                     <div className="space-y-2">
                       {[
                         { step: "①", title: "登録申請書を提出", desc: "e-Taxまたは郵送で「適格請求書発行事業者の登録申請書」を提出" },
@@ -1231,9 +1232,9 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                         { step: "④", title: "消費税の申告が必要に", desc: "2割特例（売上の約1.8%）で負担は軽い。詳細はインボイスガイドで" },
                       ].map((item, i) => (
                         <div key={i} className="flex gap-2 items-start">
-                          <span className="text-[10px] font-bold flex-shrink-0" style={{ color: orange }}>{item.step}</span>
+                          <span className="text-[10px] font-medium flex-shrink-0" style={{ color: orange }}>{item.step}</span>
                           <div>
-                            <p className="text-[9px] font-bold" style={{ color: T.text }}>{item.title}</p>
+                            <p className="text-[9px] font-medium" style={{ color: T.text }}>{item.title}</p>
                             <p className="text-[8px]" style={{ color: T.textSub }}>{item.desc}</p>
                           </div>
                         </div>
@@ -1243,23 +1244,23 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
                   {/* 消費税の計算方法 */}
                   <div className="p-3 rounded-xl" style={{ backgroundColor: "#2563eb10", border: "1px solid #2563eb33" }}>
-                    <p className="text-[10px] font-bold mb-2" style={{ color: "#2563eb" }}>💰 消費税の納め方（セラピスト向け）</p>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: "#2563eb" }}>💰 消費税の納め方（セラピスト向け）</p>
                     <div className="space-y-2">
                       <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                        <p className="text-[9px] font-bold" style={{ color: green }}>★ おすすめ：2割特例（2026年分まで）</p>
+                        <p className="text-[9px] font-medium" style={{ color: green }}>★ おすすめ：2割特例（2026年分まで）</p>
                         <p className="text-[8px]" style={{ color: T.textSub }}>
                           売上の消費税の<b>2割だけ</b>を納付すればOK。届出不要で確定申告時に選択するだけ。
                         </p>
                         <p className="text-[8px] mt-1" style={{ color: green }}>例：年間売上300万 → 消費税30万の2割 = <b>6万円</b>の納付</p>
                       </div>
                       <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                        <p className="text-[9px] font-bold" style={{ color: "#2563eb" }}>3割特例（2027〜2028年分・個人事業主限定）</p>
+                        <p className="text-[9px] font-medium" style={{ color: "#2563eb" }}>3割特例（2027〜2028年分・個人事業主限定）</p>
                         <p className="text-[8px]" style={{ color: T.textSub }}>
                           2割特例終了後のソフトランディング措置。売上消費税の<b>3割</b>を納付。届出不要。
                         </p>
                       </div>
                       <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                        <p className="text-[9px] font-bold" style={{ color: T.text }}>簡易課税制度（2029年以降も使える）</p>
+                        <p className="text-[9px] font-medium" style={{ color: T.text }}>簡易課税制度（2029年以降も使える）</p>
                         <p className="text-[8px]" style={{ color: T.textSub }}>
                           セラピストはサービス業（第5種：50%）。売上消費税の<b>50%を控除</b>。事前届出が必要。
                         </p>
@@ -1272,7 +1273,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               {profile.shopRequiresInvoice === false && (
                 <div className="space-y-2">
                   <div className="p-3 rounded-xl" style={{ backgroundColor: "#c3a78215", border: "1px solid #c3a78244" }}>
-                    <p className="text-[10px] font-bold mb-1" style={{ color: "#c3a782" }}>💎 チョップでは登録をおすすめしています</p>
+                    <p className="text-[10px] font-medium mb-1" style={{ color: "#c3a782" }}>💎 チョップでは登録をおすすめしています</p>
                     <p className="text-[9px]" style={{ color: T.textSub }}>
                       現在、インボイス未登録のセラピストさんからはバック額の10%を控除しています。
                       登録すればこの控除がなくなり、<b>手取りが増えます</b>。
@@ -1280,7 +1281,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <p className="text-[9px] mt-1" style={{ color: T.textSub }}>
                       2割特例（売上の約1.8%を納税するだけ）を使えば、10%控除より<b>ずっとお得</b>です。
                     </p>
-                    <a href="/mypage/invoice-guide" className="inline-block mt-2 text-[10px] px-3 py-1.5 rounded-lg" style={{ background: "linear-gradient(135deg, #c3a782, #b09672)", color: "#fff", fontWeight: 600, textDecoration: "none" }}>💎 インボイス登録ガイドを見る →</a>
+                    <a href="/mypage/invoice-guide" className="inline-block mt-2 text-[10px] px-3 py-1.5 rounded-lg" style={{ background: "linear-gradient(135deg, #c3a782, #b09672)", color: "#fff", fontWeight: 500, textDecoration: "none" }}>💎 インボイス登録ガイドを見る →</a>
                   </div>
                   <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
                     <p className="text-[8px]" style={{ color: T.textMuted }}>
@@ -1293,7 +1294,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 登録状況 */}
             <div style={altCard} className="mb-3">
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📌 あなたのインボイス登録状況</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>📌 あなたのインボイス登録状況</p>
               <div className="flex gap-2">
                 <button onClick={() => saveProfile({ ...profile, hasInvoice: true })} style={yesNoBtn(profile.hasInvoice, true)}>登録済み</button>
                 <button onClick={() => saveProfile({ ...profile, hasInvoice: false })} style={yesNoBtn(profile.hasInvoice, false)}>まだ未登録</button>
@@ -1309,8 +1310,8 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             {/* メリット・デメリット比較 */}
             <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
               <div className="grid grid-cols-2 text-center">
-                <div className="p-2" style={{ backgroundColor: green + "15" }}><span className="text-[9px] font-bold" style={{ color: green }}>登録するメリット</span></div>
-                <div className="p-2" style={{ backgroundColor: red + "10" }}><span className="text-[9px] font-bold" style={{ color: red }}>登録するデメリット</span></div>
+                <div className="p-2" style={{ backgroundColor: green + "15" }}><span className="text-[9px] font-medium" style={{ color: green }}>登録するメリット</span></div>
+                <div className="p-2" style={{ backgroundColor: red + "10" }}><span className="text-[9px] font-medium" style={{ color: red }}>登録するデメリット</span></div>
               </div>
               {[
                 ["お店の控除10%がなくなり手取りUP", "消費税の申告・納付が必要"],
@@ -1335,11 +1336,11 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 5 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>💰 経費の整理</h2>
+            <h2 className="text-[14px] font-medium mb-1" style={{ color: T.text }}>💰 経費の整理</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>セラピストならではの経費をしっかり計上して節税しましょう！</p>
 
             <div className="p-3 rounded-xl mb-4" style={{ background: `linear-gradient(135deg, ${pink}15, ${pink}05)`, border: `1px solid ${pinkBorder}` }}>
-              <p className="text-[11px] font-bold" style={{ color: pink }}>💡 経費のポイント</p>
+              <p className="text-[11px] font-medium" style={{ color: pink }}>💡 経費のポイント</p>
               <p className="text-[10px] mt-1" style={{ color: T.textSub }}>
                 「仕事に必要な出費」はすべて経費になります。
                 セラピストは見た目も含めた「商品力」が重要なので、美容系の経費が認められやすい職種です。
@@ -1351,7 +1352,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 <button key={i} onClick={() => setShowDetail(showDetail === cat.cat ? null : cat.cat)}
                   className="w-full text-left" style={{ ...altCard, cursor: "pointer", border: `1px solid ${showDetail === cat.cat ? pinkBorder : "transparent"}` }}>
                   <div className="flex justify-between items-center">
-                    <p className="text-[11px] font-bold" style={{ color: T.text }}>{cat.cat}</p>
+                    <p className="text-[11px] font-medium" style={{ color: T.text }}>{cat.cat}</p>
                     <span className="text-[10px]" style={{ color: T.textMuted }}>{showDetail === cat.cat ? "▲" : "▼"}</span>
                   </div>
                   {showDetail === cat.cat && (
@@ -1369,7 +1370,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             <div className="mt-4" style={altCard}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📱 レシート管理のコツ</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>📱 レシート管理のコツ</p>
               <div className="space-y-1.5">
                 {[
                   "レシートをもらったらすぐスマホで撮影📸",
@@ -1386,7 +1387,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: orange + "10", border: `1px solid ${orange}33` }}>
-              <p className="text-[10px] font-bold" style={{ color: orange }}>⚠️ 按分（あんぶん）について</p>
+              <p className="text-[10px] font-medium" style={{ color: orange }}>⚠️ 按分（あんぶん）について</p>
               <p className="text-[9px] mt-1" style={{ color: T.textSub }}>
                 プライベートと仕事で兼用するもの（スマホ代、美容費など）は「仕事で使う割合」で経費にします。
                 例：スマホを仕事50%で使用 → 月額1万円の50%＝5,000円が経費。合理的な割合で按分しましょう。
@@ -1394,7 +1395,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: "#2563eb10", border: "1px solid #2563eb33" }}>
-              <p className="text-[10px] font-bold" style={{ color: "#2563eb" }}>💡 レシートに「適格事業者番号（T番号）」や「税率」は必要？</p>
+              <p className="text-[10px] font-medium" style={{ color: "#2563eb" }}>💡 レシートに「適格事業者番号（T番号）」や「税率」は必要？</p>
               <p className="text-[9px] mt-1" style={{ color: T.textSub }}>
                 <b style={{ color: green }}>ほとんどのセラピストさんは不要です！</b>
                 <br />
@@ -1411,7 +1412,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
           </div>
           {onGoToLedger && (
             <button onClick={onGoToLedger} className="w-full py-3 rounded-xl text-[11px] cursor-pointer"
-              style={{ backgroundColor: "#22c55e15", color: "#22c55e", border: "1px solid #22c55e44", fontWeight: 600 }}>
+              style={{ backgroundColor: "#22c55e15", color: "#22c55e", border: "1px solid #22c55e44", fontWeight: 500 }}>
               📒 帳簿・経費管理を開く（レシート登録・帳簿ダウンロード）
             </button>
           )}
@@ -1426,7 +1427,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
       {step === 6 && (
         <div className="space-y-3">
           <div style={{ ...cardBase, padding: "20px" }}>
-            <h2 className="text-[15px] font-bold mb-1" style={{ color: T.text }}>📄 確定申告書の作成・提出</h2>
+            <h2 className="text-[14px] font-medium mb-1" style={{ color: T.text }}>📄 確定申告書の作成・提出</h2>
             <p className="text-[10px] mb-4" style={{ color: T.textMuted }}>いよいよ最終ステップ！e-Taxで簡単に提出できます</p>
 
             {/* 提出までの流れ */}
@@ -1441,7 +1442,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 <div key={i} className="flex gap-3 items-start p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                   <span className="text-[18px] flex-shrink-0">{s.icon}</span>
                   <div>
-                    <p className="text-[11px] font-bold" style={{ color: T.text }}>{s.num} {s.title}</p>
+                    <p className="text-[11px] font-medium" style={{ color: T.text }}>{s.num} {s.title}</p>
                     <p className="text-[9px]" style={{ color: T.textSub }}>{s.desc}</p>
                   </div>
                 </div>
@@ -1450,7 +1451,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 必要書類チェックリスト */}
             <div style={altCard}>
-              <p className="text-[11px] font-bold mb-3" style={{ color: T.text }}>📋 必要書類チェックリスト</p>
+              <p className="text-[11px] font-medium mb-3" style={{ color: T.text }}>📋 必要書類チェックリスト</p>
               <div className="space-y-2">
                 {documents.map((doc) => (
                   <button key={doc.key} onClick={() => toggleCheck(doc.key)}
@@ -1475,7 +1476,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* e-Tax案内 */}
             <div className="mt-3" style={altCard}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>💻 e-Tax（電子申告）のやり方</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>💻 e-Tax（電子申告）のやり方</p>
               <div className="space-y-1.5">
                 {[
                   "国税庁「確定申告書等作成コーナー」にアクセス",
@@ -1485,7 +1486,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                   "送信ボタンで提出完了！",
                 ].map((t, i) => (
                   <p key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}>
-                    <span className="font-bold" style={{ color: pink }}>{i + 1}.</span>{t}
+                    <span className="font-medium" style={{ color: pink }}>{i + 1}.</span>{t}
                   </p>
                 ))}
               </div>
@@ -1497,7 +1498,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: green + "15", border: `1px solid ${green}44`, textDecoration: "none" }}>
                 <span className="text-[24px]">📝</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: green }}>確定申告書等作成コーナー</p>
+                  <p className="text-[11px] font-medium" style={{ color: green }}>確定申告書等作成コーナー</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>国税庁公式。ここから申告書を作成・e-Tax送信できます</p>
                 </div>
                 <span className="text-[10px]" style={{ color: green }}>↗</span>
@@ -1506,7 +1507,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                 className="flex items-center gap-3 p-3 rounded-xl cursor-pointer" style={{ backgroundColor: "#2563eb20", border: "1px solid #2563eb44", textDecoration: "none" }}>
                 <span className="text-[24px]">💻</span>
                 <div className="flex-1">
-                  <p className="text-[11px] font-bold" style={{ color: "#2563eb" }}>e-Tax公式サイト</p>
+                  <p className="text-[11px] font-medium" style={{ color: "#2563eb" }}>e-Tax公式サイト</p>
                   <p className="text-[8px]" style={{ color: T.textMuted }}>初めての方はこちらで利用者登録から</p>
                 </div>
                 <span className="text-[10px]" style={{ color: "#2563eb" }}>↗</span>
@@ -1516,7 +1517,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             {/* 副業の場合の注意点 */}
             {profile.isSubJob && (
               <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
-                <p className="text-[11px] font-bold" style={{ color: red }}>🔒 【超重要】副業バレ防止</p>
+                <p className="text-[11px] font-medium" style={{ color: red }}>🔒 【超重要】副業バレ防止</p>
                 <p className="text-[10px] mt-1" style={{ color: T.textSub }}>
                   確定申告書 第二表の「住民税の徴収方法」欄で、必ず<b style={{ color: red }}>「自分で納付（普通徴収）」</b>にチェック！
                 </p>
@@ -1528,14 +1529,14 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 提出期限 */}
             <div className="mt-3 p-3 rounded-xl" style={{ background: `linear-gradient(135deg, ${pink}15, ${pink}05)`, border: `1px solid ${pinkBorder}` }}>
-              <p className="text-[12px] font-bold text-center" style={{ color: pink }}>📅 提出期限</p>
-              <p className="text-[20px] font-bold text-center mt-1" style={{ color: T.text }}>毎年 2月16日 〜 3月15日</p>
+              <p className="text-[12px] font-medium text-center" style={{ color: pink }}>📅 提出期限</p>
+              <p className="text-[20px] font-medium text-center mt-1" style={{ color: T.text }}>毎年 2月16日 〜 3月15日</p>
               <p className="text-[9px] text-center mt-1" style={{ color: T.textMuted }}>※還付申告（税金が戻ってくる場合）は1月1日から提出可能</p>
             </div>
 
             {/* T-MANAGEデータの使い方 */}
-            <div className="mt-3" style={{ ...altCard, border: `2px solid ${pink}44` }}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: pink }}>📒 T-MANAGEの帳簿データの使い方</p>
+            <div className="mt-3" style={{ ...altCard, border: `1px solid ${pink}44` }}>
+              <p className="text-[11px] font-medium mb-2" style={{ color: pink }}>📒 T-MANAGEの帳簿データの使い方</p>
               <div className="space-y-1.5">
                 {[
                   "「帳簿・経費管理」→「📄 申告」タブで年間の収入・経費・所得を確認",
@@ -1545,46 +1546,46 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                   "経費 → 勘定科目ごとの金額を入力（PDFに一覧あり）",
                 ].map((t, i) => (
                   <p key={i} className="text-[10px] flex gap-1.5" style={{ color: T.textSub }}>
-                    <span className="font-bold" style={{ color: pink }}>{i + 1}.</span>{t}
+                    <span className="font-medium" style={{ color: pink }}>{i + 1}.</span>{t}
                   </p>
                 ))}
               </div>
             </div>
 
             {/* 💰 納税方法 */}
-            <div className="mt-3" style={{ ...altCard, border: `2px solid ${green}33` }}>
-              <p className="text-[12px] font-bold mb-3" style={{ color: green }}>💰 税金の納め方（所得税）</p>
+            <div className="mt-3" style={{ ...altCard, border: `1px solid ${green}33` }}>
+              <p className="text-[12px] font-medium mb-3" style={{ color: green }}>💰 税金の納め方（所得税）</p>
               <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>確定申告で「納付」の場合、以下の方法で3月15日までに納付します。還付の場合は約1〜2ヶ月で指定口座に振り込まれます。</p>
               <div className="space-y-2">
                 <div className="p-2.5 rounded-lg" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
-                  <p className="text-[10px] font-bold" style={{ color: green }}>★ おすすめ：振替納税（口座引き落とし）</p>
+                  <p className="text-[10px] font-medium" style={{ color: green }}>★ おすすめ：振替納税（口座引き落とし）</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>
                     銀行口座から自動引き落とし。一度設定すれば毎年自動。引き落とし日は4月中旬〜下旬（約1ヶ月の猶予あり）。
                   </p>
                   <p className="text-[8px] mt-1" style={{ color: T.textMuted }}>設定方法：e-Taxで電子申告時に「振替納税」を選択 → 口座情報を入力するだけ</p>
                 </div>
                 <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                  <p className="text-[10px] font-bold" style={{ color: T.text }}>② クレジットカード納付</p>
+                  <p className="text-[10px] font-medium" style={{ color: T.text }}>② クレジットカード納付</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>国税クレジットカードお支払サイトから納付。手数料がかかります（税額1万円につき約83円）。</p>
                 </div>
                 <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                  <p className="text-[10px] font-bold" style={{ color: T.text }}>③ スマホアプリ納付（PayPay等）</p>
+                  <p className="text-[10px] font-medium" style={{ color: T.text }}>③ スマホアプリ納付（PayPay等）</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>Pay払い（PayPay、d払い、au PAY、楽天ペイ等）で30万円以下なら納付可能。手数料無料。</p>
                 </div>
                 <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                  <p className="text-[10px] font-bold" style={{ color: T.text }}>④ コンビニ納付（QRコード）</p>
+                  <p className="text-[10px] font-medium" style={{ color: T.text }}>④ コンビニ納付（QRコード）</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>確定申告書等作成コーナーでQRコードを作成 → コンビニのレジで納付。30万円以下。</p>
                 </div>
                 <div className="p-2 rounded-lg" style={{ backgroundColor: T.card }}>
-                  <p className="text-[10px] font-bold" style={{ color: T.text }}>⑤ 銀行窓口・ダイレクト納付</p>
+                  <p className="text-[10px] font-medium" style={{ color: T.text }}>⑤ 銀行窓口・ダイレクト納付</p>
                   <p className="text-[9px]" style={{ color: T.textSub }}>銀行窓口で納付書を使って納付。またはe-Taxからのダイレクト納付（事前届出が必要）。</p>
                 </div>
               </div>
             </div>
 
             {/* 申告後の流れ */}
-            <div className="mt-3" style={{ ...altCard, border: `2px solid ${orange}33` }}>
-              <p className="text-[12px] font-bold mb-3" style={{ color: orange }}>📅 申告後のスケジュール</p>
+            <div className="mt-3" style={{ ...altCard, border: `1px solid ${orange}33` }}>
+              <p className="text-[12px] font-medium mb-3" style={{ color: orange }}>📅 申告後のスケジュール</p>
               <div className="space-y-2">
                 {[
                   { when: "3月15日", what: "所得税の納付期限", desc: "振替納税の場合は4月中旬〜下旬に引き落とし", icon: "💴" },
@@ -1597,8 +1598,8 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <span className="text-[14px] flex-shrink-0">{item.icon}</span>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[8px] px-1.5 py-0.5 rounded font-bold" style={{ backgroundColor: orange + "20", color: orange }}>{item.when}</span>
-                        <span className="text-[10px] font-bold" style={{ color: T.text }}>{item.what}</span>
+                        <span className="text-[8px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: orange + "20", color: orange }}>{item.when}</span>
+                        <span className="text-[10px] font-medium" style={{ color: T.text }}>{item.what}</span>
                       </div>
                       <p className="text-[8px] mt-0.5" style={{ color: T.textSub }}>{item.desc}</p>
                     </div>
@@ -1609,7 +1610,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
             {/* 住民税の納付方法 */}
             <div className="mt-3" style={altCard}>
-              <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>🏛 住民税の納め方</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: T.text }}>🏛 住民税の納め方</p>
               <p className="text-[9px] mb-2" style={{ color: T.textSub }}>
                 住民税は確定申告とは別に、お住まいの市区町村に納付します。確定申告すると自動的に住民税も計算されます。
               </p>
@@ -1619,14 +1620,14 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </div>
               {profile.isSubJob && (
                 <div className="mt-2 p-2 rounded-lg" style={{ backgroundColor: red + "08" }}>
-                  <p className="text-[8px] font-bold" style={{ color: red }}>⚠️ 副業の方は「普通徴収」を必ず選択！（確定申告書で選択済みのはず）</p>
+                  <p className="text-[8px] font-medium" style={{ color: red }}>⚠️ 副業の方は「普通徴収」を必ず選択！（確定申告書で選択済みのはず）</p>
                 </div>
               )}
             </div>
           </div>
           {onGoToLedger && (
             <button onClick={onGoToLedger} className="w-full py-3 rounded-xl text-[11px] cursor-pointer"
-              style={{ backgroundColor: "#22c55e15", color: "#22c55e", border: "1px solid #22c55e44", fontWeight: 600 }}>
+              style={{ backgroundColor: "#22c55e15", color: "#22c55e", border: "1px solid #22c55e44", fontWeight: 500 }}>
               📒 帳簿を開いてCSVダウンロード → 確定申告に使える！
             </button>
           )}
@@ -1639,13 +1640,13 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
       {/* ============== FAQ セクション（常時表示） ============== */}
       <div style={{ ...cardBase, padding: "20px" }}>
-        <h2 className="text-[15px] font-bold mb-3" style={{ color: T.text }}>❓ よくある質問・不安解消</h2>
+        <h2 className="text-[14px] font-medium mb-3" style={{ color: T.text }}>❓ よくある質問・不安解消</h2>
         <div className="space-y-2">
           {faqs.map((faq, i) => (
             <button key={i} onClick={() => setExpandedFaq(expandedFaq === i ? null : i)}
               className="w-full text-left cursor-pointer" style={{ ...altCard, border: `1px solid ${expandedFaq === i ? pinkBorder : "transparent"}` }}>
               <div className="flex justify-between items-center">
-                <p className="text-[11px] font-bold" style={{ color: T.text }}>{faq.q}</p>
+                <p className="text-[11px] font-medium" style={{ color: T.text }}>{faq.q}</p>
                 <span className="text-[10px] flex-shrink-0 ml-2" style={{ color: T.textMuted }}>{expandedFaq === i ? "▲" : "▼"}</span>
               </div>
               {expandedFaq === i && (
@@ -1658,7 +1659,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
 
       {/* ============== 進捗サマリー（常時表示） ============== */}
       <div style={{ ...cardBase, padding: "20px" }}>
-        <h2 className="text-[15px] font-bold mb-3" style={{ color: T.text }}>📈 あなたの進捗状況</h2>
+        <h2 className="text-[14px] font-medium mb-3" style={{ color: T.text }}>📈 あなたの進捗状況</h2>
         <div className="space-y-2">
           {STEPS.map((s, i) => (
             <div key={i} className="flex items-center gap-3 p-2 rounded-xl cursor-pointer"
