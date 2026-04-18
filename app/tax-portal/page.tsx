@@ -63,7 +63,7 @@ const TAX_TASKS: TaxTask[] = [
   // 毎月の業務
   { id: "monthly-payroll", timing: "毎月", month: 0, title: "給与計算・給与振込", description: "スタッフ・社員の給与計算と振込処理", assignee: "会社", deadline: "月末", category: "給与", importance: "high" },
   { id: "monthly-shakai", timing: "毎月", month: 0, title: "社会保険料納付", description: "健康保険・厚生年金の納付（翌月末）", assignee: "会社", deadline: "翌月末", category: "社保", importance: "high" },
-  { id: "monthly-trial", timing: "毎月", month: 0, title: "月次試算表作成", description: "前月分の試算表を税理士に提出", assignee: "会社", deadline: "翌月15日目安", category: "経理", importance: "medium" },
+  { id: "monthly-trial", timing: "毎月", month: 0, title: "月次資料を税理士に提出", description: "前月の売上・経費・銀行明細を税理士ポータルで確認できる状態にして、税理士に試算表作成を依頼（📊 月次サマリーから「月次試算表（管理用）」をPDF出力して送るとスムーズ）", assignee: "共同", deadline: "翌月15日目安", category: "経理", importance: "medium" },
   // 1月
   { id: "jan-withhold-h2", timing: "1月", month: 1, title: "源泉所得税納付（納特・下半期）", description: "7〜12月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "1/20", category: "源泉", importance: "high" },
   { id: "jan-shiharai-chosho", timing: "1月", month: 1, title: "法定調書合計表・支払調書提出", description: "セラピスト等への支払調書と法定調書を税務署に提出", assignee: "税理士", deadline: "1/31", category: "源泉", importance: "high" },
@@ -815,6 +815,157 @@ export default function TaxPortal() {
     }
   };
 
+  // 📊 月次試算表（管理用）を新窓で開いて印刷
+  const openMonthlyTrialBalance = () => {
+    const periodLabel = viewMode === "monthly"
+      ? `${selectedMonth.split("-")[0]}年${parseInt(selectedMonth.split("-")[1])}月`
+      : `${selectedYear}年`;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+
+    // 売上内訳
+    const cardSales = reservations.reduce((s, r) => {
+      const card = (r as unknown as { card_amount?: number }).card_amount || 0;
+      return s + card;
+    }, 0);
+    const paypaySales = reservations.reduce((s, r) => {
+      const p = (r as unknown as { paypay_amount?: number }).paypay_amount || 0;
+      return s + p;
+    }, 0);
+    const cashSales = reservations.reduce((s, r) => {
+      const c = (r as unknown as { cash_amount?: number }).cash_amount || 0;
+      return s + c;
+    }, 0);
+    const otherIncome = expenses.filter(e => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
+
+    // 経費の勘定科目別 (accountSummary をそのまま使う)
+    // therapist_back は外注費として別枠表示
+
+    // HTMLを生成
+    const rows = accountSummary.filter(a => a.category !== "therapist_back").map(a => {
+      const pct = totalExpenseAll > 0 ? Math.round((a.amount / totalExpenseAll) * 100) : 0;
+      return `<tr><td class="l">${a.account}</td><td class="r">${fmt(a.amount)}</td><td class="r sub">${pct}%</td></tr>`;
+    }).join("");
+    const backPct = totalExpenseAll > 0 ? Math.round((totalBack / totalExpenseAll) * 100) : 0;
+    const outsourcingRow = totalBack > 0 ? `<tr><td class="l">外注費（業務委託）</td><td class="r">${fmt(totalBack)}</td><td class="r sub">${backPct}%</td></tr>` : "";
+
+    const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>月次試算表_${periodLabel}_${companyName}</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    * { box-sizing: border-box; }
+    body { font-family: "Hiragino Sans","Yu Gothic","Meiryo",sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; margin: 0; padding: 20px; background: #fafafa; }
+    .sheet { max-width: 800px; margin: 0 auto; background: #fff; padding: 30px 35px; border: 1px solid #ddd; }
+    h1 { font-size: 20pt; text-align: center; margin: 0 0 8px 0; font-weight: 500; letter-spacing: 2px; }
+    .subtitle { text-align: center; font-size: 10pt; color: #666; margin-bottom: 25px; }
+    .meta { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 10pt; }
+    .meta-block { flex: 1; }
+    .meta-block strong { display: inline-block; min-width: 70px; color: #666; font-weight: normal; }
+    h2 { font-size: 13pt; border-left: 4px solid #c3a782; padding-left: 10px; margin: 25px 0 10px 0; font-weight: 500; }
+    h3 { font-size: 11pt; color: #555; margin: 15px 0 6px 0; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 10pt; }
+    th { background: #f5f2ec; color: #555; padding: 8px 10px; text-align: left; border-bottom: 1px solid #d4c9b0; font-weight: 500; font-size: 9pt; }
+    th.r { text-align: right; }
+    td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+    td.l { text-align: left; }
+    td.r { text-align: right; font-variant-numeric: tabular-nums; }
+    td.sub { color: #999; font-size: 9pt; }
+    tr.total td { background: #fafafa; border-top: 2px solid #888; border-bottom: 2px solid #888; font-weight: 500; padding: 8px 10px; }
+    tr.grand td { background: #c3a78215; border-top: 2px solid #c3a782; border-bottom: 3px double #c3a782; font-weight: 500; padding: 10px; font-size: 11pt; }
+    tr.profit td { background: ${netProfit >= 0 ? "#22c55e15" : "#c4555515"}; font-weight: 500; color: ${netProfit >= 0 ? "#15803d" : "#9b1c1c"}; }
+    tr.sub-row td { padding-left: 25px; color: #555; font-size: 9.5pt; }
+    tr.sub-row td.l::before { content: "└ "; color: #aaa; }
+    .note { margin-top: 30px; padding: 12px 15px; background: #fffef0; border-left: 3px solid #c3a782; font-size: 9pt; line-height: 1.7; color: #555; }
+    .footer { margin-top: 25px; text-align: center; font-size: 9pt; color: #888; padding-top: 15px; border-top: 1px solid #eee; }
+    .print-btn { display: block; margin: 20px auto; padding: 10px 30px; background: #c3a782; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11pt; font-family: inherit; }
+    .print-btn:hover { background: #b09672; }
+    @media print {
+      body { background: white; padding: 0; }
+      .sheet { border: none; padding: 0; max-width: none; }
+      .print-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <h1>月 次 試 算 表</h1>
+    <p class="subtitle">（管理用・T-MANAGE自動生成）</p>
+
+    <div class="meta">
+      <div class="meta-block">
+        <p><strong>会社名</strong>${companyName}</p>
+        <p><strong>対象期間</strong>${periodLabel}</p>
+      </div>
+      <div class="meta-block" style="text-align: right">
+        <p><strong>作成日</strong>${todayStr}</p>
+      </div>
+    </div>
+
+    <h2>Ⅰ 損益計算書</h2>
+
+    <h3>◆ 収益の部</h3>
+    <table>
+      <thead>
+        <tr><th>項目</th><th class="r">金額</th><th class="r">補足</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="l">売上高（サービス売上）</td><td class="r">${fmt(totalSales)}</td><td class="r sub">${reservations.length}件</td></tr>
+        ${cardSales > 0 ? `<tr class="sub-row"><td class="l">カード決済</td><td class="r">${fmt(cardSales)}</td><td></td></tr>` : ""}
+        ${paypaySales > 0 ? `<tr class="sub-row"><td class="l">PayPay決済</td><td class="r">${fmt(paypaySales)}</td><td></td></tr>` : ""}
+        ${cashSales > 0 ? `<tr class="sub-row"><td class="l">現金売上</td><td class="r">${fmt(cashSales)}</td><td></td></tr>` : ""}
+        ${otherIncome > 0 ? `<tr><td class="l">その他収入（雑収入等）</td><td class="r">${fmt(otherIncome)}</td><td class="r sub">—</td></tr>` : ""}
+        <tr class="total"><td class="l">収益 合計</td><td class="r">${fmt(grossRevenue)}</td><td></td></tr>
+      </tbody>
+    </table>
+
+    <h3>◆ 費用の部</h3>
+    <table>
+      <thead>
+        <tr><th>勘定科目</th><th class="r">金額</th><th class="r">構成比</th></tr>
+      </thead>
+      <tbody>
+        ${outsourcingRow}
+        ${rows || `<tr><td class="l" colspan="3" style="text-align:center; color:#999">経費データがありません</td></tr>`}
+        <tr class="total"><td class="l">費用 合計</td><td class="r">${fmt(totalExpenseAll)}</td><td class="r">100%</td></tr>
+      </tbody>
+    </table>
+
+    <h3>◆ 差引利益</h3>
+    <table>
+      <tbody>
+        <tr class="grand"><td class="l">収益 合計</td><td class="r">${fmt(grossRevenue)}</td><td></td></tr>
+        <tr class="grand"><td class="l">費用 合計</td><td class="r">△ ${fmt(totalExpenseAll)}</td><td></td></tr>
+        <tr class="profit grand"><td class="l">${netProfit >= 0 ? "当期純利益" : "当期純損失"}</td><td class="r">${netProfit < 0 ? "△ " : ""}${fmt(Math.abs(netProfit))}</td><td></td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>💡 本書類について</strong><br>
+      本書類は T-MANAGE により自動生成された<strong>管理用の月次サマリー</strong>です。<br>
+      ・科目の分類はサロン側の登録内容に基づいており、会計基準上の正式な科目と異なる場合があります。<br>
+      ・貸借対照表（BS）は税理士先生が仕訳確定後に作成します。<br>
+      ・<strong>正式な月次試算表</strong>は、本資料・銀行明細・領収書等を元に顧問税理士が作成します。<br>
+      ・税務署提出や融資申請に使用する資料としては、税理士作成版をご利用ください。
+    </div>
+
+    <div class="footer">
+      合同会社テラスライフ T-MANAGE / Generated on ${todayStr}
+    </div>
+
+    <button class="print-btn" onclick="window.print()">🖨 印刷 / PDFで保存</button>
+  </div>
+</body>
+</html>`;
+
+    const w = window.open("", "_blank");
+    if (!w) { alert("ポップアップがブロックされました。ブラウザ設定を確認してください。"); return; }
+    w.document.write(html);
+    w.document.close();
+  };
+
   // 経費明細CSV出力
   const exportExpenseCSV = () => {
     const items = expenses.filter(e => e.type !== "income");
@@ -1022,9 +1173,10 @@ export default function TaxPortal() {
               </div>
 
               <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-2" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
                   <span className="text-[12px] font-medium">📊 勘定科目別集計（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
                   <div className="flex items-center gap-2">
+                    <button onClick={openMonthlyTrialBalance} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "none" }}>📄 月次試算表（管理用）を出力</button>
                     <button onClick={exportSummaryCSV} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>💾 CSV出力</button>
                     <span className="text-[10px]" style={{ color: T.textFaint }}>{accountSummary.length}科目</span>
                   </div>
