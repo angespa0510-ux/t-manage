@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
+import { useConfirm } from "../components/useConfirm";
 
 // ========================================
 // Types
@@ -220,6 +221,7 @@ async function postToBluesky(id: string, pw: string, text: string): Promise<{ su
 export function SokuhoPanel({
   show, onClose, therapists, reservations, shifts, stores, buildings, allRooms, roomAssigns, clockedOut, selectedDate, T, dark,
 }: SokuhoProps) {
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [currentRoom, setCurrentRoom] = useState<"mikawa" | "toyohashi">("mikawa");
   const [slots, setSlots] = useState<TherapistSlot[]>([]);
   const [bskyId, setBskyId] = useState("");
@@ -460,7 +462,8 @@ export function SokuhoPanel({
       ? [...segmenter.segment(text)].length
       : text.length;
     if (graphemeCount > 300) {
-      if (!confirm(`テキストが${graphemeCount}文字です（Bluesky上限300文字）。\n投稿するとエラーになる可能性があります。続行しますか？`)) return;
+      const ok = await confirm({ title: `テキストが${graphemeCount}文字です`, message: "Bluesky上限の300文字を超えています。投稿するとエラーになる可能性があります。続行しますか？", variant: "warning", confirmLabel: "続行する" });
+      if (!ok) return;
     }
     setPosting(true);
     setPostResult(null);

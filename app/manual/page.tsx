@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useBackNav } from "../../lib/use-back-nav";
+import { useConfirm } from "../../components/useConfirm";
 
 type Category = { id: number; name: string; icon: string; color: string; description: string; sort_order: number };
 type Article = {
@@ -32,6 +33,7 @@ function tagColor(tag: string) {
 export default function ManualPage() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff } = useStaffSession();
   // NavMenu manages its own state
 
@@ -317,7 +319,8 @@ export default function ManualPage() {
 
   // ── Delete article ──
   const deleteArticle = async (id: number) => {
-    if (!confirm("この記事を削除しますか？")) return;
+    const ok = await confirm({ title: "この記事を削除しますか？", message: "既読履歴・更新履歴も削除されます。", variant: "danger", confirmLabel: "削除する" });
+    if (!ok) return;
     await supabase.from("manual_articles").delete().eq("id", id);
     fetchData();
   };
@@ -1030,6 +1033,7 @@ export default function ManualPage() {
 
   return (
     <div style={S.page}>
+      {ConfirmModalNode}
       <div style={S.header}>
         <NavMenu T={T} />
         <span style={S.headerTitle}>📖 マニュアル管理</span>
@@ -1044,7 +1048,8 @@ export default function ManualPage() {
             <div style={{ fontSize: 16, fontWeight: 600 }}>🤖 AI質問ログ</div>
             <div style={{ display: "flex", gap: 8 }}>
               <button style={S.btn} onClick={async () => {
-                if (confirm("全ログを削除しますか？")) {
+                const ok = await confirm({ title: "全ログを削除しますか？", message: "AIへの質問履歴がすべて削除されます。元に戻せません。", variant: "danger", confirmLabel: "全削除する" });
+                if (ok) {
                   await supabase.from("manual_ai_logs").delete().neq("id", 0);
                   fetchData();
                 }

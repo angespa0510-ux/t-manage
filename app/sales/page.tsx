@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "../../components/useConfirm";
 
 type Sale = {
   id: number; created_at: string; date: string; therapist_id: number;
@@ -13,6 +14,7 @@ type Store = { id: number; name: string };
 
 export default function SalesAnalysis() {
   const router = useRouter();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [sales, setSales] = useState<Sale[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -77,7 +79,8 @@ export default function SalesAnalysis() {
   };
 
   const deleteSale = async (id: number) => {
-    if (!confirm("この売上データを削除しますか？")) return;
+    const ok = await confirm({ title: "この売上データを削除しますか？", variant: "danger", confirmLabel: "削除する" });
+    if (!ok) return;
     await supabase.from("sales").delete().eq("id", id);
     fetchData();
   };
@@ -165,6 +168,7 @@ export default function SalesAnalysis() {
 
   return (
     <div className="h-screen flex flex-col bg-[#f8f6f3]">
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[64px] bg-white/80 backdrop-blur-xl border-b border-[#e8e4df] flex items-center justify-between px-6 flex-shrink-0">
         <div className="flex items-center gap-4">

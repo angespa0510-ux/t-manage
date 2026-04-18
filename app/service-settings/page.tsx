@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { useConfirm } from "../../components/useConfirm";
 
 type Nomination = { id: number; name: string; price: number; therapist_back: number };
 type Discount = { id: number; name: string; amount: number; type: string; newcomer_only: boolean; web_available: boolean; valid_from: string | null; valid_until: string | null; combinable: boolean };
@@ -37,6 +38,7 @@ export default function ServiceSettings() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
   const { activeStaff } = useStaffSession();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [tab, setTab] = useState<Tab>("nomination");
 
   const [nominations, setNominations] = useState<Nomination[]>([]);
@@ -278,7 +280,8 @@ export default function ServiceSettings() {
 
   // ===== Delete =====
   const handleDelete = async (id: number) => {
-    if (!confirm("削除しますか？")) return;
+    const ok = await confirm({ title: "削除しますか？", variant: "danger", confirmLabel: "削除する" });
+    if (!ok) return;
     const table = tab === "nomination" ? "nominations" : tab === "discount" ? "discounts" : tab === "extension" ? "extensions" : "options";
     await supabase.from(table).delete().eq("id", id);
     fetchData();
@@ -347,7 +350,8 @@ export default function ServiceSettings() {
 
   // ===== Bonus Rule Delete =====
   const deleteBonusRule = async (id: number) => {
-    if (!confirm("このボーナスルールを削除しますか？")) return;
+    const ok = await confirm({ title: "このボーナスルールを削除しますか？", variant: "danger", confirmLabel: "削除する" });
+    if (!ok) return;
     await supabase.from("point_bonus_rules").delete().eq("id", id);
     fetchData();
   };
@@ -408,6 +412,7 @@ export default function ServiceSettings() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">
@@ -1038,7 +1043,7 @@ export default function ServiceSettings() {
                         <p className="text-[13px] font-medium">接客 {r.min_sessions}本以上 × 本指名率 {r.min_nomination_rate}%以上 → <span style={{ color: "#8b5cf6" }}>+{r.salary_type === "percent" ? `${r.back_increase}%` : `${r.back_increase.toLocaleString()}円`}UP</span></p>
                         <div className="flex items-center gap-2">
                           <button onClick={async () => { await supabase.from("back_rate_rules").update({ is_active: !r.is_active }).eq("id", r.id); fetchData(); }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: r.is_active ? "#4a7c59" : "#888", backgroundColor: r.is_active ? "#4a7c5918" : "#88888818" }}>{r.is_active ? "ON" : "OFF"}</button>
-                          <button onClick={async () => { if (confirm("削除しますか？")) { await supabase.from("back_rate_rules").delete().eq("id", r.id); fetchData(); } }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
+                          <button onClick={async () => { const ok = await confirm({ title: "このバックルールを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (ok) { await supabase.from("back_rate_rules").delete().eq("id", r.id); fetchData(); } }} className="px-2 py-1 text-[10px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                         </div>
                       </div>
                     ))}

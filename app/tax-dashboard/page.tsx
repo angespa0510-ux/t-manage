@@ -10,6 +10,7 @@ import { useStaffSession } from "../../lib/staff-session";
 import { useToast } from "../../lib/toast";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
 import JSZip from "jszip";
+import { useConfirm } from "../../components/useConfirm";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -28,6 +29,7 @@ export default function TaxDashboard() {
   const router = useRouter();
   const toast = useToast();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const { role, loading: roleLoading, isOwner } = useRole();
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -183,6 +185,7 @@ export default function TaxDashboard() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">
@@ -1604,6 +1607,7 @@ function TaxCalendar({ T, onNavigate }: { T: any; onNavigate: (tab: string) => v
 function MyNumberManager({ T }: { T: any }) {
   const { activeStaff } = useStaffSession();
   const toast = useToast();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const staffName = activeStaff?.name || "不明";
   const [therapists, setTherapists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1777,7 +1781,14 @@ ${backFile ? `<div class="photo-box"><p class="photo-label">裏面</p><img src="
   // ====== 一括保存 ======
   const bulkDownload = async (targets: any[], label: string) => {
     if (saving || bulkSaving || targets.length === 0) return;
-    if (!confirm(`${targets.length}名分のマイナンバーを${saveMethod === "folder" ? "指定フォルダ" : "ZIPファイル"}に保存します。\n\n対象: ${targets.map(t => t.name).slice(0, 5).join("、")}${targets.length > 5 ? ` ほか${targets.length - 5}名` : ""}\n\n⚠️ 番号法遵守のため、保存後は暗号化USB等の安全な場所で管理してください。`)) return;
+    const ok = await confirm({
+      title: `${targets.length}名分のマイナンバーを保存しますか？`,
+      message: `保存先: ${saveMethod === "folder" ? "指定フォルダ" : "ZIPファイル"}\n対象: ${targets.map(t => t.name).slice(0, 5).join("、")}${targets.length > 5 ? ` ほか${targets.length - 5}名` : ""}\n\n⚠️ 番号法遵守のため、保存後は暗号化USB等の安全な場所で管理してください。`,
+      variant: "warning",
+      confirmLabel: "保存する",
+      icon: "🔢",
+    });
+    if (!ok) return;
     setBulkSaving(label);
     try {
       const rootName = `マイナンバー_${label}_${today()}_${safeName(staffName)}`;
@@ -1860,7 +1871,14 @@ ${t.mynumber_photo_url_back ? `<div class="photo-box"><p class="photo-label">裏
 
   // ====== 既存: クラウドから削除 ======
   const deleteFromCloud = async (t: any) => {
-    if (!confirm(`${t.name} のマイナンバーデータをクラウドから削除しますか？\n\n削除されるもの：\n• 個人番号（数字）\n• カード写真（表面・裏面）\n\n⚠️ 事前にローカルに保存しておくことを強く推奨します。`)) return;
+    const ok = await confirm({
+      title: `${t.name} のマイナンバーデータをクラウドから削除しますか？`,
+      message: "削除されるもの:\n• 個人番号（数字）\n• カード写真（表面・裏面）\n\n⚠️ 事前にローカルに保存しておくことを強く推奨します。",
+      variant: "danger",
+      confirmLabel: "クラウドから削除",
+      icon: "🗑️",
+    });
+    if (!ok) return;
     setDeleting(t.id);
     const updates: any = { mynumber: "", mynumber_photo_url: "", mynumber_photo_url_back: "" };
     try {
@@ -1883,6 +1901,7 @@ ${t.mynumber_photo_url_back ? `<div class="photo-box"><p class="photo-label">裏
 
   return (
     <div className="max-w-[960px] mx-auto">
+      {ConfirmModalNode}
       {/* 注意事項 */}
       <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: "#c4555512", border: "1px solid #c4555533" }}>
         <p className="text-[11px] font-medium" style={{ color: "#c45555" }}>🔒 マイナンバー管理について（番号法遵守）</p>

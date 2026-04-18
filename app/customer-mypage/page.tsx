@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
+import { useConfirm } from "../../components/useConfirm";
 
 type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number; point_used?: number };
@@ -39,6 +40,7 @@ const linkify = (text: string) => {
 };
 
 export default function CustomerMypage() {
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register" | "reset">("login");
   const [authEmail, setAuthEmail] = useState(""); const [authPw, setAuthPw] = useState(""); const [authName, setAuthName] = useState(""); const [authPhone, setAuthPhone] = useState(""); const [authError, setAuthError] = useState(""); const [authLoading, setAuthLoading] = useState(false); const [showPw, setShowPw] = useState(false);
@@ -290,7 +292,7 @@ export default function CustomerMypage() {
   const markRead = async (nid: number) => { if (!customer || readNotifIds.includes(nid)) return; await supabase.from("customer_notification_reads").insert({ customer_id: customer.id, notification_id: nid }); setReadNotifIds(prev => [...prev, nid]); };
   const markAllRead = async () => { if (!customer) return; for (const n of notifications.filter(n => !readNotifIds.includes(n.id))) { try { await supabase.from("customer_notification_reads").insert({ customer_id: customer.id, notification_id: n.id }); } catch {} } setReadNotifIds(notifications.map(n => n.id)); };
   const addCard = async () => { if (!customer || !cardLast4 || cardLast4.length !== 4) return; await supabase.from("customer_cards").insert({ customer_id: customer.id, brand: cardBrand, last4: cardLast4, holder_name: cardHolder, exp_month: cardExpMonth, exp_year: cardExpYear, is_default: cards.length === 0 }); setShowAddCard(false); setCardLast4(""); setCardHolder(""); fetchData(); };
-  const removeCard = async (id: number) => { if (!confirm("このカードを削除しますか？")) return; await supabase.from("customer_cards").delete().eq("id", id); fetchData(); };
+  const removeCard = async (id: number) => { const ok = await confirm({ title: "このカードを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (!ok) return; await supabase.from("customer_cards").delete().eq("id", id); fetchData(); };
   const setDefaultCard = async (id: number) => { if (!customer) return; await supabase.from("customer_cards").update({ is_default: false }).eq("customer_id", customer.id); await supabase.from("customer_cards").update({ is_default: true }).eq("id", id); fetchData(); };
   const submitBooking = async () => {
     if (!customer || !bookDate) { setBookMsg("日付を選択してください"); return; }
@@ -433,6 +435,7 @@ export default function CustomerMypage() {
   const tabs: { key: typeof tab; label: string; icon: string }[] = [{ key: "home", label: "ホーム", icon: "🏠" }, { key: "schedule", label: "予約", icon: "📅" }, { key: "favorites", label: "お気に入り", icon: "❤️" }, { key: "notifications", label: "お知らせ", icon: "🔔" }, { key: "settings", label: "設定", icon: "⚙️" }];
 
   return (<div className="min-h-screen pb-20" style={{ backgroundColor: C.bg, color: C.text }}>
+    {ConfirmModalNode}
     {/* Header */}
     <div className="sticky top-0 z-30 border-b backdrop-blur-xl" style={{ backgroundColor: C.card + "ee", borderColor: C.border }}><div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] text-white font-medium" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{(customer.self_name || customer.name)?.charAt(0)}</div><div><p className="text-[14px] font-medium">{customer.self_name || customer.name} 様</p><p className="text-[10px]" style={{ color: C.textMuted }}>{(() => { const r = customer.rank || "normal"; const icon = r === "platinum" ? "💎" : r === "gold" ? "🥇" : r === "silver" ? "🥈" : ""; const label = r === "platinum" ? "プラチナ" : r === "gold" ? "ゴールド" : r === "silver" ? "シルバー" : ""; return icon ? <span style={{ color: r === "platinum" ? "#9b59b6" : r === "gold" ? "#f1c40f" : "#95a5a6", fontWeight: 600 }}>{icon}{label} </span> : null; })()}ポイント: <span style={{ color: C.accent, fontWeight: 600 }}>{pointBalance.toLocaleString()}pt</span></p></div></div><div className="flex items-center gap-2"><button onClick={() => setTab("notifications")} className="relative p-2 cursor-pointer"><span className="text-[18px]">🔔</span>{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: C.red }}>{unreadCount}</span>}</button><button onClick={handleLogout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: C.border, color: C.textMuted }}>ログアウト</button></div></div></div>
 
@@ -1038,7 +1041,7 @@ export default function CustomerMypage() {
               {memoSaving ? "保存中..." : "メモを保存"}
             </button>
             {getMemo(editMemoResId) && (
-              <button onClick={async () => { const m = getMemo(editMemoResId); if (m && confirm("このメモを削除しますか？")) { await supabase.from("customer_therapist_memos").delete().eq("id", m.id); setShowMemoModal(false); try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer!.id); if (memos) setCustomerMemos(memos); } catch {} } }} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: C.red, backgroundColor: "#c4555510", border: "1px solid #c4555520" }}>
+              <button onClick={async () => { const m = getMemo(editMemoResId); if (!m) return; const ok = await confirm({ title: "このメモを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (!ok) return; await supabase.from("customer_therapist_memos").delete().eq("id", m.id); setShowMemoModal(false); try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer!.id); if (memos) setCustomerMemos(memos); } catch {} }} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: C.red, backgroundColor: "#c4555510", border: "1px solid #c4555520" }}>
                 メモを削除
               </button>
             )}

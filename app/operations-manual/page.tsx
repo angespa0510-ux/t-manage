@@ -4,12 +4,14 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { useBackNav } from "../../lib/use-back-nav";
+import { useConfirm } from "../../components/useConfirm";
 
 type Category = { id: number; name: string; icon: string; sort_order: number };
 type Article = { id: number; category_id: number; title: string; content: string; sort_order: number; created_at: string; updated_at: string };
 
 export default function OperationsManual() {
   const { dark, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [categories, setCategories] = useState<Category[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedCat, setSelectedCat] = useState<number | null>(null);
@@ -89,7 +91,8 @@ export default function OperationsManual() {
   };
 
   const deleteArticle = async (id: number) => {
-    if (!confirm("この記事を削除しますか？")) return;
+    const ok = await confirm({ title: "この記事を削除しますか？", variant: "danger", confirmLabel: "削除する" });
+    if (!ok) return;
     await supabase.from("ops_manual_articles").delete().eq("id", id);
     fetchData();
     setView("list");
@@ -198,6 +201,7 @@ export default function OperationsManual() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", backgroundColor: T.bg }}>
+      {ConfirmModalNode}
       {/* ヘッダー */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: `1px solid ${T.border}`, backgroundColor: T.card }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

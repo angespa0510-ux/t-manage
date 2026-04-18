@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useToast } from "../../lib/toast";
 import { useBackNav } from "../../lib/use-back-nav";
+import { useConfirm } from "../../components/useConfirm";
 
 /* ─── 型定義 ─── */
 type Therapist = {
@@ -145,6 +146,7 @@ const DEFAULT_VIDEO_PROMPT_EN = `[Core Instruction] Create a photorealistic, exc
 export default function VideoGenerator() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const toast = useToast();
 
   // ─── タブ ───
@@ -569,6 +571,7 @@ export default function VideoGenerator() {
   /* ═══════════════════════════════════════ RENDER ═══════ */
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
 
       {/* CSS for spinning gear */}
       <style>{`
@@ -1246,7 +1249,8 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                           >{hasRating ? "⭐" : "☆"}</button>
                         )}
                         <button onClick={async () => {
-                          if (!confirm(`「${log.therapist_name}」の履歴を削除しますか？`)) return;
+                          const ok = await confirm({ title: `「${log.therapist_name}」の履歴を削除しますか？`, message: "生成された動画ファイル・評価も削除されます。", variant: "danger", confirmLabel: "削除する" });
+                          if (!ok) return;
                           await supabase.from("video_generation_logs").delete().eq("id", log.id);
                           fetchLogs();
                           toast.show("削除しました");
@@ -1314,7 +1318,8 @@ ${settings.videoPromptEn?.slice(0, 500) || "N/A"}...
                         {hasRating && (
                           <div style={{ marginTop: 10, textAlign: "right" }}>
                             <button onClick={async () => {
-                              if (!confirm("この動画の評価をリセットしますか？")) return;
+                              const ok = await confirm({ title: "この動画の評価をリセットしますか？", message: "すべての評価（動き・一貫性・品質・安全性）が未評価に戻ります。", variant: "warning", confirmLabel: "リセットする" });
+                              if (!ok) return;
                               await supabase.from("video_generation_logs").update({
                                 rating_motion: 0, rating_consistency: 0, rating_quality: 0, rating_safety: 0,
                                 rating_comment: "", liked: false,

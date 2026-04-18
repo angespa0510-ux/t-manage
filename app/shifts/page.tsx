@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { useConfirm } from "../../components/useConfirm";
 
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
@@ -14,6 +15,7 @@ type ShiftRequest = { id: number; therapist_id: number; week_start: string; date
 export default function ShiftManagement() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -140,7 +142,8 @@ export default function ShiftManagement() {
   const approveAllPending = async () => {
     const pending = shiftRequests.filter(r => r.status === "pending");
     if (pending.length === 0) return;
-    if (!confirm(`未処理のシフト希望${pending.length}件をすべて承認しますか？`)) return;
+    const ok = await confirm({ title: `未処理のシフト希望${pending.length}件をすべて承認しますか？`, message: "承認すると確定シフトとして登録され、お気に入り顧客に通知が送られます。", variant: "warning", confirmLabel: "すべて承認する", icon: "✅" });
+    if (!ok) return;
     for (const req of pending) {
       await supabase.from("shift_requests").update({ status: "approved" }).eq("id", req.id);
       const { data: existing } = await supabase.from("shifts").select("id").eq("therapist_id", req.therapist_id).eq("date", req.date).limit(1);
@@ -158,6 +161,7 @@ export default function ShiftManagement() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6 flex-shrink-0" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
         <div className="flex items-center gap-4">

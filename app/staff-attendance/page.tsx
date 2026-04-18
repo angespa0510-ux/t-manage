@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { useConfirm } from "../../components/useConfirm";
 
 type StaffMember = { id: number; name: string; role: string; unit_price: number; transport_fee: number; status: string };
 type StaffSchedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_checked: boolean; checked_by: string; clock_in_time: string; clock_out_time: string; break_minutes: number };
@@ -45,6 +46,7 @@ function calcUnits(start: string, end: string, breakMin: number = 0): number {
 export default function StaffAttendance() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, isManager, login, logout } = useStaffSession();
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [schedules, setSchedules] = useState<StaffSchedule[]>([]);
@@ -99,7 +101,8 @@ export default function StaffAttendance() {
   };
 
   const removeSchedule = async (id: number) => {
-    if (!confirm("このスケジュールを削除しますか？")) return;
+    const ok = await confirm({ title: "このスケジュールを削除しますか？", variant: "danger", confirmLabel: "削除する" });
+    if (!ok) return;
     await supabase.from("staff_schedules").delete().eq("id", id);
     fetchData();
   };
@@ -169,6 +172,7 @@ export default function StaffAttendance() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">

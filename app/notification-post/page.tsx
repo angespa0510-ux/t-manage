@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { useConfirm } from "../../components/useConfirm";
 
 type Notification = {
   id: number; title: string; body: string; type: string;
@@ -16,6 +17,7 @@ type Customer = { id: number; name: string; phone: string; rank: string };
 export default function NotificationPost() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -80,7 +82,8 @@ export default function NotificationPost() {
   };
 
   const deleteNotification = async (id: number) => {
-    if (!confirm("このお知らせを削除しますか？")) return;
+    const ok = await confirm({ title: "このお知らせを削除しますか？", variant: "danger", confirmLabel: "削除する" });
+    if (!ok) return;
     await supabase.from("customer_notifications").delete().eq("id", id);
     fetchData();
   };
@@ -94,6 +97,7 @@ export default function NotificationPost() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">

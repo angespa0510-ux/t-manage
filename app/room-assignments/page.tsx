@@ -9,6 +9,7 @@ import { useStaffSession } from "../../lib/staff-session";
 import HPOutputPanel from "../../lib/hp-output-panel";
 import LineShiftPanel from "../../lib/line-shift-panel";
 import WeeklyTaskPanel from "../../lib/weekly-task-panel";
+import { useConfirm } from "../../components/useConfirm";
 
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
@@ -55,6 +56,7 @@ function formatDateShort(d: string) { const dt = new Date(d + "T00:00:00"); cons
 export default function RoomAssignments() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, isManager, login, logout } = useStaffSession();
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState("");
@@ -227,7 +229,7 @@ useEffect(() => {
     if (tid === 0) { if (ex) { const op = getTherapistParking(date, ex.therapist_id); if (op) await supabase.from("parking_usage").delete().eq("id", op.id); await supabase.from("room_assignments").delete().eq("id", ex.id); } }
     else {
       if (isTherapistAssigned(date, tid)) { const cs = allAssignments.find((a) => a.date === date && a.therapist_id === tid); if (cs && !(cs.room_id === roomId && cs.slot === slot)) { alert(`${getTherapistName(tid)} は既にこの日の別の枠に割り当てられています。`); return; } }
-      const { points } = calcPoints(tid); if (points <= -5) { if (!confirm(`${getTherapistName(tid)} は現在 ${points}pt です。割り当てますか？`)) return; }
+      const { points } = calcPoints(tid); if (points <= -5) { const ok = await confirm({ title: `${getTherapistName(tid)} は現在 ${points}pt です`, message: "ポイントが低いですが、このまま割り当てますか？", variant: "warning", confirmLabel: "割り当てる" }); if (!ok) return; }
       const sh = allShifts.find((s) => s.therapist_id === tid && s.date === date);
       const st = sh?.start_time || (slot === "early" ? "12:00" : "18:00"); const et = sh?.end_time || (slot === "early" ? "18:00" : "03:00");
       if (ex) { await supabase.from("room_assignments").update({ therapist_id: tid, start_time: st, end_time: et }).eq("id", ex.id); }
@@ -237,7 +239,7 @@ useEffect(() => {
   const updateTime = async (id: number, f: "start_time" | "end_time", v: string) => { await supabase.from("room_assignments").update({ [f]: v }).eq("id", id); fetchData(); };
   const assignParking = async (date: string, tid: number, sid: number) => { const ex = getTherapistParking(date, tid); if (ex) await supabase.from("parking_usage").delete().eq("id", ex.id); if (sid === 0) { fetchData(); return; } await supabase.from("parking_usage").insert({ date, parking_spot_id: sid, user_type: "therapist", therapist_id: tid, customer_name: null, notes: null }); fetchData(); };
   const toggleAttendance = async (id: number, cur: string, val: "late" | "early_leave") => { const a = cur.split(",").filter(Boolean); const n = a.includes(val) ? a.filter((x) => x !== val) : [...a, val]; await supabase.from("room_assignments").update({ attendance: n.join(",") }).eq("id", id); fetchData(); };
-  const markAbsent = async (date: string, a: RoomAssignment) => { if (!confirm(`${getTherapistName(a.therapist_id)} を当欠にしますか？\n枠が空きます。`)) return; await supabase.from("absent_records").insert({ date, therapist_id: a.therapist_id, room_id: a.room_id, slot: a.slot, original_start: a.start_time, original_end: a.end_time }); const p = getTherapistParking(date, a.therapist_id); if (p) await supabase.from("parking_usage").delete().eq("id", p.id); await supabase.from("room_assignments").delete().eq("id", a.id); fetchData(); };
+  const markAbsent = async (date: string, a: RoomAssignment) => { const ok = await confirm({ title: `${getTherapistName(a.therapist_id)} を当欠にしますか？`, message: "当欠にすると枠が空きます。駐車場の割り当ても解除されます。", variant: "warning", confirmLabel: "当欠にする", icon: "⚠️" }); if (!ok) return; await supabase.from("absent_records").insert({ date, therapist_id: a.therapist_id, room_id: a.room_id, slot: a.slot, original_start: a.start_time, original_end: a.end_time }); const p = getTherapistParking(date, a.therapist_id); if (p) await supabase.from("parking_usage").delete().eq("id", p.id); await supabase.from("room_assignments").delete().eq("id", a.id); fetchData(); };
   const cancelAbsent = async (id: number) => { await supabase.from("absent_records").delete().eq("id", id); fetchData(); };
   const updateCleaning = async (id: number, v: string) => { await supabase.from("room_assignments").update({ cleaning: v }).eq("id", id); fetchData(); };
   const updateSlotMemo = async (id: number, v: string) => { await supabase.from("room_assignments").update({ memo: v }).eq("id", id); fetchData(); };
@@ -248,7 +250,8 @@ useEffect(() => {
     fetchData();
   };
   const autoAssign = async (date: string) => {
-    if (!confirm(`${date} のシフトから自動割当しますか？`)) return;
+    const ok = await confirm({ title: `${date} のシフトから自動割当しますか？`, message: "既存の割り当ては削除され、シフトから自動で再割当されます。", variant: "warning", confirmLabel: "自動割当する", icon: "🔄" });
+    if (!ok) return;
     const da = getAssignmentsForDate(date); if (da.length > 0) await supabase.from("room_assignments").delete().in("id", da.map((a) => a.id));
     const ds = getShiftsForDate(date); const eS = ds.filter((s) => parseInt(s.start_time.split(":")[0]) < 18); const lS = ds.filter((s) => parseInt(s.start_time.split(":")[0]) >= 18);
     const uE = new Set<number>(); const uL = new Set<number>();
@@ -349,6 +352,7 @@ useEffect(() => {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">
