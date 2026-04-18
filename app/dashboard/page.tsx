@@ -344,6 +344,18 @@ export default function Dashboard() {
     }));
     const reserveUsedTotal = reserveUsedList.reduce((s: number, x: any) => s + x.amount, 0);
 
+    // 豊橋予備金の残高（当日終了時点の累計）
+    // initial + refund + adjustment − withdraw
+    const { data: reserveMovements } = await supabase
+      .from("toyohashi_reserve_movements")
+      .select("movement_type,amount")
+      .lte("movement_date", date)
+      .range(0, 49999);
+    const toyohashiBalance = (reserveMovements || []).reduce((s: number, m: any) => {
+      const amt = m.amount || 0;
+      return m.movement_type === "withdraw" ? s - amt : s + amt;
+    }, 0);
+
     // セラピスト別売上
     const therapistSales = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
       const tRes = completed.filter(r => r.therapist_id === tid);
@@ -360,7 +372,7 @@ export default function Dashboard() {
       netProfit, therapistData, totalOut,
       staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
       therapistSales, safeUncollectedList, safeTotalUncollected, safeCollectedTodayList, safeCollectedTodayTotal,
-      reserveUsedList, reserveUsedTotal,
+      reserveUsedList, reserveUsedTotal, toyohashiBalance,
     });
     setClosingLoading(false);
   }, []);
@@ -1014,12 +1026,41 @@ export default function Dashboard() {
                         </div>
                       )}
                       <div className="pt-3 mt-2" style={{ borderTop: "2px solid #f59e0b44" }}>
-                        <div className="flex justify-between font-bold text-[15px]"><span style={{ color: "#f59e0b" }}>💴 事務所の残金</span><span style={{ color: (closingData.cashOnHand + closingData.safeCollectedTodayTotal) >= 0 ? "#22c55e" : "#c45555" }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal)}</span></div>
-                        <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ 未回収の売上はルームにあるため含まれません。回収後に事務所の残金が増えます。</p>
+                        {/* 今ある現金 4箇所 + 合計 スタッフが実測で照合する部分 */}
+                        <p className="text-[11px] font-bold mb-3" style={{ color: "#f59e0b" }}>📦 今ある現金（実際にカウントして照合）</p>
+                        <div className="space-y-1.5 text-[12px]">
+                          <div className="flex justify-between items-center px-2 py-1.5 rounded" style={{ backgroundColor: "rgba(34,197,94,0.08)" }}>
+                            <span>💴 事務所にある現金</span>
+                            <span style={{ color: (closingData.cashOnHand + closingData.safeCollectedTodayTotal) >= 0 ? "#22c55e" : "#c45555", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal)}</span>
+                          </div>
+                          {closingData.safeTotalUncollected > 0 && (
+                            <div className="flex justify-between items-center px-2 py-1.5 rounded" style={{ backgroundColor: "rgba(168,85,247,0.08)" }}>
+                              <span>🔐 金庫にある現金（投函済・未回収）</span>
+                              <span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(closingData.safeTotalUncollected)}</span>
+                            </div>
+                          )}
+                          {closingData.totalUncollected > 0 && (
+                            <div className="flex justify-between items-center px-2 py-1.5 rounded" style={{ backgroundColor: "rgba(245,158,11,0.08)" }}>
+                              <span>🏠 ルームにある現金（まだ回収してない）</span>
+                              <span style={{ color: "#f59e0b", fontWeight: 700 }}>{fmt(closingData.totalUncollected)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center px-2 py-1.5 rounded" style={{ backgroundColor: "rgba(212,104,126,0.08)" }}>
+                            <span>🏛 豊橋予備金（立替用・豊橋保管）</span>
+                            <span style={{ color: "#d4687e", fontWeight: 700 }}>{fmt(closingData.toyohashiBalance || 0)}</span>
+                          </div>
+                          <div className="flex justify-between items-center px-3 py-2.5 rounded-lg mt-2" style={{ backgroundColor: "#22c55e18", border: "2px solid #22c55e" }}>
+                            <span className="text-[14px] font-bold" style={{ color: "#22c55e" }}>📦 今ある現金 合計</span>
+                            <span className="text-[18px] font-bold" style={{ color: "#22c55e", fontVariantNumeric: "tabular-nums" }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected + closingData.totalUncollected + (closingData.toyohashiBalance || 0))}</span>
+                          </div>
+                          <p className="text-[10px] mt-2 px-2" style={{ color: T.textFaint, lineHeight: 1.5 }}>
+                            ※ 実際に <strong style={{ color: "#22c55e" }}>事務所</strong>・<strong style={{ color: "#a855f7" }}>金庫</strong>・<strong style={{ color: "#f59e0b" }}>ルーム</strong>・<strong style={{ color: "#d4687e" }}>豊橋予備金</strong> の現金を数えて、合計がこの金額と一致していれば本日の現金残はOKです
+                          </p>
+                        </div>
                         {closingData.reserveUsedTotal > 0 && (
-                          <div className="mt-2 pt-2" style={{ borderTop: `1px dashed ${T.border}` }}>
+                          <div className="mt-3 pt-2" style={{ borderTop: `1px dashed ${T.border}` }}>
                             <div className="flex justify-between text-[11px]" style={{ color: "#d4687e" }}>
-                              <span>🏛 豊橋予備金からの立替（上記に含む）</span>
+                              <span>🏛 豊橋予備金からの立替（事務所残金に含む）</span>
                               <span style={{ fontWeight: 500 }}>{fmt(closingData.reserveUsedTotal)}</span>
                             </div>
                             {closingData.reserveUsedList.map((r: any, i: number) => (
@@ -1031,8 +1072,6 @@ export default function Dashboard() {
                             <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>※ セラピストに全額渡済み。後日スタッフ金庫から予備金へ {fmt(closingData.reserveUsedTotal)} 補充してください。</p>
                           </div>
                         )}
-                        {closingData.safeTotalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#a855f7" }}>🔐 金庫回収後の残金</span><span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected)}</span></div>}
-                        {closingData.totalUncollected > 0 && <div className="flex justify-between mt-1 text-[12px]"><span style={{ color: "#22c55e" }}>全額回収後の残金</span><span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(closingData.cashOnHand + closingData.safeCollectedTodayTotal + closingData.safeTotalUncollected + closingData.totalUncollected)}</span></div>}
                       </div>
                     </div>
                   </div>
