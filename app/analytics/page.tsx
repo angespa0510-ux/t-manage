@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useBackNav } from "../../lib/use-back-nav";
 
-type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
+type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
@@ -47,20 +47,20 @@ export default function Analytics() {
     const { data: b } = await supabase.from("buildings").select("*").order("id"); if (b) setBuildings(b);
     const { data: rm } = await supabase.from("rooms").select("*").order("id"); if (rm) setRooms(rm);
 
-    // 当月の予約
+    // 当月の予約（終了のみ）
     const startDate = `${selectedMonth}-01`;
     const endDate = `${selectedMonth}-${String(daysInMonth).padStart(2, "0")}`;
-    const { data: r } = await supabase.from("reservations").select("*").gte("date", startDate).lte("date", endDate).order("date");
+    const { data: r } = await supabase.from("reservations").select("*").eq("status", "completed").gte("date", startDate).lte("date", endDate).order("date");
     if (r) setReservations(r);
 
     // 当月の部屋割り
     const { data: a } = await supabase.from("room_assignments").select("*").gte("date", startDate).lte("date", endDate);
     if (a) setAssignments(a);
 
-    // 年間データ
+    // 年間データ（終了のみ）
     const yearStart = `${selectedYear}-01-01`;
     const yearEnd = `${selectedYear}-12-31`;
-    const { data: ar } = await supabase.from("reservations").select("*").gte("date", yearStart).lte("date", yearEnd).order("date");
+    const { data: ar } = await supabase.from("reservations").select("*").eq("status", "completed").gte("date", yearStart).lte("date", yearEnd).order("date");
     if (ar) setAllReservations(ar);
   }, [selectedMonth, daysInMonth, selectedYear]);
 
@@ -176,8 +176,6 @@ export default function Analytics() {
     return { sales, back, profit: sales - back, count: allReservations.length };
   }, [allReservations, courses]);
 
-  const maxDailySales = Math.max(...dailyData.map((d) => d.sales), 1);
-  const maxMonthlySales = Math.max(...monthlyData.map((d) => d.sales), 1);
   const maxTherapistSales = therapistData.length > 0 ? therapistData[0].sales || 1 : 1;
   const totalCourseSales = courseData.reduce((s, c) => s + c.sales, 0) || 1;
 
@@ -189,12 +187,6 @@ export default function Analytics() {
 
   const prevMonth = () => { const d = new Date(smYear, smMonth - 2, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   const nextMonth = () => { const d = new Date(smYear, smMonth, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
-
-  // Bar component
-  const Bar = ({ value, max, color, height = 120 }: { value: number; max: number; color: string; height?: number }) => {
-    const h = max > 0 ? (value / max) * height : 0;
-    return <div className="rounded-t" style={{ width: "100%", height: h, backgroundColor: color, minHeight: value > 0 ? 2 : 0, transition: "height 0.3s" }} />;
-  };
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
@@ -243,38 +235,56 @@ export default function Analytics() {
                 <span className="text-[14px] font-medium">{smYear}年{smMonth}月</span>
                 <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
-              <div className="rounded-2xl border p-4 overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <div className="flex items-end gap-[2px]" style={{ minWidth: daysInMonth * 28 }}>
-                  {dailyData.map((d) => (
-                    <div key={d.date} className="flex-1 flex flex-col items-center min-w-[26px]" title={`${d.date}\n売上: ${fmt(d.sales)}\n予約: ${d.count}件`}>
-                      <p className="text-[7px] mb-1" style={{ color: d.sales > 0 ? T.text : T.textFaint }}>{d.sales > 0 ? fmt(d.sales).replace("¥", "") : ""}</p>
-                      <div className="w-full flex items-end justify-center" style={{ height: 120 }}>
-                        <div className="w-[80%]"><Bar value={d.sales} max={maxDailySales} color={d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.accent} /></div>
-                      </div>
-                      <p className="text-[9px] mt-1" style={{ color: d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.textMuted }}>{d.label}</p>
-                      <p className="text-[7px]" style={{ color: T.textFaint }}>{d.dow}</p>
-                    </div>
-                  ))}
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {[
+                          { label: "日付", align: "left", w: "100px" },
+                          { label: "曜日", align: "center", w: "48px" },
+                          { label: "予約数", align: "right", w: "72px" },
+                          { label: "売上", align: "right", w: "" },
+                          { label: "バック", align: "right", w: "" },
+                          { label: "利益", align: "right", w: "" },
+                          { label: "平均単価", align: "right", w: "" },
+                        ].map((h) => (
+                          <th key={h.label} className={`py-2.5 px-3 font-medium text-[11px] text-${h.align}`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailyData.map((d) => {
+                        const zero = d.count === 0;
+                        const avg = d.count > 0 ? Math.round(d.sales / d.count) : 0;
+                        const dowColor = d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.textSub;
+                        return (
+                          <tr key={d.date} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1, backgroundColor: d.dow === "日" ? "rgba(196,85,85,0.03)" : d.dow === "土" ? "rgba(61,107,159,0.03)" : "transparent" }}>
+                            <td className="py-2 px-3" style={{ borderRight: `1px solid ${T.border}` }}>{d.date}</td>
+                            <td className="py-2 px-3 text-center font-medium" style={{ color: dowColor, borderRight: `1px solid ${T.border}` }}>{d.dow}</td>
+                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : `${d.count}件`}</td>
+                            <td className="py-2 px-3 text-right font-medium" style={{ color: zero ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.sales)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.back)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.text, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.profit)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub }}>{zero ? "—" : fmt(avg)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                        <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>合計</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{monthTotal.count}件</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(monthTotal.sales)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(monthTotal.back)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(monthTotal.profit)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub }}>{monthTotal.count > 0 ? fmt(Math.round(monthTotal.sales / monthTotal.count)) : "—"}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
-              {/* 日別テーブル */}
-              <div className="rounded-2xl border mt-4 overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <table className="w-full text-[11px]">
-                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["日付", "曜日", "予約数", "売上", "バック", "利益"].map((h) => (<th key={h} className="py-2 px-3 text-left font-normal" style={{ color: T.textMuted }}>{h}</th>))}
-                  </tr></thead>
-                  <tbody>{dailyData.filter((d) => d.count > 0).map((d) => (
-                    <tr key={d.date} style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <td className="py-2 px-3">{d.date}</td>
-                      <td className="py-2 px-3" style={{ color: d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.textSub }}>{d.dow}</td>
-                      <td className="py-2 px-3">{d.count}件</td>
-                      <td className="py-2 px-3 font-medium" style={{ color: T.accent }}>{fmt(d.sales)}</td>
-                      <td className="py-2 px-3" style={{ color: "#7ab88f" }}>{fmt(d.back)}</td>
-                      <td className="py-2 px-3">{fmt(d.profit)}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
+              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
             </div>
           )}
 
@@ -286,65 +296,132 @@ export default function Analytics() {
                 <span className="text-[14px] font-medium">{selectedYear}年</span>
                 <button onClick={() => setSelectedYear(selectedYear + 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
-              <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <div className="flex items-end gap-2">
-                  {monthlyData.map((d) => (
-                    <div key={d.month} className="flex-1 flex flex-col items-center" title={`${d.label}\n売上: ${fmt(d.sales)}\n予約: ${d.count}件`}>
-                      <p className="text-[9px] mb-1" style={{ color: d.sales > 0 ? T.accent : T.textFaint }}>{d.sales > 0 ? fmt(d.sales).replace("¥", "") : ""}</p>
-                      <div className="w-full flex items-end justify-center" style={{ height: 140 }}>
-                        <div className="w-[70%]"><Bar value={d.sales} max={maxMonthlySales} color={T.accent} height={140} /></div>
-                      </div>
-                      <p className="text-[11px] mt-1" style={{ color: T.textSub }}>{d.label}</p>
-                    </div>
-                  ))}
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {["月", "予約数", "売上", "バック", "利益", "平均単価", "前月比"].map((h, i) => (
+                          <th key={h} className={`py-2.5 px-3 font-medium text-[11px] ${i === 0 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthlyData.map((d, idx) => {
+                        const zero = d.count === 0;
+                        const avg = d.count > 0 ? Math.round(d.sales / d.count) : 0;
+                        const prev = idx > 0 ? monthlyData[idx - 1].sales : 0;
+                        const diff = d.sales - prev;
+                        const diffPct = prev > 0 ? Math.round((diff / prev) * 100) : 0;
+                        const diffColor = diff > 0 ? "#7ab88f" : diff < 0 ? "#c45555" : T.textFaint;
+                        return (
+                          <tr key={d.month} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1 }}>
+                            <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
+                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : `${d.count}件`}</td>
+                            <td className="py-2 px-3 text-right font-medium" style={{ color: zero ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.sales)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.back)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.text, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.profit)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(avg)}</td>
+                            <td className="py-2 px-3 text-right text-[11px]" style={{ color: idx === 0 || prev === 0 ? T.textFaint : diffColor }}>
+                              {idx === 0 || prev === 0 ? "—" : `${diff >= 0 ? "+" : ""}${diffPct}%`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                        <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }}>年間合計</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{yearTotal.count}件</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.sales)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.back)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.profit)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{yearTotal.count > 0 ? fmt(Math.round(yearTotal.sales / yearTotal.count)) : "—"}</td>
+                        <td className="py-2.5 px-3 text-right" style={{ color: T.textFaint }}>—</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
-              <div className="rounded-2xl border mt-4 p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <p className="text-[13px] font-medium mb-2">{selectedYear}年 合計</p>
-                <div className="flex gap-6 text-[12px]">
-                  <span style={{ color: T.textSub }}>売上: <span className="font-medium" style={{ color: T.accent }}>{fmt(yearTotal.sales)}</span></span>
-                  <span style={{ color: T.textSub }}>バック: <span className="font-medium" style={{ color: "#7ab88f" }}>{fmt(yearTotal.back)}</span></span>
-                  <span style={{ color: T.textSub }}>利益: <span className="font-medium" style={{ color: T.text }}>{fmt(yearTotal.profit)}</span></span>
-                  <span style={{ color: T.textSub }}>予約: <span className="font-medium" style={{ color: T.text }}>{yearTotal.count}件</span></span>
-                </div>
-              </div>
+              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
             </div>
           )}
 
           {/* 年別 */}
           {tab === "yearly" && (
             <div className="animate-[fadeIn_0.3s]">
-              <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <p className="text-[13px] font-medium mb-3">{selectedYear}年 月別推移テーブル</p>
-                <table className="w-full text-[11px]">
-                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["月", "予約数", "売上", "バック", "利益", "平均単価"].map((h) => (<th key={h} className="py-2 px-3 text-left font-normal" style={{ color: T.textMuted }}>{h}</th>))}
-                  </tr></thead>
-                  <tbody>{monthlyData.map((d) => (
-                    <tr key={d.month} style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <td className="py-2 px-3 font-medium">{d.label}</td>
-                      <td className="py-2 px-3">{d.count}件</td>
-                      <td className="py-2 px-3 font-medium" style={{ color: T.accent }}>{fmt(d.sales)}</td>
-                      <td className="py-2 px-3" style={{ color: "#7ab88f" }}>{fmt(d.back)}</td>
-                      <td className="py-2 px-3">{fmt(d.profit)}</td>
-                      <td className="py-2 px-3" style={{ color: T.textSub }}>{d.count > 0 ? fmt(Math.round(d.sales / d.count)) : "—"}</td>
-                    </tr>
-                  ))}</tbody>
-                  <tfoot><tr style={{ borderTop: `2px solid ${T.border}` }}>
-                    <td className="py-2 px-3 font-bold">合計</td>
-                    <td className="py-2 px-3 font-bold">{yearTotal.count}件</td>
-                    <td className="py-2 px-3 font-bold" style={{ color: T.accent }}>{fmt(yearTotal.sales)}</td>
-                    <td className="py-2 px-3 font-bold" style={{ color: "#7ab88f" }}>{fmt(yearTotal.back)}</td>
-                    <td className="py-2 px-3 font-bold">{fmt(yearTotal.profit)}</td>
-                    <td className="py-2 px-3 font-bold" style={{ color: T.textSub }}>{yearTotal.count > 0 ? fmt(Math.round(yearTotal.sales / yearTotal.count)) : "—"}</td>
-                  </tr></tfoot>
-                </table>
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <button onClick={() => setSelectedYear(selectedYear - 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+                <span className="text-[14px] font-medium">{selectedYear}年 年間推移</span>
+                <button onClick={() => setSelectedYear(selectedYear + 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
-              <div className="flex items-center justify-center gap-4 mt-4">
-                <button onClick={() => setSelectedYear(selectedYear - 1)} className="px-3 py-1.5 text-[11px] border rounded-lg cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>◀ {selectedYear - 1}年</button>
-                <span className="text-[14px] font-medium">{selectedYear}年</span>
-                <button onClick={() => setSelectedYear(selectedYear + 1)} className="px-3 py-1.5 text-[11px] border rounded-lg cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>{selectedYear + 1}年 ▶</button>
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {["四半期", "月", "予約数", "売上", "バック", "利益", "平均単価", "構成比"].map((h, i) => (
+                          <th key={h} className={`py-2.5 px-3 font-medium text-[11px] ${i <= 1 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[0, 1, 2, 3].map((q) => {
+                        const qMonths = monthlyData.slice(q * 3, q * 3 + 3);
+                        const qSales = qMonths.reduce((s, m) => s + m.sales, 0);
+                        const qBack = qMonths.reduce((s, m) => s + m.back, 0);
+                        const qCount = qMonths.reduce((s, m) => s + m.count, 0);
+                        const qColors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885"];
+                        const qColor = qColors[q];
+                        return (
+                          <React.Fragment key={q}>
+                            {qMonths.map((d, mi) => {
+                              const zero = d.count === 0;
+                              const avg = d.count > 0 ? Math.round(d.sales / d.count) : 0;
+                              const pct = yearTotal.sales > 0 ? ((d.sales / yearTotal.sales) * 100).toFixed(1) : "0.0";
+                              return (
+                                <tr key={d.month} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1 }}>
+                                  {mi === 0 && (
+                                    <td rowSpan={3} className="py-2 px-3 font-medium text-center" style={{ borderRight: `1px solid ${T.border}`, color: qColor, backgroundColor: qColor + "10", verticalAlign: "middle" }}>Q{q + 1}</td>
+                                  )}
+                                  <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
+                                  <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : `${d.count}件`}</td>
+                                  <td className="py-2 px-3 text-right font-medium" style={{ color: zero ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.sales)}</td>
+                                  <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.back)}</td>
+                                  <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.profit)}</td>
+                                  <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(avg)}</td>
+                                  <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub }}>{zero ? "—" : `${pct}%`}</td>
+                                </tr>
+                              );
+                            })}
+                            <tr style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: qColor + "08" }}>
+                              <td className="py-2 px-3 text-[11px] font-medium" style={{ color: qColor, borderRight: `1px solid ${T.border}` }} colSpan={2}>Q{q + 1}小計</td>
+                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{qCount}件</td>
+                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ color: qColor, borderRight: `1px solid ${T.border}` }}>{fmt(qSales)}</td>
+                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(qBack)}</td>
+                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(qSales - qBack)}</td>
+                              <td className="py-2 px-3 text-right text-[11px]" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{qCount > 0 ? fmt(Math.round(qSales / qCount)) : "—"}</td>
+                              <td className="py-2 px-3 text-right text-[11px]" style={{ color: T.textSub }}>{yearTotal.sales > 0 ? `${((qSales / yearTotal.sales) * 100).toFixed(1)}%` : "—"}</td>
+                            </tr>
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                        <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>年間合計</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{yearTotal.count}件</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.sales)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.back)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.profit)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{yearTotal.count > 0 ? fmt(Math.round(yearTotal.sales / yearTotal.count)) : "—"}</td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub }}>100.0%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
+              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
             </div>
           )}
 
