@@ -10,7 +10,7 @@ import { useBackNav } from "../../lib/use-back-nav";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
-type Expense = { id: number; date: string; category: string; name: string; amount: number; store_id: number; is_recurring: boolean; notes: string; type: string };
+type Expense = { id: number; date: string; category: string; name: string; amount: number; store_id: number; is_recurring: boolean; notes: string; type: string; receipt_url?: string; receipt_thumb_url?: string; receipt_name?: string; payment_method?: string; needs_review?: boolean; review_note?: string; flagged_by_name?: string; flagged_at?: string | null };
 type Store = { id: number; name: string; company_name?: string; fiscal_month?: number };
 type Therapist = { id: number; name: string; real_name?: string; has_withholding?: boolean; has_invoice?: boolean; therapist_invoice_number?: string; transport_fee?: number; address?: string };
 type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
@@ -228,6 +228,17 @@ export default function TaxPortal() {
   // 銀行取込
   const [bankTxs, setBankTxs] = useState<BankTransaction[]>([]);
   const [bankRules, setBankRules] = useState<BankRule[]>([]);
+
+  // 経費シート拡張（Session 47）
+  const [receiptModal, setReceiptModal] = useState<Expense | null>(null);
+  const [reviewModal, setReviewModal] = useState<Expense | null>(null);
+  const [reviewNoteInput, setReviewNoteInput] = useState<string>("");
+  const [onlyReviewFilter, setOnlyReviewFilter] = useState<boolean>(false);
+  const [onlyNoReceiptFilter, setOnlyNoReceiptFilter] = useState<boolean>(false);
+  const [bulkDLModal, setBulkDLModal] = useState<boolean>(false);
+  const [bulkDLMonth, setBulkDLMonth] = useState<string>(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+  const [bulkDLCategory, setBulkDLCategory] = useState<string>("all");
+  const [bulkDLLoading, setBulkDLLoading] = useState<boolean>(false);
   const [bankParsing, setBankParsing] = useState(false);
   const [bankStagedTxs, setBankStagedTxs] = useState<BankTransaction[]>([]);  // アップ後・確定前
   const [bankFilter, setBankFilter] = useState<"all" | "unconfirmed" | "confirmed">("unconfirmed");
@@ -254,6 +265,9 @@ export default function TaxPortal() {
       { isOpen: showNewRule, close: () => setShowNewRule(false) },
       { isOpen: editingRuleId !== null, close: () => setEditingRuleId(null) },
       { isOpen: editingDocId !== null, close: () => setEditingDocId(null) },
+      { isOpen: receiptModal !== null, close: () => setReceiptModal(null) },
+      { isOpen: reviewModal !== null, close: () => { setReviewModal(null); setReviewNoteInput(""); } },
+      { isOpen: bulkDLModal, close: () => setBulkDLModal(false) },
     ],
     !!activeStaff && canAccessTaxPortal,
   );
@@ -694,6 +708,113 @@ export default function TaxPortal() {
     downloadCSV(rows, `売上_${periodLabel}_${accFormat}.csv`);
   };
 
+  // 🚩 要確認トグル（税理士が経費1件に要確認マーク）
+  const toggleExpenseReview = async (exp: Expense, note: string) => {
+    const isFlagging = !exp.needs_review; // 現在OFFなら今からONにする
+    const updates = isFlagging
+      ? {
+          needs_review: true,
+          review_note: note || "",
+          flagged_by_name: activeStaff?.name || "",
+          flagged_at: new Date().toISOString(),
+        }
+      : {
+          needs_review: false,
+          review_note: "",
+          flagged_by_name: "",
+          flagged_at: null,
+        };
+    const { error } = await supabase.from("expenses").update(updates).eq("id", exp.id);
+    if (error) { alert("更新に失敗しました: " + error.message); return; }
+    setExpenses(prev => prev.map(e => (e.id === exp.id ? { ...e, ...updates } : e)));
+    setReviewModal(null);
+    setReviewNoteInput("");
+  };
+
+  // 📦 領収書一括ZIPダウンロード
+  const downloadReceiptsZip = async () => {
+    setBulkDLLoading(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+
+      // 対象月の経費を全件取得（現在画面に表示中でなくても取れるように）
+      const [y, m] = bulkDLMonth.split("-").map(Number);
+      const dim = new Date(y, m, 0).getDate();
+      const startDate = `${bulkDLMonth}-01`;
+      const endDate = `${bulkDLMonth}-${String(dim).padStart(2, "0")}`;
+      let query = supabase.from("expenses").select("*").gte("date", startDate).lte("date", endDate).neq("type", "income").order("date");
+      if (bulkDLCategory !== "all") query = query.eq("category", bulkDLCategory);
+      const { data: targetExpenses, error } = await query;
+      if (error) { alert("データ取得エラー: " + error.message); setBulkDLLoading(false); return; }
+      if (!targetExpenses || targetExpenses.length === 0) { alert("対象の経費がありません"); setBulkDLLoading(false); return; }
+
+      const withReceipt = targetExpenses.filter(e => e.receipt_url);
+      const withoutReceipt = targetExpenses.filter(e => !e.receipt_url);
+
+      // 集計CSV
+      const csvRows: string[] = ["No,日付,勘定科目,項目,金額,備考,領収書ファイル名"];
+      for (let i = 0; i < targetExpenses.length; i++) {
+        const e = targetExpenses[i];
+        const acc = (ACCOUNT_MAP[e.category] || "雑費").replace(/,/g, "_");
+        const name = (e.name || "").replace(/,/g, "_");
+        const notes = (e.notes || "").replace(/,/g, "_");
+        const fileName = e.receipt_url ? `${String(i + 1).padStart(3, "0")}_${e.date}_${e.amount}_${(e.name || "receipt").replace(/[\\/:*?"<>|]/g, "_").slice(0, 20)}` : "";
+        csvRows.push([String(i + 1), e.date, acc, name, String(e.amount), notes, fileName].join(","));
+      }
+      csvRows.push("");
+      csvRows.push(`合計件数,${targetExpenses.length}`);
+      csvRows.push(`領収書あり,${withReceipt.length}`);
+      csvRows.push(`領収書なし,${withoutReceipt.length}`);
+      csvRows.push(`合計金額,${targetExpenses.reduce((s, e) => s + (e.amount || 0), 0)}`);
+      zip.file("_集計表.csv", "\uFEFF" + csvRows.join("\n")); // BOM付きでExcel文字化け防止
+
+      // 領収書画像を取得してZIPに追加
+      let successCount = 0;
+      let failCount = 0;
+      for (let i = 0; i < withReceipt.length; i++) {
+        const e = withReceipt[i];
+        try {
+          const res = await fetch(e.receipt_url as string);
+          if (!res.ok) { failCount++; continue; }
+          const blob = await res.blob();
+          const ext = (e.receipt_url as string).split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+          const safeName = (e.name || "receipt").replace(/[\\/:*?"<>|]/g, "_").slice(0, 20);
+          const fileName = `${String(i + 1).padStart(3, "0")}_${e.date}_${e.amount}_${safeName}.${ext}`;
+          zip.file(fileName, blob);
+          successCount++;
+        } catch {
+          failCount++;
+        }
+      }
+
+      // 領収書なしリストをテキストで同梱
+      if (withoutReceipt.length > 0) {
+        const lines = ["【領収書が登録されていない経費】", ""];
+        withoutReceipt.forEach((e, idx) => {
+          lines.push(`${idx + 1}. ${e.date}  ${fmt(e.amount)}  ${e.name || ""}  (${ACCOUNT_MAP[e.category] || "雑費"})`);
+        });
+        zip.file("_領収書なし一覧.txt", lines.join("\n"));
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      const catLabel = bulkDLCategory === "all" ? "全カテゴリ" : (ACCOUNT_MAP[bulkDLCategory] || bulkDLCategory);
+      a.download = `領収書_${bulkDLMonth}_${catLabel}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      alert(`✅ ダウンロード完了\n\n対象: ${targetExpenses.length}件\n領収書DL成功: ${successCount}件\n領収書なし: ${withoutReceipt.length}件${failCount > 0 ? `\n⚠️ 取得失敗: ${failCount}件` : ""}`);
+      setBulkDLModal(false);
+    } catch (e: unknown) {
+      alert("エラーが発生しました: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBulkDLLoading(false);
+    }
+  };
+
   // 経費明細CSV出力
   const exportExpenseCSV = () => {
     const items = expenses.filter(e => e.type !== "income");
@@ -1025,40 +1146,62 @@ export default function TaxPortal() {
           )}
 
           {/* ── Sheet: 経費 ── */}
-          {sheet === "expense" && (
+          {sheet === "expense" && (() => {
+            // 経費フィルタリング（要確認のみ / 領収書なしのみ）
+            const allExpenses = expenses.filter(e => e.type !== "income");
+            const noReceiptCount = allExpenses.filter(e => !e.receipt_url).length;
+            const needsReviewCount = allExpenses.filter(e => e.needs_review).length;
+            let displayExpenses = allExpenses;
+            if (onlyReviewFilter) displayExpenses = displayExpenses.filter(e => e.needs_review);
+            if (onlyNoReceiptFilter) displayExpenses = displayExpenses.filter(e => !e.receipt_url);
+            const displayTotal = displayExpenses.filter(e => e.category !== "outsourcing").reduce((s, e) => s + (e.amount || 0), 0);
+
+            return (
             <div className="space-y-4 animate-[fadeIn_0.3s]">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                   <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>経費件数</p>
-                  <p className="text-[18px] font-medium">{expenses.filter(e => e.type !== "income").length}件</p>
+                  <p className="text-[18px] font-medium">{allExpenses.length}件</p>
                 </div>
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                   <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>経費合計（外注費除く）</p>
                   <p className="text-[18px] font-medium" style={{ color: "#c45555" }}>{fmt(totalExpenseOnly)}</p>
                 </div>
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>外注費（セラピストバック）</p>
-                  <p className="text-[18px] font-medium" style={{ color: "#e091a8" }}>{fmt(totalBack)}</p>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>📎 領収書なし</p>
+                  <p className="text-[18px] font-medium" style={{ color: noReceiptCount > 0 ? "#f59e0b" : T.textSub }}>{noReceiptCount}件</p>
                 </div>
                 <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>経費総額</p>
-                  <p className="text-[18px] font-medium">{fmt(totalExpenseAll)}</p>
+                  <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>🚩 要確認</p>
+                  <p className="text-[18px] font-medium" style={{ color: needsReviewCount > 0 ? "#c45555" : T.textSub }}>{needsReviewCount}件</p>
                 </div>
               </div>
 
               <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-2" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
                   <span className="text-[12px] font-medium">💸 経費明細（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* フィルタ */}
+                    <label className="flex items-center gap-1 text-[10px] cursor-pointer" style={{ color: onlyReviewFilter ? "#c45555" : T.textSub }}>
+                      <input type="checkbox" checked={onlyReviewFilter} onChange={e => setOnlyReviewFilter(e.target.checked)} style={{ cursor: "pointer" }} />
+                      🚩 要確認のみ
+                    </label>
+                    <label className="flex items-center gap-1 text-[10px] cursor-pointer" style={{ color: onlyNoReceiptFilter ? "#f59e0b" : T.textSub }}>
+                      <input type="checkbox" checked={onlyNoReceiptFilter} onChange={e => setOnlyNoReceiptFilter(e.target.checked)} style={{ cursor: "pointer" }} />
+                      📎 領収書なしのみ
+                    </label>
+                    <button onClick={() => setBulkDLModal(true)} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59", border: "none" }}>📦 領収書ZIP一括DL</button>
                     <button onClick={exportExpenseCSV} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>💾 {ACC_FORMAT_LABELS[accFormat]}でCSV出力</button>
-                    <span className="text-[10px]" style={{ color: T.textFaint }}>{expenses.filter(e => e.type !== "income").length}件</span>
+                    <span className="text-[10px]" style={{ color: T.textFaint }}>表示 {displayExpenses.length}/{allExpenses.length}件</span>
                   </div>
                 </div>
                 <div style={{ maxHeight: 500, overflowY: "auto" }}>
                   <table className="w-full" style={{ fontSize: 12 }}>
                     <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
                       <tr style={{ color: T.textSub, fontSize: 11 }}>
-                        <th style={{ padding: "6px 10px", textAlign: "center", width: 40, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                        <th style={{ padding: "6px 6px", textAlign: "center", width: 32, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                        <th style={{ padding: "6px 6px", textAlign: "center", width: 34, borderRight: gridBorder, borderBottom: gridBorder }} title="領収書">📎</th>
+                        <th style={{ padding: "6px 6px", textAlign: "center", width: 34, borderRight: gridBorder, borderBottom: gridBorder }} title="要確認">🚩</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>日付</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>勘定科目</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>項目</th>
@@ -1068,25 +1211,69 @@ export default function TaxPortal() {
                       </tr>
                     </thead>
                     <tbody>
-                      {expenses.filter(e => e.type !== "income").length === 0 && (
-                        <tr><td colSpan={7} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>経費データがありません</td></tr>
+                      {displayExpenses.length === 0 && (
+                        <tr><td colSpan={9} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>
+                          {allExpenses.length === 0 ? "経費データがありません" : "フィルタ条件に該当する経費がありません"}
+                        </td></tr>
                       )}
-                      {expenses.filter(e => e.type !== "income").map((e, i) => (
-                        <tr key={e.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
-                          <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                      {displayExpenses.map((e, i) => {
+                        const hasReceipt = !!e.receipt_url;
+                        const isFlagged = !!e.needs_review;
+                        // 行の背景色（要確認 > 領収書なし > 通常）
+                        const rowBg = isFlagged
+                          ? "#c4555512"
+                          : !hasReceipt
+                          ? "#f59e0b0f"
+                          : i % 2 === 0 ? "transparent" : T.cardAlt + "40";
+                        return (
+                        <tr key={e.id} style={{ borderTop: gridBorder, backgroundColor: rowBg }}>
+                          <td style={{ padding: "5px 6px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                          {/* 領収書アイコン */}
+                          <td style={{ padding: "2px 6px", textAlign: "center", borderRight: gridBorder }}>
+                            {hasReceipt ? (
+                              <button
+                                onClick={() => setReceiptModal(e)}
+                                title="領収書を表示"
+                                style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, fontSize: 14 }}
+                              >📎</button>
+                            ) : (
+                              <span title="領収書なし" style={{ fontSize: 12, color: "#f59e0b" }}>⚠️</span>
+                            )}
+                          </td>
+                          {/* 要確認アイコン */}
+                          <td style={{ padding: "2px 6px", textAlign: "center", borderRight: gridBorder }}>
+                            <button
+                              onClick={() => {
+                                setReviewModal(e);
+                                setReviewNoteInput(e.review_note || "");
+                              }}
+                              title={isFlagged ? `要確認: ${e.review_note || "（理由なし）"}\n${e.flagged_by_name || ""}` : "要確認マークを付ける"}
+                              style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, fontSize: 14, opacity: isFlagged ? 1 : 0.25 }}
+                            >🚩</button>
+                          </td>
                           <td style={{ padding: "5px 10px", borderRight: gridBorder, fontVariantNumeric: "tabular-nums" }}>{e.date}</td>
                           <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textSub, fontSize: 11 }}>{ACCOUNT_MAP[e.category] || "雑費"}</td>
                           <td style={{ padding: "5px 10px", borderRight: gridBorder }}>{e.name || "—"}</td>
                           <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 11 }}>{getStoreName(e.store_id) || "—"}</td>
-                          <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 10 }}>{e.notes || ""}</td>
+                          <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 10 }}>
+                            {e.notes || ""}
+                            {isFlagged && e.review_note && (
+                              <span style={{ display: "block", color: "#c45555", fontSize: 9, marginTop: 2 }}>🚩 {e.review_note}</span>
+                            )}
+                          </td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#c45555" }}>{fmt(e.amount)}</td>
                         </tr>
-                      ))}
-                      {expenses.filter(e => e.type !== "income").length > 0 && (
+                        );
+                      })}
+                      {displayExpenses.length > 0 && (
                         <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: "#c4555510", fontWeight: 500 }}>
-                          <td style={{ padding: "8px 10px", borderRight: gridBorder }}></td>
-                          <td colSpan={5} style={{ padding: "8px 10px", borderRight: gridBorder }}>経費合計（外注費除く）</td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#c45555" }}>{fmt(totalExpenseOnly)}</td>
+                          <td colSpan={3} style={{ padding: "8px 10px", borderRight: gridBorder }}></td>
+                          <td colSpan={5} style={{ padding: "8px 10px", borderRight: gridBorder }}>
+                            {(onlyReviewFilter || onlyNoReceiptFilter) ? "表示中の合計（外注費除く）" : "経費合計（外注費除く）"}
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#c45555" }}>
+                            {fmt((onlyReviewFilter || onlyNoReceiptFilter) ? displayTotal : totalExpenseOnly)}
+                          </td>
                         </tr>
                       )}
                     </tbody>
@@ -1094,7 +1281,8 @@ export default function TaxPortal() {
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ── Sheet: セラピスト支払・源泉徴収 ── */}
           {sheet === "therapist" && (
@@ -2007,6 +2195,199 @@ export default function TaxPortal() {
       </div>
 
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+      {/* ── Modal: 領収書表示 ── */}
+      {receiptModal && (
+        <div
+          onClick={() => setReceiptModal(null)}
+          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="rounded-2xl overflow-hidden flex flex-col"
+            style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, maxWidth: 720, width: "100%", maxHeight: "90vh" }}
+          >
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+              <div>
+                <p className="text-[13px] font-medium">📎 領収書</p>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>
+                  {receiptModal.date}　{ACCOUNT_MAP[receiptModal.category] || "雑費"}　{fmt(receiptModal.amount)}　{receiptModal.name || ""}
+                </p>
+              </div>
+              <button onClick={() => setReceiptModal(null)} className="text-[14px] cursor-pointer px-2" style={{ background: "transparent", border: "none", color: T.textSub }}>×</button>
+            </div>
+            <div className="flex-1 overflow-auto flex items-center justify-center p-4" style={{ backgroundColor: T.cardAlt }}>
+              {receiptModal.receipt_url && (receiptModal.receipt_url.toLowerCase().endsWith(".pdf") ? (
+                <iframe src={receiptModal.receipt_url} style={{ width: "100%", height: "70vh", border: "none", backgroundColor: "#fff" }} />
+              ) : (
+                <img src={receiptModal.receipt_url} alt="領収書" style={{ maxWidth: "100%", maxHeight: "75vh", objectFit: "contain" }} />
+              ))}
+            </div>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: `1px solid ${T.border}` }}>
+              <a href={receiptModal.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[11px]" style={{ color: "#4a7c9f", textDecoration: "underline" }}>
+                新しいタブで開く
+              </a>
+              <button onClick={() => setReceiptModal(null)} className="text-[11px] px-3 py-1.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: 要確認マーク ── */}
+      {reviewModal && (
+        <div
+          onClick={() => { setReviewModal(null); setReviewNoteInput(""); }}
+          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="rounded-2xl overflow-hidden"
+            style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, maxWidth: 480, width: "100%" }}
+          >
+            <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+              <p className="text-[13px] font-medium">🚩 要確認マーク</p>
+              <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>
+                {reviewModal.date}　{ACCOUNT_MAP[reviewModal.category] || "雑費"}　{fmt(reviewModal.amount)}　{reviewModal.name || ""}
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              {reviewModal.needs_review ? (
+                <>
+                  <p className="text-[11px]" style={{ color: T.textSub }}>
+                    この経費には現在、要確認マークが付いています。
+                    {reviewModal.flagged_by_name && (
+                      <span style={{ display: "block", fontSize: 10, color: T.textMuted, marginTop: 4 }}>
+                        フラグ付与: {reviewModal.flagged_by_name}　{reviewModal.flagged_at ? new Date(reviewModal.flagged_at).toLocaleString("ja-JP") : ""}
+                      </span>
+                    )}
+                  </p>
+                  <div>
+                    <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>理由・メモ</p>
+                    <textarea
+                      value={reviewNoteInput}
+                      onChange={e => setReviewNoteInput(e.target.value)}
+                      rows={3}
+                      placeholder="領収書の金額が読めない / 勘定科目の確認が必要 など"
+                      className="w-full rounded p-2 text-[12px]"
+                      style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px]" style={{ color: T.textSub }}>
+                    この経費に要確認マークを付けますか？<br />
+                    後で見返す時に目印になります。
+                  </p>
+                  <div>
+                    <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>理由・メモ（任意）</p>
+                    <textarea
+                      value={reviewNoteInput}
+                      onChange={e => setReviewNoteInput(e.target.value)}
+                      rows={3}
+                      placeholder="領収書の金額が読めない / 勘定科目の確認が必要 など"
+                      className="w-full rounded p-2 text-[12px]"
+                      style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="px-5 py-3 flex items-center justify-between gap-2" style={{ borderTop: `1px solid ${T.border}` }}>
+              <button onClick={() => { setReviewModal(null); setReviewNoteInput(""); }} className="text-[11px] px-3 py-1.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}>キャンセル</button>
+              <div className="flex items-center gap-2">
+                {reviewModal.needs_review && (
+                  <button
+                    onClick={() => toggleExpenseReview(reviewModal, "")}
+                    className="text-[11px] px-3 py-1.5 rounded cursor-pointer"
+                    style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}
+                  >✓ マークを外す</button>
+                )}
+                {reviewModal.needs_review ? (
+                  <button
+                    onClick={() => toggleExpenseReview({ ...reviewModal, needs_review: false }, reviewNoteInput)}
+                    className="text-[11px] px-3 py-1.5 rounded cursor-pointer"
+                    style={{ backgroundColor: "#c45555", color: "#fff", border: "none" }}
+                  >🚩 メモを更新</button>
+                ) : (
+                  <button
+                    onClick={() => toggleExpenseReview(reviewModal, reviewNoteInput)}
+                    className="text-[11px] px-3 py-1.5 rounded cursor-pointer"
+                    style={{ backgroundColor: "#c45555", color: "#fff", border: "none" }}
+                  >🚩 要確認マークを付ける</button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: 領収書ZIP一括ダウンロード ── */}
+      {bulkDLModal && (
+        <div
+          onClick={() => !bulkDLLoading && setBulkDLModal(false)}
+          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="rounded-2xl overflow-hidden"
+            style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, maxWidth: 480, width: "100%" }}
+          >
+            <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+              <p className="text-[13px] font-medium">📦 領収書をまとめてダウンロード</p>
+              <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>指定期間・カテゴリの領収書画像をZIPで一括取得します</p>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>対象月</p>
+                <input
+                  type="month"
+                  value={bulkDLMonth}
+                  onChange={e => setBulkDLMonth(e.target.value)}
+                  className="w-full rounded p-2 text-[12px]"
+                  style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}
+                />
+              </div>
+              <div>
+                <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>勘定科目</p>
+                <select
+                  value={bulkDLCategory}
+                  onChange={e => setBulkDLCategory(e.target.value)}
+                  className="w-full rounded p-2 text-[12px] cursor-pointer"
+                  style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}
+                >
+                  <option value="all">すべて</option>
+                  {EXPENSE_CATEGORIES.filter(c => c.value !== "income" && c.value !== "misc_income").map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="rounded p-3" style={{ backgroundColor: T.cardAlt, border: `1px dashed ${T.border}` }}>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>
+                  📁 ZIP内の構成:<br />
+                  　_集計表.csv（全件の一覧・BOM付き）<br />
+                  　_領収書なし一覧.txt（領収書未登録の経費）<br />
+                  　001_日付_金額_項目.jpg / .pdf ...
+                </p>
+              </div>
+            </div>
+            <div className="px-5 py-3 flex items-center justify-between gap-2" style={{ borderTop: `1px solid ${T.border}` }}>
+              <button
+                onClick={() => setBulkDLModal(false)}
+                disabled={bulkDLLoading}
+                className="text-[11px] px-3 py-1.5 rounded"
+                style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text, cursor: bulkDLLoading ? "not-allowed" : "pointer", opacity: bulkDLLoading ? 0.5 : 1 }}
+              >キャンセル</button>
+              <button
+                onClick={downloadReceiptsZip}
+                disabled={bulkDLLoading}
+                className="text-[11px] px-4 py-1.5 rounded"
+                style={{ backgroundColor: "#4a7c59", color: "#fff", border: "none", cursor: bulkDLLoading ? "wait" : "pointer", opacity: bulkDLLoading ? 0.6 : 1 }}
+              >{bulkDLLoading ? "⏳ 処理中..." : "📦 ZIPでダウンロード"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
