@@ -432,8 +432,8 @@ export default function Analytics() {
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.invoice === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{dash(d.invoice, fmt(d.invoice))}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.withholding === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{dash(d.withholding, fmt(d.withholding))}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.expense === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.expense, fmt(d.expense))}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.uncollectedSales === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{dash(d.uncollectedSales, fmt(d.uncollectedSales))}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.safeUncollected === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{dash(d.safeUncollected, fmt(d.safeUncollected))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.uncollectedSales === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.uncollectedSales, d.uncollectedSales === 0 ? fmt(0) : `−${fmt(d.uncollectedSales)}`)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.safeUncollected === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.safeUncollected, d.safeUncollected === 0 ? fmt(0) : `−${fmt(d.safeUncollected)}`)}</td>
                             <td className="py-2 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: zero ? T.textFaint : d.cashOnHand >= 0 ? "#22c55e" : "#c45555", borderRight: `1px solid ${T.border}`, backgroundColor: zero ? "transparent" : "rgba(245,158,11,0.04)" }}>{zero && d.cashOnHand === 0 ? "—" : fmt(d.cashOnHand)}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
                           </tr>
@@ -469,8 +469,8 @@ export default function Analytics() {
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.invoice)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(tot.withholding)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.expense)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#f59e0b", borderRight: `1px solid ${T.border}` }}>{fmt(tot.uncollectedSales)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.safeUncollected)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.uncollectedSales === 0 ? fmt(0) : `−${fmt(tot.uncollectedSales)}`}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.safeUncollected === 0 ? fmt(0) : `−${fmt(tot.safeUncollected)}`}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: tot.cashOnHand >= 0 ? "#22c55e" : "#c45555", borderRight: `1px solid ${T.border}`, backgroundColor: "rgba(245,158,11,0.06)" }}>{fmt(tot.cashOnHand)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub }}>{avg > 0 ? fmt(avg) : "—"}</td>
                           </tr>
@@ -483,7 +483,7 @@ export default function Analytics() {
               <div className="mt-2 space-y-1">
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。事務所残金は営業締めと同じ計算式</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 平均単価 =（売上 − セラピストバック）÷ 予約数 （インボイス・源泉は引かない／指名・オプション・延長は含む）</p>
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収 = ルーム内の未回収現金、金庫未回収 = その日に金庫投函された未回収金</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）。精算確定すると事務所残金に移動します</p>
               </div>
             </div>
           )}
