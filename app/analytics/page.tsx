@@ -58,6 +58,21 @@ export default function Analytics() {
   // 日別ヘッダークリックで表示するヒント（sales/storeShare/avg/back いずれか、null なら非表示）
   const [activeFormula, setActiveFormula] = useState<null | "sales" | "storeShare" | "avg" | "back">(null);
   const toggleFormula = (key: "sales" | "storeShare" | "avg" | "back") => setActiveFormula(v => v === key ? null : key);
+  // 日別 日付範囲選択（1回目クリック=開始、2回目クリック=終了、3回目=リセットして新規開始）
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const [rangeEnd, setRangeEnd] = useState<string | null>(null);
+  const handleDateClick = (date: string) => {
+    if (!rangeStart || rangeEnd) {
+      setRangeStart(date); setRangeEnd(null);
+    } else if (date === rangeStart) {
+      setRangeStart(null); setRangeEnd(null);
+    } else if (date < rangeStart) {
+      setRangeEnd(rangeStart); setRangeStart(date);
+    } else {
+      setRangeEnd(date);
+    }
+  };
+  const clearRange = () => { setRangeStart(null); setRangeEnd(null); };
 
   // マウス戻るボタン対応: タブ → 前のページ
   useBackNav(tab, setTab);
@@ -330,11 +345,18 @@ export default function Analytics() {
     return { totalCustomers, repeaters, repeatRate, nominationCount, nominationRate, totalReservations: src.length, topCustomers };
   }, [reservations, allReservations, tab, courses]);
 
-  // 月間合計（バックは settlements ベース、営業締めと同根拠）
+  // 月間合計（日別タブと同じ計算ロジック：売上=定価ベース、セラピスト=実支給額、店取概算=売上-割引-セラピスト-インボイス-源泉）
   const monthTotal = useMemo(() => {
-    const sales = reservations.reduce((s, r) => s + getPrice(r), 0);
-    const back = monthSettlements.reduce((s, ds) => s + (ds.total_back || 0), 0);
-    return { sales, back, profit: sales - back, count: reservations.length };
+    const sales = reservations.reduce((s, r) => {
+      const coursePrice = getCourse(r.course)?.price || 0;
+      return s + coursePrice + (r.nomination_fee || 0) + (r.options_total || 0) + (r.extension_price || 0);
+    }, 0);
+    const discount = reservations.reduce((s, r) => s + (r.discount_amount || 0), 0);
+    const back = monthSettlements.reduce((s, ds) => s + (ds.final_payment || 0), 0);
+    const invoice = monthSettlements.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
+    const withholding = monthSettlements.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
+    const storeShare = sales - discount - back - invoice - withholding;
+    return { sales, back, profit: storeShare, count: reservations.length };
   }, [reservations, monthSettlements, courses]);
 
   // 年間合計（バックは settlements ベース）
@@ -343,6 +365,31 @@ export default function Analytics() {
     const back = yearSettlements.reduce((s, ds) => s + (ds.total_back || 0), 0);
     return { sales, back, profit: sales - back, count: allReservations.length };
   }, [allReservations, yearSettlements, courses]);
+
+  // 選択範囲の小計（日別タブ 日付クリックで範囲選択）
+  const rangeTotal = useMemo(() => {
+    if (!rangeStart) return null;
+    const endDate = rangeEnd || rangeStart;
+    const filtered = dailyData.filter(d => d.date >= rangeStart && d.date <= endDate);
+    if (filtered.length === 0) return null;
+    return filtered.reduce((acc, d) => ({
+      days: acc.days + 1,
+      count: acc.count + d.count,
+      sales: acc.sales + d.sales,
+      discount: acc.discount + d.discount,
+      back: acc.back + d.back,
+      card: acc.card + d.card,
+      paypay: acc.paypay + d.paypay,
+      invoice: acc.invoice + d.invoice,
+      withholding: acc.withholding + d.withholding,
+      expense: acc.expense + d.expense,
+      income: acc.income + d.income,
+      storeShare: acc.storeShare + d.storeShare,
+      uncollectedSales: acc.uncollectedSales + d.uncollectedSales,
+      safeUncollected: acc.safeUncollected + d.safeUncollected,
+      cashOnHand: acc.cashOnHand + d.cashOnHand,
+    }), { days: 0, count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, invoice: 0, withholding: 0, expense: 0, income: 0, storeShare: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+  }, [rangeStart, rangeEnd, dailyData]);
 
   const totalCourseSales = courseData.reduce((s, c) => s + c.sales, 0) || 1;
 
@@ -379,8 +426,8 @@ export default function Analytics() {
       <div className="px-4 py-3 flex gap-3 flex-shrink-0 overflow-x-auto" style={{ backgroundColor: T.cardAlt }}>
         {[
           { label: "月間売上", value: fmt(monthTotal.sales), color: "#c3a782" },
-          { label: "月間バック", value: fmt(monthTotal.back), color: "#7ab88f" },
-          { label: "月間利益", value: fmt(monthTotal.profit), color: "#85a8c4" },
+          { label: "月間セラピスト", value: fmt(monthTotal.back), color: "#7ab88f" },
+          { label: "月間店取概算", value: fmt(monthTotal.profit), color: "#85a8c4" },
           { label: "月間予約数", value: `${monthTotal.count}件`, color: "#c49885" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl px-4 py-3 border min-w-[140px]" style={{ backgroundColor: T.card, borderColor: T.border }}>
@@ -402,6 +449,35 @@ export default function Analytics() {
                 <span className="text-[14px] font-medium">{smYear}年{smMonth}月 日別</span>
                 <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
+              {rangeStart && (
+                <div className="mb-3 rounded-xl border p-3" style={{ backgroundColor: "rgba(133,168,196,0.08)", borderColor: "#85a8c4" }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[12px] font-medium" style={{ color: "#85a8c4" }}>
+                      📅 期間選択: {rangeStart.slice(5).replace("-", "/")}
+                      {rangeEnd && rangeEnd !== rangeStart && ` 〜 ${rangeEnd.slice(5).replace("-", "/")}`}
+                      {!rangeEnd && <span className="ml-2 text-[10px]" style={{ color: T.textMuted }}>（終了日をクリック）</span>}
+                      {rangeTotal && <span className="ml-2" style={{ color: T.textSub }}>・{rangeTotal.days}日間</span>}
+                    </div>
+                    <button onClick={clearRange} className="text-[11px] cursor-pointer px-2 py-1 rounded" style={{ color: T.textSub, backgroundColor: T.card }}>クリア</button>
+                  </div>
+                  {rangeTotal && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]" style={{ color: T.text }}>
+                      <span>予約: <strong>{rangeTotal.count}件</strong></span>
+                      <span style={{ color: "#85a8c4" }}>店取概算: <strong>{fmt(rangeTotal.storeShare)}</strong></span>
+                      <span style={{ color: T.accent }}>売上: <strong>{fmt(rangeTotal.sales)}</strong></span>
+                      <span style={{ color: "#7ab88f" }}>セラピスト: <strong>{fmt(rangeTotal.back)}</strong></span>
+                      {rangeTotal.discount > 0 && <span style={{ color: "#f59e0b" }}>割引: <strong>−{fmt(rangeTotal.discount)}</strong></span>}
+                      {rangeTotal.card > 0 && <span style={{ color: T.textSub }}>カード: <strong>{fmt(rangeTotal.card)}</strong></span>}
+                      {rangeTotal.paypay > 0 && <span style={{ color: T.textSub }}>ペイペイ: <strong>{fmt(rangeTotal.paypay)}</strong></span>}
+                      {rangeTotal.invoice > 0 && <span style={{ color: "#a855f7" }}>インボイス: <strong>{fmt(rangeTotal.invoice)}</strong></span>}
+                      {rangeTotal.withholding > 0 && <span style={{ color: "#d4687e" }}>源泉: <strong>{fmt(rangeTotal.withholding)}</strong></span>}
+                      {rangeTotal.expense > 0 && <span style={{ color: "#c45555" }}>経費: <strong>{fmt(rangeTotal.expense)}</strong></span>}
+                      {rangeTotal.income > 0 && <span style={{ color: "#22c55e" }}>入金: <strong>+{fmt(rangeTotal.income)}</strong></span>}
+                      <span style={{ color: rangeTotal.cashOnHand >= 0 ? "#22c55e" : "#c45555" }}>事務所残金: <strong>{fmt(rangeTotal.cashOnHand)}</strong></span>
+                    </div>
+                  )}
+                </div>
+              )}
               {activeFormula === "sales" && (
                 <div className="mb-3 rounded-xl border p-3 flex items-center justify-between" style={{ backgroundColor: "rgba(195,167,130,0.08)", borderColor: T.accent }}>
                   <div className="text-[12px]" style={{ color: T.text }}>
@@ -496,7 +572,15 @@ export default function Analytics() {
                             key={h.label}
                             onClick={h.key ? () => toggleFormula(h.key!) : undefined}
                             className={`py-2 px-1.5 font-medium text-[10px] text-${h.align} whitespace-nowrap ${h.key ? "cursor-pointer select-none" : ""}`}
-                            style={{ color: h.key && activeFormula === h.key ? "#85a8c4" : T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}
+                            style={{
+                              color: h.key && activeFormula === h.key ? "#85a8c4" : T.textMuted,
+                              width: h.w || "auto",
+                              borderRight: `1px solid ${T.border}`,
+                              position: "sticky",
+                              top: 0,
+                              backgroundColor: T.cardAlt,
+                              zIndex: 10,
+                            }}
                           >
                             {h.label}{h.key ? " ⓘ" : ""}
                           </th>
@@ -508,9 +592,17 @@ export default function Analytics() {
                         const zero = d.count === 0 && d.expense === 0 && d.income === 0 && d.replenish === 0 && d.uncollectedSales === 0 && d.safeUncollected === 0 && d.cashOnHand === 0;
                         const dowColor = d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.textSub;
                         const dash = (v: number, formatted: string) => (zero && v === 0) ? "—" : formatted;
+                        // 選択範囲判定
+                        const inRange = rangeStart && ((!rangeEnd && d.date === rangeStart) || (rangeEnd && d.date >= rangeStart && d.date <= rangeEnd));
+                        const rowBg = inRange ? "rgba(133,168,196,0.12)" : d.dow === "日" ? "rgba(196,85,85,0.03)" : d.dow === "土" ? "rgba(61,107,159,0.03)" : "transparent";
                         return (
-                          <tr key={d.date} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1, backgroundColor: d.dow === "日" ? "rgba(196,85,85,0.03)" : d.dow === "土" ? "rgba(61,107,159,0.03)" : "transparent" }}>
-                            <td className="py-1.5 px-1.5 whitespace-nowrap" style={{ borderRight: `1px solid ${T.border}` }}>{`${smMonth}/${d.label}`}</td>
+                          <tr key={d.date} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero && !inRange ? 0.45 : 1, backgroundColor: rowBg }}>
+                            <td
+                              onClick={() => handleDateClick(d.date)}
+                              className="py-1.5 px-1.5 whitespace-nowrap cursor-pointer select-none"
+                              style={{ borderRight: `1px solid ${T.border}`, fontWeight: inRange ? 600 : 400, color: inRange ? "#85a8c4" : "inherit" }}
+                              title="クリックで期間選択（1回目=開始、2回目=終了）"
+                            >{`${smMonth}/${d.label}`}</td>
                             <td className="py-1.5 px-1.5 text-center font-medium" style={{ color: dowColor, borderRight: `1px solid ${T.border}` }}>{d.dow}</td>
                             <td className="py-1.5 px-1.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : d.count}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
@@ -578,6 +670,7 @@ export default function Analytics() {
                 </div>
               </div>
               <div className="mt-2 space-y-1">
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 💡 <strong>日付セルをクリック</strong>すると期間選択できます（1回目=開始日、2回目=終了日）。選択中は行がハイライトされ上部に小計バーが表示されます</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。事務所残金は営業締めと同じ計算式</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上は定価ベース（コース+指名+オプション+延長）、売上 − 割引 = 実売上</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
