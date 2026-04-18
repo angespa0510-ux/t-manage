@@ -482,10 +482,8 @@ export default function CorporatePage() {
 
       {/* ── Divider ── */}
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.3),transparent)" }}/>
-      <section id="stats" data-a style={{ position:"relative",padding:"80px 24px",background:"#020617",overflow:"hidden" }}>
-        <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.2,zIndex:0 }}><source src="/corporate/stats-bg.mp4" type="video/mp4"/></video>
-        <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(2,6,23,0.6) 0%,rgba(2,6,23,0.3) 50%,rgba(2,6,23,0.6) 100%)",zIndex:1 }}/>
-        <div className={`fu ${show("stats")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto",position:"relative",zIndex:2 }}>
+      <section id="stats" data-a style={{ position:"relative",padding:"80px 24px",background:"linear-gradient(180deg,#020617,#0a1628,#020617)",overflow:"hidden" }}>
+        <div className={`fu ${show("stats")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto" }}>
           <div style={{ textAlign:"center",marginBottom:48 }}>
             <span className={`sh ${show("stats")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>ACHIEVEMENTS</span>
             <h2 className={`sh2 ${show("stats")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>数字で見る実績</h2>
@@ -668,14 +666,13 @@ export default function CorporatePage() {
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(124,58,237,0.3),rgba(37,99,235,0.3),transparent)" }}/>
 
       {/* ══════════ COMPANY ══════════ */}
-      <section id="company" data-a style={{ padding:"80px 24px",background:"#020617" }}>
-        <div className={`fu ${show("company")?"on":""}`} style={{ maxWidth:900,margin:"0 auto" }}>
+      <section id="company" data-a style={{ position:"relative",padding:"80px 24px",background:"#020617",overflow:"hidden" }}>
+        <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.15,zIndex:0 }}><source src="/corporate/company-bg.mp4" type="video/mp4"/></video>
+        <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(2,6,23,0.6) 0%,rgba(2,6,23,0.3) 50%,rgba(2,6,23,0.7) 100%)",zIndex:1 }}/>
+        <div className={`fu ${show("company")?"on":""}`} style={{ maxWidth:900,margin:"0 auto",position:"relative",zIndex:2 }}>
           <div style={{ textAlign:"center",marginBottom:56 }}>
             <span className={`sh ${show("company")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>COMPANY</span>
             <h2 className={`sh2 ${show("company")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>会社概要</h2>
-          </div>
-          <div style={{ borderRadius:18,overflow:"hidden",marginBottom:32 }}>
-            <img src="/corporate/office.jpg" alt="開発環境" style={{ width:"100%",height:"auto",display:"block",borderRadius:18,border:"1px solid rgba(96,165,250,0.1)" }}/>
           </div>
           <div style={{ borderRadius:18,overflow:"hidden",border:"1px solid rgba(96,165,250,0.12)",boxShadow:"0 8px 40px rgba(0,0,0,0.3)",animation:"borderGlow 6s ease-in-out infinite" }}>
             <div style={{ padding:"36px 40px",background:"linear-gradient(135deg,#0f2847,#0a1628)",display:"flex",alignItems:"center",gap:20,borderBottom:"1px solid rgba(96,165,250,0.1)" }}>
