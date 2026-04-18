@@ -63,6 +63,7 @@ const TAX_TASKS: TaxTask[] = [
   // 毎月の業務
   { id: "monthly-payroll", timing: "毎月", month: 0, title: "給与計算・給与振込", description: "スタッフ・社員の給与計算と振込処理", assignee: "会社", deadline: "月末", category: "給与", importance: "high" },
   { id: "monthly-shakai", timing: "毎月", month: 0, title: "社会保険料納付", description: "健康保険・厚生年金の納付（翌月末）", assignee: "会社", deadline: "翌月末", category: "社保", importance: "high" },
+  { id: "monthly-kessai", timing: "毎月", month: 0, title: "決済明細の取得・保管", description: "前月分の決済明細PDFを各社管理画面からダウンロードして、書類庫「決済明細」カテゴリに保管:\n□ スターペイメント（カード決済明細）\n□ PayPay（QR決済明細）\nファイル名の例: 2026-03_スターペイメント_カード決済明細.pdf\n\n※ 売上計上と入金の突合に必須の書類。税理士の月次仕訳でも使用。", assignee: "会社", deadline: "毎月10日頃", category: "経理", importance: "medium" },
   { id: "monthly-trial", timing: "毎月", month: 0, title: "月次資料を税理士に提出", description: "前月の売上・経費・銀行明細を税理士ポータルで確認できる状態にして、税理士に試算表作成を依頼（📊 月次サマリーから「月次試算表（管理用）」をPDF出力して送るとスムーズ）", assignee: "共同", deadline: "翌月15日目安", category: "経理", importance: "medium" },
   // 1月
   { id: "jan-withhold-h2", timing: "1月", month: 1, title: "源泉所得税納付（納特・下半期）", description: "7〜12月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "1/20", category: "源泉", importance: "high" },
@@ -93,7 +94,7 @@ const TAX_TASKS: TaxTask[] = [
   { id: "feb-kojin-shinkoku", timing: "2〜3月", month: 2, title: "役員個人の確定申告（該当者のみ）", description: "以下に該当する場合は役員個人の確定申告が必要:\n□ 役員報酬が年2,000万円超 → 必須\n□ 2社以上から役員報酬を受けている → 必須\n□ ふるさと納税を6自治体超（ワンストップ特例が使えない）\n□ 医療費が年10万円超（医療費控除）\n□ 住宅ローン控除の初年度\n□ 役員報酬以外の所得（不動産・副業等）あり\n→ 該当書類（寄附金受領証明書・医療費明細等）を書類庫に保管して税理士に提出", assignee: "税理士", deadline: "3/15", category: "源泉", importance: "high" },
 ];
 
-const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "借入・融資", "保険", "納税通知", "個人確定申告", "その他"];
+const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "決済明細", "借入・融資", "保険", "納税通知", "個人確定申告", "その他"];
 
 // 会計ソフト形式
 type AccFormat = "general" | "yayoi" | "freee" | "mf";
@@ -131,6 +132,7 @@ const CATEGORY_PATH: Record<string, string> = {
   "契約書": "keiyaku",
   "固定資産": "kotei",
   "支払調書": "shiharai",
+  "決済明細": "kessai",
   "借入・融資": "shakkin",
   "保険": "hoken",
   "納税通知": "nouzei",
@@ -145,6 +147,7 @@ const NAME_PLACEHOLDER: Record<string, string> = {
   "契約書": "例: 本店賃貸借契約書（オアシス）",
   "固定資産": "例: 固定資産台帳 第3期",
   "支払調書": "例: 2025年分 支払調書",
+  "決済明細": "例: 2026-03 スターペイメント カード決済明細",
   "借入・融資": "例: 〇〇銀行 返済予定表 2026年4月",
   "保険": "例: 火災保険証券（店舗）",
   "納税通知": "例: 2025年度 固定資産税通知",
@@ -2306,7 +2309,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                           (docPersonFilter === "all" || (docPersonFilter === "__company__" ? !d.target_person_name : d.target_person_name === docPersonFilter))
                         );
                         if (filtered.length === 0) return <tr><td colSpan={10} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>書類が登録されていません</td></tr>;
-                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "個人確定申告": "#d97757", "その他": "#888780" };
+                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "決済明細": "#4a7c9f", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "個人確定申告": "#d97757", "その他": "#888780" };
                         return filtered.map((d, i) => (
                           <tr key={d.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
                             <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
@@ -2389,7 +2392,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                         { c: "納税通知", w: "固定資産税・住民税・事業税など", n: "2025年度 固定資産税通知", p: "第3期", m: "年税額○○円" },
                         { c: "その他", w: "上記に当てはまらないもの", n: "任意", p: "任意", m: "自由" },
                       ].map((r, i) => {
-                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "その他": "#888780" };
+                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "決済明細": "#4a7c9f", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "個人確定申告": "#d97757", "その他": "#888780" };
                         return (
                           <tr key={r.c} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
                             <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
