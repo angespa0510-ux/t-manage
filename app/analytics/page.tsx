@@ -57,9 +57,9 @@ export default function Analytics() {
   const [tab, setTab] = useState<Tab>("daily");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
-  // 日別ヘッダークリックで表示するヒント（sales/storeShare/avg/back いずれか、null なら非表示）
-  const [activeFormula, setActiveFormula] = useState<null | "sales" | "storeShare" | "avg" | "back">(null);
-  const toggleFormula = (key: "sales" | "storeShare" | "avg" | "back") => setActiveFormula(v => v === key ? null : key);
+  // 日別ヘッダークリックで表示するヒント（sales/storeShare/avg/back/card いずれか、null なら非表示）
+  const [activeFormula, setActiveFormula] = useState<null | "sales" | "storeShare" | "avg" | "back" | "card">(null);
+  const toggleFormula = (key: "sales" | "storeShare" | "avg" | "back" | "card") => setActiveFormula(v => v === key ? null : key);
   // 日別 日付範囲選択（1回目クリック=開始、2回目クリック=終了、3回目=リセットして新規開始）
   const [rangeStart, setRangeStart] = useState<string | null>(null);
   const [rangeEnd, setRangeEnd] = useState<string | null>(null);
@@ -582,6 +582,20 @@ export default function Analytics() {
                   <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
                 </div>
               )}
+              {activeFormula === "card" && (
+                <div className="mb-3 rounded-xl border p-3 flex items-center justify-between" style={{ backgroundColor: "rgba(138,138,138,0.06)", borderColor: T.textSub }}>
+                  <div className="text-[12px]" style={{ color: T.text }}>
+                    <span className="font-medium" style={{ color: T.textSub }}>💡 カードの内訳</span>
+                    <span className="mx-2" style={{ color: T.textMuted }}>=</span>
+                    <span>カード決済の実請求額</span>
+                    <span className="mx-2" style={{ color: T.textFaint }}>|</span>
+                    <span className="text-[11px]" style={{ color: "#f59e0b" }}>TAX 10% 込み</span>
+                    <span className="mx-2" style={{ color: T.textFaint }}>|</span>
+                    <span className="text-[11px]" style={{ color: T.textMuted }}>売上（税抜）× 1.10 でお客様に請求された金額</span>
+                  </div>
+                  <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
+                </div>
+              )}
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="overflow-x-auto">
                   <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
@@ -596,7 +610,7 @@ export default function Analytics() {
                           { label: "売上", align: "right", w: "", key: "sales" as const },
                           { label: "セラピスト", align: "right", w: "", key: "back" as const },
                           { label: "割引", align: "right", w: "", key: null },
-                          { label: "カード", align: "right", w: "", key: null },
+                          { label: "カード", align: "right", w: "", key: "card" as const },
                           { label: "ペイペイ", align: "right", w: "", key: null },
                           { label: "インボイス", align: "right", w: "", key: null },
                           { label: "源泉", align: "right", w: "", key: null },
