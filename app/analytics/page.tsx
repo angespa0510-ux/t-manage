@@ -153,7 +153,9 @@ export default function Analytics() {
       const paypay = dayRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
       const cash = dayRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
 
-      const back = daySettles.reduce((s, ds) => s + (ds.total_back || 0), 0);
+      // セラピスト実支給額 = final_payment
+      //   = コース/指名/オプション/延長のバック合計 − インボイス − 源泉 − 福利厚生費 + 交通費 + 調整金
+      const back = daySettles.reduce((s, ds) => s + (ds.final_payment || 0), 0);
       const invoice = daySettles.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
       const withholding = daySettles.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
 
@@ -215,8 +217,9 @@ export default function Analytics() {
       // 事務所残金 = -釣銭補充 - 経費 + 収入 + スタッフ回収 + 本日の金庫回収分
       const cashOnHand = -replenish - expense + income + staffCollectedAmt + safeCollectedTodayTotal;
 
-      // 店取概算 = 売上 − 割引 − インボイス − 源泉 − セラピスト
-      const storeShare = sales - discount - invoice - withholding - back;
+      // 店取概算 = 売上 − 割引 − セラピスト(実支給額)
+      //   実支給額にはインボイス・源泉が既に天引き済みなので単独では引かない
+      const storeShare = sales - discount - back;
       // 平均単価 = 店取概算 ÷ 予約数
       const avgNet = count > 0 ? Math.round(storeShare / count) : 0;
 
@@ -418,13 +421,11 @@ export default function Analytics() {
                     <span className="mx-2" style={{ color: T.textMuted }}>=</span>
                     <span style={{ color: T.accent }}>売上</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>−</span>
-                    <span style={{ color: "#7ab88f" }}>セラピスト</span>
-                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
                     <span style={{ color: "#f59e0b" }}>割引</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>−</span>
-                    <span style={{ color: "#a855f7" }}>インボイス</span>
-                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
-                    <span style={{ color: "#d4687e" }}>源泉</span>
+                    <span style={{ color: "#7ab88f" }}>セラピスト</span>
+                    <span className="mx-2" style={{ color: T.textFaint }}>|</span>
+                    <span className="text-[11px]" style={{ color: T.textMuted }}>セラピスト(実支給額)にインボイス・源泉・厚生費・交通費・調整金は反映済み</span>
                   </div>
                   <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
                 </div>
@@ -444,17 +445,21 @@ export default function Analytics() {
               {activeFormula === "back" && (
                 <div className="mb-3 rounded-xl border p-3 flex items-center justify-between" style={{ backgroundColor: "rgba(122,184,143,0.08)", borderColor: "#7ab88f" }}>
                   <div className="text-[12px]" style={{ color: T.text }}>
-                    <span className="font-medium" style={{ color: "#7ab88f" }}>💡 セラピストの内訳</span>
+                    <span className="font-medium" style={{ color: "#7ab88f" }}>💡 セラピスト（実支給額）の内訳</span>
                     <span className="mx-2" style={{ color: T.textMuted }}>=</span>
-                    <span>コースバック</span>
+                    <span>バック合計</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#a855f7" }}>インボイス</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#d4687e" }}>源泉</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span>厚生費</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>+</span>
-                    <span>指名バック</span>
+                    <span>交通費</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>+</span>
-                    <span>オプションバック</span>
-                    <span className="mx-1" style={{ color: T.textMuted }}>+</span>
-                    <span>延長バック</span>
+                    <span>調整金</span>
                     <span className="mx-2" style={{ color: T.textFaint }}>|</span>
-                    <span className="text-[11px]" style={{ color: T.textMuted }}>精算モーダルで確定された支給額ベース（インボイス・源泉を引く前）</span>
+                    <span className="text-[11px]" style={{ color: T.textMuted }}>精算モーダルで確定したセラピストへの実際の支給額（final_payment）</span>
                   </div>
                   <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
                 </div>
@@ -571,8 +576,9 @@ export default function Analytics() {
               <div className="mt-2 space-y-1">
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。事務所残金は営業締めと同じ計算式</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上は定価ベース（コース+指名+オプション+延長）、売上 − 割引 = 実売上</p>
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − セラピスト − 割引 − インボイス − 源泉、平均単価 = 店取概算 ÷ 予約数（ヘッダーⓘクリックで詳細）</p>
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）。精算確定すると事務所残金に移動します</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額（final_payment）」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト、平均単価 = 店取概算 ÷ 予約数（ヘッダーⓘで詳細）</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）</p>
               </div>
             </div>
           )}
