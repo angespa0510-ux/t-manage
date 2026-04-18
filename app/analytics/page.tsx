@@ -7,7 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useBackNav } from "../../lib/use-back-nav";
 
-type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string; total_price?: number; card_billing?: number; paypay_amount?: number; cash_amount?: number; nomination?: string };
+type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string; total_price?: number; card_billing?: number; paypay_amount?: number; cash_amount?: number; nomination?: string; discount_amount?: number };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
@@ -121,7 +121,7 @@ export default function Analytics() {
   const dailyData = useMemo(() => {
     type Row = {
       date: string; label: string; dow: string; count: number;
-      sales: number; back: number; card: number; paypay: number; cash: number;
+      sales: number; discount: number; back: number; card: number; paypay: number; cash: number;
       invoice: number; withholding: number;
       expense: number; income: number; replenish: number;
       uncollectedSales: number; safeUncollected: number; cashOnHand: number;
@@ -141,6 +141,7 @@ export default function Analytics() {
 
       const count = dayRes.length;
       const sales = dayRes.reduce((s, r) => s + getPrice(r), 0);
+      const discount = dayRes.reduce((s, r) => s + (r.discount_amount || 0), 0);
       const card = dayRes.reduce((s, r) => s + (r.card_billing || 0), 0);
       const paypay = dayRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
       const cash = dayRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
@@ -212,7 +213,7 @@ export default function Analytics() {
 
       data.push({
         date, label: `${i}`, dow: dayNames[d.getDay()], count,
-        sales, back, card, paypay, cash,
+        sales, discount, back, card, paypay, cash,
         invoice, withholding,
         expense, income, replenish,
         uncollectedSales, safeUncollected, cashOnHand,
@@ -226,7 +227,7 @@ export default function Analytics() {
   const monthlyData = useMemo(() => {
     type MRow = {
       month: string; label: string; count: number;
-      sales: number; back: number; card: number; paypay: number; cash: number;
+      sales: number; discount: number; back: number; card: number; paypay: number; cash: number;
       invoice: number; withholding: number;
       expense: number; income: number;
       profit: number; avgNet: number;
@@ -239,6 +240,7 @@ export default function Analytics() {
       const mExp = yearExpenses.filter((e) => e.date.startsWith(prefix));
       const count = mRes.length;
       const sales = mRes.reduce((s, r) => s + getPrice(r), 0);
+      const discount = mRes.reduce((s, r) => s + (r.discount_amount || 0), 0);
       const card = mRes.reduce((s, r) => s + (r.card_billing || 0), 0);
       const paypay = mRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
       const cash = mRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
@@ -250,7 +252,7 @@ export default function Analytics() {
       // 月次利益（粗い集計）: 売上 - バック - 経費 + 収入
       const profit = sales - back - expense + income;
       const avgNet = count > 0 ? Math.round((sales - back) / count) : 0;
-      data.push({ month: prefix, label: `${m}月`, count, sales, back, card, paypay, cash, invoice, withholding, expense, income, profit, avgNet });
+      data.push({ month: prefix, label: `${m}月`, count, sales, discount, back, card, paypay, cash, invoice, withholding, expense, income, profit, avgNet });
     }
     return data;
   }, [allReservations, yearSettlements, yearExpenses, selectedYear, courses]);
@@ -398,6 +400,7 @@ export default function Analytics() {
                           { label: "曜", align: "center", w: "36px" },
                           { label: "予約数", align: "right", w: "64px" },
                           { label: "売上", align: "right", w: "" },
+                          { label: "割引", align: "right", w: "" },
                           { label: "カード", align: "right", w: "" },
                           { label: "ペイペイ", align: "right", w: "" },
                           { label: "現金", align: "right", w: "" },
@@ -425,6 +428,7 @@ export default function Analytics() {
                             <td className="py-2 px-2.5 text-center font-medium" style={{ color: dowColor, borderRight: `1px solid ${T.border}` }}>{d.dow}</td>
                             <td className="py-2 px-2.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : `${d.count}件`}</td>
                             <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{dash(d.sales, fmt(d.sales))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{dash(d.discount, d.discount === 0 ? fmt(0) : `−${fmt(d.discount)}`)}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.card, fmt(d.card))}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.paypay, fmt(d.paypay))}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.cash === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.cash, fmt(d.cash))}</td>
@@ -445,6 +449,7 @@ export default function Analytics() {
                         const tot = dailyData.reduce((acc, d) => ({
                           count: acc.count + d.count,
                           sales: acc.sales + d.sales,
+                          discount: acc.discount + d.discount,
                           card: acc.card + d.card,
                           paypay: acc.paypay + d.paypay,
                           cash: acc.cash + d.cash,
@@ -455,13 +460,14 @@ export default function Analytics() {
                           uncollectedSales: acc.uncollectedSales + d.uncollectedSales,
                           safeUncollected: acc.safeUncollected + d.safeUncollected,
                           cashOnHand: acc.cashOnHand + d.cashOnHand,
-                        }), { count: 0, sales: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
                         const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
                         return (
                           <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
                             <td className="py-2.5 px-2.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>合計</td>
                             <td className="py-2.5 px-2.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}件</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: tot.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.discount === 0 ? fmt(0) : `−${fmt(tot.discount)}`}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.cash)}</td>
@@ -484,6 +490,7 @@ export default function Analytics() {
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。事務所残金は営業締めと同じ計算式</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 平均単価 =（売上 − セラピストバック）÷ 予約数 （インボイス・源泉は引かない／指名・オプション・延長は含む）</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）。精算確定すると事務所残金に移動します</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 割引は定価から値引きした額をオレンジでマイナス表示（売上には既に適用済み）</p>
               </div>
             </div>
           )}
@@ -501,7 +508,7 @@ export default function Analytics() {
                   <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
                     <thead>
                       <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
-                        {["月", "予約数", "売上", "カード", "ペイペイ", "現金", "バック", "インボイス", "源泉", "経費", "利益", "平均単価", "前月比"].map((h, i) => (
+                        {["月", "予約数", "売上", "割引", "カード", "ペイペイ", "現金", "バック", "インボイス", "源泉", "経費", "利益", "平均単価", "前月比"].map((h, i) => (
                           <th key={h} className={`py-2.5 px-2.5 font-medium text-[10px] whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
                         ))}
                       </tr>
@@ -518,6 +525,7 @@ export default function Analytics() {
                             <td className="py-2 px-2.5 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
                             <td className="py-2 px-2.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : `${d.count}件`}</td>
                             <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{d.sales === 0 ? "—" : fmt(d.sales)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{d.discount === 0 ? "—" : `−${fmt(d.discount)}`}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.card === 0 ? "—" : fmt(d.card)}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.paypay === 0 ? "—" : fmt(d.paypay)}</td>
                             <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.cash === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.cash === 0 ? "—" : fmt(d.cash)}</td>
@@ -537,10 +545,10 @@ export default function Analytics() {
                     <tfoot>
                       {(() => {
                         const tot = monthlyData.reduce((a, d) => ({
-                          count: a.count + d.count, sales: a.sales + d.sales, card: a.card + d.card, paypay: a.paypay + d.paypay, cash: a.cash + d.cash,
+                          count: a.count + d.count, sales: a.sales + d.sales, discount: a.discount + d.discount, card: a.card + d.card, paypay: a.paypay + d.paypay, cash: a.cash + d.cash,
                           back: a.back + d.back, invoice: a.invoice + d.invoice, withholding: a.withholding + d.withholding,
                           expense: a.expense + d.expense, income: a.income + d.income,
-                        }), { count: 0, sales: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0 });
+                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0 });
                         const profit = tot.sales - tot.back - tot.expense + tot.income;
                         const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
                         return (
@@ -548,6 +556,7 @@ export default function Analytics() {
                             <td className="py-2.5 px-2.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }}>年間合計</td>
                             <td className="py-2.5 px-2.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}件</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: tot.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.discount === 0 ? fmt(0) : `−${fmt(tot.discount)}`}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.cash)}</td>
@@ -585,7 +594,7 @@ export default function Analytics() {
                   <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
                     <thead>
                       <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
-                        {["四半期", "月", "予約数", "売上", "カード", "ペイペイ", "現金", "バック", "インボイス", "源泉", "経費", "利益", "平均単価", "構成比"].map((h, i) => (
+                        {["四半期", "月", "予約数", "売上", "割引", "カード", "ペイペイ", "現金", "バック", "インボイス", "源泉", "経費", "利益", "平均単価", "構成比"].map((h, i) => (
                           <th key={h} className={`py-2.5 px-2.5 font-medium text-[10px] whitespace-nowrap ${i <= 1 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
                         ))}
                       </tr>
@@ -594,6 +603,7 @@ export default function Analytics() {
                       {[0, 1, 2, 3].map((q) => {
                         const qMonths = monthlyData.slice(q * 3, q * 3 + 3);
                         const qSales = qMonths.reduce((s, m) => s + m.sales, 0);
+                        const qDiscount = qMonths.reduce((s, m) => s + m.discount, 0);
                         const qCard = qMonths.reduce((s, m) => s + m.card, 0);
                         const qPaypay = qMonths.reduce((s, m) => s + m.paypay, 0);
                         const qCash = qMonths.reduce((s, m) => s + m.cash, 0);
@@ -619,6 +629,7 @@ export default function Analytics() {
                                   <td className="py-2 px-2.5 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
                                   <td className="py-2 px-2.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : `${d.count}件`}</td>
                                   <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{d.sales === 0 ? "—" : fmt(d.sales)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{d.discount === 0 ? "—" : `−${fmt(d.discount)}`}</td>
                                   <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.card === 0 ? "—" : fmt(d.card)}</td>
                                   <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.paypay === 0 ? "—" : fmt(d.paypay)}</td>
                                   <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.cash === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.cash === 0 ? "—" : fmt(d.cash)}</td>
@@ -636,6 +647,7 @@ export default function Analytics() {
                               <td className="py-2 px-2.5 text-[10px] font-medium" style={{ color: qColor, borderRight: `1px solid ${T.border}` }} colSpan={2}>Q{q + 1}小計</td>
                               <td className="py-2 px-2.5 text-right text-[10px] font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{qCount}件</td>
                               <td className="py-2 px-2.5 text-right text-[10px] font-medium whitespace-nowrap" style={{ color: qColor, borderRight: `1px solid ${T.border}` }}>{fmt(qSales)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: qDiscount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{qDiscount === 0 ? fmt(0) : `−${fmt(qDiscount)}`}</td>
                               <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(qCard)}</td>
                               <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(qPaypay)}</td>
                               <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(qCash)}</td>
@@ -654,10 +666,10 @@ export default function Analytics() {
                     <tfoot>
                       {(() => {
                         const tot = monthlyData.reduce((a, d) => ({
-                          count: a.count + d.count, sales: a.sales + d.sales, card: a.card + d.card, paypay: a.paypay + d.paypay, cash: a.cash + d.cash,
+                          count: a.count + d.count, sales: a.sales + d.sales, discount: a.discount + d.discount, card: a.card + d.card, paypay: a.paypay + d.paypay, cash: a.cash + d.cash,
                           back: a.back + d.back, invoice: a.invoice + d.invoice, withholding: a.withholding + d.withholding,
                           expense: a.expense + d.expense, income: a.income + d.income,
-                        }), { count: 0, sales: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0 });
+                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0 });
                         const profit = tot.sales - tot.back - tot.expense + tot.income;
                         const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
                         return (
@@ -665,6 +677,7 @@ export default function Analytics() {
                             <td className="py-2.5 px-2.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>年間合計</td>
                             <td className="py-2.5 px-2.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}件</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: tot.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.discount === 0 ? fmt(0) : `−${fmt(tot.discount)}`}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
                             <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.cash)}</td>
