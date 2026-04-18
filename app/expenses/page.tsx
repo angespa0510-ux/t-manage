@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useBackNav } from "../../lib/use-back-nav";
 import { jsPDF } from "jspdf";
+import { useConfirm } from "../../components/useConfirm";
 
 /* ───────── 型定義 ───────── */
 type Expense = {
@@ -43,6 +44,7 @@ const emptyForm = {
 export default function ExpensesPage() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
 
   /* ───── データ ───── */
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -246,14 +248,26 @@ export default function ExpensesPage() {
 
   /* ───── 削除 ───── */
   const handleDelete = async (id: number) => {
-    if (!confirm("この経費を削除しますか？")) return;
+    const ok = await confirm({
+      title: "この経費を削除しますか？",
+      message: "この操作は取り消せません。関連する経費計算にも反映されます。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("expenses").delete().eq("id", id);
     fetchData();
   };
 
   /* ───── レシート削除 ───── */
   const handleDeleteReceipt = async (expense: Expense) => {
-    if (!confirm("このレシートを削除しますか？")) return;
+    const ok = await confirm({
+      title: "このレシートを削除しますか？",
+      message: "画像ファイルがストレージから完全に削除されます。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     // Storage からファイル削除
     if (expense.receipt_name) {
       await supabase.storage.from("receipts").remove([expense.receipt_name]);
@@ -297,7 +311,12 @@ export default function ExpensesPage() {
   };
 
   const deleteKeyword = async (id: number) => {
-    if (!confirm("このキーワードを削除しますか？")) return;
+    const ok = await confirm({
+      title: "このキーワードを削除しますか？",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("expense_keywords").delete().eq("id", id);
     fetchData();
   };
@@ -329,6 +348,7 @@ export default function ExpensesPage() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* ═══ Header ═══ */}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3">

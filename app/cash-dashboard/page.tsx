@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { useStaffSession } from "../../lib/staff-session";
 import { useTheme } from "../../lib/theme";
+import { useConfirm } from "../../components/useConfirm";
 
 /* ─────────── 型定義 ─────────── */
 type AtmDeposit = {
@@ -76,6 +77,7 @@ export default function CashDashboard() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
   const { activeStaff, canAccessCashDashboard } = useStaffSession();
+  const { confirm, ConfirmModalNode } = useConfirm();
 
   const [atmDeposits, setAtmDeposits] = useState<AtmDeposit[]>([]);
   const [latestBankTx, setLatestBankTx] = useState<BankTx | null>(null);
@@ -231,7 +233,13 @@ export default function CashDashboard() {
   };
 
   const deleteAtmDeposit = async (id: number) => {
-    if (!confirm("このATM預入記録を削除しますか？")) return;
+    const ok = await confirm({
+      title: "このATM預入記録を削除しますか？",
+      message: "削除すると銀行取込との照合も失われます。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("atm_deposits").delete().eq("id", id);
     fetchData();
   };
@@ -260,7 +268,13 @@ export default function CashDashboard() {
   };
 
   const deleteReserveMovement = async (id: number) => {
-    if (!confirm("この記録を削除しますか？")) return;
+    const ok = await confirm({
+      title: "この予備金記録を削除しますか？",
+      message: "削除すると豊橋予備金の残高計算に影響します。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("toyohashi_reserve_movements").delete().eq("id", id);
     fetchData();
   };
@@ -290,7 +304,13 @@ export default function CashDashboard() {
   };
 
   const deleteBalanceCheck = async (id: number) => {
-    if (!confirm("この確認記録を削除しますか？")) return;
+    const ok = await confirm({
+      title: "この確認記録を削除しますか？",
+      message: "金庫残高の実測履歴から削除されます。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("cash_balance_checks").delete().eq("id", id);
     fetchData();
   };
@@ -400,6 +420,7 @@ export default function CashDashboard() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* ヘッダー */}
       <div className="sticky top-0 z-10 px-6 py-3 flex items-center justify-between" style={{ backgroundColor: T.card, borderBottom: `1px solid ${T.border}` }}>
         <div className="flex items-center gap-4">

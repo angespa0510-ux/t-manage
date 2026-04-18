@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useBackNav } from "../../lib/use-back-nav";
+import { useConfirm } from "../../components/useConfirm";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
 
@@ -66,6 +67,7 @@ export default function Dashboard() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
   const { activeStaff, isManager, login, logout: staffLogout } = useStaffSession();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
@@ -583,7 +585,13 @@ export default function Dashboard() {
   };
   const openDetail = (c: Customer) => { setDetailCustomer(c); fetchVisits(c.id); fetchCustomerNotes(c.name); supabase.from("customer_points").select("*").eq("customer_id", c.id).order("created_at", { ascending: false }).then(({ data }) => { if (data) setCustPoints(data); }); supabase.from("reservations").select("id,date,start_time,end_time,course,therapist_id,total_price,notes,customer_name").eq("customer_name", c.name).eq("status", "cancelled").order("date", { ascending: false }).then(({ data }) => { if (data) setCancelledRes(data); }); };
   const deleteCustomerNote = async (noteId: number) => {
-    if (!confirm("このセラピストメモを削除しますか？")) return;
+    const ok = await confirm({
+      title: "このセラピストメモを削除しますか？",
+      message: "この操作は取り消せません。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("therapist_customer_notes").delete().eq("id", noteId);
     if (detailCustomer) fetchCustomerNotes(detailCustomer.name);
   };
@@ -626,7 +634,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: T.bg, color: T.text }}>
-      {/* Sidebar */}
+      {ConfirmModalNode}      {/* Sidebar */}
       <aside className={`${sidebarOpen ? "w-[260px]" : "w-0 overflow-hidden"} flex flex-col transition-all duration-500 flex-shrink-0`} style={{ backgroundColor: SB.bg }}>
         <div className="h-[72px] flex items-center px-6" style={{ borderBottom: `1px solid ${SB.border}` }}>
           <div className="flex items-center gap-3">
@@ -1456,7 +1464,7 @@ export default function Dashboard() {
                       <span>{s.date.slice(5)} {s.therapist_name} <span style={{ color: T.textFaint, fontSize: 9 }}>({s.room_label})</span></span>
                       <div className="flex items-center gap-2">
                         <span style={{ color: "#a855f7", fontWeight: 700 }}>{fmt(safeAmount)}</span>
-                        <button onClick={async () => { if (!confirm(`${s.therapist_name}の${fmt(safeAmount)}を回収しますか？`)) return; const today = new Date().toISOString().split("T")[0]; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); setSafeUncollected(prev => prev.filter(x => x.id !== s.id)); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="text-[8px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>回収</button>
+                        <button onClick={async () => { const ok = await confirm({ title: `${s.therapist_name} の ${fmt(safeAmount)} を回収しますか？`, message: "金庫内の当該セラピスト分を回収済みとして記録します。", variant: "warning", confirmLabel: "回収する", icon: "🔐" }); if (!ok) return; const today = new Date().toISOString().split("T")[0]; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); setSafeUncollected(prev => prev.filter(x => x.id !== s.id)); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="text-[8px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#a855f718", color: "#a855f7", border: "1px solid #a855f744" }}>回収</button>
                       </div>
                     </div>;
                   })}
@@ -1464,7 +1472,7 @@ export default function Dashboard() {
                     <span>金庫内合計</span>
                     <span>{fmt(safeUncollected.reduce((s, x) => s + Math.max(x.total_cash - x.final_payment, 0) + x.replenish, 0))}</span>
                   </div>
-                  <button onClick={async () => { if (!confirm("金庫内の全額を回収しますか？")) return; const today = new Date().toISOString().split("T")[0]; for (const s of safeUncollected) { await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); } setSafeUncollected([]); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="w-full px-3 py-2 bg-gradient-to-r from-[#a855f7] to-[#9333ea] text-white text-[11px] rounded-xl cursor-pointer font-medium mt-2">📦 全額回収</button>
+                  <button onClick={async () => { const ok = await confirm({ title: "金庫内の全額を回収しますか？", message: `${safeUncollected.length} 件のセラピスト分すべてを本日付で回収済みに更新します。`, variant: "warning", confirmLabel: "全額回収する", icon: "📦" }); if (!ok) return; const today = new Date().toISOString().split("T")[0]; for (const s of safeUncollected) { await supabase.from("therapist_daily_settlements").update({ safe_collected_date: today }).eq("id", s.id); } setSafeUncollected([]); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="w-full px-3 py-2 bg-gradient-to-r from-[#a855f7] to-[#9333ea] text-white text-[11px] rounded-xl cursor-pointer font-medium mt-2">📦 全額回収</button>
                 </div>
                 )}
               </div>
@@ -1478,7 +1486,7 @@ export default function Dashboard() {
                       <span style={{ color: T.textSub }}><span style={{ color: "#22c55e" }}>回収{s.safe_collected_date?.slice(5)}</span> | 投函{s.date.slice(5)} {s.therapist_name} <span style={{ fontSize: 8, color: T.textFaint }}>({s.room_label})</span></span>
                       <div className="flex items-center gap-2">
                         <span style={{ color: "#22c55e" }}>{fmt(safeAmount)}</span>
-                        <button onClick={async () => { if (!confirm("この回収を取り消しますか？")) return; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: null }).eq("id", s.id); setSafeHistory(prev => prev.filter(x => x.id !== s.id)); setSafeUncollected(prev => [...prev, { id: s.id, date: s.date, total_cash: s.total_cash, final_payment: s.final_payment, room_id: s.room_id, therapist_name: s.therapist_name, room_label: s.room_label, replenish: s.replenish }]); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="text-[7px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "none" }}>取消</button>
+                        <button onClick={async () => { const ok = await confirm({ title: "この回収を取り消しますか？", message: `${s.therapist_name} の金庫回収を未回収に戻します。`, variant: "danger", confirmLabel: "取り消す" }); if (!ok) return; await supabase.from("therapist_daily_settlements").update({ safe_collected_date: null }).eq("id", s.id); setSafeHistory(prev => prev.filter(x => x.id !== s.id)); setSafeUncollected(prev => [...prev, { id: s.id, date: s.date, total_cash: s.total_cash, final_payment: s.final_payment, room_id: s.room_id, therapist_name: s.therapist_name, room_label: s.room_label, replenish: s.replenish }]); if (activePage === "営業締め") fetchClosingReport(closingDate); }} className="text-[7px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "none" }}>取消</button>
                       </div>
                     </div>;
                   })}

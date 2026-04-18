@@ -8,6 +8,7 @@ import { useTheme } from "../../lib/theme"; import { NavMenu } from "../../lib/n
 import { SokuhoPanel, BlueskyAutoPost } from "../../lib/sokuho-panel";
 import { useBackNav } from "../../lib/use-back-nav";
 import { useStaffSession } from "../../lib/staff-session";
+import { useConfirm } from "../../components/useConfirm";
 
 type Therapist = { id: number; name: string; phone: string; status: string; has_withholding: boolean };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
@@ -55,6 +56,7 @@ export default function TimeChart() {
   const toast = useToast();
   const { dark, toggle, T } = useTheme();
   const { activeStaff } = useStaffSession();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -836,6 +838,7 @@ export default function TimeChart() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6 flex-shrink-0" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
         <div className="flex items-center gap-4">
@@ -1062,7 +1065,7 @@ export default function TimeChart() {
                       </div>
                       {(t as any).notes && <div style={{ overflow: "hidden", maxWidth: 120 }}><span className="text-[6px] block" style={{ color: "#f59e0b", whiteSpace: "nowrap", animation: (t as any).notes.length > 12 ? `scrollLeft ${Math.max(3, (t as any).notes.length * 0.2)}s linear infinite` : "none" }}>📝{(t as any).notes}</span></div>}
                       {isCO && <span className="text-[7px]" style={{ color: "#c45555" }}>退勤済</span>}
-                      {settledIds.has(t.id) && <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`${t.name}の清算確定を取り消しますか？`)) return; await supabase.from("therapist_daily_settlements").delete().eq("therapist_id", t.id).eq("date", selectedDate); setSettledIds(prev => { const next = new Set(prev); next.delete(t.id); return next; }); toast.show("清算を取り消しました", "info"); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded font-bold cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>✓ 清算済</button>}
+                      {settledIds.has(t.id) && <button onClick={async (e) => { e.stopPropagation(); const ok = await confirm({ title: `${t.name} の清算確定を取り消しますか？`, message: "この日の清算データが削除され、再度清算できる状態に戻ります。", variant: "danger", confirmLabel: "取り消す" }); if (!ok) return; await supabase.from("therapist_daily_settlements").delete().eq("therapist_id", t.id).eq("date", selectedDate); setSettledIds(prev => { const next = new Set(prev); next.delete(t.id); return next; }); toast.show("清算を取り消しました", "info"); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded font-bold cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>✓ 清算済</button>}
                     </div>
                     <div className="flex flex-col gap-0.5 flex-shrink-0">
                       <button onClick={() => toggleClockOut(t.id)} className="text-[8px] px-1.5 py-0 rounded cursor-pointer border leading-tight"
@@ -1168,7 +1171,7 @@ export default function TimeChart() {
                       const bLeft = bsM * (TC_HW / 60); const bWidth = (beM - bsM) * (TC_HW / 60);
                       return (
                         <div key={`brk-${b.id}`} className="absolute top-[2px] bottom-[2px] rounded-lg cursor-pointer" style={{ left: bLeft, width: bWidth, backgroundColor: dark ? "#a855f715" : "#a855f710", borderLeft: `2px dashed #a855f7`, zIndex: 4 }}
-                          onClick={(e) => { e.stopPropagation(); if (confirm("この休憩を削除しますか？")) setBreaks(prev => prev.filter(x => x.id !== b.id)); }}>
+                          onClick={async (e) => { e.stopPropagation(); const ok = await confirm({ title: "この休憩を削除しますか？", variant: "warning", confirmLabel: "削除する" }); if (ok) setBreaks(prev => prev.filter(x => x.id !== b.id)); }}>
                           <div className="px-1 py-0.5"><p className="text-[8px] font-medium" style={{ color: "#a855f7" }}>☕ {b.start?.slice(0,5)}〜{b.end?.slice(0,5)}</p></div>
                         </div>
                       );
@@ -1918,7 +1921,7 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
                         <span>{r.staff_name ? `👤${r.staff_name}` : ""}{r.created_at ? <span style={{ color: T.textFaint, fontSize: 9 }}> {new Date(r.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}</span> : ""}</span>
                         <div className="flex items-center gap-2">
                           <span style={{ color: "#22c55e", fontWeight: 600 }}>{fmt(r.amount)}</span>
-                          <button onClick={async () => { if (!confirm(`${fmt(r.amount)} の補充を取り消しますか？`)) return; await supabase.from("room_cash_replenishments").delete().eq("id", r.id); toast.show("補充を取り消しました", "info"); setShowReplenish(null); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "1px solid #c4555533" }}>取消</button>
+                          <button onClick={async () => { const ok = await confirm({ title: `${fmt(r.amount)} の補充を取り消しますか？`, message: "釣銭補充の記録が削除されます。", variant: "danger", confirmLabel: "取り消す" }); if (!ok) return; await supabase.from("room_cash_replenishments").delete().eq("id", r.id); toast.show("補充を取り消しました", "info"); setShowReplenish(null); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555", border: "1px solid #c4555533" }}>取消</button>
                         </div>
                       </div>
                     ))}
