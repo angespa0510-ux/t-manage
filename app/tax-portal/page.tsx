@@ -1365,7 +1365,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                 {[
                   { l: "総売上", v: fmt(grossRevenue), sub: `売上 ${fmt(totalSales)}${totalDiscount > 0 ? ` − 割引 ${fmt(totalDiscount)}` : ""}${totalCardFee > 0 ? ` + カード手数料 ${fmt(totalCardFee)}` : ""}${totalIncomeExtra > 0 ? ` + 雑収入 ${fmt(totalIncomeExtra)}` : ""}`, c: "#22c55e" },
                   { l: "経費合計", v: fmt(totalExpenseAll), sub: `うち外注費 ${fmt(totalBack)}`, c: "#c45555" },
-                  { l: "セラピスト支払", v: fmt(totalBack), sub: `実支給額(final_payment)合計`, c: "#e091a8" },
+                  { l: "セラピスト支払", v: fmt(totalBack), sub: `= バック − インボイス − 源泉 − 備品リネン代 + 交通費(実費) + 調整金`, c: "#e091a8" },
                   { l: "差引利益", v: fmt(netProfit), sub: netProfit >= 0 ? "黒字" : "赤字", c: netProfit >= 0 ? "#22c55e" : "#c45555" },
                 ].map(s => (
                   <div key={s.l} className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
@@ -1419,6 +1419,21 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#e091a810", border: "1px solid #e091a833" }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: "#e091a8" }}>🧮 セラピスト支払（実支給額）の計算式</p>
+                <div className="text-[11px] leading-relaxed space-y-1" style={{ color: T.textSub }}>
+                  <p><strong style={{ color: T.text }}>実支給額</strong> = バック合計 − インボイス控除 − 源泉徴収 − 備品・リネン代 + 交通費(実費精算) + 調整金</p>
+                  <p className="text-[10px]" style={{ color: T.textMuted }}>
+                    • <strong>バック合計</strong>: コース/指名/オプション/延長の各バックの合計<br/>
+                    • <strong>インボイス控除</strong>: 未登録セラピストの場合、バックから10%控除（店の仕入税額控除相当）<br/>
+                    • <strong>源泉徴収</strong>: 所得税法204条1項6号により (バック − インボイス − 5,000円) × 10.21%<br/>
+                    • <strong>備品・リネン代</strong>: セラピスト利用の備品・リネンに対する天引き（税法上は備品費・リネン代の概念で扱う）<br/>
+                    • <strong>交通費(実費精算)</strong>: 立替交通費の精算。<span style={{ color: "#c45555" }}>源泉・インボイス対象外</span>（給与ではないため）<br/>
+                    • <strong>調整金</strong>: 繰り上げ金や個別調整
+                  </p>
+                </div>
               </div>
 
               <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78233" }}>
