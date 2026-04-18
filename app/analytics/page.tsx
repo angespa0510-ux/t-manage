@@ -183,7 +183,7 @@ export default function Analytics() {
       const cash = dayRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
 
       // セラピスト実支給額 = final_payment
-      //   = コース/指名/オプション/延長のバック合計 − インボイス − 源泉 − 福利厚生費 + 交通費 + 調整金
+      //   = コース/指名/オプション/延長のバック合計 − インボイス − 源泉 − 備品・リネン代 + 交通費(実費精算) + 調整金
       const back = daySettles.reduce((s, ds) => s + (ds.final_payment || 0), 0);
       const invoice = daySettles.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
       const withholding = daySettles.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
@@ -576,9 +576,9 @@ export default function Analytics() {
                     <span className="mx-1" style={{ color: T.textMuted }}>−</span>
                     <span style={{ color: "#d4687e" }}>源泉</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>−</span>
-                    <span>厚生費</span>
+                    <span>備品・リネン代</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>+</span>
-                    <span>交通費</span>
+                    <span>交通費(実費精算)</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>+</span>
                     <span>調整金</span>
                     <span className="mx-2" style={{ color: T.textFaint }}>|</span>
@@ -744,7 +744,7 @@ export default function Analytics() {
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 💡 <strong>日付セルをクリック</strong>すると期間選択できます（1回目=開始日、2回目=終了日）。選択中は行がハイライトされ上部に小計バーが表示されます</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。事務所残金は営業締めと同じ計算式</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上は定価ベース（コース+指名+オプション+延長）、売上 − 割引 = 実売上</p>
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額」= バック合計 − インボイス − 源泉 − 備品・リネン代 + 交通費(実費精算) + 調整金</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト − インボイス − 源泉（インボイス・源泉は国へ納付するため店取りから除外）</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ カード手数料列: カード決済時に10%上乗せ請求した分（カード − カード÷1.10）。店の追加収入</p>

@@ -8,7 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useBackNav } from "../../lib/use-back-nav";
 
-type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
+type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string; total_price?: number; card_billing?: number; paypay_amount?: number; cash_amount?: number; discount_amount?: number; nomination_fee?: number; options_total?: number; extension_price?: number };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Expense = { id: number; date: string; category: string; name: string; amount: number; store_id: number; is_recurring: boolean; notes: string; type: string; receipt_url?: string; receipt_thumb_url?: string; receipt_name?: string; payment_method?: string; needs_review?: boolean; review_note?: string; flagged_by_name?: string; flagged_at?: string | null };
 type Store = { id: number; name: string; company_name?: string; fiscal_month?: number };
@@ -308,7 +308,7 @@ export default function TaxPortal() {
       startDate = `${selectedYear}-01-01`; endDate = `${selectedYear}-12-31`;
     }
 
-    const { data: r } = await supabase.from("reservations").select("*").gte("date", startDate).lte("date", endDate).order("date");
+    const { data: r } = await supabase.from("reservations").select("*").eq("status", "completed").gte("date", startDate).lte("date", endDate).order("date");
     if (r) setReservations(r);
     const { data: e } = await supabase.from("expenses").select("*").gte("date", startDate).lte("date", endDate).order("date");
     if (e) setExpenses(e);
@@ -1213,17 +1213,39 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
   };
 
   const getCourse = (name: string) => courses.find((c) => c.name === name);
-  const getPrice = (r: Reservation) => getCourse(r.course)?.price || 0;
+  // 売上（定価ベース）= コース定価 + 指名料 + オプション + 延長
+  const getPrice = (r: Reservation) => {
+    const coursePrice = getCourse(r.course)?.price || 0;
+    return coursePrice + (r.nomination_fee || 0) + (r.options_total || 0) + (r.extension_price || 0);
+  };
   const getBack = (r: Reservation) => getCourse(r.course)?.therapist_back || 0;
   const getStoreName = (id: number) => stores.find(s => s.id === id)?.name || "";
 
-  // 集計
+  // 集計（analytics 日別タブと同じ計算ロジックに統一）
   const totalSales = reservations.reduce((s, r) => s + getPrice(r), 0);
-  const totalBack = reservations.reduce((s, r) => s + getBack(r), 0);
+  // セラピスト支払 = 実支給額（final_payment）合計
+  // final_payment = バック合計 − インボイス − 源泉 − 備品リネン代 + 交通費(実費) + 調整金
+  const totalBack = settlements.reduce((s, ds) => s + (ds.final_payment || 0), 0);
+  // 割引（定価から値引きされた額）
+  const totalDiscount = reservations.reduce((s, r) => s + (r.discount_amount || 0), 0);
+  // カード手数料収入（カード決済時の10%上乗せ分、雑収入相当）
+  const totalCard = reservations.reduce((s, r) => s + (r.card_billing || 0), 0);
+  const totalCardFee = totalCard > 0 ? totalCard - Math.round(totalCard / 1.10) : 0;
+  // インボイス控除・源泉徴収（セラピストから預かり、国に納付予定）
+  const totalInvoiceDed = settlements.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
+  const totalWithholding = settlements.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
+  // 備品・リネン代（セラピスト給与からの控除分、店の収入として計上）
+  const totalSupplies = settlements.reduce((s, ds) => s + (ds.welfare_fee || 0), 0);
+  // 交通費実費精算（源泉・インボイス対象外、店の経費として計上）
+  const totalTransport = settlements.reduce((s, ds) => s + (ds.transport_fee || 0), 0);
+
   const totalExpenseOnly = expenses.filter((e) => e.type !== "income").reduce((s, e) => s + e.amount, 0);
   const totalIncomeExtra = expenses.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+  // 総収入 = 売上(定価) − 割引 + カード手数料収入 + 備品リネン代(店収入) + 雑収入
+  const grossRevenue = totalSales - totalDiscount + totalCardFee + totalSupplies + totalIncomeExtra;
+  // 総経費 = 経費 + セラピスト実支給額
   const totalExpenseAll = totalExpenseOnly + totalBack;
-  const grossRevenue = totalSales + totalIncomeExtra;
+  // 利益 = 総収入 − 総経費
   const netProfit = grossRevenue - totalExpenseAll;
 
   // 勘定科目別集計
@@ -1274,8 +1296,6 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
   })();
 
   const totalTherapistGross = therapistPayroll.reduce((s, p) => s + p.gross, 0);
-  const totalWithholding = therapistPayroll.reduce((s, p) => s + p.tax, 0);
-  const totalInvoiceDed = therapistPayroll.reduce((s, p) => s + p.invoiceDed, 0);
 
   if (!activeStaff || !canAccessTaxPortal) {
     return (
@@ -1343,9 +1363,9 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
             <div className="space-y-4 animate-[fadeIn_0.3s]">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { l: "総売上", v: fmt(grossRevenue), sub: `予約 ${fmt(totalSales)}${totalIncomeExtra > 0 ? ` + 入金 ${fmt(totalIncomeExtra)}` : ""}`, c: "#22c55e" },
+                  { l: "総売上", v: fmt(grossRevenue), sub: `売上 ${fmt(totalSales)}${totalDiscount > 0 ? ` − 割引 ${fmt(totalDiscount)}` : ""}${totalCardFee > 0 ? ` + カード手数料 ${fmt(totalCardFee)}` : ""}${totalIncomeExtra > 0 ? ` + 雑収入 ${fmt(totalIncomeExtra)}` : ""}`, c: "#22c55e" },
                   { l: "経費合計", v: fmt(totalExpenseAll), sub: `うち外注費 ${fmt(totalBack)}`, c: "#c45555" },
-                  { l: "業務委託費", v: fmt(totalBack), sub: `${reservations.length}件のバック`, c: "#e091a8" },
+                  { l: "セラピスト支払", v: fmt(totalBack), sub: `実支給額(final_payment)合計`, c: "#e091a8" },
                   { l: "差引利益", v: fmt(netProfit), sub: netProfit >= 0 ? "黒字" : "赤字", c: netProfit >= 0 ? "#22c55e" : "#c45555" },
                 ].map(s => (
                   <div key={s.l} className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>

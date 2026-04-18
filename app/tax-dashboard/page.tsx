@@ -677,7 +677,7 @@ function TherapistPayroll({ T }: { T: any }) {
           <div className="px-5 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><h2 className="text-[13px] font-medium">セラピスト支払調書 — {year}年</h2></div>
           <table className="w-full text-[11px]">
             <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-              {["名前", "日数", "報酬（税込）", "インボイス控除", "源泉徴収", "厚生費", "交通費", "差引支払額", ""].map(h => <th key={h} className="py-2.5 px-3 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>)}
+              {["名前", "日数", "報酬（税込）", "インボイス控除", "源泉徴収", "備品・リネン代", "交通費(実費)", "差引支払額", ""].map(h => <th key={h} className="py-2.5 px-3 text-left font-normal text-[10px]" style={{ color: T.textMuted }}>{h}</th>)}
             </tr></thead>
             <tbody>{data.map(row => (
               <tr key={row.id} style={{ borderBottom: `1px solid ${T.border}` }}>
