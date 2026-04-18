@@ -149,7 +149,7 @@ export default function Analytics() {
       invoice: number; withholding: number;
       expense: number; income: number; replenish: number;
       uncollectedSales: number; safeUncollected: number; cashOnHand: number;
-      avgNet: number; storeShare: number; reserve: number; changeNet: number;
+      avgNet: number; storeShare: number; reserve: number; changeNet: number; cardFee: number;
     };
     const data: Row[] = [];
     const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
@@ -176,6 +176,9 @@ export default function Analytics() {
       }, 0);
       const discount = dayRes.reduce((s, r) => s + (r.discount_amount || 0), 0);
       const card = dayRes.reduce((s, r) => s + (r.card_billing || 0), 0);
+      // カード手数料収入（カード決済時に10%上乗せした分） = カード請求額 − カード請求額/1.10
+      //   例: カード ¥17,600 → 手数料 ¥1,600（= 17,600 - 16,000）
+      const cardFee = card > 0 ? card - Math.round(card / 1.10) : 0;
       const paypay = dayRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
       const cash = dayRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
 
@@ -278,7 +281,7 @@ export default function Analytics() {
         invoice, withholding,
         expense, income, replenish,
         uncollectedSales, safeUncollected, cashOnHand,
-        avgNet, storeShare, reserve, changeNet,
+        avgNet, storeShare, reserve, changeNet, cardFee,
       });
     }
     return data;
@@ -424,7 +427,8 @@ export default function Analytics() {
       cashOnHand: acc.cashOnHand + d.cashOnHand,
       reserve: acc.reserve + d.reserve,
       changeNet: acc.changeNet + d.changeNet,
-    }), { days: 0, count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, invoice: 0, withholding: 0, expense: 0, income: 0, storeShare: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, reserve: 0, changeNet: 0 });
+      cardFee: acc.cardFee + d.cardFee,
+    }), { days: 0, count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, invoice: 0, withholding: 0, expense: 0, income: 0, storeShare: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, reserve: 0, changeNet: 0, cardFee: 0 });
   }, [rangeStart, rangeEnd, dailyData]);
 
   const totalCourseSales = courseData.reduce((s, c) => s + c.sales, 0) || 1;
@@ -504,6 +508,7 @@ export default function Analytics() {
                       <span style={{ color: "#7ab88f" }}>セラピスト: <strong>{fmt(rangeTotal.back)}</strong></span>
                       {rangeTotal.discount > 0 && <span style={{ color: "#f59e0b" }}>割引: <strong>−{fmt(rangeTotal.discount)}</strong></span>}
                       {rangeTotal.card > 0 && <span style={{ color: T.textSub }}>カード: <strong>{fmt(rangeTotal.card)}</strong></span>}
+                      {rangeTotal.cardFee > 0 && <span style={{ color: "#22c55e" }}>カード手数料: <strong>+{fmt(rangeTotal.cardFee)}</strong></span>}
                       {rangeTotal.paypay > 0 && <span style={{ color: T.textSub }}>ペイペイ: <strong>{fmt(rangeTotal.paypay)}</strong></span>}
                       {rangeTotal.invoice > 0 && <span style={{ color: "#a855f7" }}>インボイス: <strong>{fmt(rangeTotal.invoice)}</strong></span>}
                       {rangeTotal.withholding > 0 && <span style={{ color: "#d4687e" }}>源泉: <strong>{fmt(rangeTotal.withholding)}</strong></span>}
@@ -613,6 +618,7 @@ export default function Analytics() {
                           { label: "セラピスト", align: "right", w: "", key: "back" as const },
                           { label: "割引", align: "right", w: "", key: null },
                           { label: "カード", align: "right", w: "", key: "card" as const },
+                          { label: "カード手数料", align: "right", w: "", key: null },
                           { label: "ペイペイ", align: "right", w: "", key: null },
                           { label: "インボイス", align: "right", w: "", key: null },
                           { label: "源泉", align: "right", w: "", key: null },
@@ -667,6 +673,7 @@ export default function Analytics() {
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.back === 0 ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{dash(d.back, fmt(d.back))}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{dash(d.discount, d.discount === 0 ? fmt(0) : `−${fmt(d.discount)}`)}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.card, fmt(d.card))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.cardFee === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{d.cardFee === 0 ? (zero ? "—" : fmt(0)) : `+${fmt(d.cardFee)}`}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.paypay, fmt(d.paypay))}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.invoice === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{dash(d.invoice, fmt(d.invoice))}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.withholding === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{dash(d.withholding, fmt(d.withholding))}</td>
@@ -701,7 +708,8 @@ export default function Analytics() {
                           storeShare: acc.storeShare + d.storeShare,
                           reserve: acc.reserve + d.reserve,
                           changeNet: acc.changeNet + d.changeNet,
-                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0, reserve: 0, changeNet: 0 });
+                          cardFee: acc.cardFee + d.cardFee,
+                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0, reserve: 0, changeNet: 0, cardFee: 0 });
                         // 平均単価 = 店取概算 ÷ 予約数
                         const avg = tot.count > 0 ? Math.round(tot.storeShare / tot.count) : 0;
                         return (
@@ -714,6 +722,7 @@ export default function Analytics() {
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(tot.back)}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.discount === 0 ? fmt(0) : `−${fmt(tot.discount)}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.cardFee === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{tot.cardFee === 0 ? fmt(0) : `+${fmt(tot.cardFee)}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.invoice)}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(tot.withholding)}</td>
@@ -738,6 +747,7 @@ export default function Analytics() {
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト − インボイス − 源泉（インボイス・源泉は国へ納付するため店取りから除外）</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ カード手数料列: カード決済時に10%上乗せ請求した分（カード − カード÷1.10）。店の追加収入</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 釣銭列: −=補充（事務所金庫からルームへ）/ +=回収（ルームから事務所金庫へ）。合計が0なら整合OK</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 豊橋予備金列: −=立替（予備金が減った、セラピスト補填）/ +=補充・初期・調整（予備金が増えた）</p>
               </div>
