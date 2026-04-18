@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme"; import { NavMenu } from "../../lib/nav-menu";
 import { SokuhoPanel, BlueskyAutoPost } from "../../lib/sokuho-panel";
+import { useBackNav } from "../../lib/use-back-nav";
 
 type Therapist = { id: number; name: string; phone: string; status: string; has_withholding: boolean };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
@@ -335,6 +336,27 @@ export default function TimeChart() {
   // フリー枠ドラッグ割り当て
   const [dragFreeRes, setDragFreeRes] = useState<number|null>(null);
   const [dragOverTherapist, setDragOverTherapist] = useState<number|null>(null);
+
+  // マウス戻るボタン対応: モーダル → 日付履歴 → 前のページ
+  useBackNav(selectedDate, setSelectedDate, [
+    { isOpen: !!editRes, close: () => setEditRes(null) },
+    { isOpen: showNewRes, close: () => setShowNewRes(false) },
+    { isOpen: showWebRes, close: () => setShowWebRes(false) },
+    { isOpen: showStatusList, close: () => setShowStatusList(false) },
+    { isOpen: showCustSearch, close: () => setShowCustSearch(false) },
+    { isOpen: showNewCust, close: () => setShowNewCust(false) },
+    { isOpen: showTcSettings, close: () => setShowTcSettings(false) },
+    { isOpen: showCustMemos, close: () => setShowCustMemos(false) },
+    { isOpen: showThMemos, close: () => setShowThMemos(false) },
+    { isOpen: showBulkNotify, close: () => setShowBulkNotify(false) },
+    { isOpen: showOverduePopup, close: () => setShowOverduePopup(false) },
+    { isOpen: showShiftNotif, close: () => setShowShiftNotif(false) },
+    { isOpen: showSokuho, close: () => setShowSokuho(false) },
+    { isOpen: !!editTherapist, close: () => setEditTherapist(null) },
+    { isOpen: showNewTherapist, close: () => setShowNewTherapist(false) },
+    { isOpen: showCancelModal, close: () => setShowCancelModal(false) },
+    { isOpen: showDeleteConfirm, close: () => setShowDeleteConfirm(false) },
+  ]);
 
   // therapistsをrealtime callback内で参照
   const therapistsRef = useRef<Therapist[]>([]);
