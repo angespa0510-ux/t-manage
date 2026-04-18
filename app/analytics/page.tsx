@@ -45,6 +45,8 @@ export default function Analytics() {
   const [monthSettlements, setMonthSettlements] = useState<Settlement[]>([]);
   const [monthExpenses, setMonthExpenses] = useState<ExpenseRow[]>([]);
   const [monthReplenishments, setMonthReplenishments] = useState<Replenishment[]>([]);
+  // 豊橋予備金の動き（当月分）。movement_type: 'withdraw'=立替 / 'refund'=補充 / 'initial'=初期残高 / 'adjustment'=棚卸調整
+  const [monthReserveMovements, setMonthReserveMovements] = useState<{ movement_date: string; movement_type: string; amount: number }[]>([]);
   // 当月中に safe_collected_date が該当する settlements（投函日は当月外の可能性あり）
   const [safeCollectedInMonth, setSafeCollectedInMonth] = useState<Settlement[]>([]);
   // 年間集計用
@@ -106,6 +108,10 @@ export default function Analytics() {
     const { data: mr } = await supabase.from("room_cash_replenishments").select("id,date,room_id,amount").gte("date", startDate).lte("date", endDate).range(0, 9999);
     if (mr) setMonthReplenishments(mr as Replenishment[]);
 
+    // 当月の豊橋予備金の動き
+    const { data: mrm } = await supabase.from("toyohashi_reserve_movements").select("movement_date,movement_type,amount").gte("movement_date", startDate).lte("movement_date", endDate).range(0, 9999);
+    if (mrm) setMonthReserveMovements(mrm as { movement_date: string; movement_type: string; amount: number }[]);
+
     // 当月中に金庫から回収された精算（投函日は過去の可能性あり）
     const { data: sct } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).gte("safe_collected_date", startDate).lte("safe_collected_date", endDate).range(0, 9999);
     if (sct) setSafeCollectedInMonth(sct as Settlement[]);
@@ -143,7 +149,7 @@ export default function Analytics() {
       invoice: number; withholding: number;
       expense: number; income: number; replenish: number;
       uncollectedSales: number; safeUncollected: number; cashOnHand: number;
-      avgNet: number; storeShare: number;
+      avgNet: number; storeShare: number; reserve: number;
     };
     const data: Row[] = [];
     const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
@@ -156,6 +162,11 @@ export default function Analytics() {
       const dayExp = monthExpenses.filter((e) => e.date === date);
       const dayReps = monthReplenishments.filter((r) => r.date === date);
       const collectedToday = safeCollectedInMonth.filter((s) => s.safe_collected_date === date);
+      const dayMovements = monthReserveMovements.filter((m) => m.movement_date === date);
+      // 豊橋予備金の日次純額: withdraw(立替)=マイナス、refund/initial/adjustment(補充・調整)=プラス
+      const reserve = dayMovements.reduce((s, m) => {
+        return s + (m.movement_type === "withdraw" ? -m.amount : m.amount);
+      }, 0);
 
       const count = dayRes.length;
       // 売上 = 定価ベース（コース定価 + 指名料 + オプション + 延長）、割引を引く前の総額
@@ -244,11 +255,11 @@ export default function Analytics() {
         invoice, withholding,
         expense, income, replenish,
         uncollectedSales, safeUncollected, cashOnHand,
-        avgNet, storeShare,
+        avgNet, storeShare, reserve,
       });
     }
     return data;
-  }, [reservations, monthSettlements, monthExpenses, monthReplenishments, safeCollectedInMonth, selectedMonth, daysInMonth, courses]);
+  }, [reservations, monthSettlements, monthExpenses, monthReplenishments, safeCollectedInMonth, monthReserveMovements, selectedMonth, daysInMonth, courses]);
 
   // ===== 月別データ（日別データと同じ思想で月ごとに集計） =====
   const monthlyData = useMemo(() => {
@@ -388,7 +399,8 @@ export default function Analytics() {
       uncollectedSales: acc.uncollectedSales + d.uncollectedSales,
       safeUncollected: acc.safeUncollected + d.safeUncollected,
       cashOnHand: acc.cashOnHand + d.cashOnHand,
-    }), { days: 0, count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, invoice: 0, withholding: 0, expense: 0, income: 0, storeShare: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+      reserve: acc.reserve + d.reserve,
+    }), { days: 0, count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, invoice: 0, withholding: 0, expense: 0, income: 0, storeShare: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, reserve: 0 });
   }, [rangeStart, rangeEnd, dailyData]);
 
   const totalCourseSales = courseData.reduce((s, c) => s + c.sales, 0) || 1;
@@ -473,6 +485,7 @@ export default function Analytics() {
                       {rangeTotal.withholding > 0 && <span style={{ color: "#d4687e" }}>源泉: <strong>{fmt(rangeTotal.withholding)}</strong></span>}
                       {rangeTotal.expense > 0 && <span style={{ color: "#c45555" }}>経費: <strong>{fmt(rangeTotal.expense)}</strong></span>}
                       {rangeTotal.income > 0 && <span style={{ color: "#22c55e" }}>入金: <strong>+{fmt(rangeTotal.income)}</strong></span>}
+                      {rangeTotal.reserve !== 0 && <span style={{ color: rangeTotal.reserve > 0 ? "#22c55e" : "#d4687e" }}>豊橋予備金: <strong>{rangeTotal.reserve > 0 ? `+${fmt(rangeTotal.reserve)}` : `−${fmt(Math.abs(rangeTotal.reserve))}`}</strong></span>}
                       <span style={{ color: rangeTotal.cashOnHand >= 0 ? "#22c55e" : "#c45555" }}>事務所残金: <strong>{fmt(rangeTotal.cashOnHand)}</strong></span>
                     </div>
                   )}
@@ -566,6 +579,7 @@ export default function Analytics() {
                           { label: "入金", align: "right", w: "", key: null },
                           { label: "売上未回収", align: "right", w: "", key: null },
                           { label: "金庫未回収", align: "right", w: "", key: null },
+                          { label: "豊橋予備金", align: "right", w: "", key: null },
                           { label: "事務所残金", align: "right", w: "", key: null },
                         ].map((h) => (
                           <th
@@ -589,7 +603,7 @@ export default function Analytics() {
                     </thead>
                     <tbody>
                       {dailyData.map((d) => {
-                        const zero = d.count === 0 && d.expense === 0 && d.income === 0 && d.replenish === 0 && d.uncollectedSales === 0 && d.safeUncollected === 0 && d.cashOnHand === 0;
+                        const zero = d.count === 0 && d.expense === 0 && d.income === 0 && d.replenish === 0 && d.uncollectedSales === 0 && d.safeUncollected === 0 && d.cashOnHand === 0 && d.reserve === 0;
                         const dowColor = d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.textSub;
                         const dash = (v: number, formatted: string) => (zero && v === 0) ? "—" : formatted;
                         // 選択範囲判定
@@ -618,6 +632,7 @@ export default function Analytics() {
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.income === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{dash(d.income, d.income === 0 ? fmt(0) : `+${fmt(d.income)}`)}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.uncollectedSales === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.uncollectedSales, d.uncollectedSales === 0 ? fmt(0) : `−${fmt(d.uncollectedSales)}`)}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.safeUncollected === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.safeUncollected, d.safeUncollected === 0 ? fmt(0) : `−${fmt(d.safeUncollected)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.reserve === 0 ? T.textFaint : d.reserve > 0 ? "#22c55e" : "#d4687e", borderRight: `1px solid ${T.border}` }}>{d.reserve === 0 ? (zero ? "—" : fmt(0)) : d.reserve > 0 ? `+${fmt(d.reserve)}` : `−${fmt(Math.abs(d.reserve))}`}</td>
                             <td className="py-1.5 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: zero ? T.textFaint : d.cashOnHand >= 0 ? "#22c55e" : "#c45555", backgroundColor: zero ? "transparent" : "rgba(245,158,11,0.04)" }}>{zero && d.cashOnHand === 0 ? "—" : fmt(d.cashOnHand)}</td>
                           </tr>
                         );
@@ -641,7 +656,8 @@ export default function Analytics() {
                           safeUncollected: acc.safeUncollected + d.safeUncollected,
                           cashOnHand: acc.cashOnHand + d.cashOnHand,
                           storeShare: acc.storeShare + d.storeShare,
-                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0 });
+                          reserve: acc.reserve + d.reserve,
+                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0, reserve: 0 });
                         // 平均単価 = 店取概算 ÷ 予約数
                         const avg = tot.count > 0 ? Math.round(tot.storeShare / tot.count) : 0;
                         return (
@@ -661,6 +677,7 @@ export default function Analytics() {
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.income === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{tot.income === 0 ? fmt(0) : `+${fmt(tot.income)}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.uncollectedSales === 0 ? fmt(0) : `−${fmt(tot.uncollectedSales)}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.safeUncollected === 0 ? fmt(0) : `−${fmt(tot.safeUncollected)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.reserve === 0 ? T.textFaint : tot.reserve > 0 ? "#22c55e" : "#d4687e", borderRight: `1px solid ${T.border}` }}>{tot.reserve === 0 ? fmt(0) : tot.reserve > 0 ? `+${fmt(tot.reserve)}` : `−${fmt(Math.abs(tot.reserve))}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.cashOnHand >= 0 ? "#22c55e" : "#c45555", backgroundColor: "rgba(245,158,11,0.06)" }}>{fmt(tot.cashOnHand)}</td>
                           </tr>
                         );
@@ -676,6 +693,7 @@ export default function Analytics() {
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト − インボイス − 源泉（インボイス・源泉は国へ納付するため店取りから除外）</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 豊橋予備金列: −=立替（予備金が減った、セラピスト補填）/ +=補充・初期・調整（予備金が増えた）</p>
               </div>
             </div>
           )}
