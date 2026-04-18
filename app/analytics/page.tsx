@@ -587,11 +587,13 @@ export default function Analytics() {
                   <div className="text-[12px]" style={{ color: T.text }}>
                     <span className="font-medium" style={{ color: T.textSub }}>💡 カードの内訳</span>
                     <span className="mx-2" style={{ color: T.textMuted }}>=</span>
-                    <span>カード決済の実請求額</span>
+                    <span style={{ color: T.accent }}>売上</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>×</span>
+                    <span>1.10</span>
                     <span className="mx-2" style={{ color: T.textFaint }}>|</span>
-                    <span className="text-[11px]" style={{ color: "#f59e0b" }}>TAX 10% 込み</span>
+                    <span className="text-[11px]" style={{ color: "#f59e0b" }}>TAX 10% 上乗せ込み</span>
                     <span className="mx-2" style={{ color: T.textFaint }}>|</span>
-                    <span className="text-[11px]" style={{ color: T.textMuted }}>売上（税抜）× 1.10 でお客様に請求された金額</span>
+                    <span className="text-[11px]" style={{ color: T.textMuted }}>コース料金は税込、カード決済時のみ10%上乗せ請求（上乗せ分は店の収入）</span>
                   </div>
                   <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
                 </div>
