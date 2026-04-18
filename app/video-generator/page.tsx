@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useToast } from "../../lib/toast";
+import { useBackNav } from "../../lib/use-back-nav";
 
 /* ─── 型定義 ─── */
 type Therapist = {
@@ -148,6 +149,9 @@ export default function VideoGenerator() {
 
   // ─── タブ ───
   const [activeTab, setActiveTab] = useState<"generate" | "history" | "settings">("generate");
+
+  // マウス戻るボタン対応: タブ → 前のページ
+  useBackNav(activeTab, setActiveTab);
 
   // ─── 生成モード ───
   const [genMode, setGenMode] = useState<"hp" | "upload">("hp");

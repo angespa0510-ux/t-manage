@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { useBackNav } from "../../lib/use-back-nav";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -32,6 +33,9 @@ export default function Analytics() {
   const [tab, setTab] = useState<Tab>("daily");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+
+  // マウス戻るボタン対応: タブ → 前のページ
+  useBackNav(tab, setTab);
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
   const daysInMonth = new Date(smYear, smMonth, 0).getDate();

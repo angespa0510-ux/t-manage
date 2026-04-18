@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
+import { useBackNav } from "../../lib/use-back-nav";
 
 type Category = { id: number; name: string; icon: string; sort_order: number };
 type Article = { id: number; category_id: number; title: string; content: string; sort_order: number; created_at: string; updated_at: string };
@@ -23,6 +24,9 @@ export default function OperationsManual() {
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // マウス戻るボタン対応: view → 前のページ
+  useBackNav(view, setView);
 
   // ── 画像アップロード ──
   const uploadImage = async (file: File): Promise<string> => {

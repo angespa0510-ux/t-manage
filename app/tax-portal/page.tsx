@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { useBackNav } from "../../lib/use-back-nav";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -244,6 +245,18 @@ export default function TaxPortal() {
   const [newRulePriority, setNewRulePriority] = useState(50);
 
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
+
+  // マウス戻るボタン対応: モーダル → シート → 前のページ
+  useBackNav(
+    sheet,
+    setSheet,
+    [
+      { isOpen: showNewRule, close: () => setShowNewRule(false) },
+      { isOpen: editingRuleId !== null, close: () => setEditingRuleId(null) },
+      { isOpen: editingDocId !== null, close: () => setEditingDocId(null) },
+    ],
+    !!activeStaff && canAccessTaxPortal,
+  );
 
   // 認証・権限チェック
   useEffect(() => {

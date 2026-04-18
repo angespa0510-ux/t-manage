@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { useBackNav } from "../../lib/use-back-nav";
 import { jsPDF } from "jspdf";
 
 /* ───────── 型定義 ───────── */
@@ -56,6 +57,13 @@ export default function ExpensesPage() {
   const [filterType, setFilterType] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
+
+  // マウス戻るボタン対応: モーダル → タブ → 前のページ
+  useBackNav(tab, setTab, [
+    { isOpen: showForm, close: () => setShowForm(false) },
+    { isOpen: !!editTarget, close: () => setEditTarget(null) },
+  ]);
+
   const [form, setForm] = useState({ ...emptyForm });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);

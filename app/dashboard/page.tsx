@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { useBackNav } from "../../lib/use-back-nav";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
 
@@ -171,6 +172,18 @@ export default function Dashboard() {
   const [ptData, setPtData] = useState<{customer_id:number;name:string;rank:string;balance:number;total_earned:number;total_used:number}[]>([]);
   const [ptLoading, setPtLoading] = useState(false);
   const [ptSort, setPtSort] = useState<"balance"|"earned"|"used">("balance");
+
+  // マウス戻るボタン対応: モーダル → ページ切替 → 前のページ
+  useBackNav(activePage, setActivePage, [
+    { isOpen: !!detailCustomer, close: () => setDetailCustomer(null) },
+    { isOpen: !!editingCustomer, close: () => setEditingCustomer(null) },
+    { isOpen: showSafeList, close: () => setShowSafeList(false) },
+    { isOpen: showMonthlyModal, close: () => setShowMonthlyModal(false) },
+    { isOpen: showNgRegister, close: () => setShowNgRegister(false) },
+    { isOpen: showCustImport, close: () => setShowCustImport(false) },
+    { isOpen: showNgImport, close: () => setShowNgImport(false) },
+    { isOpen: !!deleteTarget, close: () => setDeleteTarget(null) },
+  ]);
 
   useEffect(() => {
     if (activePage !== "ポイント管理") return;

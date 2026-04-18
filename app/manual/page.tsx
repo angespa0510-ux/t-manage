@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { useBackNav } from "../../lib/use-back-nav";
 
 type Category = { id: number; name: string; icon: string; color: string; description: string; sort_order: number };
 type Article = {
@@ -61,6 +62,12 @@ export default function ManualPage() {
   const [editUpdateMemo, setEditUpdateMemo] = useState("");
   const [editResetReads, setEditResetReads] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  // マウス戻るボタン対応: プレビュー → view → 前のページ
+  useBackNav(view, setView, [
+    { isOpen: showPreview, close: () => setShowPreview(false) },
+  ]);
+
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState<"" | "cleanup" | "tags">("");
   const [msg, setMsg] = useState("");
