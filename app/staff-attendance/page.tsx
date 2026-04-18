@@ -324,7 +324,7 @@ export default function StaffAttendance() {
                     if (next.length > 4) return;
                     setPinInput(next); setPinError("");
                     if (next.length === 4) {
-                      login(next).then(ok => { if (ok) setShowPinModal(false); else { setPinError("PINが一致しません"); setPinInput(""); } });
+                      login(next).then(({ ok }) => { if (ok) setShowPinModal(false); else { setPinError("PINが一致しません"); setPinInput(""); } });
                     }
                   }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
                     {n === "del" ? "⌫" : n}

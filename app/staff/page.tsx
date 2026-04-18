@@ -8,7 +8,7 @@ import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 
-type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean };
+type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
 type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number; break_minutes: number };
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
@@ -521,6 +521,39 @@ const openPaymentStatement = (sch: Schedule) => {
         {/* ========== Tab 1: Staff Management ========== */}
         {tab === "staff" && (
           <div className="space-y-4">
+            {/* PIN 未変更スタッフ警告（active で pin あり かつ pin_updated_at が NULL） */}
+            {(() => {
+              const unchangedPinStaffs = staffList.filter(s => s.status === "active" && s.pin && !s.pin_updated_at);
+              if (unchangedPinStaffs.length === 0) return null;
+              return (
+                <div className="rounded-xl p-4" style={{ backgroundColor: "#c4555512", border: "1px solid #c4555533" }}>
+                  <div className="flex items-start gap-3">
+                    <span className="text-[20px] leading-none">⚠️</span>
+                    <div className="flex-1">
+                      <p className="text-[12px] font-medium mb-1" style={{ color: "#c45555" }}>
+                        初期 PIN のまま未変更のスタッフが {unchangedPinStaffs.length} 名います
+                      </p>
+                      <p className="text-[10px] leading-relaxed mb-2" style={{ color: T.textSub }}>
+                        セキュリティのため、6/1 本番運用開始までに全員の PIN 変更が必要です。
+                        該当スタッフが次回 PIN ログインした際に、PIN 変更画面が自動表示されます。
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {unchangedPinStaffs.map(s => (
+                          <span
+                            key={s.id}
+                            className="text-[10px] px-2 py-1 rounded"
+                            style={{ backgroundColor: "#c4555522", color: "#c45555", border: "1px solid #c4555533" }}
+                          >
+                            {s.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex justify-between items-center">
               <p className="text-[13px]" style={{ color: T.textMuted }}>登録済み: {staffList.length}名</p>
               <button onClick={() => { setShowAdd(true); setAddLicense(false); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ スタッフ追加</button>
@@ -541,7 +574,15 @@ const openPaymentStatement = (sch: Schedule) => {
                       {s.email && <span className="flex items-center gap-1">✉️ {s.email} {s.email_verified ? <span style={{ color: "#22c55e", fontSize: 8 }}>✅</span> : <span style={{ color: "#f59e0b", fontSize: 8 }}>⏳</span>}</span>}
                       {isBizCommission(s.company_position) && <span>💰 {fmt(s.unit_price || 1200)}/u</span>}
                       {s.oiri_bonus > 0 && <span style={{ color: "#f59e0b" }}>🎉 {fmt(s.oiri_bonus)}</span>}
-                      {s.pin ? <span style={{ color: "#22c55e" }}>🔑 設定済</span> : <span style={{ color: "#c45555" }}>🔑 未設定</span>}
+                      {s.pin ? (
+                        s.pin_updated_at ? (
+                          <span style={{ color: "#22c55e" }}>🔑 設定済</span>
+                        ) : (
+                          <span style={{ color: "#c45555", fontWeight: 600 }} title="初回ログイン時の PIN が未変更です。セキュリティのためスタッフ本人に変更してもらってください">⚠️ 初期PIN</span>
+                        )
+                      ) : (
+                        <span style={{ color: "#c45555" }}>🔑 未設定</span>
+                      )}
                     </div>
                   </div>
                 </div>

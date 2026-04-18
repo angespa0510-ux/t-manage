@@ -1617,24 +1617,62 @@ export default function TimeChart() {
                   <div className="flex justify-between"><span>現金受取（お客様から）</span><span>+{fmt(totalCash)}</span></div>
                   <div className="flex justify-between" style={{ color: "#c45555" }}><span>報酬支払（セラピストへ）</span><span>-{fmt(finalPay)}</span></div>
                   <div className="flex justify-between pt-2 font-bold text-[13px]" style={{ borderTop: `1px solid ${cashBalance < 0 ? "#c4555533" : "#85a8c433"}`, color: cashBalance < 0 ? "#c45555" : "#85a8c4" }}><span>現在の残高</span><span>{fmt(cashBalance)}</span></div>
-                  {cashBalance < 0 && (() => {
+                  {(() => {
                     const isToyohashi = (bl?.name || "").includes("豊橋");
+                    const needsReplenish = cashBalance < 0;
+                    const replenishAmount = needsReplenish ? Math.abs(cashBalance) : 0;
                     return (
                     <div className="mt-2 space-y-2">
-                      <p className="text-[10px] font-medium px-2 py-1.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠ 残高がマイナスです。{isToyohashi ? "予備金" : "釣銭"}から {fmt(Math.abs(cashBalance))} を補充してください</p>
+                      {needsReplenish && (
+                        <p className="text-[10px] font-medium px-2 py-1.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠ 残高がマイナスです。{isToyohashi ? "予備金" : "釣銭"}から {fmt(replenishAmount)} を補充してください</p>
+                      )}
                       {isToyohashi ? (
                         <>
-                          <button onClick={() => { setSettleUseReserve(!settleUseReserve); if (!settleUseReserve) setSettleUseReplenish(false); }} className="w-full px-3 py-2.5 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: settleUseReserve ? "#d4687e18" : T.cardAlt, color: settleUseReserve ? "#d4687e" : T.textSub, border: `1px solid ${settleUseReserve ? "#d4687e" : T.border}`, fontWeight: settleUseReserve ? 600 : 400 }}>
-                            {settleUseReserve ? `✅ 豊橋予備金から ${fmt(Math.abs(cashBalance))} 補充する` : `🏛 豊橋予備金から ${fmt(Math.abs(cashBalance))} 補充する`}
+                          <button
+                            onClick={() => { if (!needsReplenish) return; setSettleUseReserve(!settleUseReserve); if (!settleUseReserve) setSettleUseReplenish(false); }}
+                            disabled={!needsReplenish}
+                            title={!needsReplenish ? "現金が足りているため、予備金補充は不要です" : ""}
+                            className="w-full px-3 py-2.5 rounded-xl text-[11px]"
+                            style={{
+                              backgroundColor: !needsReplenish ? T.cardAlt : (settleUseReserve ? "#d4687e18" : T.cardAlt),
+                              color: !needsReplenish ? T.textFaint : (settleUseReserve ? "#d4687e" : T.textSub),
+                              border: `1px solid ${!needsReplenish ? T.border : (settleUseReserve ? "#d4687e" : T.border)}`,
+                              fontWeight: settleUseReserve ? 600 : 400,
+                              cursor: needsReplenish ? "pointer" : "not-allowed",
+                              opacity: needsReplenish ? 1 : 0.55,
+                            }}
+                          >
+                            {!needsReplenish
+                              ? `🏛 豊橋予備金から補充（現金が足りているため不要）`
+                              : settleUseReserve
+                              ? `✅ 豊橋予備金から ${fmt(replenishAmount)} 補充する`
+                              : `🏛 豊橋予備金から ${fmt(replenishAmount)} 補充する`}
                           </button>
-                          {settleUseReserve && <p className="text-[9px] px-2" style={{ color: T.textFaint }}>※ 清算確定時に、豊橋予備金の立替履歴に自動記録されます</p>}
+                          {settleUseReserve && needsReplenish && <p className="text-[9px] px-2" style={{ color: T.textFaint }}>※ 清算確定時に、豊橋予備金の立替履歴に自動記録されます</p>}
                         </>
                       ) : (
                         <>
-                          <button onClick={() => { setSettleUseReplenish(!settleUseReplenish); if (!settleUseReplenish) setSettleUseReserve(false); }} className="w-full px-3 py-2.5 rounded-xl text-[11px] cursor-pointer" style={{ backgroundColor: settleUseReplenish ? "#22c55e18" : T.cardAlt, color: settleUseReplenish ? "#22c55e" : T.textSub, border: `1px solid ${settleUseReplenish ? "#22c55e" : T.border}`, fontWeight: settleUseReplenish ? 600 : 400 }}>
-                            {settleUseReplenish ? `✅ 釣銭を ${fmt(Math.abs(cashBalance))} 補充する` : `💰 釣銭を ${fmt(Math.abs(cashBalance))} 補充する`}
+                          <button
+                            onClick={() => { if (!needsReplenish) return; setSettleUseReplenish(!settleUseReplenish); if (!settleUseReplenish) setSettleUseReserve(false); }}
+                            disabled={!needsReplenish}
+                            title={!needsReplenish ? "現金が足りているため、釣銭補充は不要です" : ""}
+                            className="w-full px-3 py-2.5 rounded-xl text-[11px]"
+                            style={{
+                              backgroundColor: !needsReplenish ? T.cardAlt : (settleUseReplenish ? "#22c55e18" : T.cardAlt),
+                              color: !needsReplenish ? T.textFaint : (settleUseReplenish ? "#22c55e" : T.textSub),
+                              border: `1px solid ${!needsReplenish ? T.border : (settleUseReplenish ? "#22c55e" : T.border)}`,
+                              fontWeight: settleUseReplenish ? 600 : 400,
+                              cursor: needsReplenish ? "pointer" : "not-allowed",
+                              opacity: needsReplenish ? 1 : 0.55,
+                            }}
+                          >
+                            {!needsReplenish
+                              ? `💰 釣銭を補充（現金が足りているため不要）`
+                              : settleUseReplenish
+                              ? `✅ 釣銭を ${fmt(replenishAmount)} 補充する`
+                              : `💰 釣銭を ${fmt(replenishAmount)} 補充する`}
                           </button>
-                          {settleUseReplenish && <p className="text-[9px] px-2" style={{ color: T.textFaint }}>※ 清算確定時に、釣銭補充として room_cash_replenishments に自動記録されます</p>}
+                          {settleUseReplenish && needsReplenish && <p className="text-[9px] px-2" style={{ color: T.textFaint }}>※ 清算確定時に、釣銭補充として room_cash_replenishments に自動記録されます</p>}
                         </>
                       )}
                     </div>

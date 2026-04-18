@@ -1421,7 +1421,7 @@ export default function Dashboard() {
                     if (next.length > 4) return;
                     setPinInput(next); setPinError("");
                     if (next.length === 4) {
-                      login(next).then(ok => {
+                      login(next).then(({ ok }) => {
                         if (ok) { setShowPinModal(false); }
                         else { setPinError("PINが一致しません"); setPinInput(""); }
                       });
