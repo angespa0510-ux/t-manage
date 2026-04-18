@@ -62,6 +62,8 @@ export default function TimeChart() {
   const [webReservations, setWebReservations] = useState<{ id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; status: string; customer_status: string; created_at: string }[]>([]);
   const [showWebRes, setShowWebRes] = useState(false);
   const [showTcSettings, setShowTcSettings] = useState(false);
+  // ステータスサマリーバー用のフィルタ（nullで全表示、値があるとそのステータスだけハイライト）
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [tcConfig, setTcConfig] = useState<TcConfig>({
     hourWidth: DEFAULT_HOUR_WIDTH, startHour: DEFAULT_START_HOUR, displayHours: DEFAULT_DISPLAY_HOURS,
     rowHeight: DEFAULT_ROW_HEIGHT, nameSize: DEFAULT_NAME_SIZE, barFontSize: DEFAULT_BAR_FONT_SIZE,
@@ -490,6 +492,8 @@ export default function TimeChart() {
     if (data) setPendingShiftReqs(data);
   };
   useEffect(() => { fetchPendingShifts(); }, []);
+  // 日付変更時にステータスフィルタをリセット
+  useEffect(() => { setStatusFilter(null); }, [selectedDate]);
   
   useEffect(() => { const p = new URLSearchParams(window.location.search).get("date"); if (p) setSelectedDate(p); }, []);
 
@@ -870,6 +874,68 @@ export default function TimeChart() {
         <button onClick={nextDay} className="p-1.5 rounded-lg cursor-pointer" style={{ color: T.textSub }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="9 18 15 12 9 6"/></svg></button>
       </div>
 
+      {/* ステータスサマリーバー — 各状態の予約件数を可視化 */}
+      {(() => {
+        const nonCancelled = reservations.filter(r => (r as any).status !== "cancelled");
+        if (nonCancelled.length === 0) return null;
+        const counts: Record<string, number> = {};
+        nonCancelled.forEach(r => {
+          const cs = (r as any).customer_status || "unsent";
+          counts[cs] = (counts[cs] || 0) + 1;
+        });
+        const items: Array<{ key: string; label: string; color: string }> = [
+          { key: "unsent",            label: "📝 未送信",       color: "#888780" },
+          { key: "web_reservation",   label: "🌐 WEB予約",      color: "#a855f7" },
+          { key: "summary_unread",    label: "📨 概要(未読)",   color: "#3b82f6" },
+          { key: "summary_read",      label: "📬 概要(既読)",   color: "#2563eb" },
+          { key: "detail_unread",     label: "📩 詳細(未読)",   color: "#4a7c59" },
+          { key: "detail_read",       label: "📭 詳細(既読)",   color: "#16a34a" },
+          { key: "serving",           label: "🟢 接客中",       color: "#22c55e" },
+          { key: "completed",         label: "✅ 終了",         color: "#c3a782" },
+        ];
+        const totalShown = items.filter(it => (counts[it.key] || 0) > 0).length;
+        if (totalShown === 0) return null;
+        return (
+          <div
+            className="border-b flex items-center gap-1.5 px-4 py-1.5 overflow-x-auto flex-shrink-0 [&::-webkit-scrollbar]:hidden"
+            style={{ backgroundColor: T.bg, borderColor: T.border }}
+          >
+            <span className="text-[10px] flex-shrink-0" style={{ color: T.textMuted }}>ステータス内訳:</span>
+            {items.map(it => {
+              const count = counts[it.key] || 0;
+              if (count === 0) return null;
+              const active = statusFilter === it.key;
+              return (
+                <button
+                  key={it.key}
+                  onClick={() => setStatusFilter(active ? null : it.key)}
+                  className="text-[10px] px-2 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap transition-all"
+                  style={{
+                    backgroundColor: active ? it.color + "33" : it.color + "12",
+                    color: it.color,
+                    border: `1px solid ${active ? it.color : it.color + "44"}`,
+                    fontWeight: active ? 600 : 400,
+                  }}
+                  title={active ? "クリックで全表示に戻す" : `${it.label} の予約だけハイライト`}
+                >
+                  <span>{it.label}</span>
+                  <span className="font-bold tabular-nums">{count}</span>
+                </button>
+              );
+            })}
+            {statusFilter && (
+              <button
+                onClick={() => setStatusFilter(null)}
+                className="text-[9px] px-2 py-1 rounded-lg cursor-pointer flex-shrink-0 ml-auto"
+                style={{ color: T.textSub, border: `1px solid ${T.border}` }}
+              >
+                ✕ フィルタ解除
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
       {/* WEB予約ドロップダウン */}
       {showWebRes && (
         <div className="fixed inset-0 z-40" onClick={() => setShowWebRes(false)}>
@@ -1075,9 +1141,10 @@ export default function TimeChart() {
                       const course = getCourseByName(r.course); const custSt = (r as any).customer_status || "unsent"; const therSt = (r as any).therapist_status || "unsent"; const dualStatusColors: Record<string,string> = { unsent: "#888780", ...tcConfig.statusColors, detail_sent: tcConfig.statusColors.detail_unread || "#4a7c59" }; const color = dualStatusColors[custSt] || colors[origIdx % colors.length];
                       const custLabel: Record<string,string> = { unsent: "", web_reservation: "WEB", summary_unread: "概要未読", summary_read: "概要既読", detail_unread: "詳細未読", detail_read: "詳細既読", serving: "接客中", completed: "終了" }; const therLabel: Record<string,string> = { unsent: "", detail_sent: "セ送信済", serving: "接客中", completed: "終了" };
                       const cBadge = custLabel[custSt] || ""; const tBadge = therLabel[therSt] || "";
+                      const dimmed = statusFilter !== null && statusFilter !== custSt;
                       return (
-                        <div key={`res-${r.id}-${ri}`} className="res-block absolute top-[4px] bottom-[4px] rounded-lg cursor-pointer group"
-                          style={{ left, width: Math.max(width, TC_HW/6), backgroundColor: color + "20", borderLeft: `3px solid ${color}`, zIndex: 5 }}
+                        <div key={`res-${r.id}-${ri}`} className="res-block absolute top-[4px] bottom-[4px] rounded-lg cursor-pointer group transition-opacity"
+                          style={{ left, width: Math.max(width, TC_HW/6), backgroundColor: color + "20", borderLeft: `3px solid ${color}`, zIndex: 5, opacity: dimmed ? 0.2 : 1 }}
                           onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
                           <div className="absolute left-0 top-0 bottom-0 w-[6px] cursor-ew-resize opacity-0 group-hover:opacity-100 hover:bg-black/10 rounded-l-lg"
                             onMouseDown={(e) => { e.stopPropagation(); setDragInfo({ resId: r.id, edge: "start", initX: e.clientX, initMin: sM, initEndMin: eM }); }} />
@@ -1143,12 +1210,13 @@ export default function TimeChart() {
                       const stColor = dualSC[custSt] || "#378ADD";
                       const custLabel: Record<string,string> = { unsent: "", web_reservation: "WEB", summary_unread: "概要未読", summary_read: "概要既読", detail_unread: "詳細未読", detail_read: "詳細既読", serving: "接客中", completed: "終了" };
                       const cBadge = custLabel[custSt] || "";
+                      const dimmed = statusFilter !== null && statusFilter !== custSt;
                       return (
-                        <div key={`fres-${r.id}`} className="res-block absolute rounded-lg cursor-grab"
+                        <div key={`fres-${r.id}`} className="res-block absolute rounded-lg cursor-grab transition-opacity"
                           draggable
                           onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(r.id)); e.dataTransfer.effectAllowed = "move"; setDragFreeRes(r.id); }}
                           onDragEnd={() => { setDragFreeRes(null); setDragOverTherapist(null); }}
-                          style={{ left, width: Math.max(width, TC_HW/6), top: 4 + subRowIdx * 28, height: 24, backgroundColor: dragFreeRes === r.id ? stColor + "55" : stColor + "20", borderLeft: `3px solid ${stColor}`, zIndex: 5 }}
+                          style={{ left, width: Math.max(width, TC_HW/6), top: 4 + subRowIdx * 28, height: 24, backgroundColor: dragFreeRes === r.id ? stColor + "55" : stColor + "20", borderLeft: `3px solid ${stColor}`, zIndex: 5, opacity: dimmed ? 0.2 : 1 }}
                           onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
                           <div className="px-2 py-0.5 overflow-hidden h-full flex items-center gap-1">
                             <span style={{ fontSize: 8 }}>↕️</span>
