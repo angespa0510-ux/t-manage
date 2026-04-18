@@ -815,6 +815,170 @@ export default function TaxPortal() {
     }
   };
 
+  // 📄 支払調書HTMLを生成（1セラピスト分）
+  const buildShiharaiHtml = (p: { id: number; name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }) => {
+    const th = therapists.find(t => t.id === p.id);
+    const store = stores.find(s => !!s.company_name) || stores[0];
+    const y = viewMode === "monthly" ? parseInt(selectedMonth.split("-")[0]) : selectedYear;
+    const periodLabel = viewMode === "monthly" ? selectedMonth : `${y}年`;
+    const thAny = th as unknown as { address?: string; birth_date?: string } | undefined;
+    const storeAny = store as unknown as { company_name?: string; company_address?: string; company_phone?: string; invoice_number?: string } | undefined;
+    return `<div class="page">
+<p class="doc-title">報酬、料金、契約金及び賞金の支払調書</p>
+<h1>支　払　調　書</h1>
+<h2>対象期間：${y}年1月1日 〜 ${y}年12月31日${viewMode === "monthly" ? `（表示: ${periodLabel}）` : ""}</h2>
+
+<table>
+  <tr><th>支払を受ける者（氏名）</th><td>${p.realName}</td></tr>
+  ${p.realName !== p.name ? `<tr><th>業務上の名称</th><td>${p.name}</td></tr>` : ""}
+  <tr><th>支払を受ける者（住所）</th><td>${thAny?.address || '<span style="color:#c45555">※未登録</span>'}</td></tr>
+  ${thAny?.birth_date ? `<tr><th>生年月日</th><td>${thAny.birth_date}</td></tr>` : ""}
+  <tr><th>区分</th><td>${p.hasWithholding ? "報酬（所得税法第204条第1項第6号）" : "報酬（所得税法第204条第1項第1号）"}</td></tr>
+  <tr><th>細目</th><td>${p.hasWithholding ? "ホステス等の業務に関する報酬" : "マッサージ施術業務"}</td></tr>
+  <tr><th>適格請求書発行事業者</th><td>${p.hasInvoice ? `登録あり（登録番号：${p.invoiceNum}）` : "未登録"}</td></tr>
+</table>
+
+<table>
+  <tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
+  <tr><td>稼働日数</td><td class="right">${p.days}日</td><td class="small">年間清算回数</td></tr>
+  <tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${p.gross.toLocaleString()}</strong></td><td class="small">業務委託報酬の年間合計</td></tr>
+  ${p.invoiceDed > 0 ? `
+    <tr><td class="red">仕入税額控除の経過措置</td><td class="right red">-&yen;${p.invoiceDed.toLocaleString()}</td><td class="small">報酬額の10%を控除</td></tr>
+    <tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(p.gross - p.invoiceDed).toLocaleString()}</td><td class="small">支払金額 − 仕入税額控除</td></tr>
+  ` : ""}
+  ${p.tax > 0
+    ? `<tr><td class="red">源泉徴収税額</td><td class="right red">-&yen;${p.tax.toLocaleString()}</td><td class="small">所得税及び復興特別所得税</td></tr>`
+    : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td class="small">源泉徴収対象外</td></tr>`}
+  ${p.welfare > 0 ? `<tr><td class="red">備品代・リネン代</td><td class="right red">-&yen;${p.welfare.toLocaleString()}</td><td class="small">&yen;${p.days > 0 ? Math.round(p.welfare / p.days).toLocaleString() : 0}/日 × ${p.days}日</td></tr>` : ""}
+  ${p.transport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right">&yen;${p.transport.toLocaleString()}</td><td class="small">&yen;${p.days > 0 ? Math.round(p.transport / p.days).toLocaleString() : 0}/日 × ${p.days}日</td></tr>` : ""}
+  <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${p.final.toLocaleString()}</td><td class="small">年間支給額合計</td></tr>
+</table>
+
+<div style="margin-top:15px">
+  <p class="note">※ 支払金額は全て税込（内税方式）で記載。</p>
+  <p class="note">※ 源泉徴収税額は所得税法第204条第1項${p.hasWithholding ? "第6号" : "第1号"}に基づき日次清算時に控除済み。</p>
+  <p class="note">※ 本書は所得税法第225条第1項に基づく支払調書に準じて作成。</p>
+</div>
+
+<div class="section">
+  <p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p>
+  <div class="company">
+    <p><strong>${storeAny?.company_name || ""}</strong></p>
+    <p>${storeAny?.company_address || ""}</p>
+    <p>TEL: ${storeAny?.company_phone || ""}</p>
+    ${storeAny?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${storeAny.invoice_number}</p>` : ""}
+  </div>
+</div>
+
+<div class="stamp-area">
+  <div class="stamp-box">支払者（${storeAny?.company_name || ""}）</div>
+  <div class="stamp-box">支払を受ける者（${p.realName} 様）</div>
+</div>
+</div>`;
+  };
+
+  // 📄 支払調書のHTML共通ラッパー
+  const buildShiharaiWrapperHtml = (innerHtml: string, title: string) => `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;margin:0;padding:0;color:#333;background:#f4f4f4}
+.page{max-width:750px;margin:20px auto;padding:30px;background:#fff;page-break-after:always;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+.page:last-child{page-break-after:auto}
+h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}
+h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}
+table{width:100%;border-collapse:collapse;margin:15px 0}
+td,th{border:1px solid #ccc;padding:9px 14px;font-size:12px;vertical-align:top}
+th{background:#f5f0e8;text-align:left;width:38%}
+.right{text-align:right}
+.total-row{background:#f9f6f0;font-weight:bold;font-size:14px}
+.section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}
+.company{font-size:11px;line-height:2;color:#555}
+.note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}
+.doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}
+.stamp-area{display:flex;justify-content:space-between;margin-top:40px}
+.stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:10px;color:#888}
+.small{font-size:10px;color:#888}
+.red{color:#c45555}
+.print-bar{position:sticky;top:0;z-index:999;background:#c3a782;color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
+.print-bar button{background:#fff;color:#c3a782;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-weight:500;font-size:13px;font-family:inherit}
+.print-bar button:hover{background:#f5f2ec}
+@media print{
+  body{background:#fff}
+  .page{margin:0;padding:20mm 15mm;box-shadow:none;max-width:none}
+  .print-bar{display:none}
+}
+</style>
+</head>
+<body>
+<div class="print-bar">
+  <span>${title}</span>
+  <button onclick="window.print()">🖨 印刷 / PDFで保存</button>
+</div>
+${innerHtml}
+</body>
+</html>`;
+
+  // 📄 1セラピスト分の支払調書を開く
+  const openSingleShiharai = (p: { id: number; name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }) => {
+    const html = buildShiharaiWrapperHtml(buildShiharaiHtml(p), `支払調書_${viewMode === "monthly" ? selectedMonth : selectedYear}_${p.realName}`);
+    const w = window.open("", "_blank");
+    if (!w) { alert("ポップアップがブロックされました。ブラウザ設定を確認してください。"); return; }
+    w.document.write(html);
+    w.document.close();
+  };
+
+  // 📦 全セラピスト分の支払調書を1つの窓にまとめて開く
+  const openAllShiharai = () => {
+    if (therapistPayroll.length === 0) { alert("対象セラピストがいません"); return; }
+    // 5万円超の人（税務署提出対象）と以下の人を分けて案内
+    const over5 = therapistPayroll.filter(p => p.gross > 50000);
+    const under5 = therapistPayroll.filter(p => p.gross <= 50000);
+    const inner = therapistPayroll.map(p => buildShiharaiHtml(p)).join("\n");
+    const periodLabel = viewMode === "monthly" ? selectedMonth : `${selectedYear}年`;
+    const noticeHtml = `<div class="page" style="page-break-after:always">
+<h1 style="letter-spacing:0;font-size:18px">支払調書 一覧（${periodLabel}）</h1>
+<p style="text-align:center;color:#888;font-size:11px;margin-bottom:25px">T-MANAGE自動生成 / 合計 ${therapistPayroll.length}名</p>
+
+<table>
+  <tr><th style="width:50%;background:#fffceb">📋 税務署提出対象（年間支払額5万円超）</th><td class="right"><strong>${over5.length}名</strong></td></tr>
+  <tr><th style="width:50%;background:#f5f2ec">本人交付のみ（年間支払額5万円以下）</th><td class="right">${under5.length}名</td></tr>
+</table>
+
+<div style="margin-top:20px">
+  <p style="font-size:11px;margin-bottom:10px"><strong>【税務署提出対象のセラピスト】</strong></p>
+  <table>
+    <tr><th style="width:10%">No</th><th style="width:30%">氏名</th><th class="right" style="width:20%">年間支払額</th><th class="right" style="width:20%">源泉徴収</th><th class="right" style="width:20%">差引支払</th></tr>
+    ${over5.length === 0 ? `<tr><td colspan="5" class="small" style="text-align:center">該当なし</td></tr>` : over5.map((p, i) => `<tr><td>${i + 1}</td><td>${p.realName}${p.name !== p.realName ? `<span class="small">（${p.name}）</span>` : ""}</td><td class="right">&yen;${p.gross.toLocaleString()}</td><td class="right red">-&yen;${p.tax.toLocaleString()}</td><td class="right">&yen;${p.final.toLocaleString()}</td></tr>`).join("")}
+  </table>
+</div>
+
+${under5.length > 0 ? `<div style="margin-top:20px">
+  <p style="font-size:11px;margin-bottom:10px"><strong>【本人交付のみのセラピスト（5万円以下）】</strong></p>
+  <table>
+    <tr><th style="width:10%">No</th><th style="width:30%">氏名</th><th class="right" style="width:20%">年間支払額</th><th class="right" style="width:20%">源泉徴収</th><th class="right" style="width:20%">差引支払</th></tr>
+    ${under5.map((p, i) => `<tr><td>${i + 1}</td><td>${p.realName}${p.name !== p.realName ? `<span class="small">（${p.name}）</span>` : ""}</td><td class="right">&yen;${p.gross.toLocaleString()}</td><td class="right">${p.tax > 0 ? `-&yen;${p.tax.toLocaleString()}` : "&yen;0"}</td><td class="right">&yen;${p.final.toLocaleString()}</td></tr>`).join("")}
+  </table>
+</div>` : ""}
+
+<div style="margin-top:30px;padding:12px;background:#fffceb;border-left:3px solid #c3a782;font-size:10px;line-height:1.8;color:#555">
+  <strong>📋 法定調書提出について</strong><br>
+  ・年間支払額が5万円を超えるセラピストのみ、税務署への支払調書提出が必要です。<br>
+  ・5万円以下のセラピストにも、確定申告用として本人交付は必要です。<br>
+  ・提出期限: 翌年1月31日（e-Tax推奨）。<br>
+  ・マイナンバー未回収のセラピストがいる場合、提出前に回収してください。
+</div>
+</div>
+`;
+    const html = buildShiharaiWrapperHtml(noticeHtml + inner, `支払調書_全員分_${periodLabel}`);
+    const w = window.open("", "_blank");
+    if (!w) { alert("ポップアップがブロックされました。ブラウザ設定を確認してください。"); return; }
+    w.document.write(html);
+    w.document.close();
+  };
+
   // 📊 月次試算表（管理用）を新窓で開いて印刷
   const openMonthlyTrialBalance = () => {
     const periodLabel = viewMode === "monthly"
@@ -1459,12 +1623,13 @@ export default function TaxPortal() {
               </div>
 
               <div className="rounded-xl overflow-hidden" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
+                <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-2" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
                   <div>
                     <span className="text-[12px] font-medium">👥 セラピスト支払・源泉徴収集計（{viewMode === "monthly" ? selectedMonth : `${selectedYear}年`}）</span>
                     <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>根拠: 所得税法204条1項6号 / 月額5,000円控除 / 税率10.21%</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={openAllShiharai} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "none" }}>📦 全員の支払調書をまとめて出力</button>
                     <button onClick={exportTherapistCSV} className="text-[10px] px-2.5 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>💾 {ACC_FORMAT_LABELS[accFormat]}でCSV出力</button>
                     <span className="text-[10px]" style={{ color: T.textFaint }}>{therapistPayroll.length}名</span>
                   </div>
@@ -1481,12 +1646,13 @@ export default function TaxPortal() {
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>報酬総額</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>インボイス控除</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>源泉徴収</th>
-                        <th style={{ padding: "6px 10px", textAlign: "right", borderBottom: gridBorder }}>実支給額</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>実支給額</th>
+                        <th style={{ padding: "6px 6px", textAlign: "center", width: 70, borderBottom: gridBorder }}>支払調書</th>
                       </tr>
                     </thead>
                     <tbody>
                       {therapistPayroll.length === 0 && (
-                        <tr><td colSpan={9} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>対象期間の清算データがありません</td></tr>
+                        <tr><td colSpan={10} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>対象期間の清算データがありません</td></tr>
                       )}
                       {therapistPayroll.map((p, i) => (
                         <tr key={p.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
@@ -1505,7 +1671,15 @@ export default function TaxPortal() {
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder }}>{fmt(p.gross)}</td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#85a8c4" }}>{fmt(p.invoiceDed)}</td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#f59e0b" }}>{fmt(p.tax)}</td>
-                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>{fmt(p.final)}</td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, borderRight: gridBorder }}>{fmt(p.final)}</td>
+                          <td style={{ padding: "2px 6px", textAlign: "center" }}>
+                            <button
+                              onClick={() => openSingleShiharai(p)}
+                              title={`${p.realName} の支払調書を出力${p.gross > 50000 ? "\n（税務署提出対象）" : "\n（本人交付のみ）"}`}
+                              className="text-[10px] px-2 py-1 rounded cursor-pointer"
+                              style={{ backgroundColor: p.gross > 50000 ? "#c3a782" : T.cardAlt, color: p.gross > 50000 ? "#fff" : T.textSub, border: `1px solid ${p.gross > 50000 ? "#c3a782" : T.border}` }}
+                            >📄</button>
+                          </td>
                         </tr>
                       ))}
                       {therapistPayroll.length > 0 && (
@@ -1515,7 +1689,8 @@ export default function TaxPortal() {
                           <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#e091a8" }}>{fmt(totalTherapistGross)}</td>
                           <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#85a8c4" }}>{fmt(totalInvoiceDed)}</td>
                           <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#f59e0b" }}>{fmt(totalWithholding)}</td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(therapistPayroll.reduce((s, p) => s + p.final, 0))}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder }}>{fmt(therapistPayroll.reduce((s, p) => s + p.final, 0))}</td>
+                          <td style={{ padding: "8px 6px" }}></td>
                         </tr>
                       )}
                     </tbody>
