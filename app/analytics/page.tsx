@@ -55,9 +55,9 @@ export default function Analytics() {
   const [tab, setTab] = useState<Tab>("daily");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
-  // 日別ヘッダークリックで表示するヒント（sales/storeShare/avg いずれか、null なら非表示）
-  const [activeFormula, setActiveFormula] = useState<null | "sales" | "storeShare" | "avg">(null);
-  const toggleFormula = (key: "sales" | "storeShare" | "avg") => setActiveFormula(v => v === key ? null : key);
+  // 日別ヘッダークリックで表示するヒント（sales/storeShare/avg/back いずれか、null なら非表示）
+  const [activeFormula, setActiveFormula] = useState<null | "sales" | "storeShare" | "avg" | "back">(null);
+  const toggleFormula = (key: "sales" | "storeShare" | "avg" | "back") => setActiveFormula(v => v === key ? null : key);
 
   // マウス戻るボタン対応: タブ → 前のページ
   useBackNav(tab, setTab);
@@ -441,6 +441,24 @@ export default function Analytics() {
                   <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
                 </div>
               )}
+              {activeFormula === "back" && (
+                <div className="mb-3 rounded-xl border p-3 flex items-center justify-between" style={{ backgroundColor: "rgba(122,184,143,0.08)", borderColor: "#7ab88f" }}>
+                  <div className="text-[12px]" style={{ color: T.text }}>
+                    <span className="font-medium" style={{ color: "#7ab88f" }}>💡 セラピストの内訳</span>
+                    <span className="mx-2" style={{ color: T.textMuted }}>=</span>
+                    <span>コースバック</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>+</span>
+                    <span>指名バック</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>+</span>
+                    <span>オプションバック</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>+</span>
+                    <span>延長バック</span>
+                    <span className="mx-2" style={{ color: T.textFaint }}>|</span>
+                    <span className="text-[11px]" style={{ color: T.textMuted }}>精算モーダルで確定された支給額ベース（インボイス・源泉を引く前）</span>
+                  </div>
+                  <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
+                </div>
+              )}
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="overflow-x-auto">
                   <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
@@ -453,7 +471,7 @@ export default function Analytics() {
                           { label: "平均単価", align: "right", w: "", key: "avg" as const },
                           { label: "店取概算", align: "right", w: "", key: "storeShare" as const },
                           { label: "売上", align: "right", w: "", key: "sales" as const },
-                          { label: "セラピスト", align: "right", w: "", key: null },
+                          { label: "セラピスト", align: "right", w: "", key: "back" as const },
                           { label: "割引", align: "right", w: "", key: null },
                           { label: "カード", align: "right", w: "", key: null },
                           { label: "ペイペイ", align: "right", w: "", key: null },
