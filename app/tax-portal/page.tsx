@@ -14,7 +14,7 @@ type Expense = { id: number; date: string; category: string; name: string; amoun
 type Store = { id: number; name: string; company_name?: string; fiscal_month?: number };
 type Therapist = { id: number; name: string; real_name?: string; has_withholding?: boolean; has_invoice?: boolean; therapist_invoice_number?: string; transport_fee?: number; address?: string };
 type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
-type TaxDoc = { id: number; category: string; file_name: string; file_url: string; file_path: string; file_size: number; fiscal_period: string; uploaded_by_name: string; notes: string; created_at: string };
+type TaxDoc = { id: number; category: string; file_name: string; file_url: string; file_path: string; file_size: number; fiscal_period: string; uploaded_by_name: string; notes: string; created_at: string; target_person_name?: string };
 type TaxTaskStatus = { id: number; task_id: string; fiscal_year: number; status: string; note: string; updated_by_name: string; updated_at: string };
 type TaxTask = { id: string; timing: string; month: number; title: string; description: string; assignee: "税理士" | "会社" | "社労士" | "共同"; deadline: string; category: string; importance: "high" | "medium" | "low" };
 
@@ -85,12 +85,15 @@ const TAX_TASKS: TaxTask[] = [
   { id: "jul-santei", timing: "7月", month: 7, title: "社会保険算定基礎届提出", description: "標準報酬月額の定時決定届", assignee: "社労士", deadline: "7/10", category: "社保", importance: "high" },
   // 11月
   { id: "nov-chukan", timing: "11月", month: 11, title: "法人税・消費税中間申告", description: "前期税額が一定以上なら中間申告・納付", assignee: "税理士", deadline: "11/30", category: "法人税", importance: "high" },
+  { id: "nov-nenchou-prep", timing: "11月", month: 11, title: "年末調整の書類回収開始", description: "役員・社員から以下の書類を回収して書類庫「個人確定申告」カテゴリに保管 → 税理士に共有:\n□ 生命保険料控除証明書（10〜11月に各保険会社から郵送）\n□ 地震保険料控除証明書\n□ 社会保険料控除証明書（国民年金等を個人で払っている場合）\n□ iDeCo等の小規模企業共済等掛金払込証明書\n□ 住宅ローン控除関係書類（初年度のみ）\n□ 扶養控除等異動申告書（扶養家族に変化があった場合）", assignee: "共同", deadline: "11月末", category: "源泉", importance: "high" },
   // 12月
-  { id: "dec-nenchou", timing: "12月", month: 12, title: "年末調整", description: "社員の年末調整処理", assignee: "税理士", deadline: "12月給与", category: "源泉", importance: "high" },
+  { id: "dec-nenchou", timing: "12月", month: 12, title: "年末調整", description: "11月に回収した書類をもとに、役員・社員の年末調整を実施。12月給与で還付 or 追加徴収の精算。翌年1月に源泉徴収票を発行。\n※ 2社以上から役員報酬を受けている場合は「主たる給与」のみで年末調整し、全体の精算は2〜3月の役員個人の確定申告で行う。", assignee: "税理士", deadline: "12月給与", category: "源泉", importance: "high" },
   { id: "dec-shoyo", timing: "12月", month: 12, title: "賞与計算・源泉徴収", description: "冬季賞与の計算と源泉処理", assignee: "会社", deadline: "12月支給時", category: "給与", importance: "medium" },
+  // 2月
+  { id: "feb-kojin-shinkoku", timing: "2〜3月", month: 2, title: "役員個人の確定申告（該当者のみ）", description: "以下に該当する場合は役員個人の確定申告が必要:\n□ 役員報酬が年2,000万円超 → 必須\n□ 2社以上から役員報酬を受けている → 必須\n□ ふるさと納税を6自治体超（ワンストップ特例が使えない）\n□ 医療費が年10万円超（医療費控除）\n□ 住宅ローン控除の初年度\n□ 役員報酬以外の所得（不動産・副業等）あり\n→ 該当書類（寄附金受領証明書・医療費明細等）を書類庫に保管して税理士に提出", assignee: "税理士", deadline: "3/15", category: "源泉", importance: "high" },
 ];
 
-const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "借入・融資", "保険", "納税通知", "その他"];
+const DOC_CATEGORIES = ["決算書", "申告書", "契約書", "固定資産", "支払調書", "借入・融資", "保険", "納税通知", "個人確定申告", "その他"];
 
 // 会計ソフト形式
 type AccFormat = "general" | "yayoi" | "freee" | "mf";
@@ -131,6 +134,7 @@ const CATEGORY_PATH: Record<string, string> = {
   "借入・融資": "shakkin",
   "保険": "hoken",
   "納税通知": "nouzei",
+  "個人確定申告": "kojin",
   "その他": "other",
 };
 
@@ -144,6 +148,7 @@ const NAME_PLACEHOLDER: Record<string, string> = {
   "借入・融資": "例: 〇〇銀行 返済予定表 2026年4月",
   "保険": "例: 火災保険証券（店舗）",
   "納税通知": "例: 2025年度 固定資産税通知",
+  "個人確定申告": "例: 2025年分 生命保険料控除証明書（〇〇生命）",
   "その他": "例: ファイル名",
 };
 const PERIOD_PLACEHOLDER: Record<string, string> = {
@@ -201,6 +206,7 @@ export default function TaxPortal() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const [staffList, setStaffList] = useState<{ id: number; name: string }[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [companyName, setCompanyName] = useState("合同会社テラスライフ");
   const [fiscalMonth, setFiscalMonth] = useState(3);
@@ -213,6 +219,8 @@ export default function TaxPortal() {
   const [uploadPeriod, setUploadPeriod] = useState<string>("");
   const [uploadDisplayName, setUploadDisplayName] = useState<string>("");
   const [uploadNotes, setUploadNotes] = useState<string>("");
+  const [uploadTargetPerson, setUploadTargetPerson] = useState<string>("");
+  const [docPersonFilter, setDocPersonFilter] = useState<string>("all");
   const [uploading, setUploading] = useState(false);
   const [editingDocId, setEditingDocId] = useState<number | null>(null);
   const [editingFileName, setEditingFileName] = useState<string>("");
@@ -305,6 +313,10 @@ export default function TaxPortal() {
     // セラピスト一覧
     const { data: th } = await supabase.from("therapists").select("id,name,real_name,has_withholding,has_invoice,therapist_invoice_number,transport_fee,address");
     if (th) setTherapists(th);
+
+    // スタッフ一覧（書類庫の対象者サジェスト用）
+    const { data: st } = await supabase.from("staff").select("id,name").eq("status", "active").order("name");
+    if (st) setStaffList(st);
 
     // 期間内のセラピスト日次清算
     const { data: sts } = await supabase.from("therapist_daily_settlements")
@@ -637,8 +649,9 @@ export default function TaxPortal() {
         uploaded_by_id: activeStaff.id,
         uploaded_by_name: activeStaff.name,
         notes: uploadNotes.trim(),
+        target_person_name: uploadTargetPerson.trim(),
       });
-      setUploadPeriod(""); setUploadNotes(""); setUploadDisplayName("");
+      setUploadPeriod(""); setUploadNotes(""); setUploadDisplayName(""); setUploadTargetPerson("");
       fetchDocs();
     } catch (err) {
       alert("エラー: " + String(err));
@@ -2179,6 +2192,23 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                     <input type="text" value={uploadPeriod} onChange={(e) => setUploadPeriod(e.target.value)} placeholder={PERIOD_PLACEHOLDER[uploadCategory] || "例: 第3期 / 2025年分"} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
                   </div>
                   <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>
+                      対象者（{uploadCategory === "個人確定申告" ? "個人書類は必須" : "任意"}）
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadTargetPerson}
+                      onChange={(e) => setUploadTargetPerson(e.target.value)}
+                      list="staff-suggestions"
+                      placeholder={uploadCategory === "個人確定申告" ? "例: 田中社長" : "会社書類なら空欄でOK"}
+                      className="w-full px-3 py-2 rounded-lg text-[12px] outline-none"
+                      style={inputStyle}
+                    />
+                    <datalist id="staff-suggestions">
+                      {(staffList || []).map(s => <option key={s.id} value={s.name} />)}
+                    </datalist>
+                  </div>
+                  <div className="md:col-span-4">
                     <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>備考（任意）</label>
                     <input type="text" value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} placeholder={NOTES_PLACEHOLDER[uploadCategory] || "メモ"} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
                   </div>
@@ -2221,6 +2251,20 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                     </>
                   );
                 })()}
+                {(() => {
+                  const persons = Array.from(new Set(taxDocs.map(d => d.target_person_name).filter((p): p is string => !!p)));
+                  if (persons.length === 0) return null;
+                  return (
+                    <>
+                      <span className="text-[11px] ml-3" style={{ color: T.textSub }}>対象者:</span>
+                      <select value={docPersonFilter} onChange={(e) => setDocPersonFilter(e.target.value)} className="px-2 py-1 text-[10px] rounded-lg outline-none cursor-pointer" style={inputStyle}>
+                        <option value="all">すべて</option>
+                        <option value="__company__">会社書類のみ（対象者なし）</option>
+                        {persons.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* 書類一覧 */}
@@ -2228,7 +2272,14 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                 <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: T.cardAlt, borderBottom: gridBorder }}>
                   <span className="text-[12px] font-medium">📁 書類一覧</span>
                   <span className="text-[10px]" style={{ color: T.textFaint }}>
-                    {(() => { const filtered = taxDocs.filter(d => (docFilter === "all" || d.category === docFilter) && (docPeriodFilter === "all" || d.fiscal_period === docPeriodFilter)); return `${filtered.length}件表示中`; })()}
+                    {(() => {
+                      const filtered = taxDocs.filter(d =>
+                        (docFilter === "all" || d.category === docFilter) &&
+                        (docPeriodFilter === "all" || d.fiscal_period === docPeriodFilter) &&
+                        (docPersonFilter === "all" || (docPersonFilter === "__company__" ? !d.target_person_name : d.target_person_name === docPersonFilter))
+                      );
+                      return `${filtered.length}件表示中`;
+                    })()}
                   </span>
                 </div>
                 <div style={{ maxHeight: 500, overflowY: "auto" }}>
@@ -2238,6 +2289,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                         <th style={{ padding: "6px 10px", textAlign: "center", width: 40, borderRight: gridBorder, borderBottom: gridBorder }}></th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>カテゴリ</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>ファイル名</th>
+                        <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>対象者</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>期</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>備考</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>アップ者</th>
@@ -2248,9 +2300,13 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                     </thead>
                     <tbody>
                       {(() => {
-                        const filtered = taxDocs.filter(d => (docFilter === "all" || d.category === docFilter) && (docPeriodFilter === "all" || d.fiscal_period === docPeriodFilter));
-                        if (filtered.length === 0) return <tr><td colSpan={9} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>書類が登録されていません</td></tr>;
-                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "その他": "#888780" };
+                        const filtered = taxDocs.filter(d =>
+                          (docFilter === "all" || d.category === docFilter) &&
+                          (docPeriodFilter === "all" || d.fiscal_period === docPeriodFilter) &&
+                          (docPersonFilter === "all" || (docPersonFilter === "__company__" ? !d.target_person_name : d.target_person_name === docPersonFilter))
+                        );
+                        if (filtered.length === 0) return <tr><td colSpan={10} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>書類が登録されていません</td></tr>;
+                        const catColors: Record<string, string> = { "決算書": "#c3a782", "申告書": "#85a8c4", "契約書": "#7ab88f", "固定資産": "#a885c4", "支払調書": "#e091a8", "借入・融資": "#c45555", "保険": "#5aa8a8", "納税通知": "#c4a555", "個人確定申告": "#d97757", "その他": "#888780" };
                         return filtered.map((d, i) => (
                           <tr key={d.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
                             <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
@@ -2271,6 +2327,11 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                               ) : (
                                 <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.file_name}>{d.file_name}</div>
                               )}
+                            </td>
+                            <td style={{ padding: "5px 10px", borderRight: gridBorder, fontSize: 11 }}>
+                              {d.target_person_name
+                                ? <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c422", color: "#85a8c4" }}>👤 {d.target_person_name}</span>
+                                : <span style={{ color: T.textFaint, fontSize: 10 }}>—</span>}
                             </td>
                             <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textSub, fontSize: 11 }}>{d.fiscal_period || "—"}</td>
                             <td style={{ padding: "5px 10px", borderRight: gridBorder, color: T.textMuted, fontSize: 10, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.notes}>{d.notes || ""}</td>
