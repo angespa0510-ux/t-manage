@@ -20,7 +20,7 @@ export default function StaffPage() {
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
   const { confirm, ConfirmModalNode } = useConfirm();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license">("staff");
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "permissions">("staff");
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 
@@ -544,9 +544,9 @@ const openPaymentStatement = (sch: Schedule) => {
 
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["staff", "schedule", "oiri", "license"] as const).map(t => (
+          {(["staff", "permissions", "schedule", "oiri", "license"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: tab === t ? "#c3a78222" : T.cardAlt, color: tab === t ? "#c3a782" : T.textMuted, border: `1px solid ${tab === t ? "#c3a782" : T.border}`, fontWeight: tab === t ? 700 : 400 }}>
-              {t === "staff" ? "👥 スタッフ管理" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🚗 免許資格単価設定"}
+              {t === "staff" ? "👥 スタッフ管理" : t === "permissions" ? "🔐 権限マトリクス" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🚗 免許資格単価設定"}
             </button>
           ))}
         </div>
@@ -628,6 +628,193 @@ const openPaymentStatement = (sch: Schedule) => {
             ))}
           </div>
         )}
+
+        {/* ========== Tab: Permissions Matrix ========== */}
+        {tab === "permissions" && (() => {
+          // 権限定義 — staff-session.tsx のロジックと同期
+          const isManagerFn = (s: Staff) => s.role === "owner" || s.role === "manager" || s.role === "leader";
+          const canTaxFn = (s: Staff) => s.company_position === "社長" || s.company_position === "経営責任者" || s.company_position === "税理士";
+          const canCashFn = (s: Staff) => s.company_position === "社長" || s.company_position === "経営責任者";
+          // 社長（canEdit = 編集可能）
+          const isPresident = activeStaff?.company_position === "社長";
+          const activeStaffs = staffList.filter(s => s.status === "active");
+
+          type Feature = { key: string; label: string; icon: string; check: (s: Staff) => boolean; hint: string };
+          const features: Feature[] = [
+            { key: "manage",   label: "管理系操作",      icon: "📅", check: isManagerFn, hint: "タイムチャート編集・営業締め・精算・金庫など" },
+            { key: "tax",      label: "税理士ポータル",  icon: "📒", check: canTaxFn,    hint: "売上/経費/セラピスト支払/書類庫/銀行取込 など" },
+            { key: "cash",     label: "資金管理",        icon: "💴", check: canCashFn,   hint: "5財布のリアルタイム表示・ATM預入・豊橋予備金管理" },
+          ];
+
+          const roleLabelFn: Record<string, string> = { owner: "社長(owner)", manager: "経営責任者(manager)", leader: "店長(leader)", staff: "スタッフ(staff)" };
+          const posOptions = ["社長", "経営責任者", "税理士", "店長", "業務委託", "パート", "正社員", "アルバイト"];
+          const roleOptions = ["owner", "manager", "leader", "staff"];
+
+          return (
+            <div className="space-y-4">
+              {/* 説明 */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#85a8c412", border: "1px solid #85a8c433" }}>
+                <div className="flex items-start gap-3">
+                  <span className="text-[18px]">ℹ️</span>
+                  <div>
+                    <p className="text-[12px] font-medium mb-1" style={{ color: "#85a8c4" }}>権限の仕組み</p>
+                    <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
+                      権限は <strong>ロール (role)</strong> と <strong>法人ポジション (company_position)</strong> の組み合わせで決まります。
+                    </p>
+                    <ul className="text-[10px] mt-2 space-y-0.5" style={{ color: T.textSub }}>
+                      <li>・<strong>📅 管理系操作</strong>: role が owner / manager / leader</li>
+                      <li>・<strong>📒 税理士ポータル</strong>: 法人ポジションが 社長 / 経営責任者 / 税理士</li>
+                      <li>・<strong>💴 資金管理</strong>: 法人ポジションが 社長 / 経営責任者（税理士は除外）</li>
+                    </ul>
+                    {!isPresident && (
+                      <p className="text-[10px] mt-2" style={{ color: "#f59e0b" }}>
+                        🔒 権限の編集は社長のみ可能です。閲覧のみ表示しています。
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* マトリクス */}
+              <div className="rounded-xl border overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <table className="w-full text-[11px]" style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: 720 }}>
+                  <thead>
+                    <tr style={{ backgroundColor: T.cardAlt }}>
+                      <th className="text-left px-3 py-2.5 font-medium sticky left-0" style={{ color: T.textSub, backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}`, minWidth: 120 }}>スタッフ</th>
+                      <th className="text-left px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 130 }}>ロール</th>
+                      <th className="text-left px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 120 }}>法人ポジション</th>
+                      {features.map(f => (
+                        <th key={f.key} className="text-center px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 110 }} title={f.hint}>
+                          <div>{f.icon} {f.label}</div>
+                        </th>
+                      ))}
+                      {isPresident && (
+                        <th className="text-center px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 70 }}></th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeStaffs.length === 0 && (
+                      <tr>
+                        <td colSpan={3 + features.length + (isPresident ? 1 : 0)} className="text-center py-6 text-[11px]" style={{ color: T.textMuted }}>
+                          アクティブなスタッフがいません
+                        </td>
+                      </tr>
+                    )}
+                    {activeStaffs.map((s, idx) => {
+                      const isMe = activeStaff?.id === s.id;
+                      const canEditRow = isPresident && !isMe;  // 社長は自分の権限は変更できない（ガード）
+                      return (
+                        <tr key={s.id} style={{ backgroundColor: idx % 2 === 0 ? "transparent" : (dark ? T.cardAlt : "#f8f6f3") }}>
+                          <td className="px-3 py-2 sticky left-0" style={{ backgroundColor: idx % 2 === 0 ? T.card : (dark ? T.cardAlt : "#f8f6f3"), borderBottom: `1px solid ${T.border}` }}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] text-white font-medium flex-shrink-0" style={{ backgroundColor: roleColors[s.role] || "#888" }}>
+                                {s.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-medium truncate">{s.name}</div>
+                                {isMe && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c3a78222", color: "#c3a782" }}>自分</span>}
+                              </div>
+                            </div>
+                          </td>
+                          {/* ロール */}
+                          <td className="px-3 py-2" style={{ borderBottom: `1px solid ${T.border}` }}>
+                            {canEditRow ? (
+                              <select
+                                value={s.role}
+                                onChange={async (e) => {
+                                  const newRole = e.target.value;
+                                  await supabase.from("staff").update({ role: newRole }).eq("id", s.id);
+                                  toast.show(`${s.name} のロールを変更しました`, "success");
+                                  fetchData();
+                                }}
+                                className="px-2 py-1 rounded text-[10px] cursor-pointer outline-none"
+                                style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }}
+                              >
+                                {roleOptions.map(r => <option key={r} value={r}>{roleLabelFn[r] || r}</option>)}
+                              </select>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: (roleColors[s.role] || "#888") + "22", color: roleColors[s.role] || "#888" }}>
+                                {roleLabelFn[s.role] || s.role}
+                              </span>
+                            )}
+                          </td>
+                          {/* 法人ポジション */}
+                          <td className="px-3 py-2" style={{ borderBottom: `1px solid ${T.border}` }}>
+                            {canEditRow ? (
+                              <select
+                                value={s.company_position || ""}
+                                onChange={async (e) => {
+                                  const newPos = e.target.value;
+                                  await supabase.from("staff").update({ company_position: newPos }).eq("id", s.id);
+                                  toast.show(`${s.name} の法人ポジションを変更しました`, "success");
+                                  fetchData();
+                                }}
+                                className="px-2 py-1 rounded text-[10px] cursor-pointer outline-none"
+                                style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }}
+                              >
+                                <option value="">—</option>
+                                {posOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                            ) : (
+                              <span className="text-[10px]" style={{ color: T.textSub }}>{s.company_position || "—"}</span>
+                            )}
+                          </td>
+                          {/* 権限セル */}
+                          {features.map(f => {
+                            const has = f.check(s);
+                            return (
+                              <td key={f.key} className="px-3 py-2 text-center" style={{ borderBottom: `1px solid ${T.border}` }}>
+                                {has ? (
+                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full" style={{ backgroundColor: T.cardAlt, color: T.textFaint }}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                          {/* 編集ボタン */}
+                          {isPresident && (
+                            <td className="px-3 py-2 text-center" style={{ borderBottom: `1px solid ${T.border}` }}>
+                              <button
+                                onClick={() => {
+                                  setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); setEditNightStart(s.night_start_time||"00:00"); setEditNightEnd(s.night_end_time||"05:00"); setEditNightPrice(String(s.night_unit_price||100)); setEditHasInvoice(!!s.has_invoice); setEditInvoiceNum(s.invoice_number||""); setEditInvoicePhoto(null);
+                                }}
+                                className="text-[10px] px-2 py-1 rounded cursor-pointer border"
+                                style={{ borderColor: T.border, color: T.textSub }}
+                                title="編集モーダルを開く"
+                              >
+                                編集
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* サマリー */}
+              <div className="grid grid-cols-3 gap-3">
+                {features.map(f => {
+                  const count = activeStaffs.filter(f.check).length;
+                  return (
+                    <div key={f.key} className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>{f.icon} {f.label}</p>
+                      <p className="text-[22px] font-medium tabular-nums" style={{ color: T.text }}>{count}<span className="text-[11px] font-normal ml-1" style={{ color: T.textMuted }}>/ {activeStaffs.length} 名</span></p>
+                      <p className="text-[9px] mt-1 leading-relaxed" style={{ color: T.textFaint }}>{f.hint}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ========== Tab 2: Schedule ========== */}
         {tab === "schedule" && (
