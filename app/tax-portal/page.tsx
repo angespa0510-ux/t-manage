@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useBackNav } from "../../lib/use-back-nav";
+import { useConfirm } from "../../components/useConfirm";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string; total_price?: number; card_billing?: number; paypay_amount?: number; cash_amount?: number; discount_amount?: number; nomination_fee?: number; options_total?: number; extension_price?: number };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -197,6 +198,7 @@ type SheetKey = "summary" | "sales" | "expense" | "therapist" | "invoice" | "sch
 export default function TaxPortal() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, canAccessTaxPortal } = useStaffSession();
 
   const [sheet, setSheet] = useState<SheetKey>("summary");
@@ -473,7 +475,14 @@ export default function TaxPortal() {
   // ステージング取引をDBに確定（重複は UNIQUE制約でスキップ）
   const confirmStagedTxs = async () => {
     if (bankStagedTxs.length === 0) return;
-    if (!confirm(`${bankStagedTxs.length}件の取引を取り込みますか？（重複行は自動スキップ）`)) return;
+    const confirmed = await confirm({
+      title: `${bankStagedTxs.length}件の取引を取り込みますか？`,
+      message: "重複行は自動でスキップされます。",
+      variant: "info",
+      confirmLabel: "取り込む",
+      icon: "🏦",
+    });
+    if (!confirmed) return;
 
     const rows = bankStagedTxs.map(t => ({
       transaction_date: t.transaction_date,
@@ -550,7 +559,14 @@ export default function TaxPortal() {
   const confirmAllExpenses = async () => {
     const unconfirmed = bankTxs.filter(t => !t.is_confirmed);
     if (unconfirmed.length === 0) { alert("未確定の取引がありません"); return; }
-    if (!confirm(`${unconfirmed.length}件の取引を経費/売上として一括登録しますか？`)) return;
+    const ok = await confirm({
+      title: `${unconfirmed.length}件の取引を一括登録しますか？`,
+      message: "未確定の銀行取引を経費または売上として一括で登録します。",
+      variant: "warning",
+      confirmLabel: "一括登録する",
+      icon: "📋",
+    });
+    if (!ok) return;
     for (const tx of unconfirmed) { await confirmExpense(tx); }
     alert(`${unconfirmed.length}件を登録しました`);
   };
@@ -574,7 +590,13 @@ export default function TaxPortal() {
   };
 
   const deleteRule = async (id: number) => {
-    if (!confirm("このルールを削除しますか？")) return;
+    const ok = await confirm({
+      title: "このルールを削除しますか？",
+      message: "銀行取込の自動分類ルールが1件削除されます。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("bank_category_rules").delete().eq("id", id);
     fetchBankData();
   };
@@ -681,7 +703,13 @@ export default function TaxPortal() {
 
   // 書類削除
   const deleteDoc = async (doc: TaxDoc) => {
-    if (!confirm(`「${doc.file_name}」を削除しますか？（元に戻せません）`)) return;
+    const ok = await confirm({
+      title: `「${doc.file_name}」を削除しますか？`,
+      message: "この操作は取り消せません。Storage上のファイルも削除されます。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     if (doc.file_path) {
       await supabase.storage.from("tax-documents").remove([doc.file_path]);
     }
@@ -1310,6 +1338,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* ── Header ── */}
       <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6 flex-shrink-0" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
         <div className="flex items-center gap-4">

@@ -6,6 +6,7 @@ import TaxSupportWizard from "../../components/TaxSupportWizard";
 import TaxBookkeeping from "../../components/TaxBookkeeping";
 import { useTheme } from "../../lib/theme";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
+import { useConfirm } from "../../components/useConfirm";
 
 /* ───────── 型定義 ───────── */
 type Therapist = {
@@ -49,6 +50,7 @@ function formatDate(d: string): string {
 
 export default function TherapistMyPage() {
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [loggedIn, setLoggedIn] = useState(false);
   const [therapist, setTherapist] = useState<Therapist | null>(null);
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
@@ -259,7 +261,12 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const copyShiftToClipboard = () => { navigator.clipboard.writeText(generateShiftCopyText()); setCopiedShift(true); setTimeout(() => setCopiedShift(false), 2000); };
 
   const deleteCustomerNote = async (id: number) => {
-    if (!confirm("このメモを削除しますか？")) return;
+    const ok = await confirm({
+      title: "このメモを削除しますか？",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("therapist_customer_notes").delete().eq("id", id);
     const returnDate = calDetailDate; setShowAddNote(false); setNoteViewTarget(null); await fetchData(); if (returnDate) setCalDetailDate(returnDate);
   };
@@ -499,6 +506,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{therapist?.name?.charAt(0) || "?"}</div><div><p className="text-[13px] font-medium">{therapist?.name}</p><p className="text-[8px]" style={{ color: T.textMuted }}>マイページ</p></div></div>
         <div className="flex items-center gap-2"><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#fce4ec", color: "#d4687e" }}>ログアウト</button></div>
@@ -1484,7 +1492,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => { setNoteForm({ customer_name: n.customer_name, note: n.note, is_ng: n.is_ng, ng_reason: n.ng_reason, rating: n.rating || 0, reservation_id: 0 }); setNoteHistoryCustomer(""); setShowAddNote(true); }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#e8849a", backgroundColor: "#e8849a15" }}>✏️ 編集</button>
-                      <button onClick={async () => { if (confirm("このメモを削除しますか？")) { await supabase.from("therapist_customer_notes").delete().eq("id", n.id); await fetchData(); } }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#c45555", backgroundColor: "#c4555510" }}>🗑</button>
+                      <button onClick={async () => { const ok = await confirm({ title: "このメモを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (ok) { await supabase.from("therapist_customer_notes").delete().eq("id", n.id); await fetchData(); } }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#c45555", backgroundColor: "#c4555510" }}>🗑</button>
                     </div>
                   </div>
                   <p className="text-[10px] whitespace-pre-wrap leading-relaxed" style={{ color: T.textSub }}>{n.note}</p>
@@ -1516,7 +1524,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                           </div>
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => { setNoteForm({ customer_name: resNote.customer_name, note: resNote.note, is_ng: resNote.is_ng, ng_reason: resNote.ng_reason, rating: resNote.rating || 0, reservation_id: r.id }); setNoteHistoryCustomer(""); setShowAddNote(true); }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#e8849a", backgroundColor: "#e8849a15" }}>✏️ 編集</button>
-                            <button onClick={async () => { if (confirm("このメモを削除しますか？")) { await supabase.from("therapist_customer_notes").delete().eq("id", resNote.id); await fetchData(); } }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#c45555", backgroundColor: "#c4555510" }}>🗑</button>
+                            <button onClick={async () => { const ok = await confirm({ title: "このメモを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (ok) { await supabase.from("therapist_customer_notes").delete().eq("id", resNote.id); await fetchData(); } }} className="text-[9px] cursor-pointer px-1.5 py-0.5 rounded" style={{ color: "#c45555", backgroundColor: "#c4555510" }}>🗑</button>
                           </div>
                         </div>
                         {resNote.note && <p className="text-[10px] whitespace-pre-wrap leading-relaxed" style={{ color: T.textSub }}>{resNote.note}</p>}

@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { useConfirm } from "../../components/useConfirm";
 
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
@@ -14,6 +15,7 @@ type ParkingSpot = { id: number; store_id: number; building_id: number; number: 
 export default function RoomManagement() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [stores, setStores] = useState<Store[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -48,24 +50,71 @@ export default function RoomManagement() {
 
   const addStore = async () => { if (!newStoreName.trim()) return; await supabase.from("stores").insert({ name: newStoreName.trim() }); setNewStoreName(""); fetchData(); };
   const updateStore = async () => { if (!editStore || !editStoreName.trim()) return; await supabase.from("stores").update({ name: editStoreName.trim() }).eq("id", editStore.id); setEditStore(null); fetchData(); };
-  const deleteStore = async (id: number) => { if (!confirm("このルームを削除しますか？関連する建物・部屋・駐車場も削除されます。")) return; const bIds = buildings.filter((b) => b.store_id === id).map((b) => b.id); if (bIds.length > 0) { await supabase.from("rooms").delete().in("building_id", bIds); await supabase.from("parking_spots").delete().in("building_id", bIds); await supabase.from("buildings").delete().eq("store_id", id); } await supabase.from("stores").delete().eq("id", id); fetchData(); };
+  const deleteStore = async (id: number) => {
+    const ok = await confirm({
+      title: "このルームを削除しますか？",
+      message: "関連する建物・部屋・駐車場もすべて削除されます。元に戻せません。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
+    const bIds = buildings.filter((b) => b.store_id === id).map((b) => b.id);
+    if (bIds.length > 0) {
+      await supabase.from("rooms").delete().in("building_id", bIds);
+      await supabase.from("parking_spots").delete().in("building_id", bIds);
+      await supabase.from("buildings").delete().eq("store_id", id);
+    }
+    await supabase.from("stores").delete().eq("id", id);
+    fetchData();
+  };
 
   const addBuilding = async () => { if (!newBuildingName.trim() || !newBuildingStoreId) return; await supabase.from("buildings").insert({ name: newBuildingName.trim(), store_id: newBuildingStoreId }); setNewBuildingName(""); fetchData(); };
   const updateBuilding = async () => { if (!editBuilding || !editBuildingName.trim()) return; await supabase.from("buildings").update({ name: editBuildingName.trim() }).eq("id", editBuilding.id); setEditBuilding(null); fetchData(); };
-  const deleteBuilding = async (id: number) => { if (!confirm("この建物を削除しますか？関連する部屋・駐車場も削除されます。")) return; await supabase.from("rooms").delete().eq("building_id", id); await supabase.from("parking_spots").delete().eq("building_id", id); await supabase.from("buildings").delete().eq("id", id); fetchData(); };
+  const deleteBuilding = async (id: number) => {
+    const ok = await confirm({
+      title: "この建物を削除しますか？",
+      message: "関連する部屋・駐車場もすべて削除されます。元に戻せません。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
+    await supabase.from("rooms").delete().eq("building_id", id);
+    await supabase.from("parking_spots").delete().eq("building_id", id);
+    await supabase.from("buildings").delete().eq("id", id);
+    fetchData();
+  };
 
   const addRoom = async () => { if (!newRoomName.trim() || !newRoomBuildingId) return; const bld = buildings.find((b) => b.id === newRoomBuildingId); await supabase.from("rooms").insert({ name: newRoomName.trim(), building_id: newRoomBuildingId, store_id: bld?.store_id || 0, key_number: newRoomKeyNumber.trim() }); setNewRoomName(""); setNewRoomKeyNumber(""); fetchData(); };
   const updateRoom = async () => { if (!editRoom || !editRoomName.trim()) return; await supabase.from("rooms").update({ name: editRoomName.trim(), key_number: editRoomKeyNumber.trim() }).eq("id", editRoom.id); setEditRoom(null); fetchData(); };
-  const deleteRoom = async (id: number) => { if (!confirm("この部屋を削除しますか？")) return; await supabase.from("rooms").delete().eq("id", id); fetchData(); };
+  const deleteRoom = async (id: number) => {
+    const ok = await confirm({
+      title: "この部屋を削除しますか？",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
+    await supabase.from("rooms").delete().eq("id", id);
+    fetchData();
+  };
 
   const addParking = async () => { if (!newParkingNumber.trim() || !newParkingBuildingId) return; const bld = buildings.find((b) => b.id === newParkingBuildingId); await supabase.from("parking_spots").insert({ number: newParkingNumber.trim(), store_id: bld?.store_id || 0, building_id: newParkingBuildingId, type: newParkingType }); setNewParkingNumber(""); fetchData(); };
-  const deleteParking = async (id: number) => { if (!confirm("この駐車場を削除しますか？")) return; await supabase.from("parking_spots").delete().eq("id", id); fetchData(); };
+  const deleteParking = async (id: number) => {
+    const ok = await confirm({
+      title: "この駐車場を削除しますか？",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
+    await supabase.from("parking_spots").delete().eq("id", id);
+    fetchData();
+  };
 
   const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4"];
   const inputStyle = { backgroundColor: T.cardAlt, color: T.text, border: "1px solid transparent" };
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6 flex-shrink-0" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
         <div className="flex items-center gap-4">

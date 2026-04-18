@@ -8,6 +8,7 @@ import { useStaffSession } from "../../lib/staff-session";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useBackNav } from "../../lib/use-back-nav";
+import { useConfirm } from "../../components/useConfirm";
 
 /* ─────────── 型定義 ─────────── */
 type InventoryStore = { id: number; name: string; display_order: number; is_active: boolean };
@@ -34,6 +35,7 @@ const fmt = (n: number) => "¥" + Math.round(n || 0).toLocaleString();
 export default function InventoryPage() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, canAccessCashDashboard } = useStaffSession();
 
   const [tab, setTab] = useState<Tab>("count");
@@ -196,7 +198,14 @@ export default function InventoryPage() {
 
   const finalizeSession = async () => {
     if (!currentSession) { alert("まず実績を1件以上入力してください"); return; }
-    if (!confirm(`${currentSession.count_date} ${currentSession.store_name_snapshot} の棚卸を確定します。\n確定後も編集は可能ですが、「確定済み」としてマーク・タイムスタンプが記録されます。\n実行しますか？`)) return;
+    const ok = await confirm({
+      title: `${currentSession.count_date} ${currentSession.store_name_snapshot} の棚卸を確定しますか？`,
+      message: "確定後も編集は可能ですが、「確定済み」としてマーク・タイムスタンプが記録されます。",
+      variant: "warning",
+      confirmLabel: "確定する",
+      icon: "✅",
+    });
+    if (!ok) return;
     await supabase.from("inventory_sessions").update({
       status: "finalized",
       finalized_at: new Date().toISOString(),
@@ -208,7 +217,13 @@ export default function InventoryPage() {
   };
 
   const deleteSession = async (session: InventorySession) => {
-    if (!confirm(`${session.count_date} ${session.store_name_snapshot} の棚卸を削除しますか？\n関連する実績もすべて削除されます。`)) return;
+    const ok = await confirm({
+      title: `${session.count_date} ${session.store_name_snapshot} の棚卸を削除しますか？`,
+      message: "関連する実績もすべて削除されます。元に戻せません。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
     await supabase.from("inventory_sessions").delete().eq("id", session.id);
     const { data: newSessions } = await supabase.from("inventory_sessions").select("*").order("count_date", { ascending: false });
     if (newSessions) setSessions(newSessions);
@@ -251,10 +266,23 @@ export default function InventoryPage() {
   const deleteItem = async (item: InventoryItem) => {
     const { count } = await supabase.from("inventory_counts").select("*", { count: "exact", head: true }).eq("item_id", item.id);
     if ((count || 0) > 0) {
-      if (!confirm(`「${item.name}」は過去の棚卸で使用されています。\n廃番扱い（一覧から非表示）にしますか？`)) return;
+      const ok = await confirm({
+        title: `「${item.name}」は過去の棚卸で使用されています`,
+        message: "廃番扱い（一覧から非表示）にしますか？ 過去の実績データは保持されます。",
+        variant: "warning",
+        confirmLabel: "廃番にする",
+        icon: "📦",
+      });
+      if (!ok) return;
       await supabase.from("inventory_items").update({ is_active: false }).eq("id", item.id);
     } else {
-      if (!confirm(`「${item.name}」を完全に削除しますか？`)) return;
+      const ok = await confirm({
+        title: `「${item.name}」を完全に削除しますか？`,
+        message: "過去に使われていないため、完全削除が可能です。",
+        variant: "danger",
+        confirmLabel: "削除する",
+      });
+      if (!ok) return;
       const { error } = await supabase.from("inventory_items").delete().eq("id", item.id);
       if (error) { alert("削除失敗: " + error.message); return; }
     }
@@ -378,6 +406,7 @@ ${CATEGORY_ORDER.map(cat => {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: bg, color: T.text }}>
+      {ConfirmModalNode}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
