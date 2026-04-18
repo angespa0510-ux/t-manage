@@ -341,8 +341,10 @@ export default function CorporatePage() {
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(6,182,212,0.3),rgba(124,58,237,0.3),transparent)" }}/>
 
       {/* ══════════ PRODUCTS (3 cards → detail pages) ══════════ */}
-      <section id="products" data-a style={{ padding:"100px 24px",background:"linear-gradient(180deg,#020617,#060e1f,#020617)" }}>
-        <div className={`fu ${show("products")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto" }}>
+      <section id="products" data-a style={{ position:"relative",padding:"100px 24px",background:"#020617",overflow:"hidden" }}>
+        <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.15,zIndex:0 }}><source src="/corporate/products-bg.mp4" type="video/mp4"/></video>
+        <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(2,6,23,0.7) 0%,rgba(2,6,23,0.3) 50%,rgba(2,6,23,0.7) 100%)",zIndex:1 }}/>
+        <div className={`fu ${show("products")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto",position:"relative",zIndex:2 }}>
           <div style={{ textAlign:"center",marginBottom:64 }}>
             <span className={`sh ${show("products")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>PRODUCTS</span>
             <h2 className={`sh2 ${show("products")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,marginTop:14,color:"#f8fafc",letterSpacing:-.5 }}>プロダクト</h2>
@@ -480,8 +482,10 @@ export default function CorporatePage() {
 
       {/* ── Divider ── */}
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.3),transparent)" }}/>
-      <section id="stats" data-a style={{ padding:"80px 24px",background:"linear-gradient(180deg,#020617,#0a1628,#020617)" }}>
-        <div className={`fu ${show("stats")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto" }}>
+      <section id="stats" data-a style={{ position:"relative",padding:"80px 24px",background:"#020617",overflow:"hidden" }}>
+        <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.2,zIndex:0 }}><source src="/corporate/stats-bg.mp4" type="video/mp4"/></video>
+        <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(2,6,23,0.6) 0%,rgba(2,6,23,0.3) 50%,rgba(2,6,23,0.6) 100%)",zIndex:1 }}/>
+        <div className={`fu ${show("stats")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto",position:"relative",zIndex:2 }}>
           <div style={{ textAlign:"center",marginBottom:48 }}>
             <span className={`sh ${show("stats")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#06b6d4",letterSpacing:3 }}>ACHIEVEMENTS</span>
             <h2 className={`sh2 ${show("stats")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>数字で見る実績</h2>
@@ -535,8 +539,10 @@ export default function CorporatePage() {
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.2),transparent)" }}/>
 
       {/* ══════════ TECH ══════════ */}
-      <section id="tech" data-a style={{ padding:"80px 24px",background:"#020617" }}>
-        <div className={`fu ${show("tech")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto" }}>
+      <section id="tech" data-a style={{ position:"relative",padding:"80px 24px",background:"#020617",overflow:"hidden" }}>
+        <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.15,zIndex:0 }}><source src="/corporate/tech-bg.mp4" type="video/mp4"/></video>
+        <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(2,6,23,0.6) 0%,rgba(2,6,23,0.3) 50%,rgba(2,6,23,0.6) 100%)",zIndex:1 }}/>
+        <div className={`fu ${show("tech")?"on":""}`} style={{ maxWidth:1100,margin:"0 auto",position:"relative",zIndex:2 }}>
           <div style={{ textAlign:"center",marginBottom:56 }}>
             <span className={`sh ${show("tech")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#2563eb",letterSpacing:3 }}>TECHNOLOGY</span>
             <h2 className={`sh2 ${show("tech")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>技術スタック</h2>
