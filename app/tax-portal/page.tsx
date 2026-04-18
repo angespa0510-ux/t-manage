@@ -63,7 +63,7 @@ const TAX_TASKS: TaxTask[] = [
   // 毎月の業務
   { id: "monthly-payroll", timing: "毎月", month: 0, title: "給与計算・給与振込", description: "スタッフ・社員の給与計算と振込処理", assignee: "会社", deadline: "月末", category: "給与", importance: "high" },
   { id: "monthly-shakai", timing: "毎月", month: 0, title: "社会保険料納付", description: "健康保険・厚生年金の納付（翌月末）", assignee: "会社", deadline: "翌月末", category: "社保", importance: "high" },
-  { id: "monthly-kessai", timing: "毎月", month: 0, title: "決済明細の取得・保管", description: "前月分の決済明細PDFを各社管理画面からダウンロードして、書類庫「決済明細」カテゴリに保管:\n□ スターペイメント（カード決済明細）\n□ PayPay（QR決済明細）\nファイル名の例: 2026-03_スターペイメント_カード決済明細.pdf\n\n※ 売上計上と入金の突合に必須の書類。税理士の月次仕訳でも使用。", assignee: "会社", deadline: "毎月10日頃", category: "経理", importance: "medium" },
+  { id: "monthly-kessai", timing: "毎月", month: 0, title: "決済明細の取得・保管", description: "前月分の決済明細PDFを各社管理画面からダウンロードして、書類庫「決済明細」カテゴリに保管:\n□ スターペイメント（カード決済明細）\n　　https://pay2-admin.star-pay.jp/kanri/index.php\n□ PayPay（QR決済明細）\n　　https://www.paypay.ne.jp/portal/oauth2/sign-in?client_id=pay2-merchant-panel-client\n\nファイル名の例: 2026-03_スターペイメント_カード決済明細.pdf\n※ 売上計上と入金の突合に必須の書類。税理士の月次仕訳でも使用。", assignee: "会社", deadline: "毎月10日頃", category: "経理", importance: "medium" },
   { id: "monthly-trial", timing: "毎月", month: 0, title: "月次資料を税理士に提出", description: "前月の売上・経費・銀行明細を税理士ポータルで確認できる状態にして、税理士に試算表作成を依頼（📊 月次サマリーから「月次試算表（管理用）」をPDF出力して送るとスムーズ）", assignee: "共同", deadline: "翌月15日目安", category: "経理", importance: "medium" },
   // 1月
   { id: "jan-withhold-h2", timing: "1月", month: 1, title: "源泉所得税納付（納特・下半期）", description: "7〜12月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "1/20", category: "源泉", importance: "high" },
@@ -2508,7 +2508,23 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                                   <td style={{ padding: "5px 10px", borderRight: gridBorder, fontSize: 11, color: T.textSub }}>{t.timing}</td>
                                   <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
                                     <div style={{ fontWeight: 500, textDecoration: status === "done" ? "line-through" : "none" }}>{t.title}</div>
-                                    <div className="text-[10px]" style={{ color: T.textMuted }}>{t.description}</div>
+                                    <div className="text-[10px]" style={{ color: T.textMuted, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                      {t.description.split(/(https?:\/\/[^\s　]+)/g).map((part, idx) => {
+                                        if (/^https?:\/\//.test(part)) {
+                                          return (
+                                            <a
+                                              key={idx}
+                                              href={part}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              style={{ color: "#4a7c9f", textDecoration: "underline", wordBreak: "break-all" }}
+                                              onClick={(e) => e.stopPropagation()}
+                                            >{part}</a>
+                                          );
+                                        }
+                                        return <span key={idx}>{part}</span>;
+                                      })}
+                                    </div>
                                   </td>
                                   <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
                                     <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (assigneeColors[t.assignee] || "#888") + "22", color: assigneeColors[t.assignee] || "#888" }}>{t.assignee}</span>
