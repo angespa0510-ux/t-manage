@@ -772,11 +772,12 @@ export default function TaxPortal() {
       const csvRows: string[] = ["No,日付,勘定科目,項目,金額,備考,領収書ファイル名"];
       for (let i = 0; i < targetExpenses.length; i++) {
         const e = targetExpenses[i];
+        const no = String(i + 1).padStart(3, "0");
         const acc = (ACCOUNT_MAP[e.category] || "雑費").replace(/,/g, "_");
         const name = (e.name || "").replace(/,/g, "_");
         const notes = (e.notes || "").replace(/,/g, "_");
-        const fileName = e.receipt_url ? `${String(i + 1).padStart(3, "0")}_${e.date}_${e.amount}_${(e.name || "receipt").replace(/[\\/:*?"<>|]/g, "_").slice(0, 20)}` : "";
-        csvRows.push([String(i + 1), e.date, acc, name, String(e.amount), notes, fileName].join(","));
+        const fileName = e.receipt_url ? `${no}_${e.date}_${e.amount}_${(e.name || "receipt").replace(/[\\/:*?"<>|]/g, "_").slice(0, 20)}` : "";
+        csvRows.push([no, e.date, acc, name, String(e.amount), notes, fileName].join(","));
       }
       csvRows.push("");
       csvRows.push(`合計件数,${targetExpenses.length}`);
@@ -807,8 +808,11 @@ export default function TaxPortal() {
       // 領収書なしリストをテキストで同梱
       if (withoutReceipt.length > 0) {
         const lines = ["【領収書が登録されていない経費】", ""];
-        withoutReceipt.forEach((e, idx) => {
-          lines.push(`${idx + 1}. ${e.date}  ${fmt(e.amount)}  ${e.name || ""}  (${ACCOUNT_MAP[e.category] || "雑費"})`);
+        withoutReceipt.forEach((e) => {
+          // 証憑Noは CSV/ZIPと同じ（targetExpenses内の位置）
+          const origIdx = targetExpenses.findIndex(t => t.id === e.id);
+          const no = String(origIdx + 1).padStart(3, "0");
+          lines.push(`No.${no}  ${e.date}  ${fmt(e.amount)}  ${e.name || ""}  (${ACCOUNT_MAP[e.category] || "雑費"})`);
         });
         zip.file("_領収書なし一覧.txt", lines.join("\n"));
       }
@@ -1531,7 +1535,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                   <table className="w-full" style={{ fontSize: 12 }}>
                     <thead style={{ position: "sticky", top: 0, backgroundColor: T.cardAlt }}>
                       <tr style={{ color: T.textSub, fontSize: 11 }}>
-                        <th style={{ padding: "6px 6px", textAlign: "center", width: 32, borderRight: gridBorder, borderBottom: gridBorder }}></th>
+                        <th style={{ padding: "6px 6px", textAlign: "center", width: 44, borderRight: gridBorder, borderBottom: gridBorder, fontSize: 10 }} title="証憑番号（CSV・領収書ZIPのファイル名と一致）">No</th>
                         <th style={{ padding: "6px 6px", textAlign: "center", width: 34, borderRight: gridBorder, borderBottom: gridBorder }} title="領収書">📎</th>
                         <th style={{ padding: "6px 6px", textAlign: "center", width: 34, borderRight: gridBorder, borderBottom: gridBorder }} title="要確認">🚩</th>
                         <th style={{ padding: "6px 10px", textAlign: "left", borderRight: gridBorder, borderBottom: gridBorder }}>日付</th>
@@ -1559,7 +1563,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                           : i % 2 === 0 ? "transparent" : T.cardAlt + "40";
                         return (
                         <tr key={e.id} style={{ borderTop: gridBorder, backgroundColor: rowBg }}>
-                          <td style={{ padding: "5px 6px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
+                          <td style={{ padding: "5px 6px", textAlign: "center", color: T.textSub, fontSize: 10, fontVariantNumeric: "tabular-nums", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", borderRight: gridBorder }}>{String(i + 1).padStart(3, "0")}</td>
                           {/* 領収書アイコン */}
                           <td style={{ padding: "2px 6px", textAlign: "center", borderRight: gridBorder }}>
                             {hasReceipt ? (
