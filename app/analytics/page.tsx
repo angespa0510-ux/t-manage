@@ -7,7 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useBackNav } from "../../lib/use-back-nav";
 
-type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string };
+type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string; total_price?: number; card_billing?: number; paypay_amount?: number; cash_amount?: number; nomination?: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
@@ -15,6 +15,17 @@ type Shift = { id: number; therapist_id: number; store_id: number; date: string 
 type RoomAssignment = { id: number; date: string; room_id: number; slot: string; therapist_id: number };
 type Room = { id: number; store_id: number; building_id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
+
+type Settlement = {
+  id: number; therapist_id: number; date: string; room_id: number | null;
+  total_cash?: number; total_back?: number; final_payment?: number;
+  invoice_deduction?: number; withholding_tax?: number;
+  reserve_used_amount?: number;
+  sales_collected?: boolean; change_collected?: boolean; safe_deposited?: boolean;
+  safe_collected_date?: string | null;
+};
+type ExpenseRow = { id: number; date: string; amount: number; type: string };
+type Replenishment = { id: number; date: string; room_id: number; amount: number };
 
 type Tab = "daily" | "monthly" | "yearly" | "therapist" | "course" | "store" | "customer";
 
@@ -29,6 +40,17 @@ export default function Analytics() {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [assignments, setAssignments] = useState<RoomAssignment[]>([]);
+
+  // 資金/税務計算用（当月分）
+  const [monthSettlements, setMonthSettlements] = useState<Settlement[]>([]);
+  const [monthExpenses, setMonthExpenses] = useState<ExpenseRow[]>([]);
+  const [monthReplenishments, setMonthReplenishments] = useState<Replenishment[]>([]);
+  // 当月中に safe_collected_date が該当する settlements（投函日は当月外の可能性あり）
+  const [safeCollectedInMonth, setSafeCollectedInMonth] = useState<Settlement[]>([]);
+  // 年間集計用
+  const [yearSettlements, setYearSettlements] = useState<Settlement[]>([]);
+  const [yearExpenses, setYearExpenses] = useState<ExpenseRow[]>([]);
+  const [yearReplenishments, setYearReplenishments] = useState<Replenishment[]>([]);
 
   const [tab, setTab] = useState<Tab>("daily");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
@@ -47,21 +69,42 @@ export default function Analytics() {
     const { data: b } = await supabase.from("buildings").select("*").order("id"); if (b) setBuildings(b);
     const { data: rm } = await supabase.from("rooms").select("*").order("id"); if (rm) setRooms(rm);
 
-    // 当月の予約（終了のみ）
     const startDate = `${selectedMonth}-01`;
     const endDate = `${selectedMonth}-${String(daysInMonth).padStart(2, "0")}`;
+
+    // 当月の予約（終了のみ）
     const { data: r } = await supabase.from("reservations").select("*").eq("status", "completed").gte("date", startDate).lte("date", endDate).order("date");
-    if (r) setReservations(r);
+    if (r) setReservations(r as Reservation[]);
 
     // 当月の部屋割り
     const { data: a } = await supabase.from("room_assignments").select("*").gte("date", startDate).lte("date", endDate);
     if (a) setAssignments(a);
 
+    // 当月の精算・経費・釣銭補充
+    const { data: ms } = await supabase.from("therapist_daily_settlements").select("*").gte("date", startDate).lte("date", endDate).range(0, 9999);
+    if (ms) setMonthSettlements(ms as Settlement[]);
+    const { data: me } = await supabase.from("expenses").select("id,date,amount,type").gte("date", startDate).lte("date", endDate).range(0, 9999);
+    if (me) setMonthExpenses(me as ExpenseRow[]);
+    const { data: mr } = await supabase.from("room_cash_replenishments").select("id,date,room_id,amount").gte("date", startDate).lte("date", endDate).range(0, 9999);
+    if (mr) setMonthReplenishments(mr as Replenishment[]);
+
+    // 当月中に金庫から回収された精算（投函日は過去の可能性あり）
+    const { data: sct } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).gte("safe_collected_date", startDate).lte("safe_collected_date", endDate).range(0, 9999);
+    if (sct) setSafeCollectedInMonth(sct as Settlement[]);
+
     // 年間データ（終了のみ）
     const yearStart = `${selectedYear}-01-01`;
     const yearEnd = `${selectedYear}-12-31`;
-    const { data: ar } = await supabase.from("reservations").select("*").eq("status", "completed").gte("date", yearStart).lte("date", yearEnd).order("date");
-    if (ar) setAllReservations(ar);
+    const { data: ar } = await supabase.from("reservations").select("*").eq("status", "completed").gte("date", yearStart).lte("date", yearEnd).range(0, 49999).order("date");
+    if (ar) setAllReservations(ar as Reservation[]);
+
+    // 年間の精算・経費・釣銭補充
+    const { data: ys } = await supabase.from("therapist_daily_settlements").select("id,therapist_id,date,total_cash,total_back,final_payment,invoice_deduction,withholding_tax,reserve_used_amount,sales_collected,change_collected,safe_deposited,safe_collected_date,room_id").gte("date", yearStart).lte("date", yearEnd).range(0, 49999);
+    if (ys) setYearSettlements(ys as Settlement[]);
+    const { data: ye } = await supabase.from("expenses").select("id,date,amount,type").gte("date", yearStart).lte("date", yearEnd).range(0, 49999);
+    if (ye) setYearExpenses(ye as ExpenseRow[]);
+    const { data: yr } = await supabase.from("room_cash_replenishments").select("id,date,room_id,amount").gte("date", yearStart).lte("date", yearEnd).range(0, 49999);
+    if (yr) setYearReplenishments(yr as Replenishment[]);
   }, [selectedMonth, daysInMonth, selectedYear]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -70,36 +113,120 @@ export default function Analytics() {
   const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "不明";
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
-  const getPrice = (r: Reservation) => getCourse(r.course)?.price || 0;
+  // 売上は実際に計上された total_price を優先（dashboard/営業締めと同じ根拠）。null の古い予約は course.price にフォールバック
+  const getPrice = (r: Reservation) => (r.total_price ?? 0) || (getCourse(r.course)?.price || 0);
   const getBack = (r: Reservation) => getCourse(r.course)?.therapist_back || 0;
 
-  // ===== 日別データ =====
+  // ===== 日別データ（営業締めと同じロジックで日ごとに再現） =====
   const dailyData = useMemo(() => {
-    const data: { date: string; label: string; sales: number; back: number; profit: number; count: number; dow: string }[] = [];
-    const days = ["日", "月", "火", "水", "木", "金", "土"];
+    type Row = {
+      date: string; label: string; dow: string; count: number;
+      sales: number; back: number; card: number; paypay: number; cash: number;
+      invoice: number; withholding: number;
+      expense: number; income: number; replenish: number;
+      uncollectedSales: number; safeUncollected: number; cashOnHand: number;
+      avgNet: number;
+    };
+    const data: Row[] = [];
+    const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
     for (let i = 1; i <= daysInMonth; i++) {
       const date = `${selectedMonth}-${String(i).padStart(2, "0")}`;
       const d = new Date(date + "T00:00:00");
+
       const dayRes = reservations.filter((r) => r.date === date);
+      const daySettles = monthSettlements.filter((s) => s.date === date);
+      const dayExp = monthExpenses.filter((e) => e.date === date);
+      const dayReps = monthReplenishments.filter((r) => r.date === date);
+      const collectedToday = safeCollectedInMonth.filter((s) => s.safe_collected_date === date);
+
+      const count = dayRes.length;
       const sales = dayRes.reduce((s, r) => s + getPrice(r), 0);
-      const back = dayRes.reduce((s, r) => s + getBack(r), 0);
-      data.push({ date, label: `${i}`, sales, back, profit: sales - back, count: dayRes.length, dow: days[d.getDay()] });
+      const card = dayRes.reduce((s, r) => s + (r.card_billing || 0), 0);
+      const paypay = dayRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
+      const cash = dayRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
+
+      const back = daySettles.reduce((s, ds) => s + (ds.total_back || 0), 0);
+      const invoice = daySettles.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
+      const withholding = daySettles.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
+
+      const expense = dayExp.filter((e) => e.type === "expense").reduce((s, e) => s + (e.amount || 0), 0);
+      const income = dayExp.filter((e) => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
+      const replenish = dayReps.reduce((s, r) => s + (r.amount || 0), 0);
+
+      // 各セラピスト精算を走査（営業締めロジックを踏襲）
+      let staffCollectedAmt = 0;
+      let uncollectedSales = 0;
+      let safeUncollected = 0;
+      for (const ds of daySettles) {
+        const netAfterPay = (ds.total_cash || 0) - (ds.final_payment || 0) + (ds.reserve_used_amount || 0);
+        const roomRep = ds.room_id ? dayReps.filter((r) => r.room_id === ds.room_id).reduce((s, r) => s + (r.amount || 0), 0) : 0;
+        if (ds.sales_collected && !ds.safe_deposited) {
+          staffCollectedAmt += netAfterPay + (ds.change_collected ? roomRep : 0);
+        } else if (ds.safe_deposited && !ds.safe_collected_date) {
+          safeUncollected += Math.max((ds.total_cash || 0) - (ds.final_payment || 0), 0) + roomRep;
+        } else if (!ds.sales_collected) {
+          uncollectedSales += netAfterPay + roomRep;
+        }
+      }
+
+      // その日に金庫から回収した額（投函日の釣銭も加算）
+      let safeCollectedTodayTotal = 0;
+      for (const sc of collectedToday) {
+        const net3 = Math.max((sc.total_cash || 0) - (sc.final_payment || 0), 0);
+        const repAmt = sc.room_id ? monthReplenishments.filter((r) => r.date === sc.date && r.room_id === sc.room_id).reduce((s, r) => s + (r.amount || 0), 0) : 0;
+        safeCollectedTodayTotal += net3 + repAmt;
+      }
+
+      // 事務所残金 = -釣銭補充 - 経費 + 収入 + スタッフ回収 + 本日の金庫回収分
+      const cashOnHand = -replenish - expense + income + staffCollectedAmt + safeCollectedTodayTotal;
+
+      // 平均単価 = (売上 - セラピストバック) / 予約数
+      const avgNet = count > 0 ? Math.round((sales - back) / count) : 0;
+
+      data.push({
+        date, label: `${i}`, dow: dayNames[d.getDay()], count,
+        sales, back, card, paypay, cash,
+        invoice, withholding,
+        expense, income, replenish,
+        uncollectedSales, safeUncollected, cashOnHand,
+        avgNet,
+      });
     }
     return data;
-  }, [reservations, selectedMonth, daysInMonth, courses]);
+  }, [reservations, monthSettlements, monthExpenses, monthReplenishments, safeCollectedInMonth, selectedMonth, daysInMonth, courses]);
 
-  // ===== 月別データ =====
+  // ===== 月別データ（日別データと同じ思想で月ごとに集計） =====
   const monthlyData = useMemo(() => {
-    const data: { month: string; label: string; sales: number; back: number; profit: number; count: number }[] = [];
+    type MRow = {
+      month: string; label: string; count: number;
+      sales: number; back: number; card: number; paypay: number; cash: number;
+      invoice: number; withholding: number;
+      expense: number; income: number;
+      profit: number; avgNet: number;
+    };
+    const data: MRow[] = [];
     for (let m = 1; m <= 12; m++) {
       const prefix = `${selectedYear}-${String(m).padStart(2, "0")}`;
       const mRes = allReservations.filter((r) => r.date.startsWith(prefix));
+      const mSettles = yearSettlements.filter((s) => s.date.startsWith(prefix));
+      const mExp = yearExpenses.filter((e) => e.date.startsWith(prefix));
+      const count = mRes.length;
       const sales = mRes.reduce((s, r) => s + getPrice(r), 0);
-      const back = mRes.reduce((s, r) => s + getBack(r), 0);
-      data.push({ month: prefix, label: `${m}月`, sales, back, profit: sales - back, count: mRes.length });
+      const card = mRes.reduce((s, r) => s + (r.card_billing || 0), 0);
+      const paypay = mRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
+      const cash = mRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
+      const back = mSettles.reduce((s, ds) => s + (ds.total_back || 0), 0);
+      const invoice = mSettles.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
+      const withholding = mSettles.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
+      const expense = mExp.filter((e) => e.type === "expense").reduce((s, e) => s + (e.amount || 0), 0);
+      const income = mExp.filter((e) => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
+      // 月次利益（粗い集計）: 売上 - バック - 経費 + 収入
+      const profit = sales - back - expense + income;
+      const avgNet = count > 0 ? Math.round((sales - back) / count) : 0;
+      data.push({ month: prefix, label: `${m}月`, count, sales, back, card, paypay, cash, invoice, withholding, expense, income, profit, avgNet });
     }
     return data;
-  }, [allReservations, selectedYear, courses]);
+  }, [allReservations, yearSettlements, yearExpenses, selectedYear, courses]);
 
   // ===== セラピスト別 =====
   const therapistData = useMemo(() => {
@@ -162,19 +289,19 @@ export default function Analytics() {
     return { totalCustomers, repeaters, repeatRate, nominationCount, nominationRate, totalReservations: src.length, topCustomers };
   }, [reservations, allReservations, tab, courses]);
 
-  // 月間合計
+  // 月間合計（バックは settlements ベース、営業締めと同根拠）
   const monthTotal = useMemo(() => {
     const sales = reservations.reduce((s, r) => s + getPrice(r), 0);
-    const back = reservations.reduce((s, r) => s + getBack(r), 0);
+    const back = monthSettlements.reduce((s, ds) => s + (ds.total_back || 0), 0);
     return { sales, back, profit: sales - back, count: reservations.length };
-  }, [reservations, courses]);
+  }, [reservations, monthSettlements, courses]);
 
-  // 年間合計
+  // 年間合計（バックは settlements ベース）
   const yearTotal = useMemo(() => {
     const sales = allReservations.reduce((s, r) => s + getPrice(r), 0);
-    const back = allReservations.reduce((s, r) => s + getBack(r), 0);
+    const back = yearSettlements.reduce((s, ds) => s + (ds.total_back || 0), 0);
     return { sales, back, profit: sales - back, count: allReservations.length };
-  }, [allReservations, courses]);
+  }, [allReservations, yearSettlements, courses]);
 
   const totalCourseSales = courseData.reduce((s, c) => s + c.sales, 0) || 1;
 
@@ -231,59 +358,106 @@ export default function Analytics() {
             <div className="animate-[fadeIn_0.3s]">
               <div className="flex items-center justify-center gap-4 mb-4">
                 <button onClick={prevMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
-                <span className="text-[14px] font-medium">{smYear}年{smMonth}月</span>
+                <span className="text-[14px] font-medium">{smYear}年{smMonth}月 日別</span>
                 <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                  <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
                     <thead>
                       <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
                         {[
                           { label: "日付", align: "left", w: "100px" },
-                          { label: "曜日", align: "center", w: "48px" },
-                          { label: "予約数", align: "right", w: "72px" },
+                          { label: "曜", align: "center", w: "36px" },
+                          { label: "予約数", align: "right", w: "64px" },
                           { label: "売上", align: "right", w: "" },
+                          { label: "カード", align: "right", w: "" },
+                          { label: "ペイペイ", align: "right", w: "" },
+                          { label: "現金", align: "right", w: "" },
                           { label: "バック", align: "right", w: "" },
-                          { label: "利益", align: "right", w: "" },
+                          { label: "インボイス", align: "right", w: "" },
+                          { label: "源泉", align: "right", w: "" },
+                          { label: "経費", align: "right", w: "" },
+                          { label: "売上未回収", align: "right", w: "" },
+                          { label: "金庫未回収", align: "right", w: "" },
+                          { label: "事務所残金", align: "right", w: "" },
                           { label: "平均単価", align: "right", w: "" },
                         ].map((h) => (
-                          <th key={h.label} className={`py-2.5 px-3 font-medium text-[11px] text-${h.align}`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
+                          <th key={h.label} className={`py-2.5 px-2.5 font-medium text-[10px] text-${h.align} whitespace-nowrap`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {dailyData.map((d) => {
-                        const zero = d.count === 0;
-                        const avg = d.count > 0 ? Math.round(d.sales / d.count) : 0;
+                        const zero = d.count === 0 && d.expense === 0 && d.income === 0 && d.replenish === 0 && d.uncollectedSales === 0 && d.safeUncollected === 0 && d.cashOnHand === 0;
                         const dowColor = d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.textSub;
+                        const dash = (v: number, formatted: string) => (zero && v === 0) ? "—" : formatted;
                         return (
                           <tr key={d.date} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1, backgroundColor: d.dow === "日" ? "rgba(196,85,85,0.03)" : d.dow === "土" ? "rgba(61,107,159,0.03)" : "transparent" }}>
-                            <td className="py-2 px-3" style={{ borderRight: `1px solid ${T.border}` }}>{d.date}</td>
-                            <td className="py-2 px-3 text-center font-medium" style={{ color: dowColor, borderRight: `1px solid ${T.border}` }}>{d.dow}</td>
-                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : `${d.count}件`}</td>
-                            <td className="py-2 px-3 text-right font-medium" style={{ color: zero ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.sales)}</td>
-                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.back)}</td>
-                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.text, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.profit)}</td>
-                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub }}>{zero ? "—" : fmt(avg)}</td>
+                            <td className="py-2 px-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${T.border}` }}>{d.date}</td>
+                            <td className="py-2 px-2.5 text-center font-medium" style={{ color: dowColor, borderRight: `1px solid ${T.border}` }}>{d.dow}</td>
+                            <td className="py-2 px-2.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : `${d.count}件`}</td>
+                            <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{dash(d.sales, fmt(d.sales))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.card, fmt(d.card))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.paypay, fmt(d.paypay))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.cash === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.cash, fmt(d.cash))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.back === 0 ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{dash(d.back, fmt(d.back))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.invoice === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{dash(d.invoice, fmt(d.invoice))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.withholding === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{dash(d.withholding, fmt(d.withholding))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.expense === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.expense, fmt(d.expense))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.uncollectedSales === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{dash(d.uncollectedSales, fmt(d.uncollectedSales))}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.safeUncollected === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{dash(d.safeUncollected, fmt(d.safeUncollected))}</td>
+                            <td className="py-2 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: zero ? T.textFaint : d.cashOnHand >= 0 ? "#22c55e" : "#c45555", borderRight: `1px solid ${T.border}`, backgroundColor: zero ? "transparent" : "rgba(245,158,11,0.04)" }}>{zero && d.cashOnHand === 0 ? "—" : fmt(d.cashOnHand)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
-                      <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
-                        <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>合計</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{monthTotal.count}件</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(monthTotal.sales)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(monthTotal.back)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(monthTotal.profit)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub }}>{monthTotal.count > 0 ? fmt(Math.round(monthTotal.sales / monthTotal.count)) : "—"}</td>
-                      </tr>
+                      {(() => {
+                        const tot = dailyData.reduce((acc, d) => ({
+                          count: acc.count + d.count,
+                          sales: acc.sales + d.sales,
+                          card: acc.card + d.card,
+                          paypay: acc.paypay + d.paypay,
+                          cash: acc.cash + d.cash,
+                          back: acc.back + d.back,
+                          invoice: acc.invoice + d.invoice,
+                          withholding: acc.withholding + d.withholding,
+                          expense: acc.expense + d.expense,
+                          uncollectedSales: acc.uncollectedSales + d.uncollectedSales,
+                          safeUncollected: acc.safeUncollected + d.safeUncollected,
+                          cashOnHand: acc.cashOnHand + d.cashOnHand,
+                        }), { count: 0, sales: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+                        const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
+                        return (
+                          <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                            <td className="py-2.5 px-2.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>合計</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}件</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.cash)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(tot.back)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.invoice)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(tot.withholding)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.expense)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#f59e0b", borderRight: `1px solid ${T.border}` }}>{fmt(tot.uncollectedSales)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.safeUncollected)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: tot.cashOnHand >= 0 ? "#22c55e" : "#c45555", borderRight: `1px solid ${T.border}`, backgroundColor: "rgba(245,158,11,0.06)" }}>{fmt(tot.cashOnHand)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub }}>{avg > 0 ? fmt(avg) : "—"}</td>
+                          </tr>
+                        );
+                      })()}
                     </tfoot>
                   </table>
                 </div>
               </div>
-              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。事務所残金は営業締めと同じ計算式</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 平均単価 =（売上 − セラピストバック）÷ 予約数 （インボイス・源泉は引かない／指名・オプション・延長は含む）</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収 = ルーム内の未回収現金、金庫未回収 = その日に金庫投函された未回収金</p>
+              </div>
             </div>
           )}
 
@@ -292,36 +466,41 @@ export default function Analytics() {
             <div className="animate-[fadeIn_0.3s]">
               <div className="flex items-center justify-center gap-4 mb-4">
                 <button onClick={() => setSelectedYear(selectedYear - 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
-                <span className="text-[14px] font-medium">{selectedYear}年</span>
+                <span className="text-[14px] font-medium">{selectedYear}年 月別</span>
                 <button onClick={() => setSelectedYear(selectedYear + 1)} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                  <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
                     <thead>
                       <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
-                        {["月", "予約数", "売上", "バック", "利益", "平均単価", "前月比"].map((h, i) => (
-                          <th key={h} className={`py-2.5 px-3 font-medium text-[11px] ${i === 0 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
+                        {["月", "予約数", "売上", "カード", "ペイペイ", "現金", "バック", "インボイス", "源泉", "経費", "利益", "平均単価", "前月比"].map((h, i) => (
+                          <th key={h} className={`py-2.5 px-2.5 font-medium text-[10px] whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {monthlyData.map((d, idx) => {
-                        const zero = d.count === 0;
-                        const avg = d.count > 0 ? Math.round(d.sales / d.count) : 0;
+                        const zero = d.count === 0 && d.expense === 0;
                         const prev = idx > 0 ? monthlyData[idx - 1].sales : 0;
                         const diff = d.sales - prev;
                         const diffPct = prev > 0 ? Math.round((diff / prev) * 100) : 0;
                         const diffColor = diff > 0 ? "#7ab88f" : diff < 0 ? "#c45555" : T.textFaint;
                         return (
                           <tr key={d.month} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1 }}>
-                            <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
-                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : `${d.count}件`}</td>
-                            <td className="py-2 px-3 text-right font-medium" style={{ color: zero ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.sales)}</td>
-                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.back)}</td>
-                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.text, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.profit)}</td>
-                            <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(avg)}</td>
-                            <td className="py-2 px-3 text-right text-[11px]" style={{ color: idx === 0 || prev === 0 ? T.textFaint : diffColor }}>
+                            <td className="py-2 px-2.5 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
+                            <td className="py-2 px-2.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : `${d.count}件`}</td>
+                            <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{d.sales === 0 ? "—" : fmt(d.sales)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.card === 0 ? "—" : fmt(d.card)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.paypay === 0 ? "—" : fmt(d.paypay)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.cash === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.cash === 0 ? "—" : fmt(d.cash)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.back === 0 ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{d.back === 0 ? "—" : fmt(d.back)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.invoice === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{d.invoice === 0 ? "—" : fmt(d.invoice)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.withholding === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{d.withholding === 0 ? "—" : fmt(d.withholding)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.expense === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{d.expense === 0 ? "—" : fmt(d.expense)}</td>
+                            <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: zero ? T.textFaint : d.profit >= 0 ? T.text : "#c45555", borderRight: `1px solid ${T.border}` }}>{zero && d.profit === 0 ? "—" : fmt(d.profit)}</td>
+                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
+                            <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: idx === 0 || prev === 0 ? T.textFaint : diffColor }}>
                               {idx === 0 || prev === 0 ? "—" : `${diff >= 0 ? "+" : ""}${diffPct}%`}
                             </td>
                           </tr>
@@ -329,20 +508,40 @@ export default function Analytics() {
                       })}
                     </tbody>
                     <tfoot>
-                      <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
-                        <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }}>年間合計</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{yearTotal.count}件</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.sales)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.back)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.profit)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{yearTotal.count > 0 ? fmt(Math.round(yearTotal.sales / yearTotal.count)) : "—"}</td>
-                        <td className="py-2.5 px-3 text-right" style={{ color: T.textFaint }}>—</td>
-                      </tr>
+                      {(() => {
+                        const tot = monthlyData.reduce((a, d) => ({
+                          count: a.count + d.count, sales: a.sales + d.sales, card: a.card + d.card, paypay: a.paypay + d.paypay, cash: a.cash + d.cash,
+                          back: a.back + d.back, invoice: a.invoice + d.invoice, withholding: a.withholding + d.withholding,
+                          expense: a.expense + d.expense, income: a.income + d.income,
+                        }), { count: 0, sales: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0 });
+                        const profit = tot.sales - tot.back - tot.expense + tot.income;
+                        const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
+                        return (
+                          <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                            <td className="py-2.5 px-2.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }}>年間合計</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}件</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.cash)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(tot.back)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.invoice)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(tot.withholding)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.expense)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: profit >= 0 ? T.text : "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(profit)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{avg > 0 ? fmt(avg) : "—"}</td>
+                            <td className="py-2.5 px-2.5 text-right" style={{ color: T.textFaint }}>—</td>
+                          </tr>
+                        );
+                      })()}
                     </tfoot>
                   </table>
                 </div>
               </div>
-              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。利益 = 売上 − バック − 経費 + 収入</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 平均単価 =（売上 − セラピストバック）÷ 予約数</p>
+              </div>
             </div>
           )}
 
@@ -356,11 +555,11 @@ export default function Analytics() {
               </div>
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                  <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
                     <thead>
                       <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
-                        {["四半期", "月", "予約数", "売上", "バック", "利益", "平均単価", "構成比"].map((h, i) => (
-                          <th key={h} className={`py-2.5 px-3 font-medium text-[11px] ${i <= 1 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
+                        {["四半期", "月", "予約数", "売上", "カード", "ペイペイ", "現金", "バック", "インボイス", "源泉", "経費", "利益", "平均単価", "構成比"].map((h, i) => (
+                          <th key={h} className={`py-2.5 px-2.5 font-medium text-[10px] whitespace-nowrap ${i <= 1 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -368,59 +567,98 @@ export default function Analytics() {
                       {[0, 1, 2, 3].map((q) => {
                         const qMonths = monthlyData.slice(q * 3, q * 3 + 3);
                         const qSales = qMonths.reduce((s, m) => s + m.sales, 0);
+                        const qCard = qMonths.reduce((s, m) => s + m.card, 0);
+                        const qPaypay = qMonths.reduce((s, m) => s + m.paypay, 0);
+                        const qCash = qMonths.reduce((s, m) => s + m.cash, 0);
                         const qBack = qMonths.reduce((s, m) => s + m.back, 0);
+                        const qInvoice = qMonths.reduce((s, m) => s + m.invoice, 0);
+                        const qWithholding = qMonths.reduce((s, m) => s + m.withholding, 0);
+                        const qExpense = qMonths.reduce((s, m) => s + m.expense, 0);
+                        const qIncome = qMonths.reduce((s, m) => s + m.income, 0);
+                        const qProfit = qSales - qBack - qExpense + qIncome;
                         const qCount = qMonths.reduce((s, m) => s + m.count, 0);
                         const qColors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885"];
                         const qColor = qColors[q];
                         return (
                           <React.Fragment key={q}>
                             {qMonths.map((d, mi) => {
-                              const zero = d.count === 0;
-                              const avg = d.count > 0 ? Math.round(d.sales / d.count) : 0;
+                              const zero = d.count === 0 && d.expense === 0;
                               const pct = yearTotal.sales > 0 ? ((d.sales / yearTotal.sales) * 100).toFixed(1) : "0.0";
                               return (
                                 <tr key={d.month} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1 }}>
                                   {mi === 0 && (
-                                    <td rowSpan={3} className="py-2 px-3 font-medium text-center" style={{ borderRight: `1px solid ${T.border}`, color: qColor, backgroundColor: qColor + "10", verticalAlign: "middle" }}>Q{q + 1}</td>
+                                    <td rowSpan={3} className="py-2 px-2.5 font-medium text-center" style={{ borderRight: `1px solid ${T.border}`, color: qColor, backgroundColor: qColor + "10", verticalAlign: "middle" }}>Q{q + 1}</td>
                                   )}
-                                  <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
-                                  <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : `${d.count}件`}</td>
-                                  <td className="py-2 px-3 text-right font-medium" style={{ color: zero ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.sales)}</td>
-                                  <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.back)}</td>
-                                  <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(d.profit)}</td>
-                                  <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{zero ? "—" : fmt(avg)}</td>
-                                  <td className="py-2 px-3 text-right" style={{ color: zero ? T.textFaint : T.textSub }}>{zero ? "—" : `${pct}%`}</td>
+                                  <td className="py-2 px-2.5 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
+                                  <td className="py-2 px-2.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : `${d.count}件`}</td>
+                                  <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{d.sales === 0 ? "—" : fmt(d.sales)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.card === 0 ? "—" : fmt(d.card)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.paypay === 0 ? "—" : fmt(d.paypay)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.cash === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.cash === 0 ? "—" : fmt(d.cash)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.back === 0 ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{d.back === 0 ? "—" : fmt(d.back)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.invoice === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{d.invoice === 0 ? "—" : fmt(d.invoice)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.withholding === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{d.withholding === 0 ? "—" : fmt(d.withholding)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.expense === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{d.expense === 0 ? "—" : fmt(d.expense)}</td>
+                                  <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: zero && d.profit === 0 ? T.textFaint : d.profit >= 0 ? T.text : "#c45555", borderRight: `1px solid ${T.border}` }}>{zero && d.profit === 0 ? "—" : fmt(d.profit)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
+                                  <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.textSub }}>{d.sales === 0 ? "—" : `${pct}%`}</td>
                                 </tr>
                               );
                             })}
                             <tr style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: qColor + "08" }}>
-                              <td className="py-2 px-3 text-[11px] font-medium" style={{ color: qColor, borderRight: `1px solid ${T.border}` }} colSpan={2}>Q{q + 1}小計</td>
-                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{qCount}件</td>
-                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ color: qColor, borderRight: `1px solid ${T.border}` }}>{fmt(qSales)}</td>
-                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(qBack)}</td>
-                              <td className="py-2 px-3 text-right text-[11px] font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(qSales - qBack)}</td>
-                              <td className="py-2 px-3 text-right text-[11px]" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{qCount > 0 ? fmt(Math.round(qSales / qCount)) : "—"}</td>
-                              <td className="py-2 px-3 text-right text-[11px]" style={{ color: T.textSub }}>{yearTotal.sales > 0 ? `${((qSales / yearTotal.sales) * 100).toFixed(1)}%` : "—"}</td>
+                              <td className="py-2 px-2.5 text-[10px] font-medium" style={{ color: qColor, borderRight: `1px solid ${T.border}` }} colSpan={2}>Q{q + 1}小計</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{qCount}件</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] font-medium whitespace-nowrap" style={{ color: qColor, borderRight: `1px solid ${T.border}` }}>{fmt(qSales)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(qCard)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(qPaypay)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(qCash)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] font-medium whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(qBack)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(qInvoice)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(qWithholding)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(qExpense)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] font-medium whitespace-nowrap" style={{ color: qProfit >= 0 ? T.text : "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(qProfit)}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{qCount > 0 ? fmt(Math.round((qSales - qBack) / qCount)) : "—"}</td>
+                              <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: T.textSub }}>{yearTotal.sales > 0 ? `${((qSales / yearTotal.sales) * 100).toFixed(1)}%` : "—"}</td>
                             </tr>
                           </React.Fragment>
                         );
                       })}
                     </tbody>
                     <tfoot>
-                      <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
-                        <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>年間合計</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{yearTotal.count}件</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.sales)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.back)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(yearTotal.profit)}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{yearTotal.count > 0 ? fmt(Math.round(yearTotal.sales / yearTotal.count)) : "—"}</td>
-                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub }}>100.0%</td>
-                      </tr>
+                      {(() => {
+                        const tot = monthlyData.reduce((a, d) => ({
+                          count: a.count + d.count, sales: a.sales + d.sales, card: a.card + d.card, paypay: a.paypay + d.paypay, cash: a.cash + d.cash,
+                          back: a.back + d.back, invoice: a.invoice + d.invoice, withholding: a.withholding + d.withholding,
+                          expense: a.expense + d.expense, income: a.income + d.income,
+                        }), { count: 0, sales: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0 });
+                        const profit = tot.sales - tot.back - tot.expense + tot.income;
+                        const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
+                        return (
+                          <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                            <td className="py-2.5 px-2.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>年間合計</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}件</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.cash)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(tot.back)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.invoice)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(tot.withholding)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.expense)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: profit >= 0 ? T.text : "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(profit)}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{avg > 0 ? fmt(avg) : "—"}</td>
+                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub }}>100.0%</td>
+                          </tr>
+                        );
+                      })()}
                     </tfoot>
                   </table>
                 </div>
               </div>
-              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。利益 = 売上 − バック − 経費 + 収入</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 平均単価 =（売上 − セラピストバック）÷ 予約数</p>
+              </div>
             </div>
           )}
 
