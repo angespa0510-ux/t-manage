@@ -71,7 +71,7 @@ const TAX_TASKS: TaxTask[] = [
   { id: "jan-kyuyo-hokoku", timing: "1月", month: 1, title: "給与支払報告書提出", description: "社員の前年給与を市区町村に報告（住民税用）", assignee: "税理士", deadline: "1/31", category: "住民税", importance: "high" },
   { id: "jan-shoukyaku", timing: "1月", month: 1, title: "償却資産税申告", description: "該当資産がある場合、市区町村に申告", assignee: "税理士", deadline: "1/31", category: "固定資産", importance: "medium" },
   // 3月
-  { id: "mar-tanaoroshi", timing: "3月末", month: 3, title: "棚卸実施", description: "3/31時点の在庫棚卸し", assignee: "会社", deadline: "3/31", category: "決算", importance: "high" },
+  { id: "mar-tanaoroshi", timing: "3月末", month: 3, title: "棚卸実施", description: "3/31時点の在庫を店舗別に棚卸し。T-MANAGE「📦 棚卸管理」ページで実施:\n□ アンジュスパ三河安城の棚卸（全品目の数量をカウント）\n□ アンジュスパ豊橋の棚卸（全品目の数量をカウント）\n□ 棚卸表PDFを出力\n□ 書類庫の「決算書」カテゴリに保管（ファイル名例: 第3期末_棚卸表_アンジュスパ三河安城.pdf）\n\n※ 税理士への提出も忘れずに。期末の在庫資産金額として決算書に反映されます。", assignee: "会社", deadline: "3/31", category: "決算", importance: "high" },
   { id: "mar-kessan", timing: "3月末", month: 3, title: "決算日（期末）", description: "期末日 - 決算整理スタート", assignee: "共同", deadline: "3/31", category: "決算", importance: "high" },
   { id: "mar-kotei", timing: "3〜4月", month: 3, title: "固定資産台帳更新", description: "減価償却計算と台帳更新", assignee: "税理士", deadline: "4月上旬", category: "固定資産", importance: "high" },
   // 5月
