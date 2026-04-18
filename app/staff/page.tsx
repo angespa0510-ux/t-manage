@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
@@ -353,6 +353,107 @@ const openPaymentStatement = (sch: Schedule) => {
   // ★ アクセスゲート: このページ専用の認証（毎回manager/owner PINが必要）
   const [pageAuthed, setPageAuthed] = useState(false);
   const [pageAuthName, setPageAuthName] = useState("");
+
+  // ===== ブラウザ戻る（マウスサイドボタン/スワイプバック）対応 =====
+  // モーダル → タブ → 前のページの順で一段ずつ戻る
+  const [tabHistory, setTabHistory] = useState<(typeof tab)[]>([]);
+  const tabRef = useRef(tab);
+  const prevTabRef = useRef(tab);
+  const tabHistoryRef = useRef(tabHistory);
+  const showAddRef = useRef(showAdd);
+  const editStaffRef = useRef(editStaff);
+  const showAddScheduleRef = useRef(showAddSchedule);
+  const editScheduleRef = useRef(editSchedule);
+  const pageAuthedRef = useRef(pageAuthed);
+  const isPopstateRef = useRef(false);
+  const prevShowAddRef = useRef(showAdd);
+  const prevEditStaffRef = useRef(editStaff);
+  const prevShowAddScheduleRef = useRef(showAddSchedule);
+  const prevEditScheduleRef = useRef(editSchedule);
+
+  // 最新状態をrefに同期（popstateハンドラ等から参照される）
+  useEffect(() => {
+    tabRef.current = tab;
+    tabHistoryRef.current = tabHistory;
+    showAddRef.current = showAdd;
+    editStaffRef.current = editStaff;
+    showAddScheduleRef.current = showAddSchedule;
+    editScheduleRef.current = editSchedule;
+    pageAuthedRef.current = pageAuthed;
+  });
+
+  // タブ切替時に履歴スタックにpush
+  useEffect(() => {
+    if (!pageAuthedRef.current) { prevTabRef.current = tab; return; }
+    const prev = prevTabRef.current;
+    if (prev !== tab) {
+      if (isPopstateRef.current) {
+        // popstateによる変更なので履歴には積まない
+        isPopstateRef.current = false;
+      } else {
+        setTabHistory(h => [...h, prev]);
+        window.history.pushState({ staffTab: tab }, "");
+      }
+      prevTabRef.current = tab;
+    }
+  }, [tab]);
+
+  // モーダルopen時に履歴にpush（ユーザー操作のみ検知）
+  useEffect(() => {
+    if (!pageAuthedRef.current) { prevShowAddRef.current = showAdd; return; }
+    if (!prevShowAddRef.current && showAdd) {
+      window.history.pushState({ staffModal: "add" }, "");
+    }
+    prevShowAddRef.current = showAdd;
+  }, [showAdd]);
+
+  useEffect(() => {
+    if (!pageAuthedRef.current) { prevEditStaffRef.current = editStaff; return; }
+    if (!prevEditStaffRef.current && editStaff) {
+      window.history.pushState({ staffModal: "edit" }, "");
+    }
+    prevEditStaffRef.current = editStaff;
+  }, [editStaff]);
+
+  useEffect(() => {
+    if (!pageAuthedRef.current) { prevShowAddScheduleRef.current = showAddSchedule; return; }
+    if (!prevShowAddScheduleRef.current && showAddSchedule) {
+      window.history.pushState({ staffModal: "addSchedule" }, "");
+    }
+    prevShowAddScheduleRef.current = showAddSchedule;
+  }, [showAddSchedule]);
+
+  useEffect(() => {
+    if (!pageAuthedRef.current) { prevEditScheduleRef.current = editSchedule; return; }
+    if (!prevEditScheduleRef.current && editSchedule) {
+      window.history.pushState({ staffModal: "editSchedule" }, "");
+    }
+    prevEditScheduleRef.current = editSchedule;
+  }, [editSchedule]);
+
+  // popstate: モーダル → タブ → 前のページ の順で一段ずつ戻す
+  useEffect(() => {
+    const handlePopState = () => {
+      if (!pageAuthedRef.current) return;
+      // Priority 1: モーダルが開いていれば閉じる
+      if (showAddRef.current) { setShowAdd(false); return; }
+      if (editStaffRef.current) { setEditStaff(null); return; }
+      if (showAddScheduleRef.current) { setShowAddSchedule(false); return; }
+      if (editScheduleRef.current) { setEditSchedule(null); return; }
+      // Priority 2: タブ履歴があれば1つ戻す
+      const history = tabHistoryRef.current;
+      if (history.length > 0) {
+        const prev = history[history.length - 1];
+        setTabHistory(h => h.slice(0, -1));
+        isPopstateRef.current = true;
+        setTab(prev);
+        return;
+      }
+      // それ以外はブラウザに任せる（前のページへ遷移）
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   if (!pageAuthed) {
     return (
