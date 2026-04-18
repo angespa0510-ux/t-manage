@@ -12,7 +12,7 @@ import { useStaffSession } from "./staff-session";
 // requiresTaxPortal: true の項目は 社長・経営責任者・税理士 のみ表示
 // requiresCashDashboard: true の項目は 社長・経営責任者 のみ表示 (税理士除外)
 
-type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean; requiresCashDashboard?: boolean };
+type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean; requiresCashDashboard?: boolean; requiresManager?: boolean };
 
 const NAV_ITEMS: NavItem[] = [
   // ── 日常業務（毎日使うもの）──
@@ -43,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "👤", label: "セラピストマイページ",  path: "/mypage",                       category: "セラピスト" },
   { icon: "🎬", label: "AI動画生成",           path: "/video-generator",              category: "セラピスト" },
   { icon: "📖", label: "マニュアル管理",       path: "/manual",                       category: "セラピスト" },
+  { icon: "📨", label: "通知ダッシュボード",    path: "/notification-dashboard",       category: "セラピスト", requiresManager: true },
 
   // ── スタッフ ──
   { icon: "📊", label: "スタッフ勤怠",  path: "/staff-attendance",  category: "スタッフ" },
@@ -68,7 +69,7 @@ const NAV_ITEMS: NavItem[] = [
 
 function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
-  const { canAccessTaxPortal, canAccessCashDashboard } = useStaffSession();
+  const { canAccessTaxPortal, canAccessCashDashboard, isManager } = useStaffSession();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   if (!mounted || !open) return null;
@@ -77,6 +78,7 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
   const visibleItems = NAV_ITEMS.filter(item => {
     if (item.requiresTaxPortal && !canAccessTaxPortal) return false;
     if (item.requiresCashDashboard && !canAccessCashDashboard) return false;
+    if (item.requiresManager && !isManager) return false;
     return true;
   });
 
