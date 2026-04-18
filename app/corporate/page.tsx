@@ -161,12 +161,8 @@ export default function CorporatePage() {
   const NAV = [
     { id: "service", label: "事業内容" },
     { id: "products", label: "プロダクト" },
-    { id: "message", label: "代表挨拶" },
     { id: "stats", label: "実績" },
-    { id: "tech", label: "技術" },
-    { id: "news", label: "お知らせ" },
     { id: "company", label: "会社概要" },
-    { id: "faq", label: "FAQ" },
     { id: "contact", label: "お問い合わせ" },
   ];
 
@@ -437,51 +433,6 @@ export default function CorporatePage() {
         </div>
       </section>
 
-      {/* ── Divider ── */}
-      <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.3),transparent)" }}/>
-
-      {/* ══════════ MESSAGE (代表挨拶) ══════════ */}
-      <section id="message" data-a style={{ padding:"100px 24px",background:"radial-gradient(ellipse at 30% 50%,#0f2847,#020617 70%)",position:"relative",overflow:"hidden" }}>
-        <div style={{ position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(37,99,235,0.1),transparent 70%)",top:"10%",right:"10%",animation:"orbFloat 14s ease-in-out infinite" }}/>
-        <div className={`fu ${show("message")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto",position:"relative",zIndex:2 }}>
-          <div style={{ textAlign:"center",marginBottom:56 }}>
-            <span className={`sh ${show("message")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:3 }}>MESSAGE</span>
-            <h2 className={`sh2 ${show("message")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>代表挨拶</h2>
-            <div className={`sline ${show("message")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
-          </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:48,alignItems:"center" }}>
-            {/* 代表者写真 */}
-            <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:16 }}>
-              <div style={{ position:"relative",width:260,height:260,borderRadius:"50%",padding:4,background:"linear-gradient(135deg,#2563eb,#06b6d4,#7c3aed)",boxShadow:"0 0 40px rgba(37,99,235,0.3)" }}>
-                {CO.representative_photo_url ? (
-                  <img src={CO.representative_photo_url} alt={CO.representative_name} style={{ width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover",border:"4px solid #020617" }}/>
-                ) : (
-                  <div style={{ width:"100%",height:"100%",borderRadius:"50%",background:"linear-gradient(135deg,#0f2847,#020617)",border:"4px solid #020617",display:"flex",alignItems:"center",justifyContent:"center",fontSize:64,color:"#334155" }}>👤</div>
-                )}
-              </div>
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontSize:11,fontWeight:600,color:"#60a5fa",letterSpacing:2,marginBottom:4 }}>{CO.representative_title || "代表社員"}</div>
-                <div style={{ fontSize:20,fontWeight:800,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'",letterSpacing:.5 }}>{CO.representative_name || "氏名未設定"}</div>
-                {CO.representative_name_kana && <div style={{ fontSize:11,color:"#64748b",marginTop:2,letterSpacing:1 }}>{CO.representative_name_kana}</div>}
-              </div>
-            </div>
-            {/* 挨拶文 */}
-            <div style={{ padding:"32px 0" }}>
-              <div style={{ fontSize:48,color:"#60a5fa",lineHeight:1,marginBottom:12,opacity:.4,fontFamily:"serif" }}>&ldquo;</div>
-              <p style={{ fontSize:15,lineHeight:2.1,color:"#cbd5e1",whiteSpace:"pre-wrap" }}>
-                {CO.representative_message || "代表メッセージを設定してください。スタッフページの「会社情報」タブから編集できます。"}
-              </p>
-              <div style={{ marginTop:28,display:"flex",alignItems:"center",gap:12 }}>
-                <div style={{ flex:1,height:1,background:"linear-gradient(90deg,rgba(96,165,250,0.3),transparent)" }}/>
-                <span style={{ fontSize:11,fontWeight:600,color:"#94a3b8",letterSpacing:1 }}>{CO.company_name}　{CO.representative_title} {CO.representative_name}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Divider ── */}
-      <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.3),transparent)" }}/>
       <section id="stats" data-a style={{ position:"relative",padding:"80px 24px",background:"linear-gradient(180deg,#020617,#0a1628,#020617)",overflow:"hidden" }}>
         <video autoPlay muted loop playsInline style={{ position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:0.2,zIndex:0 }}><source src="/corporate/stats-bg.mp4" type="video/mp4"/></video>
         <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(2,6,23,0.6) 0%,rgba(2,6,23,0.3) 50%,rgba(2,6,23,0.6) 100%)",zIndex:1 }}/>
@@ -621,6 +572,24 @@ export default function CorporatePage() {
         </div>
       </section>
 
+      {/* ── CTA Banner ── */}
+      <div style={{ padding:"56px 24px",background:"linear-gradient(135deg,rgba(37,99,235,0.08),rgba(6,182,212,0.06),rgba(124,58,237,0.05))",borderTop:"1px solid rgba(37,99,235,0.1)",borderBottom:"1px solid rgba(37,99,235,0.1)" }}>
+        <div style={{ maxWidth:700,margin:"0 auto",textAlign:"center" }}>
+          <p style={{ fontSize:"clamp(18px,3vw,24px)",fontWeight:800,color:"#f8fafc",lineHeight:1.5,fontFamily:"Inter,'Noto Sans JP'" }}>まずはお気軽にご相談ください</p>
+          <p style={{ fontSize:13,color:"#94a3b8",marginTop:12,lineHeight:1.8 }}>課題のヒアリングからお見積もりまで無料です。お気軽にお問い合わせください。</p>
+          <div style={{ marginTop:28,display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap" }}>
+            <button onClick={() => go("contact")} style={{ padding:"14px 36px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:13,fontWeight:700,letterSpacing:.5,boxShadow:"0 0 30px rgba(37,99,235,0.3)",transition:"all .3s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 0 50px rgba(37,99,235,0.4)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 0 30px rgba(37,99,235,0.3)"; }}
+            >お問い合わせ →</button>
+            <button onClick={() => go("faq")} style={{ padding:"14px 36px",borderRadius:10,cursor:"pointer",background:"transparent",border:"1px solid rgba(148,163,184,0.2)",color:"#94a3b8",fontSize:13,fontWeight:600,transition:"all .3s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor="rgba(96,165,250,0.4)"; e.currentTarget.style.color="#60a5fa"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor="rgba(148,163,184,0.2)"; e.currentTarget.style.color="#94a3b8"; }}
+            >よくある質問を見る</button>
+          </div>
+        </div>
+      </div>
+
       {/* ── Divider ── */}
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(124,58,237,0.3),rgba(37,99,235,0.3),transparent)" }}/>
 
@@ -666,6 +635,51 @@ export default function CorporatePage() {
 
       {/* ── Divider ── */}
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(124,58,237,0.3),rgba(37,99,235,0.3),transparent)" }}/>
+
+      {/* ── Divider ── */}
+      <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.3),transparent)" }}/>
+
+      {/* ══════════ MESSAGE (代表挨拶) ══════════ */}
+      <section id="message" data-a style={{ padding:"100px 24px",background:"radial-gradient(ellipse at 30% 50%,#0f2847,#020617 70%)",position:"relative",overflow:"hidden" }}>
+        <div style={{ position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(37,99,235,0.1),transparent 70%)",top:"10%",right:"10%",animation:"orbFloat 14s ease-in-out infinite" }}/>
+        <div className={`fu ${show("message")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto",position:"relative",zIndex:2 }}>
+          <div style={{ textAlign:"center",marginBottom:56 }}>
+            <span className={`sh ${show("message")?"on":""}`} style={{ display:"inline-block",fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:3 }}>MESSAGE</span>
+            <h2 className={`sh2 ${show("message")?"on":""}`} style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(24px,3.5vw,36px)",fontWeight:800,marginTop:12,color:"#f8fafc" }}>代表挨拶</h2>
+            <div className={`sline ${show("message")?"on":""}`} style={{ height:3,borderRadius:2,background:"linear-gradient(90deg,#2563eb,#06b6d4)",margin:"16px auto 0" }}/>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:48,alignItems:"center" }}>
+            {/* 代表者写真 */}
+            <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:16 }}>
+              <div style={{ position:"relative",width:260,height:260,borderRadius:"50%",padding:4,background:"linear-gradient(135deg,#2563eb,#06b6d4,#7c3aed)",boxShadow:"0 0 40px rgba(37,99,235,0.3)" }}>
+                {CO.representative_photo_url ? (
+                  <img src={CO.representative_photo_url} alt={CO.representative_name} style={{ width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover",border:"4px solid #020617" }}/>
+                ) : (
+                  <div style={{ width:"100%",height:"100%",borderRadius:"50%",background:"linear-gradient(135deg,#0f2847,#020617)",border:"4px solid #020617",display:"flex",alignItems:"center",justifyContent:"center",fontSize:64,color:"#334155" }}>👤</div>
+                )}
+              </div>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontSize:11,fontWeight:600,color:"#60a5fa",letterSpacing:2,marginBottom:4 }}>{CO.representative_title || "代表社員"}</div>
+                <div style={{ fontSize:20,fontWeight:800,color:"#f8fafc",fontFamily:"Inter,'Noto Sans JP'",letterSpacing:.5 }}>{CO.representative_name || "氏名未設定"}</div>
+                {CO.representative_name_kana && <div style={{ fontSize:11,color:"#64748b",marginTop:2,letterSpacing:1 }}>{CO.representative_name_kana}</div>}
+              </div>
+            </div>
+            {/* 挨拶文 */}
+            <div style={{ padding:"32px 0" }}>
+              <div style={{ fontSize:48,color:"#60a5fa",lineHeight:1,marginBottom:12,opacity:.4,fontFamily:"serif" }}>&ldquo;</div>
+              <p style={{ fontSize:15,lineHeight:2.1,color:"#cbd5e1",whiteSpace:"pre-wrap" }}>
+                {CO.representative_message || "代表メッセージを設定してください。スタッフページの「会社情報」タブから編集できます。"}
+              </p>
+              <div style={{ marginTop:28,display:"flex",alignItems:"center",gap:12 }}>
+                <div style={{ flex:1,height:1,background:"linear-gradient(90deg,rgba(96,165,250,0.3),transparent)" }}/>
+                <span style={{ fontSize:11,fontWeight:600,color:"#94a3b8",letterSpacing:1 }}>{CO.company_name}　{CO.representative_title} {CO.representative_name}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
 
       {/* ══════════ COMPANY ══════════ */}
       <section id="company" data-a style={{ position:"relative",padding:"80px 24px",background:"#020617",overflow:"hidden" }}>
@@ -811,6 +825,7 @@ export default function CorporatePage() {
                 />
               </div>
               <button onClick={submit} style={{ width:"100%",padding:"16px 0",borderRadius:10,border:"none",cursor:"pointer",background:form.name&&form.email&&form.body?"linear-gradient(135deg,#2563eb,#1d4ed8)":"#1e293b",color:"#fff",fontSize:14,fontWeight:700,letterSpacing:1,boxShadow:form.name&&form.email&&form.body?"0 0 40px rgba(37,99,235,0.3)":"none",transition:"all .3s" }}>送信する</button>
+              <p style={{ fontSize:10,color:"#475569",textAlign:"center",marginTop:12,lineHeight:1.8 }}>送信することで<a href="/corporate/privacy" style={{ color:"#60a5fa",textDecoration:"underline" }}>プライバシーポリシー</a>に同意したものとみなします。</p>
             </div>
           ) : (
             <div style={{ background:"rgba(255,255,255,0.02)",borderRadius:18,border:"1px solid rgba(34,197,94,0.2)",padding:"56px 36px",textAlign:"center",backdropFilter:"blur(8px)" }}>
@@ -954,7 +969,10 @@ function RPGCharacters() {
           { id: "products", emoji: "📦", text: "すごい製品だ！" },
           { id: "stats", emoji: "📊", text: "実績すごいな" },
           { id: "tech", emoji: "⚡", text: "最新技術！" },
+          { id: "news", emoji: "📰", text: "最新ニュース！" },
+          { id: "message", emoji: "👤", text: "代表の想い..." },
           { id: "company", emoji: "🏢", text: "しっかりした会社" },
+          { id: "faq", emoji: "❓", text: "よくある質問か" },
           { id: "contact", emoji: "✉️", text: "お問い合わせ..." },
         ];
         for (const sec of secs) {
