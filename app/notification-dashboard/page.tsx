@@ -113,9 +113,43 @@ export default function NotificationDashboardPage() {
     const todayCount = logs.filter(l => l.created_at.startsWith(today)).length;
     const totalCount = logs.length;
     const byChannel: Record<string, number> = {};
-    logs.forEach(l => { byChannel[l.channel] = (byChannel[l.channel] || 0) + 1; });
-    return { todayCount, totalCount, byChannel };
+    const bySender: Record<string, number> = {};
+    const byRecipientType: Record<string, number> = {};
+    const byDate: Record<string, number> = {};
+    logs.forEach(l => {
+      byChannel[l.channel] = (byChannel[l.channel] || 0) + 1;
+      const sender = l.sent_by_name || "(不明)";
+      bySender[sender] = (bySender[sender] || 0) + 1;
+      byRecipientType[l.recipient_type] = (byRecipientType[l.recipient_type] || 0) + 1;
+      const d = l.created_at.split("T")[0];
+      byDate[d] = (byDate[d] || 0) + 1;
+    });
+    return { todayCount, totalCount, byChannel, bySender, byRecipientType, byDate };
   }, [logs]);
+
+  // 日別推移（過去14日、降順）
+  const dailyTrend = useMemo(() => {
+    const days: { date: string; count: number; label: string }[] = [];
+    const today = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().split("T")[0];
+      const m = d.getMonth() + 1;
+      const day = d.getDate();
+      days.push({ date: ds, count: summary.byDate[ds] || 0, label: `${m}/${day}` });
+    }
+    const max = Math.max(...days.map(d => d.count), 1);
+    return { days, max };
+  }, [summary]);
+
+  // 送信者別ランキング（上位5名）
+  const senderRanking = useMemo(() => {
+    return Object.entries(summary.bySender)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [summary]);
 
   const formatDateTime = (iso: string) => {
     const d = new Date(iso);
@@ -171,6 +205,94 @@ export default function NotificationDashboardPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* 統計ビュー 3枚 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* ▼ 日別推移（直近14日） */}
+          <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+            <p className="text-[11px] mb-3 font-medium" style={{ color: T.textSub }}>📈 日別送信推移（直近14日）</p>
+            {dailyTrend.days.every(d => d.count === 0) ? (
+              <p className="text-[10px] py-6 text-center" style={{ color: T.textMuted }}>データなし</p>
+            ) : (
+              <div className="flex items-end gap-1 h-[80px]">
+                {dailyTrend.days.map((d, idx) => {
+                  const height = d.count === 0 ? 2 : Math.max(4, (d.count / dailyTrend.max) * 72);
+                  const isToday = idx === dailyTrend.days.length - 1;
+                  return (
+                    <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: ${d.count}件`}>
+                      <div className="text-[8px] font-medium tabular-nums" style={{ color: d.count > 0 ? T.textSub : T.textFaint, height: 12 }}>{d.count || ""}</div>
+                      <div
+                        className="w-full rounded-t transition-all"
+                        style={{
+                          height,
+                          backgroundColor: isToday ? "#c3a782" : d.count > 0 ? "#85a8c4" : T.border,
+                        }}
+                      />
+                      <div className="text-[7px] tabular-nums" style={{ color: T.textMuted }}>{d.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ▼ チャネル別内訳 */}
+          <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+            <p className="text-[11px] mb-3 font-medium" style={{ color: T.textSub }}>📊 チャネル別内訳</p>
+            {Object.keys(summary.byChannel).length === 0 ? (
+              <p className="text-[10px] py-6 text-center" style={{ color: T.textMuted }}>データなし</p>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(summary.byChannel)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([ch, count]) => {
+                    const meta = channelMeta[ch] || channelMeta.other;
+                    const pct = summary.totalCount > 0 ? (count / summary.totalCount) * 100 : 0;
+                    return (
+                      <div key={ch}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[10px]" style={{ color: T.textSub }}>{meta.icon} {meta.label}</span>
+                          <span className="text-[10px] tabular-nums" style={{ color: T.text }}>{count}件 <span style={{ color: T.textMuted }}>({pct.toFixed(0)}%)</span></span>
+                        </div>
+                        <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: T.cardAlt }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: meta.color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
+          {/* ▼ 送信者ランキング */}
+          <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+            <p className="text-[11px] mb-3 font-medium" style={{ color: T.textSub }}>🏆 送信者ランキング TOP5</p>
+            {senderRanking.length === 0 ? (
+              <p className="text-[10px] py-6 text-center" style={{ color: T.textMuted }}>データなし</p>
+            ) : (
+              <div className="space-y-2">
+                {senderRanking.map((s, i) => {
+                  const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+                  const pct = summary.totalCount > 0 ? (s.count / summary.totalCount) * 100 : 0;
+                  return (
+                    <div key={s.name}>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px]" style={{ color: T.textSub }}>
+                          <span className="mr-1">{medal}</span>
+                          {s.name}
+                        </span>
+                        <span className="text-[10px] tabular-nums" style={{ color: T.text }}>{s.count}件</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: T.cardAlt }}>
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: i === 0 ? "#c3a782" : i === 1 ? "#85a8c4" : i === 2 ? "#d4687e" : "#888780" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* フィルタ */}
