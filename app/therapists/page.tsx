@@ -8,6 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useConfirm } from "../../components/useConfirm";
+import { useStaffSession } from "../../lib/staff-session";
 
 const TherapistImportPanel = lazy(() => import("../../lib/therapist-import-panel"));
 
@@ -26,6 +27,7 @@ export default function TherapistManagement() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
+  const { activeStaff } = useStaffSession();
   const { confirm, ConfirmModalNode } = useConfirm();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -237,11 +239,11 @@ const generatePassword = () => {
   };
 
   const [showBulkLinks, setShowBulkLinks] = useState(false);
-  const [bulkLinks, setBulkLinks] = useState<{ name: string; contract?: string; license?: string; invoice?: string; mynumber?: string }[]>([]);
+  const [bulkLinks, setBulkLinks] = useState<{ id: number; name: string; contract?: string; license?: string; invoice?: string; mynumber?: string }[]>([]);
   const generateBulkLinks = async () => {
     const links: typeof bulkLinks = [];
     for (const t of therapists) {
-      const entry: typeof bulkLinks[0] = { name: t.name };
+      const entry: typeof bulkLinks[0] = { id: t.id, name: t.name };
       if (!contractsMap[t.id] || contractsMap[t.id].status !== "signed") {
         const tk = `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         await supabase.from("contracts").insert({ therapist_id: t.id, token: tk, status: "pending", type: "contract" });
@@ -1137,7 +1139,25 @@ const generatePassword = () => {
                       <div key={idx} className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
                         <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.border}` }}>
                           <p className="text-[13px] font-medium" style={{ color: T.text }}>👤 {link.name}</p>
-                          <button onClick={() => { navigator.clipboard.writeText(buildMessage()); toast.show(`${link.name}さんへのメッセージをコピーしました`, "success"); }}
+                          <button onClick={async () => {
+                            const msg = buildMessage();
+                            navigator.clipboard.writeText(msg);
+                            try {
+                              await supabase.from("notification_logs").insert({
+                                channel: "therapist_line",
+                                recipient_type: "therapist",
+                                recipient_name: link.name,
+                                therapist_id: link.id || null,
+                                message_type: "contract_docs",
+                                body: msg,
+                                body_preview: msg.slice(0, 100),
+                                sent_by_staff_id: activeStaff?.id || null,
+                                sent_by_name: activeStaff?.name || "",
+                                status: "copied",
+                              });
+                            } catch (e) { console.error("通知ログ記録失敗:", e); }
+                            toast.show(`${link.name}さんへのメッセージをコピーしました`, "success");
+                          }}
                             className="px-3 py-1.5 text-[11px] rounded-lg cursor-pointer font-medium"
                             style={{ background: "linear-gradient(135deg, #c3a782, #a8895e)", color: "#fff", border: "none" }}>
                             📋 LINE用メッセージをコピー

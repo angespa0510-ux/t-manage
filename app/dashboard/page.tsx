@@ -564,7 +564,7 @@ export default function Dashboard() {
   }, []);
 
   // LINE copy helper
-  const copyLineMsg = (r: MonthlyResult) => {
+  const copyLineMsg = async (r: MonthlyResult) => {
     const ym = monthlyTarget; const [y, m] = ym.split("-");
     const nextMonth = new Date(parseInt(y), parseInt(m), 1);
     const nextLabel = `${nextMonth.getFullYear()}年${nextMonth.getMonth() + 1}月`;
@@ -575,7 +575,22 @@ export default function Dashboard() {
     else if (change === "same") footer = `${nextLabel}のバックは現状と同じ内容で継続です！\n来月もよろしくお願いします💪`;
     else footer = r.back_increase > 0 ? `${nextLabel}のバックは ${backLabel} となります。\n来月もよろしくお願いします💪` : `${nextLabel}のバックは基本レートとなります。\n来月もよろしくお願いします💪`;
     const msg = `${r.name}さん、お疲れ様です！\n${parseInt(m)}月の実績報告です📊\n\n出勤回数: ${r.work_days}日\n接客本数: ${r.sessions}本\n本指名率: ${r.nom_rate}%\n当日欠勤: ${r.absences}回\n遅刻: ${r.lates}回\n早退: ${r.early_leaves}回\n\n${footer}`;
-    navigator.clipboard.writeText(msg); setCopiedId(r.therapist_id); setTimeout(() => setCopiedId(null), 2000);
+    navigator.clipboard.writeText(msg);
+    try {
+      await supabase.from("notification_logs").insert({
+        channel: "therapist_line",
+        recipient_type: "therapist",
+        recipient_name: r.name,
+        therapist_id: r.therapist_id,
+        message_type: "shift",
+        body: msg,
+        body_preview: msg.slice(0, 100),
+        sent_by_staff_id: activeStaff?.id || null,
+        sent_by_name: activeStaff?.name || "",
+        status: "copied",
+      });
+    } catch (e) { console.error("通知ログ記録失敗:", e); }
+    setCopiedId(r.therapist_id); setTimeout(() => setCopiedId(null), 2000);
   };
 
   // Detail
