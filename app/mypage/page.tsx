@@ -750,7 +750,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
               <button onClick={() => { const d = new Date(smY, smM, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button>
             </div>
             <div className="grid grid-cols-3 gap-3">{[{ l: "月合計", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[18px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
-            {settlements.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>清算データがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{settlements.map(stl => (<div key={stl.id} className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{formatDate(stl.date)}</span><span className="text-[14px] font-medium" style={{ color: "#e8849a" }}>{fmt(stl.final_payment)}</span></div><div className="flex items-center gap-3 text-[9px] flex-wrap" style={{ color: T.textMuted }}><span>{stl.order_count}件</span><span>売上{fmt(stl.total_sales)}</span><span>バック{fmt(stl.total_back)}</span>{stl.invoice_deduction > 0 && <span style={{ color: "#c45555" }}>INV-{fmt(stl.invoice_deduction)}</span>}{stl.withholding_tax > 0 && <span style={{ color: "#c45555" }}>源泉-{fmt(stl.withholding_tax)}</span>}{stl.welfare_fee > 0 && <span style={{ color: "#c45555" }}>厚生-{fmt(stl.welfare_fee)}</span>}{stl.transport_fee > 0 && <span style={{ color: "#22c55e" }}>交通+{fmt(stl.transport_fee)}</span>}</div></div>))}</div>)}
+            {settlements.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>清算データがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{settlements.map(stl => (<div key={stl.id} className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{formatDate(stl.date)}</span><span className="text-[14px] font-medium" style={{ color: "#e8849a" }}>{fmt(stl.final_payment)}</span></div><div className="flex items-center gap-3 text-[9px] flex-wrap" style={{ color: T.textMuted }}><span>{stl.order_count}件</span><span>売上{fmt(stl.total_sales)}</span><span>バック{fmt(stl.total_back)}</span>{stl.invoice_deduction > 0 && <span style={{ color: "#c45555" }}>INV-{fmt(stl.invoice_deduction)}</span>}{stl.withholding_tax > 0 && <span style={{ color: "#c45555" }}>源泉-{fmt(stl.withholding_tax)}</span>}{stl.welfare_fee > 0 && <span style={{ color: "#c45555" }}>備品-{fmt(stl.welfare_fee)}</span>}{stl.transport_fee > 0 && <span style={{ color: "#22c55e" }}>交通+{fmt(stl.transport_fee)}</span>}</div></div>))}</div>)}
           </>)}
 
           {/* 年間ビュー */}
@@ -790,7 +790,7 @@ ${aTax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="ri
 ${aWelfare > 0 ? `<tr><td style="color:#c45555">備品代・リネン代</td><td class="right" style="color:#c45555">-&yen;${aWelfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${aDays > 0 ? Math.round(aWelfare / aDays).toLocaleString() : 0}/日 × ${aDays}日</td></tr>` : ""}
 ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right">&yen;${aTransport.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${aDays > 0 ? Math.round(aTransport / aDays).toLocaleString() : 0}/日 × ${aDays}日</td></tr>` : ""}
 <tr class="total-row"><td>差引支払額</td><td class="right">&yen;${aFinal.toLocaleString()}</td><td style="font-size:10px;color:#888">年間支給額合計</td></tr></table>
-<div style="margin-top:15px"><p class="note">※ 支払金額は全て税込（内税方式）で記載。</p><p class="note">※ 源泉徴収税額は所得税法第204条第1項${th.has_withholding ? "第6号" : "第1号"}に基づき日次清算時に控除済み。</p><p class="note">※ 本書は所得税法第225条第1項に基づく支払調書に準じて作成。</p></div>
+<div style="margin-top:15px"><p class="note">※ 支払金額は全て税込（内税方式）で記載。</p><p class="note">※ 源泉徴収税額は所得税法第204条第1項${th.has_withholding ? "第6号" : "第1号"}に基づき日次清算時に控除済み。</p>${aTransport > 0 ? `<p class="note">※ 交通費（実費精算分）は立替精算のため、支払金額・源泉徴収の対象外です（所得税基本通達204-2）。</p>` : ""}${aWelfare > 0 ? `<p class="note">※ 備品・リネン代は業務使用の備品・消耗品に対する実費控除です。確定申告時に必要経費として計上可能です。</p>` : ""}<p class="note">※ 本書は所得税法第225条第1項に基づく支払調書に準じて作成。</p></div>
 <div class="section"><p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${store.invoice_number}</p>` : ""}</div></div>
 <div class="stamp-area"><div class="stamp-box">支払者（${store?.company_name || ""}）</div><div class="stamp-box">支払を受ける者（${realName} 様）</div></div></body></html>`);
               w.document.close();
@@ -815,14 +815,21 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 {/* 控除内訳 */}
                 {(aInvDed > 0 || aWelfare > 0 || aTransport > 0) && (
                   <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>控除・加算の内訳</p>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>控除・加算の内訳（計算式）</p>
                     <div className="space-y-1 text-[11px]">
                       <div className="flex justify-between"><span>報酬額（税込）</span><span className="font-medium">{fmt(aGross)}</span></div>
-                      {aInvDed > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>インボイス控除（10%）</span><span>-{fmt(aInvDed)}</span></div>}
-                      {aTax > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>源泉徴収（10.21%）</span><span>-{fmt(aTax)}</span></div>}
-                      {aWelfare > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>備品・リネン代</span><span>-{fmt(aWelfare)}</span></div>}
-                      {aTransport > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>交通費</span><span>+{fmt(aTransport)}</span></div>}
-                      <div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}`, color: "#c3a782" }}><span>差引支払額</span><span>{fmt(aFinal)}</span></div>
+                      {aInvDed > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>− インボイス控除（10%）</span><span>-{fmt(aInvDed)}</span></div>}
+                      {aTax > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>− 源泉徴収（10.21%）</span><span>-{fmt(aTax)}</span></div>}
+                      {aWelfare > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>− 備品・リネン代</span><span>-{fmt(aWelfare)}</span></div>}
+                      {aTransport > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>+ 交通費（実費精算・非課税）</span><span>+{fmt(aTransport)}</span></div>}
+                      <div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}`, color: "#c3a782" }}><span>差引支払額（お手取り）</span><span>{fmt(aFinal)}</span></div>
+                    </div>
+                    <div className="mt-3 pt-2 text-[9px]" style={{ borderTop: `1px dashed ${T.border}`, color: T.textMuted, lineHeight: 1.6 }}>
+                      <p>💡 <strong>確定申告のヒント</strong>:</p>
+                      <p>・上の「報酬額（税込）」が税務署に報告される<strong>支払金額</strong>です（収入）</p>
+                      {aWelfare > 0 && <p>・<strong>備品・リネン代</strong>（{fmt(aWelfare)}）は必要経費として計上できます（消耗品費など）</p>}
+                      {aTransport > 0 && <p>・<strong>交通費（実費精算分）</strong>（{fmt(aTransport)}）は立替精算なので<span style={{ color: "#c45555" }}>収入にも経費にもなりません</span>（課税対象外）</p>}
+                      {aTax > 0 && <p>・<strong>源泉徴収税額</strong>（{fmt(aTax)}）は確定申告で還付または納税調整の対象になります</p>}
                     </div>
                   </div>
                 )}
@@ -1234,7 +1241,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     {dSettlement.invoice_deduction > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>インボイス控除</span><span>-{fmt(dSettlement.invoice_deduction)}</span></div>}
                     {dSettlement.withholding_tax > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>源泉徴収</span><span>-{fmt(dSettlement.withholding_tax)}</span></div>}
                     {dSettlement.welfare_fee > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>備品・リネン代</span><span>-{fmt(dSettlement.welfare_fee)}</span></div>}
-                    {dSettlement.transport_fee > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>交通費</span><span>+{fmt(dSettlement.transport_fee)}</span></div>}
+                    {dSettlement.transport_fee > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>交通費（実費精算）</span><span>+{fmt(dSettlement.transport_fee)}</span></div>}
                     <div className="flex justify-between pt-1.5 font-bold text-[13px]" style={{ borderTop: `1px solid #e8849a30`, color: "#e8849a" }}><span>支給額</span><span>{fmt(dSettlement.final_payment)}</span></div>
                     <div className="flex items-center gap-3 pt-1 text-[9px]" style={{ color: T.textMuted }}>
                       <span>💴現金 {fmt(dSettlement.total_cash)}</span>
