@@ -217,9 +217,9 @@ export default function Analytics() {
       // 事務所残金 = -釣銭補充 - 経費 + 収入 + スタッフ回収 + 本日の金庫回収分
       const cashOnHand = -replenish - expense + income + staffCollectedAmt + safeCollectedTodayTotal;
 
-      // 店取概算 = 売上 − 割引 − セラピスト(実支給額)
-      //   実支給額にはインボイス・源泉が既に天引き済みなので単独では引かない
-      const storeShare = sales - discount - back;
+      // 店取概算 = 売上 − 割引 − セラピスト(実支給額) − インボイス − 源泉
+      //   インボイス・源泉はセラピストから預かって国に納付するお金なので、店の取り分から除く
+      const storeShare = sales - discount - back - invoice - withholding;
       // 平均単価 = 店取概算 ÷ 予約数
       const avgNet = count > 0 ? Math.round(storeShare / count) : 0;
 
@@ -424,8 +424,12 @@ export default function Analytics() {
                     <span style={{ color: "#f59e0b" }}>割引</span>
                     <span className="mx-1" style={{ color: T.textMuted }}>−</span>
                     <span style={{ color: "#7ab88f" }}>セラピスト</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#a855f7" }}>インボイス</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#d4687e" }}>源泉</span>
                     <span className="mx-2" style={{ color: T.textFaint }}>|</span>
-                    <span className="text-[11px]" style={{ color: T.textMuted }}>セラピスト(実支給額)にインボイス・源泉・厚生費・交通費・調整金は反映済み</span>
+                    <span className="text-[11px]" style={{ color: T.textMuted }}>インボイス・源泉は国へ納付するため店取りから除く</span>
                   </div>
                   <button onClick={() => setActiveFormula(null)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
                 </div>
@@ -576,8 +580,8 @@ export default function Analytics() {
               <div className="mt-2 space-y-1">
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。事務所残金は営業締めと同じ計算式</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上は定価ベース（コース+指名+オプション+延長）、売上 − 割引 = 実売上</p>
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額（final_payment）」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト、平均単価 = 店取概算 ÷ 予約数（ヘッダーⓘで詳細）</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト − インボイス − 源泉（インボイス・源泉は国へ納付するため店取りから除外）</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）</p>
               </div>
             </div>
