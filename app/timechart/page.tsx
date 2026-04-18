@@ -907,6 +907,50 @@ export default function TimeChart() {
         </div>
       )}
 
+      {/* シフト未登録で予約ありの警告バナー */}
+      {(() => {
+        const orphanMap = new Map<number, number>();
+        reservations.forEach(r => {
+          if (r.therapist_id && !shiftTherapistIds.has(r.therapist_id)) {
+            orphanMap.set(r.therapist_id, (orphanMap.get(r.therapist_id) || 0) + 1);
+          }
+        });
+        if (orphanMap.size === 0) return null;
+        const totalOrphanCount = Array.from(orphanMap.values()).reduce((a, b) => a + b, 0);
+        return (
+          <div className="mx-4 mt-2 mb-1 rounded-xl p-3" style={{ backgroundColor: "#f59e0b12", border: "1px solid #f59e0b44" }}>
+            <div className="flex items-start gap-2">
+              <span className="text-[16px] leading-none">⚠️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-medium mb-1" style={{ color: "#f59e0b" }}>
+                  シフト未登録だが予約ありのセラピストが {orphanMap.size} 名（予約 {totalOrphanCount} 件）
+                </p>
+                <p className="text-[10px] mb-2" style={{ color: T.textSub }}>
+                  シフトが未登録のため、このセラピストの予約はタイムチャートに表示されません。名前をクリックしてシフトを登録してください。
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from(orphanMap.entries()).map(([thId, count]) => {
+                    const th = therapists.find(t => t.id === thId);
+                    if (!th) return null;
+                    return (
+                      <button
+                        key={thId}
+                        onClick={() => { setShowNewTherapist(true); setAddShiftTherapistId(thId); setAddShiftSearch(th.name); }}
+                        className="text-[10px] px-2 py-1 rounded cursor-pointer font-medium"
+                        style={{ backgroundColor: "#f59e0b22", color: "#f59e0b", border: "1px solid #f59e0b44" }}
+                        title={`${th.name} のシフトを登録する`}
+                      >
+                        {th.name} ({count}件) + シフト登録
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Timeline */}
       <div className="flex-1 overflow-auto select-none [&::-webkit-scrollbar]:h-[4px] [&::-webkit-scrollbar-thumb]:bg-[#d3d1c7]/40 [&::-webkit-scrollbar-thumb]:rounded-full" ref={timelineRef} style={{ cursor: isPanning ? "grabbing" : "grab" }} onMouseDown={handlePanStart} onMouseMove={handlePanMove} onMouseUp={handlePanEnd} onMouseLeave={handlePanEnd}>
         {displayTherapists.length === 0 ? (

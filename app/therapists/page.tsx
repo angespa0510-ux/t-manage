@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
+import { useConfirm } from "../../components/useConfirm";
 
 const TherapistImportPanel = lazy(() => import("../../lib/therapist-import-panel"));
 
@@ -25,6 +26,7 @@ export default function TherapistManagement() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -178,8 +180,22 @@ const generatePassword = () => {
     fetchTrash(); fetchTherapists();
   };
 
-  const permanentDelete = async (id: number) => {
-    if (!confirm("完全に削除しますか？この操作は元に戻せません。")) return;
+  const permanentDelete = async (id: number, name: string) => {
+    const ok = await confirm({
+      title: `${name} さんを完全に削除しますか？`,
+      message: (
+        <>
+          この操作は <strong style={{ color: "#c45555" }}>取り消せません</strong>。<br />
+          過去の予約履歴や売上データは残りますが、セラピスト情報は完全に失われます。
+          <br /><br />
+          本当に完全削除する場合は、セラピスト名をご入力ください。
+        </>
+      ),
+      variant: "danger",
+      confirmLabel: "完全に削除する",
+      typeToConfirm: name,
+    });
+    if (!ok) return;
     await supabase.from("therapists").delete().eq("id", id);
     toast.show("完全に削除しました");
     fetchTrash();
@@ -563,6 +579,7 @@ const generatePassword = () => {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       {/* Header */}
       <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6 flex-shrink-0" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
         <div className="flex items-center gap-4">
@@ -1174,7 +1191,7 @@ const generatePassword = () => {
                         </div>
                         <div className="flex gap-2 flex-shrink-0">
                           <button onClick={() => restoreTherapist(t.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "1px solid #22c55e44" }}>🔄 復元</button>
-                          <button onClick={() => permanentDelete(t.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>完全削除</button>
+                          <button onClick={() => permanentDelete(t.id, t.name)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>完全削除</button>
                         </div>
                       </div>
                     );

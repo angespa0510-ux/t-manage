@@ -7,6 +7,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
+import { useConfirm } from "../../components/useConfirm";
 
 type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
@@ -18,6 +19,7 @@ export default function StaffPage() {
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
+  const { confirm, ConfirmModalNode } = useConfirm();
   const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license">("staff");
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
@@ -266,7 +268,26 @@ export default function StaffPage() {
     }
     toast.show("スタッフ情報を更新しました", "success"); setEditStaff(null); fetchData();
   };
-  const deleteStaffFn = async (id: number, name: string) => { if (!confirm(`${name}を削除しますか？`)) return; await supabase.from("staff").delete().eq("id", id); toast.show("スタッフを削除しました", "info"); fetchData(); };
+  const deleteStaffFn = async (id: number, name: string) => {
+    const ok = await confirm({
+      title: `${name} さんを削除しますか？`,
+      message: (
+        <>
+          この操作は <strong style={{ color: "#c45555" }}>取り消せません</strong>。<br />
+          勤怠履歴や過去の稼働予定もすべて参照できなくなります。
+          <br /><br />
+          本当に削除する場合は、確認のためスタッフ名をご入力ください。
+        </>
+      ),
+      variant: "danger",
+      confirmLabel: "削除する",
+      typeToConfirm: name,
+    });
+    if (!ok) return;
+    await supabase.from("staff").delete().eq("id", id);
+    toast.show("スタッフを削除しました", "info");
+    fetchData();
+  };
   const saveCompany = async () => { if (!storeInfo) return; await supabase.from("stores").update({ company_name: companyName.trim(), company_address: companyAddress.trim(), company_phone: companyPhone.trim(), invoice_number: invoiceNumber.trim(), license_unit_price: parseInt(licenseUnitPrice) || 50 }).eq("id", storeInfo.id); toast.show("会社情報を更新しました", "success"); fetchData(); };
   const saveOiri = async () => {
     const data = { sales_threshold: parseInt(oiriSales) || 0, count_threshold: parseInt(oiriCount) || 0, bonus_amount: parseInt(oiriBonus) || 1000 };
@@ -291,7 +312,18 @@ export default function StaffPage() {
     toast.show("稼働予定を更新しました", "success"); setEditSchedule(null); fetchSchedules();
   };
   const markCompleted = async (sch: Schedule) => { await supabase.from("staff_schedules").update({ status: "completed" }).eq("id", sch.id); toast.show("業務完了を記録しました", "success"); fetchSchedules(); };
-  const deleteScheduleFn = async (id: number) => { if (!confirm("この稼働予定を削除しますか？")) return; await supabase.from("staff_schedules").delete().eq("id", id); toast.show("稼働予定を削除しました", "info"); fetchSchedules(); };
+  const deleteScheduleFn = async (id: number) => {
+    const ok = await confirm({
+      title: "この稼働予定を削除しますか？",
+      message: "この操作は取り消せません。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
+    if (!ok) return;
+    await supabase.from("staff_schedules").delete().eq("id", id);
+    toast.show("稼働予定を削除しました", "info");
+    fetchSchedules();
+  };
 
   const fetchMonthly = async () => {
     const [y, m] = monthlyMonth.split("-").map(Number);
@@ -498,6 +530,7 @@ const openPaymentStatement = (sch: Schedule) => {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: T.bg, color: T.text }}>
+      {ConfirmModalNode}
       <div className="h-[64px] backdrop-blur-xl border-b flex items-center justify-between px-6" style={{ backgroundColor: dark ? T.card + "cc" : "rgba(255,255,255,0.8)", borderColor: T.border }}>
         <div className="flex items-center gap-4">
           <NavMenu T={T} dark={dark} />
