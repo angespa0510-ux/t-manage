@@ -149,7 +149,7 @@ export default function Analytics() {
       invoice: number; withholding: number;
       expense: number; income: number; replenish: number;
       uncollectedSales: number; safeUncollected: number; cashOnHand: number;
-      avgNet: number; storeShare: number; reserve: number;
+      avgNet: number; storeShare: number; reserve: number; changeNet: number;
     };
     const data: Row[] = [];
     const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
@@ -243,6 +243,29 @@ export default function Analytics() {
       // 事務所残金 = -釣銭補充 - 経費 + 収入 + スタッフ回収 + 本日の金庫回収分
       const cashOnHand = -replenish - expense + income + staffCollectedAmt + safeCollectedTodayTotal;
 
+      // 釣銭純額 = 当日回収額 − 当日補充額
+      //   補充（replenish）: room_cash_replenishments の当日分（管理者金庫→ルーム釣銭）
+      //   回収: その日 change_collected=true かつスタッフ持ち帰り（!safe_deposited）したルームの補充額
+      //        + その日 safe_collected_date が該当する settlements の補充額（金庫からの回収時に釣銭も戻る）
+      //   ルーム単位で一意化して過大カウントを防ぐ
+      let changeCollectedAmt = 0;
+      const changeCollectedRooms = new Set<number>();
+      for (const ds of daySettles) {
+        if (ds.change_collected && ds.sales_collected && !ds.safe_deposited && ds.room_id && !changeCollectedRooms.has(ds.room_id)) {
+          changeCollectedRooms.add(ds.room_id);
+          const repSum = dayReps.filter((r) => r.room_id === ds.room_id).reduce((x, r) => x + (r.amount || 0), 0);
+          changeCollectedAmt += repSum;
+        }
+      }
+      for (const sc of collectedToday) {
+        if (sc.room_id && !changeCollectedRooms.has(sc.room_id)) {
+          changeCollectedRooms.add(sc.room_id);
+          const repAmt = monthReplenishments.filter((r) => r.date === sc.date && r.room_id === sc.room_id).reduce((s, r) => s + (r.amount || 0), 0);
+          changeCollectedAmt += repAmt;
+        }
+      }
+      const changeNet = changeCollectedAmt - replenish;
+
       // 店取概算 = 売上 − 割引 − セラピスト(実支給額) − インボイス − 源泉
       //   インボイス・源泉はセラピストから預かって国に納付するお金なので、店の取り分から除く
       const storeShare = sales - discount - back - invoice - withholding;
@@ -255,7 +278,7 @@ export default function Analytics() {
         invoice, withholding,
         expense, income, replenish,
         uncollectedSales, safeUncollected, cashOnHand,
-        avgNet, storeShare, reserve,
+        avgNet, storeShare, reserve, changeNet,
       });
     }
     return data;
@@ -400,7 +423,8 @@ export default function Analytics() {
       safeUncollected: acc.safeUncollected + d.safeUncollected,
       cashOnHand: acc.cashOnHand + d.cashOnHand,
       reserve: acc.reserve + d.reserve,
-    }), { days: 0, count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, invoice: 0, withholding: 0, expense: 0, income: 0, storeShare: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, reserve: 0 });
+      changeNet: acc.changeNet + d.changeNet,
+    }), { days: 0, count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, invoice: 0, withholding: 0, expense: 0, income: 0, storeShare: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, reserve: 0, changeNet: 0 });
   }, [rangeStart, rangeEnd, dailyData]);
 
   const totalCourseSales = courseData.reduce((s, c) => s + c.sales, 0) || 1;
@@ -485,6 +509,7 @@ export default function Analytics() {
                       {rangeTotal.withholding > 0 && <span style={{ color: "#d4687e" }}>源泉: <strong>{fmt(rangeTotal.withholding)}</strong></span>}
                       {rangeTotal.expense > 0 && <span style={{ color: "#c45555" }}>経費: <strong>{fmt(rangeTotal.expense)}</strong></span>}
                       {rangeTotal.income > 0 && <span style={{ color: "#22c55e" }}>入金: <strong>+{fmt(rangeTotal.income)}</strong></span>}
+                      {rangeTotal.changeNet !== 0 && <span style={{ color: rangeTotal.changeNet > 0 ? "#22c55e" : "#f59e0b" }}>釣銭: <strong>{rangeTotal.changeNet > 0 ? `+${fmt(rangeTotal.changeNet)}` : `−${fmt(Math.abs(rangeTotal.changeNet))}`}</strong></span>}
                       {rangeTotal.reserve !== 0 && <span style={{ color: rangeTotal.reserve > 0 ? "#22c55e" : "#d4687e" }}>豊橋予備金: <strong>{rangeTotal.reserve > 0 ? `+${fmt(rangeTotal.reserve)}` : `−${fmt(Math.abs(rangeTotal.reserve))}`}</strong></span>}
                       <span style={{ color: rangeTotal.cashOnHand >= 0 ? "#22c55e" : "#c45555" }}>事務所残金: <strong>{fmt(rangeTotal.cashOnHand)}</strong></span>
                     </div>
@@ -579,6 +604,7 @@ export default function Analytics() {
                           { label: "入金", align: "right", w: "", key: null },
                           { label: "売上未回収", align: "right", w: "", key: null },
                           { label: "金庫未回収", align: "right", w: "", key: null },
+                          { label: "釣銭", align: "right", w: "", key: null },
                           { label: "豊橋予備金", align: "right", w: "", key: null },
                           { label: "事務所残金", align: "right", w: "", key: null },
                         ].map((h) => (
@@ -603,7 +629,7 @@ export default function Analytics() {
                     </thead>
                     <tbody>
                       {dailyData.map((d) => {
-                        const zero = d.count === 0 && d.expense === 0 && d.income === 0 && d.replenish === 0 && d.uncollectedSales === 0 && d.safeUncollected === 0 && d.cashOnHand === 0 && d.reserve === 0;
+                        const zero = d.count === 0 && d.expense === 0 && d.income === 0 && d.replenish === 0 && d.uncollectedSales === 0 && d.safeUncollected === 0 && d.cashOnHand === 0 && d.reserve === 0 && d.changeNet === 0;
                         const dowColor = d.dow === "日" ? "#c45555" : d.dow === "土" ? "#3d6b9f" : T.textSub;
                         const dash = (v: number, formatted: string) => (zero && v === 0) ? "—" : formatted;
                         // 選択範囲判定
@@ -632,6 +658,7 @@ export default function Analytics() {
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.income === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{dash(d.income, d.income === 0 ? fmt(0) : `+${fmt(d.income)}`)}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.uncollectedSales === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.uncollectedSales, d.uncollectedSales === 0 ? fmt(0) : `−${fmt(d.uncollectedSales)}`)}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.safeUncollected === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.safeUncollected, d.safeUncollected === 0 ? fmt(0) : `−${fmt(d.safeUncollected)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.changeNet === 0 ? T.textFaint : d.changeNet > 0 ? "#22c55e" : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{d.changeNet === 0 ? (zero ? "—" : fmt(0)) : d.changeNet > 0 ? `+${fmt(d.changeNet)}` : `−${fmt(Math.abs(d.changeNet))}`}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.reserve === 0 ? T.textFaint : d.reserve > 0 ? "#22c55e" : "#d4687e", borderRight: `1px solid ${T.border}` }}>{d.reserve === 0 ? (zero ? "—" : fmt(0)) : d.reserve > 0 ? `+${fmt(d.reserve)}` : `−${fmt(Math.abs(d.reserve))}`}</td>
                             <td className="py-1.5 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: zero ? T.textFaint : d.cashOnHand >= 0 ? "#22c55e" : "#c45555", backgroundColor: zero ? "transparent" : "rgba(245,158,11,0.04)" }}>{zero && d.cashOnHand === 0 ? "—" : fmt(d.cashOnHand)}</td>
                           </tr>
@@ -657,7 +684,8 @@ export default function Analytics() {
                           cashOnHand: acc.cashOnHand + d.cashOnHand,
                           storeShare: acc.storeShare + d.storeShare,
                           reserve: acc.reserve + d.reserve,
-                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0, reserve: 0 });
+                          changeNet: acc.changeNet + d.changeNet,
+                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0, reserve: 0, changeNet: 0 });
                         // 平均単価 = 店取概算 ÷ 予約数
                         const avg = tot.count > 0 ? Math.round(tot.storeShare / tot.count) : 0;
                         return (
@@ -677,6 +705,7 @@ export default function Analytics() {
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.income === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{tot.income === 0 ? fmt(0) : `+${fmt(tot.income)}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.uncollectedSales === 0 ? fmt(0) : `−${fmt(tot.uncollectedSales)}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.safeUncollected === 0 ? fmt(0) : `−${fmt(tot.safeUncollected)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.changeNet === 0 ? T.textFaint : tot.changeNet > 0 ? "#22c55e" : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.changeNet === 0 ? fmt(0) : tot.changeNet > 0 ? `+${fmt(tot.changeNet)}` : `−${fmt(Math.abs(tot.changeNet))}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.reserve === 0 ? T.textFaint : tot.reserve > 0 ? "#22c55e" : "#d4687e", borderRight: `1px solid ${T.border}` }}>{tot.reserve === 0 ? fmt(0) : tot.reserve > 0 ? `+${fmt(tot.reserve)}` : `−${fmt(Math.abs(tot.reserve))}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.cashOnHand >= 0 ? "#22c55e" : "#c45555", backgroundColor: "rgba(245,158,11,0.06)" }}>{fmt(tot.cashOnHand)}</td>
                           </tr>
@@ -693,6 +722,7 @@ export default function Analytics() {
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ セラピスト列は「実支給額」= バック合計 − インボイス − 源泉 − 厚生費 + 交通費 + 調整金</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト − インボイス − 源泉（インボイス・源泉は国へ納付するため店取りから除外）</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 売上未回収・金庫未回収は「まだ事務所に入っていない現金」なのでマイナス表記（赤）</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 釣銭列: −=補充（事務所金庫からルームへ）/ +=回収（ルームから事務所金庫へ）。合計が0なら整合OK</p>
                 <p className="text-[10px]" style={{ color: T.textFaint }}>※ 豊橋予備金列: −=立替（予備金が減った、セラピスト補填）/ +=補充・初期・調整（予備金が増えた）</p>
               </div>
             </div>
