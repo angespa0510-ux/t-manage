@@ -176,7 +176,6 @@ export default function Analytics() {
     return { sales, back, profit: sales - back, count: allReservations.length };
   }, [allReservations, courses]);
 
-  const maxTherapistSales = therapistData.length > 0 ? therapistData[0].sales || 1 : 1;
   const totalCourseSales = courseData.reduce((s, c) => s + c.sales, 0) || 1;
 
   const tabs: { key: Tab; label: string }[] = [
@@ -428,139 +427,290 @@ export default function Analytics() {
           {/* セラピスト別 */}
           {tab === "therapist" && (
             <div className="animate-[fadeIn_0.3s]">
-              <p className="text-[12px] mb-3" style={{ color: T.textMuted }}>{smYear}年{smMonth}月 セラピスト別ランキング</p>
-              <div className="space-y-2">
-                {therapistData.map((t, i) => (
-                  <div key={t.id} className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                    <div className="flex items-center gap-4">
-                      <span className="text-[18px] font-bold w-8 text-center" style={{ color: i === 0 ? "#fbbf24" : i === 1 ? "#9ca3af" : i === 2 ? "#c49885" : T.textFaint }}>{i + 1}</span>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[13px] font-medium">{t.name}</span>
-                          <span className="text-[16px] font-medium" style={{ color: T.accent }}>{fmt(t.sales)}</span>
-                        </div>
-                        <div className="w-full rounded-full h-2 mb-2" style={{ backgroundColor: T.cardAlt }}>
-                          <div className="rounded-full h-2 transition-all" style={{ width: `${(t.sales / maxTherapistSales) * 100}%`, backgroundColor: T.accent }} />
-                        </div>
-                        <div className="flex gap-4 text-[10px]" style={{ color: T.textSub }}>
-                          <span>予約: {t.count}件</span>
-                          <span>バック: <span style={{ color: "#7ab88f" }}>{fmt(t.back)}</span></span>
-                          <span>顧客数: {t.customers}名</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {therapistData.length === 0 && <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>データがありません</p>}
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <button onClick={prevMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+                <span className="text-[14px] font-medium">{smYear}年{smMonth}月 セラピスト別</span>
+                <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {[
+                          { label: "順位", align: "center", w: "56px" },
+                          { label: "セラピスト", align: "left", w: "" },
+                          { label: "予約数", align: "right", w: "" },
+                          { label: "指名", align: "right", w: "" },
+                          { label: "売上", align: "right", w: "" },
+                          { label: "バック", align: "right", w: "" },
+                          { label: "利益", align: "right", w: "" },
+                          { label: "顧客数", align: "right", w: "" },
+                          { label: "平均単価", align: "right", w: "" },
+                          { label: "構成比", align: "right", w: "" },
+                        ].map((h) => (
+                          <th key={h.label} className={`py-2.5 px-3 font-medium text-[11px] text-${h.align}`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {therapistData.length === 0 && (
+                        <tr><td colSpan={10} className="py-8 text-center text-[12px]" style={{ color: T.textFaint }}>データがありません</td></tr>
+                      )}
+                      {therapistData.map((t, i) => {
+                        const avg = t.count > 0 ? Math.round(t.sales / t.count) : 0;
+                        const pct = monthTotal.sales > 0 ? ((t.sales / monthTotal.sales) * 100).toFixed(1) : "0.0";
+                        const rankColor = i === 0 ? "#fbbf24" : i === 1 ? "#9ca3af" : i === 2 ? "#c49885" : T.textFaint;
+                        return (
+                          <tr key={t.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td className="py-2 px-3 text-center font-bold" style={{ color: rankColor, borderRight: `1px solid ${T.border}` }}>{i + 1}</td>
+                            <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{t.name}</td>
+                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{t.count}件</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{t.nomination}件</td>
+                            <td className="py-2 px-3 text-right font-medium" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(t.sales)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(t.back)}</td>
+                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(t.sales - t.back)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{t.customers}名</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(avg)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub }}>{pct}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {therapistData.length > 0 && (
+                      <tfoot>
+                        <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                          <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>合計</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{therapistData.reduce((s, t) => s + t.count, 0)}件</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{therapistData.reduce((s, t) => s + t.nomination, 0)}件</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(therapistData.reduce((s, t) => s + t.sales, 0))}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(therapistData.reduce((s, t) => s + t.back, 0))}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(therapistData.reduce((s, t) => s + (t.sales - t.back), 0))}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>—</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{monthTotal.count > 0 ? fmt(Math.round(monthTotal.sales / monthTotal.count)) : "—"}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub }}>100.0%</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
             </div>
           )}
 
           {/* コース別 */}
           {tab === "course" && (
             <div className="animate-[fadeIn_0.3s]">
-              <p className="text-[12px] mb-3" style={{ color: T.textMuted }}>{smYear}年{smMonth}月 コース別売上</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* 円グラフ的な棒グラフ */}
-                <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                  <p className="text-[12px] font-medium mb-3">売上割合</p>
-                  <div className="space-y-2">
-                    {courseData.map((c, i) => {
-                      const pct = Math.round((c.sales / totalCourseSales) * 100);
-                      const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885", "#a885c4", "#85c4b8"];
-                      return (
-                        <div key={c.name}>
-                          <div className="flex items-center justify-between text-[11px] mb-1">
-                            <span>{c.name}</span>
-                            <span style={{ color: T.textSub }}>{pct}%</span>
-                          </div>
-                          <div className="w-full rounded-full h-3" style={{ backgroundColor: T.cardAlt }}>
-                            <div className="rounded-full h-3 transition-all" style={{ width: `${pct}%`, backgroundColor: colors[i % colors.length] }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* テーブル */}
-                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                  <table className="w-full text-[11px]">
-                    <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                      {["コース", "予約数", "売上", "割合"].map((h) => (<th key={h} className="py-2 px-3 text-left font-normal" style={{ color: T.textMuted }}>{h}</th>))}
-                    </tr></thead>
-                    <tbody>{courseData.map((c) => (
-                      <tr key={c.name} style={{ borderBottom: `1px solid ${T.border}` }}>
-                        <td className="py-2 px-3 font-medium">{c.name}</td>
-                        <td className="py-2 px-3">{c.count}件</td>
-                        <td className="py-2 px-3" style={{ color: T.accent }}>{fmt(c.sales)}</td>
-                        <td className="py-2 px-3" style={{ color: T.textSub }}>{Math.round((c.sales / totalCourseSales) * 100)}%</td>
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <button onClick={prevMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+                <span className="text-[14px] font-medium">{smYear}年{smMonth}月 コース別</span>
+                <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
+              </div>
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {[
+                          { label: "順位", align: "center", w: "56px" },
+                          { label: "コース名", align: "left", w: "" },
+                          { label: "予約数", align: "right", w: "" },
+                          { label: "売上", align: "right", w: "" },
+                          { label: "平均単価", align: "right", w: "" },
+                          { label: "構成比", align: "right", w: "" },
+                        ].map((h) => (
+                          <th key={h.label} className={`py-2.5 px-3 font-medium text-[11px] text-${h.align}`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
+                        ))}
                       </tr>
-                    ))}</tbody>
+                    </thead>
+                    <tbody>
+                      {courseData.length === 0 && (
+                        <tr><td colSpan={6} className="py-8 text-center text-[12px]" style={{ color: T.textFaint }}>データがありません</td></tr>
+                      )}
+                      {courseData.map((c, i) => {
+                        const avg = c.count > 0 ? Math.round(c.sales / c.count) : 0;
+                        const pct = totalCourseSales > 0 ? ((c.sales / totalCourseSales) * 100).toFixed(1) : "0.0";
+                        const rankColor = i === 0 ? "#fbbf24" : i === 1 ? "#9ca3af" : i === 2 ? "#c49885" : T.textFaint;
+                        return (
+                          <tr key={c.name} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td className="py-2 px-3 text-center font-bold" style={{ color: rankColor, borderRight: `1px solid ${T.border}` }}>{i + 1}</td>
+                            <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{c.name}</td>
+                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{c.count}件</td>
+                            <td className="py-2 px-3 text-right font-medium" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(c.sales)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(avg)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub }}>{pct}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {courseData.length > 0 && (
+                      <tfoot>
+                        <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                          <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>合計</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{courseData.reduce((s, c) => s + c.count, 0)}件</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(courseData.reduce((s, c) => s + c.sales, 0))}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{(() => { const tc = courseData.reduce((s, c) => s + c.count, 0); const ts = courseData.reduce((s, c) => s + c.sales, 0); return tc > 0 ? fmt(Math.round(ts / tc)) : "—"; })()}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub }}>100.0%</td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </div>
+              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
             </div>
           )}
 
           {/* ルーム別 */}
           {tab === "store" && (
             <div className="animate-[fadeIn_0.3s]">
-              <p className="text-[12px] mb-3" style={{ color: T.textMuted }}>{smYear}年{smMonth}月 ルーム別売上</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {storeData.map((s, i) => {
-                  const colors = ["#c3a782", "#7ab88f", "#85a8c4", "#c49885"];
-                  return (
-                    <div key={s.id} className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
-                        <span className="text-[13px] font-medium">{s.name}</span>
-                      </div>
-                      <p className="text-[24px] font-light mb-1" style={{ color: colors[i % colors.length] }}>{fmt(s.sales)}</p>
-                      <p className="text-[11px]" style={{ color: T.textSub }}>予約: {s.count}件</p>
-                    </div>
-                  );
-                })}
-                {storeData.length === 0 && <p className="text-[12px] py-8" style={{ color: T.textFaint }}>部屋割りデータがありません</p>}
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <button onClick={prevMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+                <span className="text-[14px] font-medium">{smYear}年{smMonth}月 ルーム別</span>
+                <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
+              <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {[
+                          { label: "順位", align: "center", w: "56px" },
+                          { label: "ルーム名", align: "left", w: "" },
+                          { label: "予約数", align: "right", w: "" },
+                          { label: "売上", align: "right", w: "" },
+                          { label: "平均単価", align: "right", w: "" },
+                          { label: "構成比", align: "right", w: "" },
+                        ].map((h) => (
+                          <th key={h.label} className={`py-2.5 px-3 font-medium text-[11px] text-${h.align}`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {storeData.length === 0 && (
+                        <tr><td colSpan={6} className="py-8 text-center text-[12px]" style={{ color: T.textFaint }}>部屋割りデータがありません</td></tr>
+                      )}
+                      {storeData.map((s, i) => {
+                        const totalStoreSales = storeData.reduce((sum, x) => sum + x.sales, 0);
+                        const avg = s.count > 0 ? Math.round(s.sales / s.count) : 0;
+                        const pct = totalStoreSales > 0 ? ((s.sales / totalStoreSales) * 100).toFixed(1) : "0.0";
+                        const rankColor = i === 0 ? "#fbbf24" : i === 1 ? "#9ca3af" : i === 2 ? "#c49885" : T.textFaint;
+                        return (
+                          <tr key={s.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td className="py-2 px-3 text-center font-bold" style={{ color: rankColor, borderRight: `1px solid ${T.border}` }}>{i + 1}</td>
+                            <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{s.name}</td>
+                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{s.count}件</td>
+                            <td className="py-2 px-3 text-right font-medium" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(s.sales)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(avg)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub }}>{pct}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {storeData.length > 0 && (
+                      <tfoot>
+                        <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                          <td className="py-2.5 px-3 font-bold" style={{ borderRight: `1px solid ${T.border}` }} colSpan={2}>合計</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{storeData.reduce((s, x) => s + x.count, 0)}件</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(storeData.reduce((s, x) => s + x.sales, 0))}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{(() => { const tc = storeData.reduce((s, x) => s + x.count, 0); const ts = storeData.reduce((s, x) => s + x.sales, 0); return tc > 0 ? fmt(Math.round(ts / tc)) : "—"; })()}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub }}>100.0%</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ 部屋割り登録 × 終了オーダーの予約に基づく</p>
             </div>
           )}
 
           {/* 顧客分析 */}
           {tab === "customer" && (
             <div className="animate-[fadeIn_0.3s]">
-              <p className="text-[12px] mb-3" style={{ color: T.textMuted }}>{smYear}年{smMonth}月 顧客分析</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                {[
-                  { label: "総顧客数", value: `${customerStats.totalCustomers}名`, color: "#c3a782" },
-                  { label: "リピーター", value: `${customerStats.repeaters}名 (${customerStats.repeatRate}%)`, color: "#7ab88f" },
-                  { label: "指名率", value: `${customerStats.nominationRate}%`, color: "#85a8c4" },
-                  { label: "総予約数", value: `${customerStats.totalReservations}件`, color: "#c49885" },
-                ].map((s) => (
-                  <div key={s.label} className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                    <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.label}</p>
-                    <p className="text-[18px] font-light" style={{ color: s.color }}>{s.value}</p>
-                  </div>
-                ))}
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <button onClick={prevMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>◀</button>
+                <span className="text-[14px] font-medium">{smYear}年{smMonth}月 顧客分析</span>
+                <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
+
+              {/* KPI テーブル */}
+              <div className="rounded-2xl border overflow-hidden mb-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {["指標", "値"].map((h, i) => (
+                          <th key={h} className={`py-2.5 px-3 font-medium text-[11px] ${i === 0 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: i === 0 ? `1px solid ${T.border}` : undefined, width: i === 0 ? "40%" : "auto" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: "総顧客数", value: `${customerStats.totalCustomers}名`, color: "#c3a782" },
+                        { label: "リピーター数", value: `${customerStats.repeaters}名`, color: "#7ab88f" },
+                        { label: "リピート率", value: `${customerStats.repeatRate}%`, color: "#7ab88f" },
+                        { label: "指名件数", value: `${customerStats.nominationCount}件`, color: "#85a8c4" },
+                        { label: "指名率", value: `${customerStats.nominationRate}%`, color: "#85a8c4" },
+                        { label: "総予約数", value: `${customerStats.totalReservations}件`, color: "#c49885" },
+                        { label: "顧客あたり平均予約数", value: customerStats.totalCustomers > 0 ? `${(customerStats.totalReservations / customerStats.totalCustomers).toFixed(1)}件` : "—", color: T.textSub },
+                      ].map((row) => (
+                        <tr key={row.label} style={{ borderBottom: `1px solid ${T.border}` }}>
+                          <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{row.label}</td>
+                          <td className="py-2 px-3 text-right font-medium" style={{ color: row.color }}>{row.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 売上TOP10 */}
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+                <div className="px-4 py-2.5" style={{ borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
                   <p className="text-[12px] font-medium">売上TOP10 顧客</p>
                 </div>
-                <table className="w-full text-[11px]">
-                  <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                    {["順位", "顧客名", "来店回数", "売上合計"].map((h) => (<th key={h} className="py-2 px-3 text-left font-normal" style={{ color: T.textMuted }}>{h}</th>))}
-                  </tr></thead>
-                  <tbody>{customerStats.topCustomers.map((c, i) => (
-                    <tr key={c.name} style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <td className="py-2 px-3 font-bold" style={{ color: i === 0 ? "#fbbf24" : i === 1 ? "#9ca3af" : i === 2 ? "#c49885" : T.textFaint }}>{i + 1}</td>
-                      <td className="py-2 px-3 font-medium">{c.name}</td>
-                      <td className="py-2 px-3">{c.count}回</td>
-                      <td className="py-2 px-3" style={{ color: T.accent }}>{fmt(c.sales)}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-                {customerStats.topCustomers.length === 0 && <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>データがありません</p>}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
+                        {[
+                          { label: "順位", align: "center", w: "56px" },
+                          { label: "顧客名", align: "left", w: "" },
+                          { label: "来店回数", align: "right", w: "" },
+                          { label: "売上合計", align: "right", w: "" },
+                          { label: "平均単価", align: "right", w: "" },
+                          { label: "構成比", align: "right", w: "" },
+                        ].map((h) => (
+                          <th key={h.label} className={`py-2.5 px-3 font-medium text-[11px] text-${h.align}`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customerStats.topCustomers.length === 0 && (
+                        <tr><td colSpan={6} className="py-8 text-center text-[12px]" style={{ color: T.textFaint }}>データがありません</td></tr>
+                      )}
+                      {customerStats.topCustomers.map((c, i) => {
+                        const avg = c.count > 0 ? Math.round(c.sales / c.count) : 0;
+                        const pct = monthTotal.sales > 0 ? ((c.sales / monthTotal.sales) * 100).toFixed(1) : "0.0";
+                        const rankColor = i === 0 ? "#fbbf24" : i === 1 ? "#9ca3af" : i === 2 ? "#c49885" : T.textFaint;
+                        return (
+                          <tr key={c.name} style={{ borderBottom: `1px solid ${T.border}` }}>
+                            <td className="py-2 px-3 text-center font-bold" style={{ color: rankColor, borderRight: `1px solid ${T.border}` }}>{i + 1}</td>
+                            <td className="py-2 px-3 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{c.name}</td>
+                            <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{c.count}回</td>
+                            <td className="py-2 px-3 text-right font-medium" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(c.sales)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(avg)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: T.textSub }}>{pct}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+              <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計</p>
             </div>
           )}
         </div>
