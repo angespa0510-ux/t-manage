@@ -55,6 +55,7 @@ export default function Analytics() {
   const [tab, setTab] = useState<Tab>("daily");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [showStoreFormula, setShowStoreFormula] = useState(false);
 
   // マウス戻るボタン対応: タブ → 前のページ
   useBackNav(tab, setTab);
@@ -125,7 +126,7 @@ export default function Analytics() {
       invoice: number; withholding: number;
       expense: number; income: number; replenish: number;
       uncollectedSales: number; safeUncollected: number; cashOnHand: number;
-      avgNet: number;
+      avgNet: number; storeShare: number;
     };
     const data: Row[] = [];
     const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
@@ -210,6 +211,8 @@ export default function Analytics() {
 
       // 平均単価 = (売上 - セラピストバック) / 予約数
       const avgNet = count > 0 ? Math.round((sales - back) / count) : 0;
+      // 店取概算 = 売上 − 割引 − インボイス − 源泉 − セラピスト
+      const storeShare = sales - discount - invoice - withholding - back;
 
       data.push({
         date, label: `${i}`, dow: dayNames[d.getDay()], count,
@@ -217,7 +220,7 @@ export default function Analytics() {
         invoice, withholding,
         expense, income, replenish,
         uncollectedSales, safeUncollected, cashOnHand,
-        avgNet,
+        avgNet, storeShare,
       });
     }
     return data;
@@ -390,30 +393,56 @@ export default function Analytics() {
                 <span className="text-[14px] font-medium">{smYear}年{smMonth}月 日別</span>
                 <button onClick={nextMonth} className="p-1 cursor-pointer" style={{ color: T.textSub }}>▶</button>
               </div>
+              {showStoreFormula && (
+                <div className="mb-3 rounded-xl border p-3 flex items-center justify-between" style={{ backgroundColor: "rgba(133,168,196,0.08)", borderColor: "#85a8c4" }}>
+                  <div className="text-[12px]" style={{ color: T.text }}>
+                    <span className="font-medium" style={{ color: "#85a8c4" }}>💡 店取概算の計算式</span>
+                    <span className="mx-2" style={{ color: T.textMuted }}>=</span>
+                    <span style={{ color: T.accent }}>売上</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#f59e0b" }}>割引</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#a855f7" }}>インボイス</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#d4687e" }}>源泉</span>
+                    <span className="mx-1" style={{ color: T.textMuted }}>−</span>
+                    <span style={{ color: "#7ab88f" }}>セラピスト</span>
+                  </div>
+                  <button onClick={() => setShowStoreFormula(false)} className="text-[12px] cursor-pointer" style={{ color: T.textSub }}>✕</button>
+                </div>
+              )}
               <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
                 <div className="overflow-x-auto">
                   <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
                     <thead>
                       <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
                         {[
-                          { label: "日付", align: "left", w: "54px" },
-                          { label: "曜", align: "center", w: "28px" },
-                          { label: "予約", align: "right", w: "48px" },
-                          { label: "平均単価", align: "right", w: "" },
-                          { label: "売上", align: "right", w: "" },
-                          { label: "セラピスト", align: "right", w: "" },
-                          { label: "割引", align: "right", w: "" },
-                          { label: "カード", align: "right", w: "" },
-                          { label: "ペイペイ", align: "right", w: "" },
-                          { label: "インボイス", align: "right", w: "" },
-                          { label: "源泉", align: "right", w: "" },
-                          { label: "経費", align: "right", w: "" },
-                          { label: "入金", align: "right", w: "" },
-                          { label: "売上未回収", align: "right", w: "" },
-                          { label: "金庫未回収", align: "right", w: "" },
-                          { label: "事務所残金", align: "right", w: "" },
+                          { label: "日付", align: "left", w: "54px", clickable: false },
+                          { label: "曜", align: "center", w: "28px", clickable: false },
+                          { label: "予約", align: "right", w: "48px", clickable: false },
+                          { label: "平均単価", align: "right", w: "", clickable: false },
+                          { label: "売上", align: "right", w: "", clickable: false },
+                          { label: "店取概算", align: "right", w: "", clickable: true },
+                          { label: "セラピスト", align: "right", w: "", clickable: false },
+                          { label: "割引", align: "right", w: "", clickable: false },
+                          { label: "カード", align: "right", w: "", clickable: false },
+                          { label: "ペイペイ", align: "right", w: "", clickable: false },
+                          { label: "インボイス", align: "right", w: "", clickable: false },
+                          { label: "源泉", align: "right", w: "", clickable: false },
+                          { label: "経費", align: "right", w: "", clickable: false },
+                          { label: "入金", align: "right", w: "", clickable: false },
+                          { label: "売上未回収", align: "right", w: "", clickable: false },
+                          { label: "金庫未回収", align: "right", w: "", clickable: false },
+                          { label: "事務所残金", align: "right", w: "", clickable: false },
                         ].map((h) => (
-                          <th key={h.label} className={`py-2 px-1.5 font-medium text-[10px] text-${h.align} whitespace-nowrap`} style={{ color: T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}>{h.label}</th>
+                          <th
+                            key={h.label}
+                            onClick={h.clickable ? () => setShowStoreFormula(v => !v) : undefined}
+                            className={`py-2 px-1.5 font-medium text-[10px] text-${h.align} whitespace-nowrap ${h.clickable ? "cursor-pointer select-none" : ""}`}
+                            style={{ color: h.clickable && showStoreFormula ? "#85a8c4" : T.textMuted, width: h.w || "auto", borderRight: `1px solid ${T.border}` }}
+                          >
+                            {h.label}{h.clickable ? " ⓘ" : ""}
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -429,6 +458,7 @@ export default function Analytics() {
                             <td className="py-1.5 px-1.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : d.count}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
                             <td className="py-1.5 px-1.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{dash(d.sales, fmt(d.sales))}</td>
+                            <td className="py-1.5 px-1.5 text-right font-medium whitespace-nowrap" style={{ color: d.storeShare === 0 ? T.textFaint : d.storeShare >= 0 ? "#85a8c4" : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.storeShare, fmt(d.storeShare))}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.back === 0 ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{dash(d.back, fmt(d.back))}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{dash(d.discount, d.discount === 0 ? fmt(0) : `−${fmt(d.discount)}`)}</td>
                             <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.card, fmt(d.card))}</td>
@@ -461,7 +491,8 @@ export default function Analytics() {
                           uncollectedSales: acc.uncollectedSales + d.uncollectedSales,
                           safeUncollected: acc.safeUncollected + d.safeUncollected,
                           cashOnHand: acc.cashOnHand + d.cashOnHand,
-                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+                          storeShare: acc.storeShare + d.storeShare,
+                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0 });
                         const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
                         return (
                           <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
@@ -469,6 +500,7 @@ export default function Analytics() {
                             <td className="py-2 px-1.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{avg > 0 ? fmt(avg) : "—"}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.storeShare >= 0 ? "#85a8c4" : "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.storeShare)}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(tot.back)}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.discount === 0 ? fmt(0) : `−${fmt(tot.discount)}`}</td>
                             <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
