@@ -153,11 +153,38 @@ export default function Analytics() {
       const income = dayExp.filter((e) => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
       const replenish = dayReps.reduce((s, r) => s + (r.amount || 0), 0);
 
-      // 各セラピスト精算を走査（営業締めロジックを踏襲）
+      // セラピスト単位で現金状態を計算（予約ベース + settlementsマッチ、営業締めと同じ）
       let staffCollectedAmt = 0;
       let uncollectedSales = 0;
       let safeUncollected = 0;
+      const processedTids = new Set<number>();
+
+      // 1) 予約のあるセラピストを走査（settlementsが無ければ未精算 = 売上未回収）
+      const therapistIds = Array.from(new Set(dayRes.map((r) => r.therapist_id)));
+      for (const tid of therapistIds) {
+        const tRes = dayRes.filter((r) => r.therapist_id === tid);
+        const tCash = tRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
+        const ds = daySettles.find((s) => s.therapist_id === tid);
+        const finalPay = ds?.final_payment || 0;
+        const reserveUsed = ds?.reserve_used_amount || 0;
+        const roomId = ds?.room_id || 0;
+        const roomRep = roomId ? dayReps.filter((r) => r.room_id === roomId).reduce((s, r) => s + (r.amount || 0), 0) : 0;
+        const netAfterPay = tCash - finalPay + reserveUsed;
+
+        if (ds?.sales_collected && !ds?.safe_deposited) {
+          staffCollectedAmt += netAfterPay + (ds.change_collected ? roomRep : 0);
+        } else if (ds?.safe_deposited && !ds?.safe_collected_date) {
+          safeUncollected += Math.max(tCash - finalPay, 0) + roomRep;
+        } else {
+          // !sales_collected（ds自体が無い場合も含む）
+          uncollectedSales += netAfterPay + roomRep;
+        }
+        processedTids.add(tid);
+      }
+
+      // 2) 予約は無いが settlements のみあるケース（予約外精算等、念のため）
       for (const ds of daySettles) {
+        if (processedTids.has(ds.therapist_id)) continue;
         const netAfterPay = (ds.total_cash || 0) - (ds.final_payment || 0) + (ds.reserve_used_amount || 0);
         const roomRep = ds.room_id ? dayReps.filter((r) => r.room_id === ds.room_id).reduce((s, r) => s + (r.amount || 0), 0) : 0;
         if (ds.sales_collected && !ds.safe_deposited) {
