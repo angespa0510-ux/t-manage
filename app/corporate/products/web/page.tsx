@@ -22,6 +22,9 @@ export default function WebProductPage() {
           challenge: "最も苦労したのはタイムチャートのリアルタイム同期。5分刻みのブロックを複数スタッフ間でドラッグ移動させる際、WebSocketとの整合性を取るためにバグと何度も格闘しました。",
           devVoice: "机上の設計ではなく、毎日現場で使いながら『ここが不便』を拾い続けて育てたシステム。だからこそ現場にフィットする使い心地になっています。",
           clientVoice: { text: "紙のシフト表とExcelの売上台帳から解放されました。スマホでどこからでも予約が確認できるのは本当に便利です。", attr: "小売業 D社 エリアマネージャー" },
+          demoImage: "/corporate/demos/cloud-core-demo.jpg",
+          demoCaption: "DASHBOARD PREVIEW",
+          demoOrientation: "landscape",
         },
         {
           name: "TERA Cloud Space",
@@ -31,6 +34,9 @@ export default function WebProductPage() {
           challenge: "複数拠点で部屋数が異なる中、すべてを一画面に収めるUI設計が難しかった。フロアごとの色分け、自動配置アルゴリズム、完了通知の連携など、見た目以上に複雑なロジックを実装。",
           devVoice: "以前は紙のホワイトボードで管理していたリソース配置が、全スタッフにリアルタイム共有されるようになり、ダブルブッキングが完全にゼロになりました。",
           clientVoice: { text: "受付業務の効率が段違いに上がりました。空きリソースが一目でわかるので、お客様をお待たせしなくなりました。", attr: "医療クリニック E社 事務長" },
+          demoImage: "/corporate/demos/cloud-space-demo.jpg",
+          demoCaption: "FLOOR MAP PREVIEW",
+          demoOrientation: "landscape",
         },
         {
           name: "TERA Cloud Portal",
@@ -40,6 +46,9 @@ export default function WebProductPage() {
           challenge: "セキュリティと使いやすさの両立が最大の課題。パスワードなしのアクセス利便性を保ちつつ、他ユーザーの情報が見えない安全性を確保するため、有効期限付きトークン認証を独自実装しました。",
           devVoice: "電話予約からWEB予約への移行率が40%に到達。受付の電話対応工数が半減し、お客様も24時間好きな時間に予約できるようになりました。",
           clientVoice: { text: "LINEに届くリンクを押すだけで予約確認できるのが画期的。お客様からの問い合わせ電話が激減しました。", attr: "美容業 F社 オーナー" },
+          demoImage: "/corporate/demos/cloud-portal-demo.jpg",
+          demoCaption: "CUSTOMER PORTAL PREVIEW",
+          demoOrientation: "landscape",
         },
       ]}
       techStack={["Next.js (App Router)", "TypeScript", "Tailwind CSS", "Supabase Realtime", "PostgreSQL", "PWA", "WebSocket", "LINE Messaging API"]}
