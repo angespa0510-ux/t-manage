@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
@@ -17,12 +17,23 @@ type Schedule = { id: number; staff_id: number; date: string; start_time: string
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
 
 export default function StaffPage() {
+  return <Suspense fallback={<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}><p>読み込み中...</p></div>}><StaffPageInner /></Suspense>;
+}
+
+function StaffPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
   const { confirm, ConfirmModalNode } = useConfirm();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "permissions" | "advances">("staff");
+  // URL ?tab=advances 等で初期タブを指定可能
+  const initialTab = (() => {
+    const t = searchParams?.get("tab");
+    if (t === "advances" || t === "permissions" || t === "schedule" || t === "oiri" || t === "license") return t;
+    return "staff";
+  })();
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "permissions" | "advances">(initialTab);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 

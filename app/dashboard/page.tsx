@@ -325,6 +325,22 @@ export default function Dashboard() {
     }));
     const staffAdvanceTotal = staffAdvanceList.reduce((s: number, a: any) => s + a.amount, 0);
 
+    // 前借り未記録チェック (本日出勤予定で preset>0 かつ pending/skipped 未記録のスタッフ)
+    const { data: todaySchs } = await supabase.from("staff_schedules").select("staff_id").eq("date", date);
+    const todayWorkingIds = new Set((todaySchs || []).map((s: any) => s.staff_id));
+    const { data: eligibleStaff } = await supabase.from("staff")
+      .select("id,name,advance_preset_amount")
+      .eq("status", "active")
+      .gt("advance_preset_amount", 0);
+    const { data: skippedRows } = await supabase.from("staff_advances")
+      .select("staff_id").eq("advance_date", date).eq("status", "skipped");
+    const recordedIds = new Set(staffAdvanceList.map((a: any) => a.staff_id));
+    const skippedIds = new Set((skippedRows || []).map((s: any) => s.staff_id));
+    const unrecordedAdvanceList = (eligibleStaff || [])
+      .filter((s: any) => todayWorkingIds.has(s.id))
+      .filter((s: any) => !recordedIds.has(s.id) && !skippedIds.has(s.id))
+      .map((s: any) => ({ id: s.id, name: s.name, preset: s.advance_preset_amount }));
+
     const cashOnHand = -totalReplenish - expenseTotal + incomeTotal + staffCollectedAmt - staffAdvanceTotal;
     // 金庫未回収（金庫投函済み・未回収）
     const { data: safeUncoll } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).is("safe_collected_date", null);
@@ -390,7 +406,7 @@ export default function Dashboard() {
       expenseList, expenseTotal, incomeList, incomeTotal,
       netProfit, therapistData, totalOut,
       staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
-      staffAdvanceList, staffAdvanceTotal,
+      staffAdvanceList, staffAdvanceTotal, unrecordedAdvanceList,
       therapistSales, safeUncollectedList, safeTotalUncollected, safeCollectedTodayList, safeCollectedTodayTotal,
       reserveUsedList, reserveUsedTotal, toyohashiBalance,
     });
@@ -1037,12 +1053,28 @@ export default function Dashboard() {
                       <div className="flex justify-between"><span>セラピスト支払い（ルーム内現金から）</span><span style={{ color: T.textFaint }}>-{fmt(closingData.totalFinalPay)}</span></div>
                       <p className="text-[9px] pl-2" style={{ color: T.textFaint }}>※ ルーム内で支払済み。スタッフ回収時に相殺されます</p>
                       {closingData.expenseTotal > 0 && <div className="flex justify-between"><span>経費</span><span style={{ color: "#c45555" }}>-{fmt(closingData.expenseTotal)}</span></div>}
-                      {closingData.staffAdvanceTotal > 0 && (
+                      {/* 💸 スタッフ前借り — 記録があれば明細表示、未記録があれば警告表示、なければ非表示 */}
+                      {(closingData.staffAdvanceTotal > 0 || (closingData.unrecordedAdvanceList || []).length > 0) && (
                         <>
-                          <div className="flex justify-between"><span>💸 スタッフ前借り</span><span style={{ color: "#d4687e" }}>-{fmt(closingData.staffAdvanceTotal)}</span></div>
+                          <div className="flex justify-between items-center">
+                            <span className="flex items-center gap-2">
+                              <span>💸 スタッフ前借り</span>
+                              <button onClick={() => router.push("/staff?tab=advances")} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#d4687e22", color: "#d4687e", border: "1px solid #d4687e44" }}>📝 記録画面へ →</button>
+                            </span>
+                            <span style={{ color: "#d4687e" }}>-{fmt(closingData.staffAdvanceTotal)}</span>
+                          </div>
                           {closingData.staffAdvanceList.map((a: any) => (
                             <div key={a.id} className="flex justify-between pl-3 text-[10px]"><span style={{ color: T.textMuted }}>・{a.name}{a.reason ? `（${a.reason}）` : ""}</span><span style={{ color: T.textMuted }}>-{fmt(a.amount)}</span></div>
                           ))}
+                          {(closingData.unrecordedAdvanceList || []).length > 0 && (
+                            <div className="rounded-lg p-2 mt-1" style={{ backgroundColor: "#f59e0b18", border: "1px solid #f59e0b44" }}>
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-medium" style={{ color: "#f59e0b" }}>⚠️ 未記録 {closingData.unrecordedAdvanceList.length} 名</span>
+                                <button onClick={() => router.push("/staff?tab=advances")} className="text-[9px] px-2 py-0.5 rounded cursor-pointer font-medium" style={{ backgroundColor: "#f59e0b", color: "#fff" }}>記録する →</button>
+                              </div>
+                              <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>{closingData.unrecordedAdvanceList.map((x: any) => x.name).join("・")}</p>
+                            </div>
+                          )}
                         </>
                       )}
                       <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>出金合計</span><span>-{fmt(closingData.totalOut + (closingData.staffAdvanceTotal || 0))}</span></div>
