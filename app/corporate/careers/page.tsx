@@ -4,120 +4,33 @@
    /corporate/careers
    
    DX導入フローと統一感のある暗シネマ調デザイン
-   「カジュアル歓迎」「非エンジニアOK」を前面に
+   Claude Design 版の良い部分を統合:
+   - MISSION を最上位に
+   - ABOUT セクション (会社紹介+facts)
+   - PERSONA セクション (求める人物像)
+   - OPEN POSITIONS を4雇用形態タブ化
+   - 5ステップ選考フロー
+   - FAQ セクション
    ═══════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { supabase } from "../../../lib/supabase";
-
-type Job = {
-  id: number;
-  title: string;
-  job_type: string;
-  summary: string;
-  description: string;
-  requirements: string;
-  salary_range: string;
-  location: string;
-};
+import {
+  RECRUIT_MISSION,
+  RECRUIT_COMPANY,
+  WHY_US,
+  PERSONA,
+  ROLES,
+  POSITIONS,
+  WORK_STYLE,
+  PROCESS,
+  RECRUIT_FAQ,
+  type Position,
+} from "./data";
 
 // ===== Accent =====
 const ACCENT = { hex: "#4dd6e8", soft: "rgba(77,214,232,0.14)", dim: "#0f2a30" };
-const LIME = { hex: "#a8eb6e", soft: "rgba(168,235,110,0.14)", dim: "#1e2a10" };
-
-// ===== Data =====
-const WHY_US = [
-  {
-    code: "01",
-    title: "現場志向",
-    en: "On-site First",
-    desc: "エンジニアリングのための開発ではなく、お客様の業務課題を解決する開発。自分たちで運営するリラクゼーションサロン「チョップ」の現場で毎日使われているものを、そのままプロダクトにしています。",
-    accent: "cyan" as const,
-  },
-  {
-    code: "02",
-    title: "少数精鋭・個の尊重",
-    en: "Small & Autonomous",
-    desc: "大企業のような「誰でもできる仕事」ではなく、一人ひとりが裁量を持って自分の色を出せる仕事。フルリモート中心で、時間と場所の拘束は最小限です。",
-    accent: "lime" as const,
-  },
-  {
-    code: "03",
-    title: "最前線の技術",
-    en: "Latest Tech",
-    desc: "Claude API・Next.js 16・Supabase など「今の技術」を積極的に採用。書籍・セミナー代補助、AI利用料補助あり。使いたい道具は一緒に揃えていきましょう。",
-    accent: "cyan" as const,
-  },
-  {
-    code: "04",
-    title: "地方から全国へ",
-    en: "Local to Nation",
-    desc: "愛知・安城ベースでも、全国の中小企業にサービスを提供。地方にいながらも、最先端のDXに関われます。「地方だから何もない」ではなく「地方だからこそやれる」の発想です。",
-    accent: "lime" as const,
-  },
-];
-
-const ROLES = [
-  {
-    code: "ROLE_01",
-    num: "01",
-    title: "エンジニア",
-    en: "Engineer",
-    summary: "フロント、バック、AI基盤まで。TypeScript + Next.js + Supabase + Claude API を使って、お客様の業務に溶け込むプロダクトを設計・実装します。",
-    skills: ["TypeScript", "Next.js", "Supabase", "Tailwind", "Claude API", "Python"],
-    note: "未経験の言語・FWも、採用後に一緒に習得できます。",
-    accent: "cyan" as const,
-  },
-  {
-    code: "ROLE_02",
-    num: "02",
-    title: "デザイナー",
-    en: "Designer",
-    summary: "プロダクトUIから、コーポレートサイト、提案資料、営業資料、映像まで。「現場で働く人が気持ちよく使える」を軸に、機能性と美しさを両立させます。",
-    skills: ["UI Design", "Figma", "動画編集", "イラスト", "コピーライティング"],
-    note: "Webだけ / グラフィックだけでもOKです。",
-    accent: "cyan" as const,
-  },
-  {
-    code: "ROLE_03",
-    num: "03",
-    title: "DX推進・営業",
-    en: "DX Consultant",
-    summary: "中小企業の社長・現場責任者と向き合い、課題を整理し、プロダクト導入を設計。テクノロジーの翻訳者として、経営と現場の橋渡し役です。",
-    skills: ["ヒアリング", "要件整理", "プロジェクト設計", "業務理解"],
-    note: "異業種からのキャリアチェンジ歓迎。業務経験のある方は即戦力として。",
-    accent: "lime" as const,
-  },
-  {
-    code: "ROLE_04",
-    num: "04",
-    title: "それ以外の枠",
-    en: "Other",
-    summary: "プロダクトの業務運用、カスタマーサポート、採用、総務、経理、マーケティング、SNS運用 — エンジニア以外の仕事もたくさんあります。「やってみたい」があれば、まずはお話しましょう。",
-    skills: ["CS", "バックオフィス", "マーケティング", "採用", "経理"],
-    note: "未経験OK。主婦・学生・シニアも歓迎します。",
-    accent: "lime" as const,
-  },
-];
-
-const WORK_STYLE = [
-  { icon: "🏠", label: "フルリモート中心", desc: "週1出社 or 完全リモートを応相談" },
-  { icon: "🕒", label: "時短・時差出勤OK", desc: "子育て・介護・Wワーク最優先" },
-  { icon: "💼", label: "副業・複業OK", desc: "他の仕事と並行、むしろ歓迎" },
-  { icon: "📚", label: "学習費補助", desc: "書籍・セミナー・資格取得を会社負担" },
-  { icon: "🤖", label: "AI利用料補助", desc: "Claude Pro・Cursor 等の支援" },
-  { icon: "👕", label: "服装自由", desc: "スーツ不要、Tシャツ可" },
-  { icon: "🎂", label: "年齢・経歴不問", desc: "実力と人柄で判断します" },
-  { icon: "🍼", label: "家庭優先OK", desc: "子の発熱・学校行事は気兼ねなく" },
-];
-
-const FLOW = [
-  { step: "01", title: "カジュアル面談", duration: "30〜60分 / オンライン", desc: "まずは雑談から。会社のこと・仕事のこと、なんでも聞いてください。" },
-  { step: "02", title: "実務的な対話", duration: "60〜90分", desc: "具体的な仕事内容、スキル、希望をすり合わせ。ポートフォリオや成果物があればぜひ。" },
-  { step: "03", title: "条件調整", duration: "1〜2週間", desc: "雇用形態（正社員 / 業務委託 / パート）、勤務条件、報酬を一緒に決めます。" },
-  { step: "04", title: "入社 / 業務開始", duration: "応相談", desc: "最短で翌月から。先方のご都合に合わせて柔軟に対応します。" },
-];
+const LIME   = { hex: "#a8eb6e", soft: "rgba(168,235,110,0.14)", dim: "#1e2a10" };
 
 // ============================================================
 //  TopBar
@@ -138,16 +51,17 @@ function TopBar() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
             <span style={{ fontWeight: 800, letterSpacing: 3, fontSize: 13 }}>TERA DX</span>
-            <span style={{ color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 10, marginTop: 4, letterSpacing: 1 }}>corporate / careers</span>
+            <span style={{ color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 10, marginTop: 4, letterSpacing: 1 }}>corporate / recruit</span>
           </div>
         </Link>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--muted)" }}>
         <Link href="/corporate" style={{ color: "inherit", textDecoration: "none" }}>corporate</Link>
         <span style={{ color: "var(--dim)" }}>/</span>
-        <span style={{ color: "#e6edf3" }}>careers</span>
+        <span style={{ color: "#e6edf3" }}>recruit</span>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+        <Link href="/corporate/services/dx-implementation-flow" style={{ display: "none" }} className="nav-dx-link">DX導入フロー →</Link>
         <Link href="/corporate#contact" style={{
           display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 999,
           background: `linear-gradient(135deg, ${ACCENT.hex}, #2dc5db)`, color: "#000",
@@ -161,59 +75,77 @@ function TopBar() {
 }
 
 // ============================================================
-//  Hero
+//  Hero (Mission先頭)
 // ============================================================
 function Hero() {
+  const m = RECRUIT_MISSION;
   return (
-    <section style={{ padding: "60px 0 40px", borderBottom: "1px solid var(--border)" }}>
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid var(--border-2)", borderRadius: 999, background: "var(--surface)", marginBottom: 28 }}>
+    <section style={{ padding: "80px 0 60px", borderBottom: "1px solid var(--border)" }}>
+      {/* Kicker */}
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "6px 12px", border: "1px solid var(--border-2)", borderRadius: 999, background: "var(--surface)", marginBottom: 24 }}>
         <span style={{ width: 6, height: 6, borderRadius: 999, background: ACCENT.hex }} />
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 1.5, color: "var(--muted)" }}>CAREERS // JOIN US</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 1.5, color: "var(--muted)" }}>RECRUIT // 2026 OPEN POSITIONS</span>
       </div>
-      <h1 style={{ fontSize: "clamp(38px, 7vw, 68px)", lineHeight: 1.1, letterSpacing: -2, margin: 0, fontWeight: 700 }}>
-        地方から、<br />
-        <span style={{ color: ACCENT.hex }}>中小企業のDX</span>を。
+      {/* MISSION label */}
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 3, color: ACCENT.hex, marginBottom: 20 }}>▸ {m.tagline}</div>
+      {/* 引用風 main message */}
+      <h1 style={{ fontSize: "clamp(36px, 6.5vw, 64px)", lineHeight: 1.15, letterSpacing: -2, margin: 0, fontWeight: 700 }}>
+        {m.main.map((ln, i) => (
+          <span key={i} style={{ display: "block", color: i === m.main.length - 1 ? ACCENT.hex : "var(--text)" }}>
+            {ln}
+          </span>
+        ))}
       </h1>
-      <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.8, marginTop: 28, maxWidth: 720 }}>
-        「現場で役立つテクノロジー」を一緒に作る仲間を探しています。<br />
-        エンジニアも、デザイナーも、営業も、<strong style={{ color: "var(--text)" }}>非エンジニアも大歓迎</strong>。<br />
-        まずは30分の雑談から、お気軽にどうぞ。
-      </p>
-
-      {/* Stats */}
-      <div style={{
-        marginTop: 48, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0,
-        border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--surface)",
-      }} className="stats-grid">
-        <Stat label="自社プロダクト" value="9" unit="製品" highlight />
-        <Stat label="DX支援実績" value="30" unit="社+" />
-        <Stat label="リモート率" value="100" unit="%" />
-        <Stat label="副業OK" value="◉" unit="" highlight />
+      {/* body */}
+      <div style={{ color: "var(--muted)", fontSize: 17, lineHeight: 1.85, marginTop: 28, maxWidth: 640 }}>
+        {m.body.map((ln, i) => <div key={i}>{ln}</div>)}
       </div>
-
-      {/* Cinematic image band */}
-      <div style={{ marginTop: 48, position: "relative", borderRadius: 16, overflow: "hidden", border: "1px solid var(--border)" }}>
-        <div style={{ position: "relative", width: "100%", aspectRatio: "21 / 9", background: "#07090c" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/corporate/dx-flow/hero-band.jpg" alt="朝のオフィス" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "saturate(0.8)" }} />
-          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(7,9,12,0.4) 0%, rgba(7,9,12,0) 30%, rgba(7,9,12,0) 60%, rgba(7,9,12,0.8) 100%), linear-gradient(90deg, rgba(77,214,232,0.1) 0%, transparent 50%)`, pointerEvents: "none" }} />
-          <div style={{ position: "absolute", left: 28, bottom: 24, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 2, color: "rgba(230,237,243,0.85)" }}>
-            <span style={{ color: ACCENT.hex }}>◉ </span>
-            WHERE WE BUILD IT — 愛知県安城市
-          </div>
-        </div>
+      <div style={{ marginTop: 24, fontSize: 14, color: "var(--text)", maxWidth: 640, lineHeight: 1.85 }}>
+        <strong style={{ color: ACCENT.hex }}>非エンジニアも大歓迎。</strong> まずは30分の雑談から、お気軽にどうぞ。
+      </div>
+      {/* CTA */}
+      <div style={{ marginTop: 36, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <a href="#jobs" style={{
+          display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 999,
+          background: ACCENT.hex, color: "#000", fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: 1.5, fontWeight: 800, textDecoration: "none",
+        }}>▸ 募集職種を見る</a>
+        <Link href="/corporate#contact" style={{
+          display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 999,
+          background: "transparent", color: "var(--text)", border: "1px solid var(--border-2)",
+          fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: 1.5, textDecoration: "none",
+        }}>カジュアル面談 (30分)</Link>
       </div>
     </section>
   );
 }
 
-function Stat({ label, value, unit, highlight }: { label: string; value: string; unit: string; highlight?: boolean }) {
+// ============================================================
+//  About (会社紹介 + facts)
+// ============================================================
+function About() {
+  const c = RECRUIT_COMPANY;
   return (
-    <div style={{ padding: "20px 24px", borderRight: "1px solid var(--border)" }}>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.5, color: "var(--muted)", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 8 }}>
-        <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1, color: highlight ? ACCENT.hex : "inherit" }}>{value}</span>
-        <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>{unit}</span>
+    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 40, alignItems: "stretch" }} className="about-grid">
+      <div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 2, color: ACCENT.hex, marginBottom: 12 }}>{c.code}</div>
+        <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>{c.name}</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--muted)", marginTop: 4, letterSpacing: 1 }}>{c.nameEn}</div>
+        <p style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.85, marginTop: 22 }}>{c.intro}</p>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 0, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--surface)" }}>
+        {c.facts.map((f, i) => (
+          <div key={f.label} style={{
+            padding: "22px 20px",
+            borderRight: i % 2 === 0 ? "1px solid var(--border)" : "none",
+            borderBottom: i < 2 ? "1px solid var(--border)" : "none",
+          }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.5, color: "var(--muted)", textTransform: "uppercase" }}>{f.label}</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 8 }}>
+              <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: f.highlight ? ACCENT.hex : "inherit" }}>{f.value}</span>
+              <span style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>{f.unit}</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -261,7 +193,27 @@ function WhyUsSection() {
 }
 
 // ============================================================
-//  Roles
+//  Persona (求める人物像)
+// ============================================================
+function PersonaSection() {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }} className="persona-grid">
+      {PERSONA.map((p, i) => {
+        const acc = i % 2 === 0 ? ACCENT : LIME;
+        return (
+          <div key={p.title} style={{ padding: 24, borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface)" }}>
+            <div style={{ fontSize: 32, color: acc.hex, marginBottom: 12, fontFamily: "var(--font-mono)", lineHeight: 1 }}>{p.icon}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{p.title}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.7 }}>{p.body}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================
+//  Roles (仕事の種類)
 // ============================================================
 function RolesSection() {
   return (
@@ -292,7 +244,7 @@ function RolesSection() {
                 <span key={s} style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "3px 8px", borderRadius: 6, background: acc.dim, color: acc.hex, border: `1px solid ${acc.hex}30` }}>{s}</span>
               ))}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text)", padding: "10px 12px", borderRadius: 8, background: "var(--bg-2)", border: "1px dashed " + acc.hex + "40" }}>
+            <div style={{ fontSize: 12, color: "var(--text)", padding: "10px 12px", borderRadius: 8, background: "var(--bg-2)", border: `1px dashed ${acc.hex}40` }}>
               <span style={{ color: acc.hex, fontWeight: 700 }}>◉ </span>{r.note}
             </div>
           </div>
@@ -303,73 +255,127 @@ function RolesSection() {
 }
 
 // ============================================================
-//  Open Positions (Supabase)
+//  Open Positions (雇用形態タブ)
 // ============================================================
-function OpenPositions({ jobs, loading }: { jobs: Job[]; loading: boolean }) {
-  const [openId, setOpenId] = useState<number | null>(null);
-  const typeLabel = (t: string) => t === "full_time" ? "正社員" : t === "part_time" ? "パート" : t === "contract" ? "業務委託" : t === "intern" ? "インターン" : "その他";
-  const typeColor = (t: string) => t === "full_time" ? ACCENT.hex : t === "part_time" ? LIME.hex : t === "contract" ? "#f4c261" : "#e879d8";
+function PositionsSection() {
+  const [activeId, setActiveId] = useState<string>(POSITIONS[0].id);
+  const active = POSITIONS.find((p) => p.id === activeId) || POSITIONS[0];
 
   return (
     <div>
-      {loading ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 12 }}>Loading positions...</div>
-      ) : jobs.length === 0 ? (
-        <div style={{ padding: "40px 28px", borderRadius: 14, border: "1px dashed var(--border-2)", background: "var(--surface)", textAlign: "center" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 2, color: ACCENT.hex, marginBottom: 10 }}>◉ NO FORMAL OPENINGS</div>
-          <p style={{ fontSize: 14, color: "var(--text)", marginBottom: 8, lineHeight: 1.7 }}>
-            現在、<strong>正式募集中のポジションはありません</strong>。
-          </p>
-          <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.8 }}>
-            とはいえ、「こんな仕事ならできるかも」「話を聞いてみたい」という方は、<br />
-            ぜひカジュアル面談でご連絡ください。新しいポジションをご一緒に作れるかもしれません。
-          </p>
-          <Link href="/corporate#contact" style={{
-            display: "inline-block", marginTop: 20, padding: "12px 28px", borderRadius: 999,
-            background: ACCENT.hex, color: "#000", fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: 1.5, fontWeight: 800, textDecoration: "none",
-          }}>▸ カジュアル面談を予約する</Link>
+      {/* Tabs */}
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${POSITIONS.length}, 1fr)`, gap: 8, marginBottom: 16 }} className="position-tabs">
+        {POSITIONS.map((j) => {
+          const isActive = j.id === activeId;
+          return (
+            <button
+              key={j.id}
+              onClick={() => setActiveId(j.id)}
+              style={{
+                appearance: "none", cursor: "pointer", textAlign: "center",
+                padding: "14px 12px", borderRadius: 12,
+                border: `1px solid ${isActive ? ACCENT.hex : "var(--border)"}`,
+                background: isActive ? `linear-gradient(180deg, ${ACCENT.soft}, var(--surface) 70%)` : "var(--surface)",
+                color: isActive ? "var(--text)" : "var(--muted)",
+                boxShadow: isActive ? `0 0 0 1px ${ACCENT.hex}, 0 16px 32px -20px ${ACCENT.soft}` : "none",
+                transition: "all 300ms cubic-bezier(.2,.8,.2,1)",
+                fontFamily: "inherit",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.5, color: isActive ? ACCENT.hex : "var(--dim)", fontWeight: 700 }}>{j.tag}</span>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>{j.type}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--muted)" }}>{j.typeEn}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Detail Panel */}
+      <PositionDetail key={active.id} position={active} />
+    </div>
+  );
+}
+
+function PositionDetail({ position: p }: { position: Position }) {
+  return (
+    <div style={{
+      border: "1px solid var(--border)", borderRadius: 16, padding: 36,
+      background: "var(--surface)",
+      animation: "fadeSlideUp 400ms cubic-bezier(.2,.8,.2,1) both",
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 20 }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 1.5, color: ACCENT.hex, marginBottom: 8 }}>{p.code}</div>
+          <h3 style={{ fontSize: "clamp(22px, 3vw, 28px)", fontWeight: 700, letterSpacing: -0.5, margin: 0, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+            {p.title}
+            <span style={{ padding: "3px 10px", fontSize: 11, borderRadius: 6, background: ACCENT.dim, color: ACCENT.hex, border: `1px solid ${ACCENT.hex}40`, fontFamily: "var(--font-mono)", fontWeight: 600, letterSpacing: 1 }}>
+              {p.type}
+            </span>
+          </h3>
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {jobs.map((j) => {
-            const isOpen = openId === j.id;
-            const tc = typeColor(j.job_type);
-            return (
-              <div key={j.id} style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--surface)", overflow: "hidden", transition: "border-color 300ms" }}>
-                <button onClick={() => setOpenId(isOpen ? null : j.id)} style={{ width: "100%", padding: "22px 28px", background: "none", border: "none", cursor: "pointer", textAlign: "left", color: "var(--text)", fontFamily: "inherit" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, background: `${tc}18`, color: tc, border: `1px solid ${tc}40`, letterSpacing: 1 }}>{typeLabel(j.job_type)}</span>
-                    {j.salary_range && <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#f4c261" }}>◉ {j.salary_range}</span>}
-                    {j.location && <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted)" }}>◉ {j.location}</span>}
-                    <span style={{ marginLeft: "auto", fontSize: 14, color: "var(--muted)", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 250ms" }}>⌄</span>
-                  </div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", lineHeight: 1.4 }}>{j.title}</h3>
-                  {j.summary && <p style={{ fontSize: 13, lineHeight: 1.75, color: "var(--muted)", marginTop: 8 }}>{j.summary}</p>}
-                </button>
-                {isOpen && (
-                  <div style={{ padding: "0 28px 24px 28px" }}>
-                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-                      {j.description && (
-                        <div>
-                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: ACCENT.hex, letterSpacing: 1.5, marginBottom: 8 }}>WORK DESCRIPTION</div>
-                          <p style={{ fontSize: 13, lineHeight: 1.85, color: "var(--text)", whiteSpace: "pre-wrap" }}>{j.description}</p>
-                        </div>
-                      )}
-                      {j.requirements && (
-                        <div>
-                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: LIME.hex, letterSpacing: 1.5, marginBottom: 8 }}>REQUIREMENTS</div>
-                          <p style={{ fontSize: 13, lineHeight: 1.85, color: "var(--text)", whiteSpace: "pre-wrap" }}>{j.requirements}</p>
-                        </div>
-                      )}
-                      <Link href="/corporate#contact" style={{ alignSelf: "flex-start", padding: "12px 28px", borderRadius: 999, background: ACCENT.hex, color: "#000", fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: 1.5, fontWeight: 800, textDecoration: "none" }}>▸ この枠で応募する</Link>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+        <Link href="/corporate#contact" style={{
+          padding: "12px 24px", borderRadius: 999, background: ACCENT.hex, color: "#000",
+          fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: 1.5, fontWeight: 800,
+          textDecoration: "none", whiteSpace: "nowrap",
+        }}>▸ この職種に応募</Link>
+      </div>
+
+      {/* Summary */}
+      <p style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.85, maxWidth: 800, marginBottom: 28 }}>{p.summary}</p>
+
+      {/* Meta Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--border)", marginBottom: 24 }} className="meta-grid">
+        {[
+          { label: "報酬",     value: p.salary    },
+          { label: "勤務地",   value: p.location  },
+          { label: "働き方",   value: p.workStyle },
+          { label: "契約期間", value: p.commit    },
+        ].map((m) => (
+          <div key={m.label} style={{ padding: "16px 18px", background: "var(--bg-2)" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.5, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>{m.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>{m.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Highlights */}
+      <div style={{ marginBottom: 24, padding: "16px 20px", borderRadius: 10, border: `1px dashed ${LIME.hex}40`, background: `${LIME.soft.replace("0.14", "0.05")}` }}>
+        {p.highlights.map((h, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "4px 0", fontSize: 13, color: "var(--text)", lineHeight: 1.7 }}>
+            <span style={{ color: LIME.hex, flexShrink: 0 }}>◉</span>
+            <span>{h}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Body Grid: Duties / Musts / Wants */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }} className="body-grid">
+        <JobBlock title="仕事内容" items={p.duties} accent={ACCENT.hex} tag="DUTIES" />
+        <JobBlock title="必須要件" items={p.musts}  accent={LIME.hex}   tag="MUST HAVE" />
+        <JobBlock title="歓迎要件" items={p.wants}  accent="var(--muted)" tag="NICE TO HAVE" />
+      </div>
+    </div>
+  );
+}
+
+function JobBlock({ title, items, accent, tag }: { title: string; items: string[]; accent: string; tag: string }) {
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 18, background: "var(--bg-2)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 1.5, color: accent, fontWeight: 700 }}>{tag}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--dim)" }}>{items.length}</span>
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{title}</div>
+      <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+        {items.map((it, i) => (
+          <li key={i} style={{ display: "flex", gap: 8, fontSize: 12, lineHeight: 1.6, color: "var(--muted)" }}>
+            <span style={{ color: accent, flexShrink: 0 }}>▪</span>
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -392,28 +398,75 @@ function WorkStyleSection() {
 }
 
 // ============================================================
-//  Selection Flow
+//  Process (5 steps timeline)
 // ============================================================
-function FlowSection() {
+function ProcessSection() {
   return (
-    <div style={{ position: "relative" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, position: "relative" }} className="flow-grid">
-        {FLOW.map((f, i) => (
-          <div key={f.step} style={{ position: "relative", padding: 22, borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface)" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 1.5, color: ACCENT.hex, marginBottom: 8 }}>STEP_{f.step}</div>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{f.title}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--muted)", marginBottom: 10 }}>{f.duration}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>{f.desc}</div>
-            {i < FLOW.length - 1 && (
-              <div className="flow-arrow" style={{ position: "absolute", right: -12, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "var(--border-2)", zIndex: 2 }}>→</div>
-            )}
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {PROCESS.map((p, i) => (
+          <div key={p.num} style={{ display: "flex", gap: 18, alignItems: "stretch" }} className="process-row">
+            {/* Timeline node + line */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 48, flexShrink: 0 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 999,
+                display: "grid", placeItems: "center",
+                border: `2px solid ${ACCENT.hex}`,
+                background: i === 0 ? ACCENT.hex : ACCENT.dim,
+                color: i === 0 ? "#000" : ACCENT.hex,
+                fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 13,
+                boxShadow: i === 0 ? `0 0 0 6px ${ACCENT.soft}` : "none",
+              }}>{p.num}</div>
+              {i < PROCESS.length - 1 && (
+                <div style={{ flex: 1, width: 2, background: "var(--border-2)", marginTop: 4, marginBottom: -4, minHeight: 24 }} />
+              )}
+            </div>
+            {/* Card */}
+            <div style={{ flex: 1, padding: "18px 22px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{p.title}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted)" }}>◷ {p.duration}</div>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.75 }}>{p.body}</div>
+            </div>
           </div>
         ))}
       </div>
       <div style={{ marginTop: 24, padding: "18px 22px", borderRadius: 12, border: `1px dashed ${LIME.hex}40`, background: `${LIME.soft.replace("0.14", "0.05")}`, fontSize: 13, color: "var(--text)", lineHeight: 1.8, textAlign: "center" }}>
         <span style={{ color: LIME.hex, fontWeight: 700 }}>◉ </span>
-        <strong>STEP_01 だけ</strong>でも大丈夫です。「話を聞きに来た」で終わっても全く問題ありません。
+        <strong>STEP_02 (カジュアル面談) だけ</strong>でも大丈夫です。「話を聞きに来た」で終わっても全く問題ありません。
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+//  FAQ
+// ============================================================
+function FAQSection() {
+  const [open, setOpen] = useState(0);
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 16, background: "var(--surface)", overflow: "hidden" }}>
+      {RECRUIT_FAQ.map((f, i) => {
+        const isOpen = open === i;
+        return (
+          <div key={i} style={{ borderTop: i === 0 ? "none" : "1px solid var(--border)" }}>
+            <button
+              onClick={() => setOpen(isOpen ? -1 : i)}
+              style={{ width: "100%", appearance: "none", background: "transparent", color: "var(--text)", border: "none", cursor: "pointer", padding: "20px 24px", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, fontFamily: "inherit" }}
+            >
+              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: ACCENT.hex, minWidth: 36 }}>Q.{String(i + 1).padStart(2, "0")}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, textAlign: "left" }}>{f.q}</span>
+              </div>
+              <span style={{ color: isOpen ? ACCENT.hex : "var(--muted)", fontSize: 16, fontFamily: "var(--font-mono)", transition: "transform 200ms", transform: isOpen ? "rotate(45deg)" : "none" }}>+</span>
+            </button>
+            <div style={{ maxHeight: isOpen ? 300 : 0, overflow: "hidden", transition: "max-height 400ms cubic-bezier(.2,.8,.2,1)" }}>
+              <div style={{ padding: "0 24px 20px 76px", color: "var(--muted)", fontSize: 14, lineHeight: 1.8 }}>{f.a}</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -423,7 +476,7 @@ function FlowSection() {
 // ============================================================
 function CTASection() {
   return (
-    <div style={{ position: "relative", border: "1px solid var(--border-2)", borderRadius: 20, padding: "56px 48px", background: `linear-gradient(135deg, ${ACCENT.soft}, transparent 60%), var(--surface)`, overflow: "hidden" }}>
+    <div style={{ position: "relative", border: "1px solid var(--border-2)", borderRadius: 20, padding: "56px 48px", background: `linear-gradient(135deg, ${ACCENT.soft}, transparent 60%), var(--surface)`, overflow: "hidden" }} id="contact">
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 2, color: ACCENT.hex }}>▸ GET_IN_TOUCH</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 40, marginTop: 16, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 320 }}>
@@ -452,17 +505,12 @@ function CTASection() {
 //  Main page
 // ============================================================
 export default function CareersPage() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  // 初期表示を #jobs に飛ぶとき用
   useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await supabase.from("corporate_jobs").select("*").eq("is_open", true).order("sort_order");
-        if (data) setJobs(data as Job[]);
-      } catch (e) { console.log("jobs fetch error:", e); }
-      setLoading(false);
-    })();
+    if (typeof window !== "undefined" && window.location.hash === "#jobs") {
+      const el = document.getElementById("jobs");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    }
   }, []);
 
   return (
@@ -505,13 +553,20 @@ export default function CareersPage() {
         .careers-page > * { position: relative; z-index: 1; }
         ::selection { background: #4dd6e8; color: #000; }
         button:focus-visible { outline: 2px solid #4dd6e8; outline-offset: 2px; }
+        @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        html { scroll-behavior: smooth; }
 
         @media (max-width: 900px) {
-          .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .about-grid { grid-template-columns: 1fr !important; }
           .why-grid, .roles-grid { grid-template-columns: 1fr !important; }
+          .persona-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .work-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .flow-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
-          .flow-arrow { display: none !important; }
+          .position-tabs { grid-template-columns: repeat(2, 1fr) !important; }
+          .meta-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .body-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 500px) {
+          .persona-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -522,31 +577,46 @@ export default function CareersPage() {
           <Hero />
 
           <div style={{ marginTop: 100 }}>
+            <SectionHead tag="ABOUT" title="私たちについて" />
+            <About />
+          </div>
+
+          <div style={{ marginTop: 100 }}>
             <SectionHead
-              tag="WHY US"
-              title="なぜ、ここで働くのか"
-              sub="大企業にはない裁量と、地方ならではの顔の見える仕事。自分たちが作ったものを、自分たちの現場で使う。その距離感が、私たちの強みです。"
+              tag="VALUES"
+              title="大切にしていること"
+              sub="日々の判断のよりどころとなる、私たちの4つの価値観。大企業にはない裁量と、地方ならではの顔の見える仕事が、私たちの強みです。"
             />
             <WhyUsSection />
           </div>
 
           <div style={{ marginTop: 100 }}>
             <SectionHead
-              tag="OPEN ROLES"
-              title="募集している枠"
-              sub="エンジニア・デザイナー・DX推進・営業が中心ですが、それ以外の仕事もあります。「自分はどれ？」と迷ったら、まず話に来てください。"
+              tag="WHO WE LOOK FOR"
+              title="求める人物像"
+              sub="スキルより大事にしている、4つの姿勢があります。どれも入社後に磨けるものです。"
               accent={LIME.hex}
             />
-            <RolesSection />
+            <PersonaSection />
           </div>
 
           <div style={{ marginTop: 100 }}>
             <SectionHead
-              tag="OPEN POSITIONS"
-              title="現在の募集ポジション"
-              sub="正式に募集中の枠は下記です。該当しなくても、カジュアル面談でお話できる枠を作れる場合があります。"
+              tag="WORK VARIETY"
+              title="仕事の種類"
+              sub="エンジニア・デザイナー・DX推進・営業が中心ですが、それ以外の仕事もあります。「自分はどれ？」と迷ったら、まず話に来てください。"
             />
-            <OpenPositions jobs={jobs} loading={loading} />
+            <RolesSection />
+          </div>
+
+          <div style={{ marginTop: 100 }} id="jobs">
+            <SectionHead
+              tag="OPEN POSITIONS // 4 TYPES"
+              title="募集雇用形態"
+              sub="どの職種も、正社員・業務委託・パート・インターンの4形態から選べます。あなたの生活に合う働き方を選んでください。"
+              accent={LIME.hex}
+            />
+            <PositionsSection />
           </div>
 
           <div style={{ marginTop: 100 }}>
@@ -554,18 +624,23 @@ export default function CareersPage() {
               tag="WORK STYLE"
               title="働き方・制度"
               sub="時間と場所に縛られず、一人ひとりのライフステージに合わせた働き方ができます。"
-              accent={LIME.hex}
             />
             <WorkStyleSection />
           </div>
 
           <div style={{ marginTop: 100 }}>
             <SectionHead
-              tag="SELECTION PROCESS"
-              title="選考の流れ"
-              sub="形式張った面接はしません。4ステップで、ゆっくりお互いを知っていきましょう。"
+              tag="SELECTION PROCESS // 5 STEPS"
+              title="選考フロー"
+              sub="形式張った面接はしません。5ステップで、ゆっくりお互いを知っていきましょう。オファーまで平均3〜4週間です。"
+              accent={LIME.hex}
             />
-            <FlowSection />
+            <ProcessSection />
+          </div>
+
+          <div style={{ marginTop: 100 }}>
+            <SectionHead tag="FAQ" title="よくあるご質問" />
+            <FAQSection />
           </div>
 
           <div style={{ marginTop: 100 }}>
@@ -579,7 +654,7 @@ export default function CareersPage() {
             </div>
             <div style={{ textAlign: "right", lineHeight: 1.8 }}>
               <div>© {new Date().getFullYear()} 合同会社テラスライフ</div>
-              <div>/ careers build r1</div>
+              <div>/ careers build r2</div>
             </div>
           </footer>
         </main>
