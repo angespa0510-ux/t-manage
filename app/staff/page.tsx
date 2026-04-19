@@ -141,7 +141,7 @@ export default function StaffPage() {
 
   // ワンクリック記録
   const recordAdvance = async (staff: Staff, amount: number, reason: string = "") => {
-    await supabase.from("staff_advances").insert({
+    const { error } = await supabase.from("staff_advances").insert({
       staff_id: staff.id,
       advance_date: advTodayDate,
       amount,
@@ -149,6 +149,11 @@ export default function StaffPage() {
       status: "pending",
       recorded_by_name: activeStaff?.name || "",
     });
+    if (error) {
+      console.error("[recordAdvance] insert failed:", error);
+      toast.show(`前借り記録に失敗: ${error.message}`, "error");
+      return;
+    }
     toast.show(`${staff.name} ¥${amount.toLocaleString()} を記録しました`, "success");
     fetchAdvTodayData();
     fetchAdvances();
@@ -156,7 +161,7 @@ export default function StaffPage() {
 
   // 「当日なし」記録
   const recordSkip = async (staff: Staff) => {
-    await supabase.from("staff_advances").insert({
+    const { error } = await supabase.from("staff_advances").insert({
       staff_id: staff.id,
       advance_date: advTodayDate,
       amount: 0,
@@ -164,6 +169,11 @@ export default function StaffPage() {
       status: "skipped",
       recorded_by_name: activeStaff?.name || "",
     });
+    if (error) {
+      console.error("[recordSkip] insert failed:", error);
+      toast.show(`記録に失敗: ${error.message}`, "error");
+      return;
+    }
     toast.show(`${staff.name} 当日なしを記録`, "info");
     fetchAdvTodayData();
     fetchAdvances();
@@ -173,7 +183,12 @@ export default function StaffPage() {
   const deleteAdvance = async (id: number) => {
     const ok = await confirm({ title: "この前借り記録を削除しますか？", variant: "danger", confirmLabel: "削除" });
     if (!ok) return;
-    await supabase.from("staff_advances").delete().eq("id", id);
+    const { error } = await supabase.from("staff_advances").delete().eq("id", id);
+    if (error) {
+      console.error("[deleteAdvance] delete failed:", error);
+      toast.show(`削除に失敗: ${error.message}`, "error");
+      return;
+    }
     toast.show("削除しました", "success");
     fetchAdvTodayData();
     fetchAdvances();
