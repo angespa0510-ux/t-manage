@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 
 type SubProduct = {
@@ -10,6 +10,8 @@ type SubProduct = {
   challenge: string;
   devVoice: string;
   clientVoice: { text: string; attr: string };
+  demoImage?: string;       // デモ画像パス（/public 配下）
+  demoCaption?: string;     // 画像下のキャプション
 };
 
 type Props = {
@@ -44,10 +46,22 @@ export default function ProductDetailLayout({ badge, badgeColor, name, tagline, 
         html{scroll-behavior:smooth}a{color:inherit;text-decoration:none}
         @keyframes fadeUp{from{opacity:0;transform:translateY(36px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
         .fu{opacity:0;transform:translateY(36px);transition:opacity .8s cubic-bezier(.22,1,.36,1),transform .8s cubic-bezier(.22,1,.36,1)}
         .fu.on{opacity:1;transform:translateY(0)}
         .ch{transition:transform .3s,box-shadow .3s,border-color .3s}
         .ch:hover{transform:translateY(-4px);box-shadow:0 20px 60px rgba(37,99,235,0.12);border-color:rgba(96,165,250,0.3)!important}
+        .demo-shell{position:relative;display:flex;align-items:flex-start;justify-content:center}
+        .demo-shell::before{content:"";position:absolute;inset:-40px;border-radius:40px;background:radial-gradient(ellipse at center,var(--glow,rgba(59,130,246,0.25)),transparent 65%);filter:blur(30px);z-index:0;pointer-events:none}
+        .demo-frame{position:relative;z-index:1;border-radius:22px;overflow:hidden;background:#0b1220;box-shadow:0 30px 80px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.06) inset;animation:floatY 6s ease-in-out infinite}
+        .demo-frame img{display:block;width:100%;height:auto}
+        .sp-grid{display:grid;grid-template-columns:1.15fr 0.85fr;gap:36px;align-items:start}
+        .sp-voices{display:grid;grid-template-columns:1fr;gap:12px}
+        @media (max-width:860px){
+          .sp-grid{grid-template-columns:1fr;gap:28px}
+          .sp-voices{grid-template-columns:1fr}
+          .demo-shell::before{inset:-20px}
+        }
       `}</style>
 
       {/* ── NAV ── */}
@@ -109,7 +123,7 @@ export default function ProductDetailLayout({ badge, badgeColor, name, tagline, 
                   <p style={{ fontSize:13,lineHeight:1.85,color:"#94a3b8",marginBottom:20 }}>{p.desc}</p>
 
                   {/* Features grid */}
-                  <div style={{ display:"flex",flexWrap:"wrap",gap:8,marginBottom:20 }}>
+                  <div style={{ display:"flex",flexWrap:"wrap",gap:8,marginBottom:24 }}>
                     {p.features.map(f => (
                       <div key={f} style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)" }}>
                         <div style={{ width:4,height:4,borderRadius:"50%",background:badgeColor }}/>
@@ -118,22 +132,52 @@ export default function ProductDetailLayout({ badge, badgeColor, name, tagline, 
                     ))}
                   </div>
 
-                  {/* Challenge + Voices in row */}
-                  <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12 }}>
-                    <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)" }}>
-                      <p style={{ fontSize:9,fontWeight:800,color:"#f59e0b",letterSpacing:1.5,marginBottom:8 }}>CHALLENGE</p>
-                      <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1" }}>{p.challenge}</p>
+                  {p.demoImage ? (
+                    /* 2カラム: 左=声カード縦積み / 右=デモ画像 */
+                    <div className="sp-grid">
+                      <div className="sp-voices">
+                        <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)" }}>
+                          <p style={{ fontSize:9,fontWeight:800,color:"#f59e0b",letterSpacing:1.5,marginBottom:8 }}>CHALLENGE</p>
+                          <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1" }}>{p.challenge}</p>
+                        </div>
+                        <div style={{ padding:"14px 16px",borderRadius:12,background:`${badgeColor}06`,border:`1px solid ${badgeColor}12` }}>
+                          <p style={{ fontSize:9,fontWeight:800,color:badgeColor,letterSpacing:1.5,marginBottom:8 }}>開発者の声</p>
+                          <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1",fontStyle:"italic" }}>&ldquo;{p.devVoice}&rdquo;</p>
+                        </div>
+                        <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.08)" }}>
+                          <p style={{ fontSize:9,fontWeight:800,color:"#22c55e",letterSpacing:1.5,marginBottom:8 }}>導入企業の声</p>
+                          <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1",fontStyle:"italic" }}>&ldquo;{p.clientVoice.text}&rdquo;</p>
+                          <p style={{ fontSize:10,color:"#64748b",marginTop:6,textAlign:"right" }}>— {p.clientVoice.attr}</p>
+                        </div>
+                      </div>
+                      <div className="demo-shell" style={{ ["--glow" as string]: `${badgeColor}33` } as React.CSSProperties}>
+                        <div className="demo-frame" style={{ maxWidth:340,width:"100%" }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.demoImage} alt={`${p.name} プレビュー`} loading="lazy" />
+                        </div>
+                        {p.demoCaption && (
+                          <p style={{ position:"absolute",bottom:-28,left:0,right:0,textAlign:"center",fontSize:10,color:"#64748b",letterSpacing:1,zIndex:1 }}>{p.demoCaption}</p>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ padding:"14px 16px",borderRadius:12,background:`${badgeColor}06`,border:`1px solid ${badgeColor}12` }}>
-                      <p style={{ fontSize:9,fontWeight:800,color:badgeColor,letterSpacing:1.5,marginBottom:8 }}>開発者の声</p>
-                      <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1",fontStyle:"italic" }}>&ldquo;{p.devVoice}&rdquo;</p>
+                  ) : (
+                    /* 従来: 3カラム声カード */
+                    <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12 }}>
+                      <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)" }}>
+                        <p style={{ fontSize:9,fontWeight:800,color:"#f59e0b",letterSpacing:1.5,marginBottom:8 }}>CHALLENGE</p>
+                        <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1" }}>{p.challenge}</p>
+                      </div>
+                      <div style={{ padding:"14px 16px",borderRadius:12,background:`${badgeColor}06`,border:`1px solid ${badgeColor}12` }}>
+                        <p style={{ fontSize:9,fontWeight:800,color:badgeColor,letterSpacing:1.5,marginBottom:8 }}>開発者の声</p>
+                        <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1",fontStyle:"italic" }}>&ldquo;{p.devVoice}&rdquo;</p>
+                      </div>
+                      <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.08)" }}>
+                        <p style={{ fontSize:9,fontWeight:800,color:"#22c55e",letterSpacing:1.5,marginBottom:8 }}>導入企業の声</p>
+                        <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1",fontStyle:"italic" }}>&ldquo;{p.clientVoice.text}&rdquo;</p>
+                        <p style={{ fontSize:10,color:"#64748b",marginTop:6,textAlign:"right" }}>— {p.clientVoice.attr}</p>
+                      </div>
                     </div>
-                    <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.08)" }}>
-                      <p style={{ fontSize:9,fontWeight:800,color:"#22c55e",letterSpacing:1.5,marginBottom:8 }}>導入企業の声</p>
-                      <p style={{ fontSize:11,lineHeight:1.75,color:"#cbd5e1",fontStyle:"italic" }}>&ldquo;{p.clientVoice.text}&rdquo;</p>
-                      <p style={{ fontSize:10,color:"#64748b",marginTop:6,textAlign:"right" }}>— {p.clientVoice.attr}</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             ))}
