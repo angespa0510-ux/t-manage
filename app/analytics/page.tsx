@@ -153,7 +153,7 @@ export default function Analytics() {
       date: string; label: string; dow: string; count: number;
       sales: number; discount: number; back: number; card: number; paypay: number; cash: number;
       invoice: number; withholding: number;
-      expense: number; income: number; replenish: number;
+      expense: number; income: number; replenish: number; advance: number;
       uncollectedSales: number; safeUncollected: number; cashOnHand: number;
       avgNet: number; storeShare: number; reserve: number; changeNet: number; cardFee: number;
     };
