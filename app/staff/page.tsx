@@ -9,7 +9,7 @@ import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 import { useConfirm } from "../../components/useConfirm";
 
-type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean };
+type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean; override_is_manager: boolean | null; override_can_tax_portal: boolean | null; override_can_cash_dashboard: boolean | null };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
 type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number; break_minutes: number };
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
@@ -372,8 +372,8 @@ const openPaymentStatement = (sch: Schedule) => {
     w.document.close();
   };
 
-  const roleColors: Record<string, string> = { owner: "#c3a782", manager: "#85a8c4", leader: "#a855f7", staff: "#22c55e" };
-  const roleLabels: Record<string, string> = { owner: "オーナー", manager: "店長", leader: "責任者", staff: "スタッフ" };
+  const roleColors: Record<string, string> = { owner: "#c3a782", manager: "#85a8c4", leader: "#a855f7", supervisor: "#e8849a", staff: "#22c55e" };
+  const roleLabels: Record<string, string> = { owner: "オーナー", manager: "店長", leader: "店長", supervisor: "責任者", staff: "スタッフ" };
   const POSITIONS = ["社長", "経営責任者", "社員", "契約社員", "業務委託", "税理士"];
   const statusColors: Record<string, string> = { scheduled: "#85a8c4", completed: "#22c55e", cancelled: "#c45555" };
   const statusLabels: Record<string, string> = { scheduled: "予定", completed: "完了", cancelled: "キャンセル" };
@@ -512,7 +512,7 @@ const openPaymentStatement = (sch: Schedule) => {
                   if (next.length === 4) {
                     const { data } = await supabase.from("staff").select("id,name,role").eq("pin", next).eq("status", "active").maybeSingle();
                     if (!data) { setPinError("PINが一致しません"); setPinInput(""); }
-                    else if (data.role !== "owner" && data.role !== "manager" && data.role !== "leader") { setPinError("責任者以上の権限が必要です"); setPinInput(""); }
+                    else if (data.role !== "owner" && data.role !== "manager" && data.role !== "leader" && data.role !== "supervisor") { setPinError("責任者以上の権限が必要です"); setPinInput(""); }
                     else { setPageAuthed(true); setPageAuthName(data.name); login(next); }
                   }
                 }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
@@ -631,24 +631,57 @@ const openPaymentStatement = (sch: Schedule) => {
 
         {/* ========== Tab: Permissions Matrix ========== */}
         {tab === "permissions" && (() => {
-          // 権限定義 — staff-session.tsx のロジックと同期
-          const isManagerFn = (s: Staff) => s.role === "owner" || s.role === "manager" || s.role === "leader";
-          const canTaxFn = (s: Staff) => s.company_position === "社長" || s.company_position === "経営責任者" || s.company_position === "税理士";
-          const canCashFn = (s: Staff) => s.company_position === "社長" || s.company_position === "経営責任者";
+          // 権限定義 — staff-session.tsx のロジックと完全に同期すること
+          // デフォルト判定（ロール/法人ポジションベース）
+          const defaultIsManagerFn = (_s: Staff) => true; // 管理系操作は基本みんなできる
+          const defaultCanTaxFn = (s: Staff) =>
+            s.company_position === "社長" ||
+            s.company_position === "経営責任者" ||
+            s.company_position === "税理士" ||
+            s.role === "supervisor";
+          const defaultCanCashFn = (s: Staff) =>
+            s.company_position === "社長" ||
+            s.company_position === "経営責任者";
+
+          // 実効権限（override があればそれを優先）
+          const effIsManager = (s: Staff) => s.override_is_manager ?? defaultIsManagerFn(s);
+          const effCanTax = (s: Staff) => s.override_can_tax_portal ?? defaultCanTaxFn(s);
+          const effCanCash = (s: Staff) => s.override_can_cash_dashboard ?? defaultCanCashFn(s);
+
           // 社長（canEdit = 編集可能）
           const isPresident = activeStaff?.company_position === "社長";
           const activeStaffs = staffList.filter(s => s.status === "active");
 
-          type Feature = { key: string; label: string; icon: string; check: (s: Staff) => boolean; hint: string };
+          type Feature = {
+            key: string;
+            label: string;
+            icon: string;
+            eff: (s: Staff) => boolean;
+            def: (s: Staff) => boolean;
+            overrideKey: "override_is_manager" | "override_can_tax_portal" | "override_can_cash_dashboard";
+            hint: string;
+          };
           const features: Feature[] = [
-            { key: "manage",   label: "管理系操作",      icon: "📅", check: isManagerFn, hint: "タイムチャート編集・営業締め・精算・金庫など" },
-            { key: "tax",      label: "税理士ポータル",  icon: "📒", check: canTaxFn,    hint: "売上/経費/セラピスト支払/書類庫/銀行取込 など" },
-            { key: "cash",     label: "資金管理",        icon: "💴", check: canCashFn,   hint: "5財布のリアルタイム表示・ATM預入・豊橋予備金管理" },
+            { key: "manage", label: "管理系操作",     icon: "📅", eff: effIsManager, def: defaultIsManagerFn, overrideKey: "override_is_manager",         hint: "タイムチャート編集・営業締め・精算・金庫など" },
+            { key: "tax",    label: "税理士ポータル", icon: "📒", eff: effCanTax,    def: defaultCanTaxFn,    overrideKey: "override_can_tax_portal",     hint: "売上/経費/セラピスト支払/書類庫/銀行取込 など" },
+            { key: "cash",   label: "資金管理",       icon: "💴", eff: effCanCash,   def: defaultCanCashFn,   overrideKey: "override_can_cash_dashboard", hint: "5財布のリアルタイム表示・ATM預入・豊橋予備金管理" },
           ];
 
-          const roleLabelFn: Record<string, string> = { owner: "社長(owner)", manager: "経営責任者(manager)", leader: "店長(leader)", staff: "スタッフ(staff)" };
+          const roleLabelFn: Record<string, string> = { owner: "社長(owner)", manager: "経営責任者(manager)", leader: "店長(leader)", supervisor: "責任者(supervisor)", staff: "スタッフ(staff)" };
           const posOptions = ["社長", "経営責任者", "税理士", "店長", "業務委託", "パート", "正社員", "アルバイト"];
-          const roleOptions = ["owner", "manager", "leader", "staff"];
+          const roleOptions = ["owner", "manager", "leader", "supervisor", "staff"];
+
+          // 権限セルクリック: デフォルト → 強制ON → 強制OFF → デフォルト のサイクル
+          const cyclePermission = async (s: Staff, f: Feature) => {
+            const cur = s[f.overrideKey]; // null | true | false
+            let next: boolean | null;
+            if (cur === null || cur === undefined) next = true;
+            else if (cur === true) next = false;
+            else next = null;
+            await supabase.from("staff").update({ [f.overrideKey]: next }).eq("id", s.id);
+            toast.show(`${s.name} の ${f.label} を ${next === null ? "ロール既定に戻しました" : next ? "強制ON" : "強制OFF"}`, "success");
+            fetchData();
+          };
 
           return (
             <div className="space-y-4">
@@ -659,14 +692,18 @@ const openPaymentStatement = (sch: Schedule) => {
                   <div>
                     <p className="text-[12px] font-medium mb-1" style={{ color: "#85a8c4" }}>権限の仕組み</p>
                     <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
-                      権限は <strong>ロール (role)</strong> と <strong>法人ポジション (company_position)</strong> の組み合わせで決まります。
+                      権限は <strong>ロール既定</strong> で自動判定され、社長が必要に応じて <strong>個別に上書き</strong> できます。
                     </p>
                     <ul className="text-[10px] mt-2 space-y-0.5" style={{ color: T.textSub }}>
-                      <li>・<strong>📅 管理系操作</strong>: role が owner / manager / leader</li>
-                      <li>・<strong>📒 税理士ポータル</strong>: 法人ポジションが 社長 / 経営責任者 / 税理士</li>
-                      <li>・<strong>💴 資金管理</strong>: 法人ポジションが 社長 / 経営責任者（税理士は除外）</li>
+                      <li>・<strong>📅 管理系操作</strong>: 既定は <strong>全ロール有効</strong>（基本みんなできる）</li>
+                      <li>・<strong>📒 税理士ポータル</strong>: 既定は法人ポジションが 社長 / 経営責任者 / 税理士、またはロールが <strong>責任者(supervisor)</strong></li>
+                      <li>・<strong>💴 資金管理</strong>: 既定は法人ポジションが 社長 / 経営責任者（税理士は除外）</li>
                     </ul>
-                    {!isPresident && (
+                    {isPresident ? (
+                      <p className="text-[10px] mt-2" style={{ color: "#22c55e" }}>
+                        💡 権限セルをクリックで「強制ON → 強制OFF → 既定」を切り替え。<strong>🔒 マーク</strong>が付いたものが個別上書き中です。
+                      </p>
+                    ) : (
                       <p className="text-[10px] mt-2" style={{ color: "#f59e0b" }}>
                         🔒 権限の編集は社長のみ可能です。閲覧のみ表示しています。
                       </p>
@@ -677,11 +714,11 @@ const openPaymentStatement = (sch: Schedule) => {
 
               {/* マトリクス */}
               <div className="rounded-xl border overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <table className="w-full text-[11px]" style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: 720 }}>
+                <table className="w-full text-[11px]" style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: 760 }}>
                   <thead>
                     <tr style={{ backgroundColor: T.cardAlt }}>
                       <th className="text-left px-3 py-2.5 font-medium sticky left-0" style={{ color: T.textSub, backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}`, minWidth: 120 }}>スタッフ</th>
-                      <th className="text-left px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 130 }}>ロール</th>
+                      <th className="text-left px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 140 }}>ロール</th>
                       <th className="text-left px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 120 }}>法人ポジション</th>
                       {features.map(f => (
                         <th key={f.key} className="text-center px-3 py-2.5 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}`, minWidth: 110 }} title={f.hint}>
@@ -760,18 +797,43 @@ const openPaymentStatement = (sch: Schedule) => {
                               <span className="text-[10px]" style={{ color: T.textSub }}>{s.company_position || "—"}</span>
                             )}
                           </td>
-                          {/* 権限セル */}
+                          {/* 権限セル（クリックで override サイクル） */}
                           {features.map(f => {
-                            const has = f.check(s);
+                            const has = f.eff(s);
+                            const ov = s[f.overrideKey]; // null/true/false
+                            const isOverridden = ov === true || ov === false;
+                            const cellContent = has ? (
+                              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full" style={{ backgroundColor: T.cardAlt, color: T.textFaint }}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                              </span>
+                            );
                             return (
                               <td key={f.key} className="px-3 py-2 text-center" style={{ borderBottom: `1px solid ${T.border}` }}>
-                                {has ? (
-                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                                  </span>
+                                {canEditRow ? (
+                                  <button
+                                    onClick={() => cyclePermission(s, f)}
+                                    className="relative inline-block cursor-pointer"
+                                    title={isOverridden ? `個別上書き中 (${ov ? "強制ON" : "強制OFF"}) — クリックで切替` : "既定値 — クリックで強制ONに切替"}
+                                  >
+                                    {cellContent}
+                                    {isOverridden && (
+                                      <span className="absolute -top-1 -right-1 text-[8px] leading-none px-1 py-0.5 rounded" style={{ backgroundColor: ov ? "#22c55e" : "#c45555", color: "#fff" }}>
+                                        🔒
+                                      </span>
+                                    )}
+                                  </button>
                                 ) : (
-                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full" style={{ backgroundColor: T.cardAlt, color: T.textFaint }}>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                  <span className="relative inline-block" title={isOverridden ? `個別上書き中 (${ov ? "強制ON" : "強制OFF"})` : "既定値"}>
+                                    {cellContent}
+                                    {isOverridden && (
+                                      <span className="absolute -top-1 -right-1 text-[8px] leading-none px-1 py-0.5 rounded" style={{ backgroundColor: ov ? "#22c55e" : "#c45555", color: "#fff" }}>
+                                        🔒
+                                      </span>
+                                    )}
                                   </span>
                                 )}
                               </td>
@@ -802,12 +864,19 @@ const openPaymentStatement = (sch: Schedule) => {
               {/* サマリー */}
               <div className="grid grid-cols-3 gap-3">
                 {features.map(f => {
-                  const count = activeStaffs.filter(f.check).length;
+                  const count = activeStaffs.filter(f.eff).length;
+                  const overriddenCount = activeStaffs.filter(s => {
+                    const ov = s[f.overrideKey];
+                    return ov === true || ov === false;
+                  }).length;
                   return (
                     <div key={f.key} className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
                       <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>{f.icon} {f.label}</p>
                       <p className="text-[22px] font-medium tabular-nums" style={{ color: T.text }}>{count}<span className="text-[11px] font-normal ml-1" style={{ color: T.textMuted }}>/ {activeStaffs.length} 名</span></p>
                       <p className="text-[9px] mt-1 leading-relaxed" style={{ color: T.textFaint }}>{f.hint}</p>
+                      {overriddenCount > 0 && (
+                        <p className="text-[9px] mt-1" style={{ color: "#f59e0b" }}>🔒 個別上書き {overriddenCount} 名</p>
+                      )}
                     </div>
                   );
                 })}
@@ -931,7 +1000,7 @@ const openPaymentStatement = (sch: Schedule) => {
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>住所</label><input type="text" value={addAddress} onChange={(e) => setAddAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={addRole} onChange={(e) => setAddRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">店長</option><option value="leader">責任者</option><option value="staff">スタッフ</option></select></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={addRole} onChange={(e) => setAddRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">社長(owner)</option><option value="manager">経営責任者(manager)</option><option value="leader">店長(leader)</option><option value="supervisor">責任者(supervisor)</option><option value="staff">スタッフ(staff)</option></select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>会社役職</label><select value={addPosition} onChange={(e) => setAddPosition(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>交通費</label><select value={addTransport} onChange={(e) => setAddTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option></select></div>
                 {isBizCommission(addPosition) && <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={addUnitPrice} onChange={(e) => setAddUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>}
@@ -974,7 +1043,7 @@ const openPaymentStatement = (sch: Schedule) => {
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>住所</label><input type="text" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">オーナー</option><option value="manager">店長</option><option value="leader">責任者</option><option value="staff">スタッフ</option></select></div>
+                <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>システムロール</label><select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="owner">社長(owner)</option><option value="manager">経営責任者(manager)</option><option value="leader">店長(leader)</option><option value="supervisor">責任者(supervisor)</option><option value="staff">スタッフ(staff)</option></select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>会社役職</label><select value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
                 <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>交通費</label><select value={editTransport} onChange={(e) => setEditTransport(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}><option value="0">なし</option><option value="500">¥500</option><option value="1000">¥1,000</option><option value="1500">¥1,500</option><option value="2000">¥2,000</option></select></div>
                 {isBizCommission(editPosition) && <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>業務単価</label><input type="text" inputMode="numeric" value={editUnitPrice} onChange={(e) => setEditUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /></div>}

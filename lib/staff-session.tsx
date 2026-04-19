@@ -8,6 +8,9 @@ type ActiveStaff = {
   role: string;
   company_position: string;
   pin_updated_at: string | null;
+  override_is_manager: boolean | null;
+  override_can_tax_portal: boolean | null;
+  override_can_cash_dashboard: boolean | null;
 } | null;
 
 type LoginResult = { ok: boolean; staff: ActiveStaff };
@@ -116,11 +119,11 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
       setActiveStaff(parsed);
       updateActivity();
 
-      // 旧形式セッション（pin_updated_at / company_position 欠落）を DB から補完
-      if (parsed && parsed.id && (parsed.pin_updated_at === undefined || parsed.company_position === undefined)) {
+      // 旧形式セッション（pin_updated_at / company_position / override_* 欠落）を DB から補完
+      if (parsed && parsed.id && (parsed.pin_updated_at === undefined || parsed.company_position === undefined || parsed.override_is_manager === undefined)) {
         supabase
           .from("staff")
-          .select("company_position,pin_updated_at")
+          .select("company_position,pin_updated_at,override_is_manager,override_can_tax_portal,override_can_cash_dashboard")
           .eq("id", parsed.id)
           .maybeSingle()
           .then(({ data }) => {
@@ -129,6 +132,9 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
                 ...parsed,
                 company_position: data.company_position || "",
                 pin_updated_at: data.pin_updated_at || null,
+                override_is_manager: data.override_is_manager ?? null,
+                override_can_tax_portal: data.override_can_tax_portal ?? null,
+                override_can_cash_dashboard: data.override_can_cash_dashboard ?? null,
               };
               setActiveStaff(updated);
               try {
@@ -186,7 +192,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
     if (!pin || pin.length !== 4) return { ok: false, staff: null };
     const { data } = await supabase
       .from("staff")
-      .select("id,name,role,company_position,pin_updated_at")
+      .select("id,name,role,company_position,pin_updated_at,override_is_manager,override_can_tax_portal,override_can_cash_dashboard")
       .eq("pin", pin)
       .eq("status", "active")
       .maybeSingle();
@@ -197,6 +203,9 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
       role: data.role,
       company_position: data.company_position || "",
       pin_updated_at: data.pin_updated_at || null,
+      override_is_manager: data.override_is_manager ?? null,
+      override_can_tax_portal: data.override_can_tax_portal ?? null,
+      override_can_cash_dashboard: data.override_can_cash_dashboard ?? null,
     };
     setActiveStaff(staff);
     setPinChangeDismissed(false);
@@ -264,19 +273,28 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   // 「今は後回し」ボタンで一時的にモーダルを閉じる（次回ログインでは再表示される）
   const dismissPinChangeTemporarily = () => setPinChangeDismissed(true);
 
-  const isManager =
-    activeStaff?.role === "owner" ||
-    activeStaff?.role === "manager" ||
-    activeStaff?.role === "leader";
+  // === 権限判定 ===
+  // 各権限は「個別上書き (override_*) が設定されていればそれを優先、
+  // NULL ならロール/法人ポジションベースのデフォルト判定」で決まる。
 
-  const canAccessTaxPortal =
+  // 管理系操作: デフォルトで全ログインスタッフが有効 (基本みんなできる)
+  const defaultIsManager = !!activeStaff;
+
+  // 税理士ポータル: 社長/経営責任者/税理士、または responsible(supervisor) ロール
+  const defaultCanTaxPortal =
     activeStaff?.company_position === "社長" ||
     activeStaff?.company_position === "経営責任者" ||
-    activeStaff?.company_position === "税理士";
+    activeStaff?.company_position === "税理士" ||
+    activeStaff?.role === "supervisor";
 
-  const canAccessCashDashboard =
+  // 資金管理: 社長/経営責任者のみ (税理士は除外)
+  const defaultCanCashDashboard =
     activeStaff?.company_position === "社長" ||
     activeStaff?.company_position === "経営責任者";
+
+  const isManager = activeStaff?.override_is_manager ?? defaultIsManager;
+  const canAccessTaxPortal = activeStaff?.override_can_tax_portal ?? defaultCanTaxPortal;
+  const canAccessCashDashboard = activeStaff?.override_can_cash_dashboard ?? defaultCanCashDashboard;
 
   // PIN 未変更 = pin_updated_at が NULL（初期 PIN のまま）
   const needsPinChange = !!activeStaff && !activeStaff.pin_updated_at && !pinChangeDismissed;
