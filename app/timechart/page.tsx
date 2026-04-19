@@ -61,7 +61,20 @@ export default function TimeChart() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    // sessionStorage に保存した日付があれば復元（F5リロード時に維持）
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem("timechart-selected-date");
+      if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) return saved;
+    }
+    return new Date().toISOString().split("T")[0];
+  });
+  // selectedDate が変わるたびに sessionStorage に保存
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("timechart-selected-date", selectedDate);
+    }
+  }, [selectedDate]);
   const [clockedOut, setClockedOut] = useState<Set<number>>(new Set());
   const [webReservations, setWebReservations] = useState<{ id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; status: string; customer_status: string; created_at: string }[]>([]);
   const [showWebRes, setShowWebRes] = useState(false);
@@ -1061,7 +1074,7 @@ export default function TimeChart() {
                       <div className="flex items-center gap-1 text-[7px]" style={{ color: T.textMuted }}>
                         
                         {(() => { const sh = shifts.find(s => s.therapist_id === t.id); return sh ? <button onClick={(e) => { e.stopPropagation(); setEditShiftTherapist(t.id); setEditShiftId(sh.id); setEditShiftStart(sh.start_time?.slice(0,5) || "12:00"); setEditShiftEnd(sh.end_time?.slice(0,5) || "03:00"); }} className="cursor-pointer" style={{ color: "#c3a782", background: "none", border: "none", padding: 0, fontSize: 7 }}>⏰{sh.start_time?.slice(0,5)}〜{sh.end_time?.slice(0,5)}</button> : null; })()}
-                        {(() => { const ra = roomAssigns.find(a => a.therapist_id === t.id); if (ra) { const rm = allRooms.find(r => r.id === ra.room_id); const bl = rm ? buildings.find(b => b.id === rm.building_id) : null; const hasReserve = (bl as any)?.cash_reserve > 0; return <><button onClick={(e) => { e.stopPropagation(); setEditRoomTherapist(t.id); const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { const rm2 = allRooms.find(r => r.id === ra2.room_id); setEditRoomId(ra2.room_id); setEditRoomStore(rm2?.store_id || 0); setEditRoomBuilding(rm2?.building_id || 0); } }} className="cursor-pointer" style={{ color: "#85a8c4", background: "none", border: "none", padding: 0, fontSize: 7 }}>🏠{bl?.name || ""}{rm?.name || ""}</button>{hasReserve && <button onClick={async (e) => { e.stopPropagation(); setShowReplenish(ra.room_id); setReplenishAmount(String((bl as any)?.cash_reserve || 20000)); setReplenishTherapistId(t.id); setReplenishStaff(""); const { data: ds } = await supabase.from("therapist_daily_settlements").select("therapist_id,sales_collected,change_collected,total_cash,total_back,room_id,safe_deposited").eq("date", selectedDate).eq("room_id", ra.room_id); if (ds) setDailySettlements(prev => { const filtered = prev.filter(p => p.room_id !== ra.room_id); return [...filtered, ...ds]; }); const past7: typeof pastUncollected = []; for (let d = 1; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds2 = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", ra.room_id).eq("date", ds2); if (ps) { for (const p of ps) { if (!p.sales_collected || !p.change_collected) { const th2 = therapists.find(x => x.id === p.therapist_id); const { data: pastRep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", ra.room_id).eq("date", ds2); const repAmt = pastRep ? pastRep.reduce((s2: number, r2: { amount: number }) => s2 + r2.amount, 0) : 0; past7.push({ date: ds2, total_cash: p.total_cash || 0, total_back: p.total_back || 0, total_sales: p.total_sales || 0, therapist_name: th2?.name || "", sales_collected: !!p.sales_collected, change_collected: !!p.change_collected, replenish_amount: repAmt }); } } } } setPastUncollected(past7); }} style={{ color: "#22c55e", background: "none", border: "none", padding: 0, fontSize: 7, cursor: "pointer", marginLeft: 2 }}>💰釣銭{(() => { if (changeCollectedIds.has(t.id)) return "¥0"; const rp = replenishments.filter(x => rm && x.room_id === rm.id).reduce((s2, x2) => s2 + x2.amount, 0); return fmt(rp); })()}</button>}</>; } return null; })()}
+                        {(() => { const ra = roomAssigns.find(a => a.therapist_id === t.id); if (ra) { const rm = allRooms.find(r => r.id === ra.room_id); const bl = rm ? buildings.find(b => b.id === rm.building_id) : null; const hasReserve = (bl as any)?.cash_reserve > 0; return <><button onClick={(e) => { e.stopPropagation(); setEditRoomTherapist(t.id); const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { const rm2 = allRooms.find(r => r.id === ra2.room_id); setEditRoomId(ra2.room_id); setEditRoomStore(rm2?.store_id || 0); setEditRoomBuilding(rm2?.building_id || 0); } }} className="cursor-pointer" style={{ color: "#85a8c4", background: "none", border: "none", padding: 0, fontSize: 7 }}>🏠{bl?.name || ""}{rm?.name || ""}</button>{hasReserve && <button onClick={async (e) => { e.stopPropagation(); setShowReplenish(ra.room_id); setReplenishAmount(String((bl as any)?.cash_reserve || 20000)); setReplenishTherapistId(t.id); setReplenishStaff(""); const { data: ds } = await supabase.from("therapist_daily_settlements").select("therapist_id,sales_collected,change_collected,total_cash,total_back,room_id,safe_deposited").eq("date", selectedDate).eq("room_id", ra.room_id); if (ds) setDailySettlements(prev => { const filtered = prev.filter(p => p.room_id !== ra.room_id); return [...filtered, ...ds]; }); const past7: typeof pastUncollected = []; for (let d = 1; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds2 = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", ra.room_id).eq("date", ds2); if (ps) { for (const p of ps) { if (!p.sales_collected || !p.change_collected) { const th2 = therapists.find(x => x.id === p.therapist_id); const { data: pastRep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", ra.room_id).eq("date", ds2); const repAmt = pastRep ? pastRep.reduce((s2: number, r2: { amount: number }) => s2 + r2.amount, 0) : 0; past7.push({ date: ds2, total_cash: p.total_cash || 0, total_back: p.total_back || 0, total_sales: p.total_sales || 0, therapist_name: th2?.name || "", sales_collected: !!p.sales_collected, change_collected: !!p.change_collected, replenish_amount: repAmt }); } } } } setPastUncollected(past7); }} style={{ color: "#22c55e", background: "none", border: "none", padding: 0, fontSize: 7, cursor: "pointer", marginLeft: 2 }}>💰釣銭{(() => { const rp = replenishments.filter(x => rm && x.room_id === rm.id).reduce((s2, x2) => s2 + x2.amount, 0); if (changeCollectedIds.has(t.id)) return rp > 0 ? `¥0 (回収${fmt(rp)})` : "¥0"; return fmt(rp); })()}</button>}</>; } return null; })()}
                       </div>
                       {(t as any).notes && <div style={{ overflow: "hidden", maxWidth: 120 }}><span className="text-[6px] block" style={{ color: "#f59e0b", whiteSpace: "nowrap", animation: (t as any).notes.length > 12 ? `scrollLeft ${Math.max(3, (t as any).notes.length * 0.2)}s linear infinite` : "none" }}>📝{(t as any).notes}</span></div>}
                       {isCO && <span className="text-[7px]" style={{ color: "#c45555" }}>退勤済</span>}
@@ -1929,6 +1942,35 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
                   </div>
                 </div>
               ); })()}
+
+              {/* 回収履歴（このルームで当日、釣銭回収済みになったセラピスト） */}
+              {(() => {
+                const roomReps = replenishments.filter(r => r.room_id === showReplenish);
+                const replenishTotal = roomReps.reduce((s, r) => s + r.amount, 0);
+                const collectedSettles = dailySettlements.filter(ds => ds.room_id === showReplenish && ds.change_collected);
+                if (collectedSettles.length === 0 || replenishTotal === 0) return null;
+                return (
+                  <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium mb-2" style={{ color: "#85a8c4" }}>✅ 回収履歴</p>
+                    <div className="space-y-1">
+                      {collectedSettles.map((ds, i) => {
+                        const th = therapists.find(x => x.id === ds.therapist_id);
+                        return (
+                          <div key={i} className="flex justify-between items-center py-1.5 px-2 rounded-lg text-[11px]" style={{ backgroundColor: "rgba(133,168,196,0.08)" }}>
+                            <span>👤 {th?.name || "不明"} <span style={{ color: T.textFaint, fontSize: 9 }}>精算モーダルで回収済</span></span>
+                            <span style={{ color: "#85a8c4", fontWeight: 600 }}>-{fmt(replenishTotal)}</span>
+                          </div>
+                        );
+                      })}
+                      {collectedSettles.length === 1 && (
+                        <p className="text-[9px] mt-1 px-2" style={{ color: T.textFaint }}>
+                          ※ 回収額=補充合計 {fmt(replenishTotal)}（そのまま表示）
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
