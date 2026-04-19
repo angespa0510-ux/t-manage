@@ -492,8 +492,27 @@ const openPaymentStatement = (sch: Schedule) => {
   const dateDisplay = (() => { const d = new Date(scheduleDate + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${days[d.getDay()]}）`; })();
 
   // ★ アクセスゲート: このページ専用の認証（毎回manager/owner PINが必要）
+  // F5 リロード対策: sessionStorage に 2 時間有効で保存
+  const STAFF_GATE_KEY = "t-manage-staff-gate";
+  const STAFF_GATE_EXPIRY_MS = 2 * 60 * 60 * 1000; // 2 時間
   const [pageAuthed, setPageAuthed] = useState(false);
   const [pageAuthName, setPageAuthName] = useState("");
+
+  // マウント時: 2 時間以内の認証が残っていれば復元（F5 対策）
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(STAFF_GATE_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { authedAt: number; authedName: string };
+      if (parsed && Date.now() - parsed.authedAt < STAFF_GATE_EXPIRY_MS) {
+        setPageAuthed(true);
+        setPageAuthName(parsed.authedName || "");
+      } else {
+        sessionStorage.removeItem(STAFF_GATE_KEY);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // PIN 入力中はキーボードで打てるように
   usePinKeyboard(!pageAuthed);
@@ -625,7 +644,12 @@ const openPaymentStatement = (sch: Schedule) => {
                     const { data } = await supabase.from("staff").select("id,name,role").eq("pin", next).eq("status", "active").maybeSingle();
                     if (!data) { setPinError("PINが一致しません"); setPinInput(""); }
                     else if (data.role !== "owner" && data.role !== "manager" && data.role !== "leader" && data.role !== "supervisor") { setPinError("責任者以上の権限が必要です"); setPinInput(""); }
-                    else { setPageAuthed(true); setPageAuthName(data.name); login(next); }
+                    else {
+                      setPageAuthed(true); setPageAuthName(data.name); login(next);
+                      try {
+                        sessionStorage.setItem(STAFF_GATE_KEY, JSON.stringify({ authedAt: Date.now(), authedName: data.name }));
+                      } catch {}
+                    }
                   }
                 }} data-pin-key={n === "del" ? "del" : String(n)} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
                   {n === "del" ? "⌫" : n}
@@ -650,7 +674,7 @@ const openPaymentStatement = (sch: Schedule) => {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggle} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️ ライト" : "🌙 ダーク"}</button>
-          <button onClick={() => { logout(); setPageAuthed(false); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c3a78222", color: "#c3a782", border: "1px solid #c3a78244" }}>👤 {pageAuthName} ログアウト</button>
+          <button onClick={() => { logout(); setPageAuthed(false); try { sessionStorage.removeItem(STAFF_GATE_KEY); } catch {} }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c3a78222", color: "#c3a782", border: "1px solid #c3a78244" }}>👤 {pageAuthName} ログアウト</button>
         </div>
       </div>
 
