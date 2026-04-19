@@ -88,7 +88,7 @@ export default function Analytics() {
   const SUMMARY_ORDER_KEY = "t-manage-analytics-summary-order";
   const DEFAULT_SUMMARY_ORDER = [
     "sales", "count", "avgNet", "storeShare", "back", "discount", "card", "cardFee",
-    "paypay", "cash", "invoice", "withholding", "expense", "advance", "income",
+    "paypay", "invoice", "withholding", "expense", "advance", "income",
     "changeNet", "reserve", "uncollectedSales", "safeUncollected", "cashOnHand",
   ];
   const [summaryOrder, setSummaryOrder] = useState<string[]>(DEFAULT_SUMMARY_ORDER);
@@ -563,7 +563,6 @@ export default function Analytics() {
               card: { label: "カード", value: fmt(M.card), color: T.textSub },
               cardFee: { label: "カード手数料", value: M.cardFee === 0 ? "¥0" : `+${fmt(M.cardFee)}`, color: M.cardFee === 0 ? T.textFaint : "#22c55e" },
               paypay: { label: "ペイペイ", value: fmt(M.paypay), color: T.textSub },
-              cash: { label: "現金", value: fmt(M.cash), color: T.textSub },
               invoice: { label: "インボイス", value: fmt(M.invoice), color: M.invoice === 0 ? T.textFaint : "#a855f7" },
               withholding: { label: "源泉徴収", value: fmt(M.withholding), color: M.withholding === 0 ? T.textFaint : "#d4687e" },
               expense: { label: "経費", value: fmt(M.expense), color: M.expense === 0 ? T.textFaint : "#c45555" },
