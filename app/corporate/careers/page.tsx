@@ -386,13 +386,33 @@ function JobBlock({ title, items, accent, tag }: { title: string; items: string[
 function WorkStyleSection() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }} className="work-grid">
-      {WORK_STYLE.map((w) => (
-        <div key={w.label} style={{ padding: 20, borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface)" }}>
-          <div style={{ fontSize: 26, marginBottom: 10 }}>{w.icon}</div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{w.label}</div>
-          <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>{w.desc}</div>
-        </div>
-      ))}
+      {WORK_STYLE.map((w, i) => {
+        const acc = i % 2 === 0 ? ACCENT : LIME;
+        const num = String(i + 1).padStart(2, "0");
+        return (
+          <div key={w.label} style={{
+            padding: "22px 20px", borderRadius: 12,
+            border: "1px solid var(--border)", background: "var(--surface)",
+            position: "relative", overflow: "hidden",
+          }}>
+            {/* Left accent bar */}
+            <div style={{
+              position: "absolute", left: 0, top: 0, bottom: 0, width: 2,
+              background: acc.hex,
+              opacity: 0.6,
+            }} />
+            {/* Mono tag */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: acc.hex }} />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.5, color: acc.hex, fontWeight: 600 }}>
+                BENEFIT_{num}
+              </span>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, letterSpacing: -0.2 }}>{w.label}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.7 }}>{w.desc}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -267,14 +267,14 @@ export const POSITIONS: Position[] = [
 
 // ===== Work Style / Benefits =====
 export const WORK_STYLE = [
-  { icon: "🏠", label: "フルリモート中心", desc: "週1出社 or 完全リモートを応相談" },
-  { icon: "🕒", label: "時短・時差出勤OK", desc: "子育て・介護・Wワーク最優先" },
-  { icon: "💼", label: "副業・複業OK",      desc: "他の仕事と並行、むしろ歓迎" },
-  { icon: "📚", label: "学習費補助",        desc: "書籍・セミナー・資格取得を会社負担" },
-  { icon: "🤖", label: "AI利用料補助",      desc: "Claude Pro・Cursor 等の支援" },
-  { icon: "👕", label: "服装自由",          desc: "スーツ不要、Tシャツ可" },
-  { icon: "🎂", label: "年齢・経歴不問",    desc: "実力と人柄で判断します" },
-  { icon: "🍼", label: "家庭優先OK",        desc: "子の発熱・学校行事は気兼ねなく" },
+  { label: "フルリモート中心",   desc: "週1出社 or 完全リモートを応相談" },
+  { label: "時短・時差出勤OK",   desc: "子育て・介護・Wワーク最優先" },
+  { label: "副業・複業OK",       desc: "他の仕事と並行、むしろ歓迎" },
+  { label: "学習費補助",         desc: "書籍・セミナー・資格取得を会社負担" },
+  { label: "AI利用料補助",       desc: "Claude Pro・Cursor 等の支援" },
+  { label: "服装自由",           desc: "スーツ不要、Tシャツ可" },
+  { label: "年齢・経歴不問",     desc: "実力と人柄で判断します" },
+  { label: "家庭優先OK",         desc: "子の発熱・学校行事は気兼ねなく" },
 ];
 
 // ===== Selection Process (5 steps) =====
