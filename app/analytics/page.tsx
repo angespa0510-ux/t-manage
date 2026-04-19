@@ -393,6 +393,7 @@ export default function Analytics() {
 
   // 月間合計（日別タブと同じ計算ロジック：売上=定価ベース、セラピスト=実支給額、店取概算=売上-割引-セラピスト-インボイス-源泉）
   const monthTotal = useMemo(() => {
+    // 基本情報 (月別以降のタブでも参照されるため維持)
     const sales = reservations.reduce((s, r) => {
       const coursePrice = getCourse(r.course)?.price || 0;
       return s + coursePrice + (r.nomination_fee || 0) + (r.options_total || 0) + (r.extension_price || 0);
@@ -402,8 +403,25 @@ export default function Analytics() {
     const invoice = monthSettlements.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
     const withholding = monthSettlements.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
     const storeShare = sales - discount - back - invoice - withholding;
-    return { sales, back, profit: storeShare, count: reservations.length };
-  }, [reservations, monthSettlements, courses]);
+    // dailyData から残りの資金系指標を集計 (日別テーブルの合計と一致する)
+    const agg = dailyData.reduce((a, d) => ({
+      card: a.card + d.card,
+      cardFee: a.cardFee + d.cardFee,
+      paypay: a.paypay + d.paypay,
+      cash: a.cash + d.cash,
+      expense: a.expense + d.expense,
+      advance: a.advance + d.advance,
+      income: a.income + d.income,
+      reserve: a.reserve + d.reserve,
+      changeNet: a.changeNet + d.changeNet,
+      uncollectedSales: a.uncollectedSales + d.uncollectedSales,
+      safeUncollected: a.safeUncollected + d.safeUncollected,
+      cashOnHand: a.cashOnHand + d.cashOnHand,
+    }), { card: 0, cardFee: 0, paypay: 0, cash: 0, expense: 0, advance: 0, income: 0, reserve: 0, changeNet: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+    const count = reservations.length;
+    const avgNet = count > 0 ? Math.round(storeShare / count) : 0;
+    return { sales, back, profit: storeShare, storeShare, count, discount, invoice, withholding, avgNet, ...agg };
+  }, [reservations, monthSettlements, dailyData, courses]);
 
   // 年間合計（バックは settlements ベース）
   const yearTotal = useMemo(() => {
@@ -472,19 +490,51 @@ export default function Analytics() {
         ))}
       </div>
 
-      {/* Summary Cards */}
-      <div className="px-4 py-3 flex gap-3 flex-shrink-0 overflow-x-auto" style={{ backgroundColor: T.cardAlt }}>
-        {[
-          { label: "月間売上", value: fmt(monthTotal.sales), color: "#c3a782" },
-          { label: "月間セラピスト", value: fmt(monthTotal.back), color: "#7ab88f" },
-          { label: "月間店取概算", value: fmt(monthTotal.profit), color: "#85a8c4" },
-          { label: "月間予約数", value: `${monthTotal.count}件`, color: "#c49885" },
-        ].map((s) => (
-          <div key={s.label} className="rounded-xl px-4 py-3 border min-w-[140px]" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.label}</p>
-            <p className="text-[18px] font-light" style={{ color: s.color }}>{s.value}</p>
-          </div>
-        ))}
+      {/* Summary Grid — 月間合計の全指標 */}
+      <div className="px-4 py-3 flex-shrink-0" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+        <p className="text-[9px] mb-2" style={{ color: T.textMuted }}>📊 {smYear}年{smMonth}月 合計</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          {(() => {
+            const M = monthTotal;
+            const cashColor = M.cashOnHand >= 0 ? "#22c55e" : "#c45555";
+            const changeColor = M.changeNet === 0 ? T.textFaint : M.changeNet > 0 ? "#22c55e" : "#f59e0b";
+            const reserveColor = M.reserve === 0 ? T.textFaint : M.reserve > 0 ? "#22c55e" : "#d4687e";
+            const changeSign = M.changeNet > 0 ? "+" : M.changeNet < 0 ? "−" : "";
+            const reserveSign = M.reserve > 0 ? "+" : M.reserve < 0 ? "−" : "";
+            const items: { label: string; value: string; color: string; emphasis?: boolean }[] = [
+              // 売上・予約 (ブランドカラー系)
+              { label: "月間売上", value: fmt(M.sales), color: "#c3a782", emphasis: true },
+              { label: "予約数", value: `${M.count}件`, color: "#c3a782", emphasis: true },
+              { label: "平均単価", value: M.avgNet > 0 ? fmt(M.avgNet) : "—", color: T.textSub },
+              { label: "店取概算", value: fmt(M.storeShare), color: "#85a8c4", emphasis: true },
+              { label: "セラピスト支給", value: fmt(M.back), color: "#7ab88f" },
+              { label: "割引", value: M.discount === 0 ? "¥0" : `−${fmt(M.discount)}`, color: M.discount === 0 ? T.textFaint : "#f59e0b" },
+              // 決済
+              { label: "カード", value: fmt(M.card), color: T.textSub },
+              { label: "カード手数料", value: M.cardFee === 0 ? "¥0" : `+${fmt(M.cardFee)}`, color: M.cardFee === 0 ? T.textFaint : "#22c55e" },
+              { label: "ペイペイ", value: fmt(M.paypay), color: T.textSub },
+              { label: "現金", value: fmt(M.cash), color: T.textSub },
+              { label: "インボイス", value: fmt(M.invoice), color: M.invoice === 0 ? T.textFaint : "#a855f7" },
+              { label: "源泉徴収", value: fmt(M.withholding), color: M.withholding === 0 ? T.textFaint : "#d4687e" },
+              // 事務所キャッシュ
+              { label: "経費", value: fmt(M.expense), color: M.expense === 0 ? T.textFaint : "#c45555" },
+              { label: "前借り", value: M.advance === 0 ? "¥0" : `−${fmt(M.advance)}`, color: M.advance === 0 ? T.textFaint : "#d4687e" },
+              { label: "入金", value: M.income === 0 ? "¥0" : `+${fmt(M.income)}`, color: M.income === 0 ? T.textFaint : "#22c55e" },
+              { label: "釣銭", value: M.changeNet === 0 ? "¥0" : `${changeSign}${fmt(Math.abs(M.changeNet))}`, color: changeColor },
+              { label: "豊橋予備金", value: M.reserve === 0 ? "¥0" : `${reserveSign}${fmt(Math.abs(M.reserve))}`, color: reserveColor },
+              // 未回収・最終残金
+              { label: "売上未回収", value: M.uncollectedSales === 0 ? "¥0" : `−${fmt(M.uncollectedSales)}`, color: M.uncollectedSales === 0 ? T.textFaint : "#c45555" },
+              { label: "金庫未回収", value: M.safeUncollected === 0 ? "¥0" : `−${fmt(M.safeUncollected)}`, color: M.safeUncollected === 0 ? T.textFaint : "#c45555" },
+              { label: "事務所残金", value: fmt(M.cashOnHand), color: cashColor, emphasis: true },
+            ];
+            return items.map((s) => (
+              <div key={s.label} className="rounded-lg px-2.5 py-1.5 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <p className="text-[9px] whitespace-nowrap" style={{ color: T.textMuted }}>{s.label}</p>
+                <p className={`tabular-nums whitespace-nowrap ${s.emphasis ? "text-[15px] font-medium" : "text-[13px]"}`} style={{ color: s.color }}>{s.value}</p>
+              </div>
+            ));
+          })()}
+        </div>
       </div>
 
       {/* Content */}
