@@ -865,6 +865,7 @@ export default function CorporatePage() {
                 <li><a href="/corporate/products/ai" style={{ fontSize:12,color:"#94a3b8",transition:"color .2s" }} onMouseEnter={e => e.currentTarget.style.color="#60a5fa"} onMouseLeave={e => e.currentTarget.style.color="#94a3b8"}>TERA AI</a></li>
                 <li><a href="/corporate/products/web" style={{ fontSize:12,color:"#94a3b8",transition:"color .2s" }} onMouseEnter={e => e.currentTarget.style.color="#60a5fa"} onMouseLeave={e => e.currentTarget.style.color="#94a3b8"}>TERA Cloud</a></li>
                 <li><a href="/corporate/products/dx" style={{ fontSize:12,color:"#94a3b8",transition:"color .2s" }} onMouseEnter={e => e.currentTarget.style.color="#60a5fa"} onMouseLeave={e => e.currentTarget.style.color="#94a3b8"}>TERA DX</a></li>
+                <li style={{ paddingTop:8,marginTop:4,borderTop:"1px solid rgba(255,255,255,0.04)" }}><a href="/corporate/services/dx-implementation-flow" style={{ fontSize:12,color:"#94a3b8",transition:"color .2s" }} onMouseEnter={e => e.currentTarget.style.color="#4dd6e8"} onMouseLeave={e => e.currentTarget.style.color="#94a3b8"}>DX導入フロー →</a></li>
               </ul>
             </div>
             {/* Company */}
