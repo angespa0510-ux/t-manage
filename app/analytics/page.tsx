@@ -84,6 +84,55 @@ export default function Analytics() {
   const [smYear, smMonth] = selectedMonth.split("-").map(Number);
   const daysInMonth = new Date(smYear, smMonth, 0).getDate();
 
+  // 月間サマリーの並び順 (ドラッグで変更可能、localStorage に保存)
+  const SUMMARY_ORDER_KEY = "t-manage-analytics-summary-order";
+  const DEFAULT_SUMMARY_ORDER = [
+    "sales", "count", "avgNet", "storeShare", "back", "discount", "card", "cardFee",
+    "paypay", "cash", "invoice", "withholding", "expense", "advance", "income",
+    "changeNet", "reserve", "uncollectedSales", "safeUncollected", "cashOnHand",
+  ];
+  const [summaryOrder, setSummaryOrder] = useState<string[]>(DEFAULT_SUMMARY_ORDER);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+
+  // マウント時に保存済み並び順を復元
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SUMMARY_ORDER_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as string[];
+      // 全キーが揃っていて余計なキーがないこと (新規項目追加時に壊れないよう validate)
+      const validKeys = new Set(DEFAULT_SUMMARY_ORDER);
+      const parsedKeys = new Set(parsed);
+      if (parsed.length === DEFAULT_SUMMARY_ORDER.length && parsed.every(k => validKeys.has(k)) && DEFAULT_SUMMARY_ORDER.every(k => parsedKeys.has(k))) {
+        setSummaryOrder(parsed);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveSummaryOrder = useCallback((order: string[]) => {
+    setSummaryOrder(order);
+    try { localStorage.setItem(SUMMARY_ORDER_KEY, JSON.stringify(order)); } catch {}
+  }, []);
+
+  const resetSummaryOrder = useCallback(() => {
+    saveSummaryOrder(DEFAULT_SUMMARY_ORDER);
+  }, [saveSummaryOrder]);
+
+  const handleSummaryDrop = useCallback((targetKey: string) => {
+    if (!draggingKey || draggingKey === targetKey) { setDraggingKey(null); setDragOverKey(null); return; }
+    const newOrder = [...summaryOrder];
+    const from = newOrder.indexOf(draggingKey);
+    const to = newOrder.indexOf(targetKey);
+    if (from === -1 || to === -1) return;
+    newOrder.splice(from, 1);
+    newOrder.splice(to, 0, draggingKey);
+    saveSummaryOrder(newOrder);
+    setDraggingKey(null);
+    setDragOverKey(null);
+  }, [draggingKey, summaryOrder, saveSummaryOrder]);
+
   const fetchData = useCallback(async () => {
     const { data: c } = await supabase.from("courses").select("*").order("duration"); if (c) setCourses(c);
     const { data: t } = await supabase.from("therapists").select("*").order("id"); if (t) setTherapists(t);
@@ -490,10 +539,13 @@ export default function Analytics() {
         ))}
       </div>
 
-      {/* Summary Grid — 月間合計の全指標 */}
+      {/* Summary Grid — 月間合計の全指標 (ドラッグで並び替え可能) */}
       <div className="px-4 py-3 flex-shrink-0" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
-        <p className="text-[9px] mb-2" style={{ color: T.textMuted }}>📊 {smYear}年{smMonth}月 合計</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[9px]" style={{ color: T.textMuted }}>📊 {smYear}年{smMonth}月 合計 <span className="ml-1" style={{ color: T.textFaint }}>（カードをドラッグで並び替え可能）</span></p>
+          <button onClick={resetSummaryOrder} className="text-[9px] px-2 py-0.5 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textMuted }} title="並び順を初期化">↺ リセット</button>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-1.5">
           {(() => {
             const M = monthTotal;
             const cashColor = M.cashOnHand >= 0 ? "#22c55e" : "#c45555";
@@ -501,38 +553,57 @@ export default function Analytics() {
             const reserveColor = M.reserve === 0 ? T.textFaint : M.reserve > 0 ? "#22c55e" : "#d4687e";
             const changeSign = M.changeNet > 0 ? "+" : M.changeNet < 0 ? "−" : "";
             const reserveSign = M.reserve > 0 ? "+" : M.reserve < 0 ? "−" : "";
-            const items: { label: string; value: string; color: string; emphasis?: boolean }[] = [
-              // 売上・予約 (ブランドカラー系)
-              { label: "月間売上", value: fmt(M.sales), color: "#c3a782", emphasis: true },
-              { label: "予約数", value: `${M.count}件`, color: "#c3a782", emphasis: true },
-              { label: "平均単価", value: M.avgNet > 0 ? fmt(M.avgNet) : "—", color: T.textSub },
-              { label: "店取概算", value: fmt(M.storeShare), color: "#85a8c4", emphasis: true },
-              { label: "セラピスト支給", value: fmt(M.back), color: "#7ab88f" },
-              { label: "割引", value: M.discount === 0 ? "¥0" : `−${fmt(M.discount)}`, color: M.discount === 0 ? T.textFaint : "#f59e0b" },
-              // 決済
-              { label: "カード", value: fmt(M.card), color: T.textSub },
-              { label: "カード手数料", value: M.cardFee === 0 ? "¥0" : `+${fmt(M.cardFee)}`, color: M.cardFee === 0 ? T.textFaint : "#22c55e" },
-              { label: "ペイペイ", value: fmt(M.paypay), color: T.textSub },
-              { label: "現金", value: fmt(M.cash), color: T.textSub },
-              { label: "インボイス", value: fmt(M.invoice), color: M.invoice === 0 ? T.textFaint : "#a855f7" },
-              { label: "源泉徴収", value: fmt(M.withholding), color: M.withholding === 0 ? T.textFaint : "#d4687e" },
-              // 事務所キャッシュ
-              { label: "経費", value: fmt(M.expense), color: M.expense === 0 ? T.textFaint : "#c45555" },
-              { label: "前借り", value: M.advance === 0 ? "¥0" : `−${fmt(M.advance)}`, color: M.advance === 0 ? T.textFaint : "#d4687e" },
-              { label: "入金", value: M.income === 0 ? "¥0" : `+${fmt(M.income)}`, color: M.income === 0 ? T.textFaint : "#22c55e" },
-              { label: "釣銭", value: M.changeNet === 0 ? "¥0" : `${changeSign}${fmt(Math.abs(M.changeNet))}`, color: changeColor },
-              { label: "豊橋予備金", value: M.reserve === 0 ? "¥0" : `${reserveSign}${fmt(Math.abs(M.reserve))}`, color: reserveColor },
-              // 未回収・最終残金
-              { label: "売上未回収", value: M.uncollectedSales === 0 ? "¥0" : `−${fmt(M.uncollectedSales)}`, color: M.uncollectedSales === 0 ? T.textFaint : "#c45555" },
-              { label: "金庫未回収", value: M.safeUncollected === 0 ? "¥0" : `−${fmt(M.safeUncollected)}`, color: M.safeUncollected === 0 ? T.textFaint : "#c45555" },
-              { label: "事務所残金", value: fmt(M.cashOnHand), color: cashColor, emphasis: true },
-            ];
-            return items.map((s) => (
-              <div key={s.label} className="rounded-lg px-2.5 py-1.5 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <p className="text-[9px] whitespace-nowrap" style={{ color: T.textMuted }}>{s.label}</p>
-                <p className={`tabular-nums whitespace-nowrap ${s.emphasis ? "text-[15px] font-medium" : "text-[13px]"}`} style={{ color: s.color }}>{s.value}</p>
-              </div>
-            ));
+            const itemMap: Record<string, { label: string; value: string; color: string; emphasis?: boolean }> = {
+              sales: { label: "月間売上", value: fmt(M.sales), color: "#c3a782", emphasis: true },
+              count: { label: "予約数", value: `${M.count}件`, color: "#c3a782", emphasis: true },
+              avgNet: { label: "平均単価", value: M.avgNet > 0 ? fmt(M.avgNet) : "—", color: T.textSub },
+              storeShare: { label: "店取概算", value: fmt(M.storeShare), color: "#85a8c4", emphasis: true },
+              back: { label: "セラピスト支給", value: fmt(M.back), color: "#7ab88f" },
+              discount: { label: "割引", value: M.discount === 0 ? "¥0" : `−${fmt(M.discount)}`, color: M.discount === 0 ? T.textFaint : "#f59e0b" },
+              card: { label: "カード", value: fmt(M.card), color: T.textSub },
+              cardFee: { label: "カード手数料", value: M.cardFee === 0 ? "¥0" : `+${fmt(M.cardFee)}`, color: M.cardFee === 0 ? T.textFaint : "#22c55e" },
+              paypay: { label: "ペイペイ", value: fmt(M.paypay), color: T.textSub },
+              cash: { label: "現金", value: fmt(M.cash), color: T.textSub },
+              invoice: { label: "インボイス", value: fmt(M.invoice), color: M.invoice === 0 ? T.textFaint : "#a855f7" },
+              withholding: { label: "源泉徴収", value: fmt(M.withholding), color: M.withholding === 0 ? T.textFaint : "#d4687e" },
+              expense: { label: "経費", value: fmt(M.expense), color: M.expense === 0 ? T.textFaint : "#c45555" },
+              advance: { label: "前借り", value: M.advance === 0 ? "¥0" : `−${fmt(M.advance)}`, color: M.advance === 0 ? T.textFaint : "#d4687e" },
+              income: { label: "入金", value: M.income === 0 ? "¥0" : `+${fmt(M.income)}`, color: M.income === 0 ? T.textFaint : "#22c55e" },
+              changeNet: { label: "釣銭", value: M.changeNet === 0 ? "¥0" : `${changeSign}${fmt(Math.abs(M.changeNet))}`, color: changeColor },
+              reserve: { label: "豊橋予備金", value: M.reserve === 0 ? "¥0" : `${reserveSign}${fmt(Math.abs(M.reserve))}`, color: reserveColor },
+              uncollectedSales: { label: "売上未回収", value: M.uncollectedSales === 0 ? "¥0" : `−${fmt(M.uncollectedSales)}`, color: M.uncollectedSales === 0 ? T.textFaint : "#c45555" },
+              safeUncollected: { label: "金庫未回収", value: M.safeUncollected === 0 ? "¥0" : `−${fmt(M.safeUncollected)}`, color: M.safeUncollected === 0 ? T.textFaint : "#c45555" },
+              cashOnHand: { label: "事務所残金", value: fmt(M.cashOnHand), color: cashColor, emphasis: true },
+            };
+            return summaryOrder.map((key) => {
+              const s = itemMap[key];
+              if (!s) return null;
+              const isDragging = draggingKey === key;
+              const isDragOver = dragOverKey === key && draggingKey !== key;
+              return (
+                <div
+                  key={key}
+                  draggable
+                  onDragStart={(e) => { setDraggingKey(key); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => { setDraggingKey(null); setDragOverKey(null); }}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOverKey !== key) setDragOverKey(key); }}
+                  onDragLeave={() => { if (dragOverKey === key) setDragOverKey(null); }}
+                  onDrop={(e) => { e.preventDefault(); handleSummaryDrop(key); }}
+                  className="rounded-lg px-2 py-1 border cursor-move transition-all select-none"
+                  style={{
+                    backgroundColor: T.card,
+                    borderColor: isDragOver ? "#c3a782" : T.border,
+                    borderWidth: isDragOver ? 2 : 1,
+                    opacity: isDragging ? 0.4 : 1,
+                    transform: isDragOver ? "scale(1.03)" : "scale(1)",
+                  }}
+                  title="ドラッグで並び替え"
+                >
+                  <p className="text-[9px] whitespace-nowrap leading-tight" style={{ color: T.textMuted }}>{s.label}</p>
+                  <p className={`tabular-nums whitespace-nowrap leading-tight ${s.emphasis ? "text-[13px] font-medium" : "text-[12px]"}`} style={{ color: s.color }}>{s.value}</p>
+                </div>
+              );
+            });
           })()}
         </div>
       </div>
