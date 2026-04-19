@@ -129,6 +129,21 @@ function Hero({ accentKey }: { accentKey: AccentKey }) {
         <Stat label="継続伴走期間" value="12" unit="ヶ月〜" />
         <Stat label="支援実績" value="30" unit="社+" />
       </div>
+
+      {/* ===== Cinematic hero band ===== */}
+      <div style={{ marginTop: 48, position: "relative", borderRadius: 16, overflow: "hidden", border: "1px solid var(--border)" }}>
+        <div style={{ position: "relative", width: "100%", aspectRatio: "21 / 9", background: "#07090c" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/corporate/dx-flow/hero-band.jpg" alt="中小企業のオフィスの朝" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "saturate(0.85)" }} />
+          {/* 暗部シアン寄せ＋上下グラデで dark テーマに馴染ませる */}
+          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(7,9,12,0.35) 0%, rgba(7,9,12,0) 30%, rgba(7,9,12,0) 70%, rgba(7,9,12,0.65) 100%), linear-gradient(90deg, rgba(77,214,232,0.08) 0%, transparent 50%)`, pointerEvents: "none" }} />
+          {/* 左下にキャプション */}
+          <div style={{ position: "absolute", left: 28, bottom: 24, fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 2, color: "rgba(230,237,243,0.75)" }}>
+            <span style={{ color: accent.hex }}>◉ </span>
+            A QUIET MORNING BEFORE TRANSFORMATION
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -153,10 +168,30 @@ function PhilosophyBlock({ accentKey }: { accentKey: AccentKey }) {
   return (
     <section style={{ marginTop: 80, padding: "56px 48px", borderRadius: 20, background: `linear-gradient(135deg, ${accent.soft}, transparent 70%), var(--surface)`, border: "1px solid var(--border)" }}>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 2, color: accent.hex, marginBottom: 20 }}>▸ OUR PHILOSOPHY</div>
-      <div style={{ fontSize: "clamp(28px, 4.5vw, 44px)", fontWeight: 700, letterSpacing: -1, lineHeight: 1.35, maxWidth: 900 }}>
-        人には、<span style={{ color: accent.hex }}>人にしかできない仕事</span>がある。<br />
-        機械に任せられる作業は機械に戻し、<br />
-        <span style={{ color: "var(--muted)" }}>時間を本当に価値のある仕事に返す。</span>
+      <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 40, alignItems: "stretch" }} className="philosophy-grid">
+        <div>
+          <div style={{ fontSize: "clamp(28px, 4.5vw, 44px)", fontWeight: 700, letterSpacing: -1, lineHeight: 1.35 }}>
+            人には、<span style={{ color: accent.hex }}>人にしかできない仕事</span>がある。<br />
+            機械に任せられる作業は機械に戻し、<br />
+            <span style={{ color: "var(--muted)" }}>時間を本当に価値のある仕事に返す。</span>
+          </div>
+          <div style={{ marginTop: 28, fontSize: 13, color: "var(--muted)", lineHeight: 1.8 }}>
+            DXの目的は「IT化」ではありません。人為的ミスをゼロに近づけ、生産効率を
+            <span style={{ color: accent.hex, fontWeight: 700 }}> 20〜最大70% </span>
+            向上させることで、人の時間を「人にしかできない仕事」に戻すことです。
+          </div>
+        </div>
+        {/* ポートレート画像：窓際で対話する2人 */}
+        <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", minHeight: 280 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/corporate/dx-flow/philosophy.jpg" alt="対話する2人の社員" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", position: "absolute", inset: 0, filter: "saturate(0.85)" }} />
+          {/* 暗部なじませオーバーレイ */}
+          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, transparent 0%, transparent 60%, rgba(7,9,12,0.7) 100%), linear-gradient(135deg, transparent 0%, rgba(77,214,232,0.06) 100%)`, pointerEvents: "none" }} />
+          {/* キャプション */}
+          <div style={{ position: "absolute", left: 20, bottom: 16, fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 2, color: "rgba(230,237,243,0.8)" }}>
+            ◉ DIALOGUE, JUDGMENT, IDEAS
+          </div>
+        </div>
       </div>
       <div style={{ marginTop: 40, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
         <div style={{ padding: 24, border: "1px solid var(--border)", borderRadius: 14, background: "var(--bg-2)" }}>
@@ -173,11 +208,6 @@ function PhilosophyBlock({ accentKey }: { accentKey: AccentKey }) {
             お客様との対話 / 現場の判断 / 改善のアイデア / 新しい価値の創造 / 仲間への気遣い
           </div>
         </div>
-      </div>
-      <div style={{ marginTop: 28, fontSize: 13, color: "var(--muted)", lineHeight: 1.8 }}>
-        DXの目的は「IT化」ではありません。人為的ミスをゼロに近づけ、生産効率を
-        <span style={{ color: accent.hex, fontWeight: 700 }}> 20〜最大70% </span>
-        向上させることで、人の時間を「人にしかできない仕事」に戻すことです。
       </div>
     </section>
   );
@@ -622,38 +652,56 @@ function CostSection({ accentKey }: { accentKey: AccentKey }) {
 // ============================================================
 //  Case Studies
 // ============================================================
+const CASE_IMAGES = [
+  { src: "/corporate/dx-flow/case-manufacturing.jpg", alt: "町工場の受発注業務" },
+  { src: "/corporate/dx-flow/case-wholesale.jpg",     alt: "卸売業の倉庫オフィス" },
+  { src: "/corporate/dx-flow/case-service.jpg",       alt: "サービス業の受付カウンター" },
+];
+
 function CaseSection() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }} className="case-grid">
       {DX_CASES.map((c, i) => {
         const acc = ACCENT_MAP[c.color];
+        const img = CASE_IMAGES[i];
         return (
-          <div key={i} style={{ position: "relative", border: "1px solid var(--border)", borderRadius: 14, padding: 24, background: "var(--surface)", overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 2, color: acc.hex }}>CASE.{String(i + 1).padStart(2, "0")}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{c.industry} / {c.size}</div>
+          <div key={i} style={{ position: "relative", border: "1px solid var(--border)", borderRadius: 14, background: "var(--surface)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {/* Cinematic image */}
+            {img && (
+              <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3", overflow: "hidden" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.src} alt={img.alt} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "saturate(0.85)" }} />
+                {/* 下部グラデでカードに馴染ませる */}
+                <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, transparent 0%, transparent 50%, rgba(13,17,23,0.85) 100%), linear-gradient(135deg, ${acc.soft} 0%, transparent 60%)`, pointerEvents: "none" }} />
+                {/* 左上 CASE番号バッジ */}
+                <div style={{ position: "absolute", left: 14, top: 14, padding: "4px 10px", borderRadius: 6, background: "rgba(7,9,12,0.75)", backdropFilter: "blur(6px)", border: `1px solid ${acc.hex}50` }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 2, color: acc.hex, fontWeight: 700 }}>CASE.{String(i + 1).padStart(2, "0")}</span>
+                </div>
+                {/* 右上 effect 数値 */}
+                <div style={{ position: "absolute", right: 14, top: 14, fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 700, color: acc.hex, letterSpacing: -1, textShadow: "0 2px 12px rgba(7,9,12,0.9)" }}>{c.effect}</div>
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 700, color: acc.hex, letterSpacing: -1 }}>{c.effect}</div>
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 700, marginTop: 18, letterSpacing: -0.3 }}>{c.title}</div>
-            <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--dim)", letterSpacing: 1 }}>BEFORE</div>
-                <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4, lineHeight: 1.5 }}>{c.before}</div>
+            )}
+            <div style={{ padding: 24, display: "flex", flexDirection: "column", flex: 1 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>{c.industry} / {c.size}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 10, letterSpacing: -0.3 }}>{c.title}</div>
+              <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--dim)", letterSpacing: 1 }}>BEFORE</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4, lineHeight: 1.5 }}>{c.before}</div>
+                </div>
+                <div style={{ height: 1, background: "var(--border)" }} />
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: acc.hex, letterSpacing: 1 }}>AFTER</div>
+                  <div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.5 }}>{c.after}</div>
+                </div>
               </div>
-              <div style={{ height: 1, background: "var(--border)" }} />
-              <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: acc.hex, letterSpacing: 1 }}>AFTER</div>
-                <div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.5 }}>{c.after}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 14 }}>
+                {c.products.map((p) => (
+                  <span key={p} style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "3px 8px", borderRadius: 6, background: "var(--bg-2)", border: "1px solid var(--border-2)", color: "var(--muted)" }}>{p}</span>
+                ))}
               </div>
+              <div style={{ marginTop: 14, padding: "10px 12px", background: acc.soft, borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 12, color: acc.hex, fontWeight: 600 }}>▸ {c.metric}</div>
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 14 }}>
-              {c.products.map((p) => (
-                <span key={p} style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "3px 8px", borderRadius: 6, background: "var(--bg-2)", border: "1px solid var(--border-2)", color: "var(--muted)" }}>{p}</span>
-              ))}
-            </div>
-            <div style={{ marginTop: 14, padding: "10px 12px", background: acc.soft, borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 12, color: acc.hex, fontWeight: 600 }}>▸ {c.metric}</div>
           </div>
         );
       })}
@@ -809,6 +857,7 @@ export default function DXImplementationFlowPage() {
           .product-grid { grid-template-columns: 1fr !important; }
           .case-grid { grid-template-columns: 1fr !important; }
           .cost-grid { grid-template-columns: 1fr !important; }
+          .philosophy-grid { grid-template-columns: 1fr !important; }
           .roi-col { border-left: none !important; padding-left: 0 !important; border-top: 1px solid var(--border); padding-top: 24px; }
         }
         @media (max-width: 640px) {
