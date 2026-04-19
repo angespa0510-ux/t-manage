@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import HPOutputPanel from "../../lib/hp-output-panel";
 import LineShiftPanel from "../../lib/line-shift-panel";
 import WeeklyTaskPanel from "../../lib/weekly-task-panel";
@@ -59,6 +60,7 @@ export default function RoomAssignments() {
   const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, isManager, login, logout } = useStaffSession();
   const [showPinModal, setShowPinModal] = useState(false);
+  usePinKeyboard(showPinModal);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
   const [stores, setStores] = useState<Store[]>([]);
@@ -739,7 +741,7 @@ useEffect(() => {
                         else { setPinError("PINが一致しません"); setPinInput(""); }
                       });
                     }
-                  }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
+                  }} data-pin-key={n === "del" ? "del" : String(n)} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
                     {n === "del" ? "⌫" : n}
                   </button>
                 );

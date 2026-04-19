@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { useBackNav } from "../../lib/use-back-nav";
 import { useConfirm } from "../../components/useConfirm";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
@@ -69,6 +70,7 @@ export default function Dashboard() {
   const { activeStaff, isManager, login, logout: staffLogout } = useStaffSession();
   const { confirm, ConfirmModalNode } = useConfirm();
   const [showPinModal, setShowPinModal] = useState(false);
+  usePinKeyboard(showPinModal);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
   const [userId, setUserId] = useState("");
@@ -1449,7 +1451,7 @@ export default function Dashboard() {
                         else { setPinError("PINが一致しません"); setPinInput(""); }
                       });
                     }
-                  }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
+                  }} data-pin-key={n === "del" ? "del" : String(n)} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
                     {n === "del" ? "⌫" : n}
                   </button>
                 );

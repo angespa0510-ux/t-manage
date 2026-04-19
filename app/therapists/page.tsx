@@ -8,6 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useConfirm } from "../../components/useConfirm";
+import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { useStaffSession } from "../../lib/staff-session";
 
 const TherapistImportPanel = lazy(() => import("../../lib/therapist-import-panel"));
@@ -71,6 +72,8 @@ const [addLoginPassword, setAddLoginPassword] = useState("");
   const [editPinInput, setEditPinInput] = useState("");
   const [editPinAuthed, setEditPinAuthed] = useState(false);
   const [editPinError, setEditPinError] = useState("");
+  // personal タブ表示中で未認証のとき、PIN入力をキーボード対応
+  usePinKeyboard(!editPinAuthed && editTab === "personal");
   const [editRealName, setEditRealName] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editHasInvoice, setEditHasInvoice] = useState(false);
@@ -938,7 +941,7 @@ const generatePassword = () => {
                         if (data && (data.role === "owner" || data.role === "manager")) { setEditPinAuthed(true); }
                         else { setEditPinError("管理者PINが一致しません"); setEditPinInput(""); }
                       }
-                    }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>{n === "del" ? "⌫" : n}</button>);
+                    }} data-pin-key={n === "del" ? "del" : String(n)} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>{n === "del" ? "⌫" : n}</button>);
                   })}
                 </div>
                 {editPinError && <p className="text-[11px] text-center" style={{ color: "#c45555" }}>{editPinError}</p>}

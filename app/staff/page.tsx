@@ -7,6 +7,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
+import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { useConfirm } from "../../components/useConfirm";
 
 type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean; override_is_manager: boolean | null; override_can_tax_portal: boolean | null; override_can_cash_dashboard: boolean | null };
@@ -386,6 +387,9 @@ const openPaymentStatement = (sch: Schedule) => {
   const [pageAuthed, setPageAuthed] = useState(false);
   const [pageAuthName, setPageAuthName] = useState("");
 
+  // PIN 入力中はキーボードで打てるように
+  usePinKeyboard(!pageAuthed);
+
   // ===== ブラウザ戻る（マウスサイドボタン/スワイプバック）対応 =====
   // モーダル → タブ → 前のページの順で一段ずつ戻る
   const [tabHistory, setTabHistory] = useState<(typeof tab)[]>([]);
@@ -515,7 +519,7 @@ const openPaymentStatement = (sch: Schedule) => {
                     else if (data.role !== "owner" && data.role !== "manager" && data.role !== "leader" && data.role !== "supervisor") { setPinError("責任者以上の権限が必要です"); setPinInput(""); }
                     else { setPageAuthed(true); setPageAuthName(data.name); login(next); }
                   }
-                }} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
+                }} data-pin-key={n === "del" ? "del" : String(n)} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>
                   {n === "del" ? "⌫" : n}
                 </button>
               );
