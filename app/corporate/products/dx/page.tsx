@@ -22,6 +22,9 @@ export default function DXProductPage() {
           challenge: "法的有効性を満たす電子署名の要件を調査しつつ、ITに不慣れな方でも迷わない操作性を追求。実際に5名のテストユーザーで検証し、つまずくポイントを1つずつ解消していきました。",
           devVoice: "以前は書類を印刷→記入→回収→スキャン→保存で1人30分。今はリンクを送るだけで全工程が完了します。年間の紙代・印刷代もゼロに。",
           clientVoice: { text: "遠方のスタッフとの契約手続きがオンラインで完結するようになり、採用リードタイムが1週間短縮されました。", attr: "人材派遣業 G社 人事部" },
+          demoImage: "/corporate/demos/contract-demo.jpg",
+          demoCaption: "ADMIN CONSOLE PREVIEW",
+          demoOrientation: "landscape",
         },
         {
           name: "TERA Tax",
@@ -31,6 +34,9 @@ export default function DXProductPage() {
           challenge: "税制は毎年変わるため、情報の鮮度維持が最大の課題。基礎控除の引き上げ、ひとり親控除の拡充など、改正のたびにロジックを更新。税理士の監修を受けながら正確性を担保しています。",
           devVoice: "確定申告が難しいと感じていた方が、ステップを追うだけで自力でe-Tax申告できるようになった時が一番嬉しい瞬間です。",
           clientVoice: { text: "業務委託スタッフの確定申告サポートに使っています。源泉徴収の計算ミスがなくなり、経理の負担が大幅に減りました。", attr: "IT業 H社 管理部門" },
+          demoImage: "/corporate/demos/tax-demo.jpg",
+          demoCaption: "TAX FILING GUIDE PREVIEW",
+          demoOrientation: "landscape",
         },
         {
           name: "TERA Knowledge",
@@ -40,6 +46,9 @@ export default function DXProductPage() {
           challenge: "ナレッジベースを作っても読まれなければ意味がありません。その解決策がAIチャット連携。記事の内容をAIが学習し、自然言語で質問するだけで該当箇所を引用付きで回答してくれます。",
           devVoice: "新人教育の時間が約60%短縮。先輩スタッフが付きっきりで教える必要がなくなり、組織全体の生産性が向上しました。",
           clientVoice: { text: "ベテランの退職時にノウハウが失われる問題が解消。暗黙知がデジタル化され、組織としての知識資産が積み上がっています。", attr: "製造業 I社 業務改善部" },
+          demoImage: "/corporate/demos/knowledge-demo.jpg",
+          demoCaption: "KNOWLEDGE BASE PREVIEW",
+          demoOrientation: "landscape",
         },
       ]}
       techStack={["電子署名 (Canvas API)", "PDF生成 (jsPDF)", "Anthropic Claude API", "Supabase Storage", "LINE Messaging API", "e-Tax連携", "Markdown Parser"]}

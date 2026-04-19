@@ -12,6 +12,7 @@ type SubProduct = {
   clientVoice: { text: string; attr: string };
   demoImage?: string;       // デモ画像パス（/public 配下）
   demoCaption?: string;     // 画像下のキャプション
+  demoOrientation?: "portrait" | "landscape"; // 既定: portrait（スマホモック用 / 縦長）
 };
 
 type Props = {
@@ -55,10 +56,15 @@ export default function ProductDetailLayout({ badge, badgeColor, name, tagline, 
         .demo-shell::before{content:"";position:absolute;inset:-40px;border-radius:40px;background:radial-gradient(ellipse at center,var(--glow,rgba(59,130,246,0.25)),transparent 65%);filter:blur(30px);z-index:0;pointer-events:none}
         .demo-frame{position:relative;z-index:1;border-radius:22px;overflow:hidden;background:#0b1220;box-shadow:0 30px 80px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.06) inset;animation:floatY 6s ease-in-out infinite}
         .demo-frame img{display:block;width:100%;height:auto}
-        .sp-grid{display:grid;grid-template-columns:1.15fr 0.85fr;gap:36px;align-items:start}
+        .demo-frame.portrait{max-width:340px;width:100%}
+        .demo-frame.landscape{max-width:100%;width:100%;border-radius:14px}
+        .demo-frame.landscape::before{content:"";position:absolute;top:0;left:0;right:0;height:24px;background:linear-gradient(180deg,rgba(255,255,255,0.04),transparent);z-index:2;pointer-events:none}
+        .sp-grid{display:grid;gap:36px;align-items:start}
+        .sp-grid.portrait{grid-template-columns:1.15fr 0.85fr}
+        .sp-grid.landscape{grid-template-columns:0.75fr 1.25fr}
         .sp-voices{display:grid;grid-template-columns:1fr;gap:12px}
         @media (max-width:860px){
-          .sp-grid{grid-template-columns:1fr;gap:28px}
+          .sp-grid.portrait,.sp-grid.landscape{grid-template-columns:1fr;gap:28px}
           .sp-voices{grid-template-columns:1fr}
           .demo-shell::before{inset:-20px}
         }
@@ -133,8 +139,8 @@ export default function ProductDetailLayout({ badge, badgeColor, name, tagline, 
                   </div>
 
                   {p.demoImage ? (
-                    /* 2カラム: 左=声カード縦積み / 右=デモ画像 */
-                    <div className="sp-grid">
+                    /* 2カラム: 左=声カード縦積み / 右=デモ画像（portrait=縦長スマホ / landscape=横長管理画面） */
+                    <div className={`sp-grid ${p.demoOrientation === "landscape" ? "landscape" : "portrait"}`}>
                       <div className="sp-voices">
                         <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)" }}>
                           <p style={{ fontSize:9,fontWeight:800,color:"#f59e0b",letterSpacing:1.5,marginBottom:8 }}>CHALLENGE</p>
@@ -151,7 +157,7 @@ export default function ProductDetailLayout({ badge, badgeColor, name, tagline, 
                         </div>
                       </div>
                       <div className="demo-shell" style={{ ["--glow" as string]: `${badgeColor}33` } as React.CSSProperties}>
-                        <div className="demo-frame" style={{ maxWidth:340,width:"100%" }}>
+                        <div className={`demo-frame ${p.demoOrientation === "landscape" ? "landscape" : "portrait"}`}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={p.demoImage} alt={`${p.name} プレビュー`} loading="lazy" />
                         </div>
