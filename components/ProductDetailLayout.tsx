@@ -21,7 +21,7 @@ type Props = {
   name: string;
   tagline: string;
   heroDesc: string;
-  keyFeatures: { icon: string; title: string; desc: string }[];
+  keyFeatures: { icon: string; title: string; desc: string; image?: string }[];
   subProducts: SubProduct[];
   techStack: string[];
 };
@@ -93,13 +93,30 @@ export default function ProductDetailLayout({ badge, badgeColor, name, tagline, 
 
       {/* ── KEY FEATURES ── */}
       <section id="kf" data-a style={{ padding:"60px 24px",background:"#020617" }}>
-        <div className={`fu ${show("kf")?"on":""}`} style={{ maxWidth:1000,margin:"0 auto" }}>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:20 }}>
+        <div className={`fu ${show("kf")?"on":""}`} style={{ maxWidth:1200,margin:"0 auto" }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:24 }}>
             {keyFeatures.map((f,i) => (
-              <div key={i} style={{ padding:"28px 24px",borderRadius:16,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ fontSize:32,marginBottom:14 }}>{f.icon}</div>
-                <h3 style={{ fontSize:16,fontWeight:700,color:"#f8fafc",marginBottom:8 }}>{f.title}</h3>
-                <p style={{ fontSize:13,lineHeight:1.8,color:"#94a3b8" }}>{f.desc}</p>
+              <div key={i} style={{ borderRadius:16,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",overflow:"hidden",transition:"transform .3s,border-color .3s,box-shadow .3s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor=`${badgeColor}60`; e.currentTarget.style.boxShadow=`0 20px 40px -20px ${badgeColor}30`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.06)"; e.currentTarget.style.boxShadow="none"; }}
+              >
+                {f.image ? (
+                  <div style={{ position:"relative",width:"100%",aspectRatio:"16 / 9",background:"#0a1628",overflow:"hidden",borderBottom:`1px solid ${badgeColor}20` }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={f.image} alt={f.title} style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }}/>
+                    {/* 上端からのグラデで暗色背景と馴染ませる */}
+                    <div style={{ position:"absolute",inset:0,background:`linear-gradient(180deg,transparent 0%,transparent 70%,rgba(2,6,23,0.6) 100%)`,pointerEvents:"none" }}/>
+                  </div>
+                ) : (
+                  <div style={{ fontSize:32,padding:"28px 24px 0" }}>{f.icon}</div>
+                )}
+                <div style={{ padding:"22px 24px 26px" }}>
+                  <h3 style={{ fontSize:16,fontWeight:700,color:"#f8fafc",marginBottom:10,display:"flex",alignItems:"center",gap:10 }}>
+                    {f.image && <span style={{ width:6,height:6,borderRadius:"50%",background:badgeColor,boxShadow:`0 0 8px ${badgeColor}` }}/>}
+                    {f.title}
+                  </h3>
+                  <p style={{ fontSize:13,lineHeight:1.8,color:"#94a3b8" }}>{f.desc}</p>
+                </div>
               </div>
             ))}
           </div>

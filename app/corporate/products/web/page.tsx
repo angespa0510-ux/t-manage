@@ -9,9 +9,9 @@ export default function WebProductPage() {
       tagline="クラウド業務管理システム"
       heroDesc="予約・シフト・売上・顧客をクラウドで一元管理。リアルタイム同期でどこからでもアクセス可能。スマホ対応のお客様ポータルで、セルフサービス化を実現します。"
       keyFeatures={[
-        { icon: "📅", title: "予約・リソース管理", desc: "タイムチャート型のビジュアル予約管理。ドラッグ&ドロップで直感操作。複数拠点のリソースをリアルタイムで可視化。" },
-        { icon: "📱", title: "顧客ポータル", desc: "お客様専用マイページで予約確認・履歴閲覧・通知受信をセルフサービス化。LINEやメールからワンタップアクセス。" },
-        { icon: "⚡", title: "リアルタイム同期", desc: "WebSocket接続で全端末が即座に同期。予約変更が全スタッフに即反映。操作の衝突も自動検知。" },
+        { icon: "📅", image: "/corporate/features/cloud-core.png", title: "予約・リソース管理", desc: "タイムチャート型のビジュアル予約管理。ドラッグ&ドロップで直感操作。複数拠点のリソースをリアルタイムで可視化。" },
+        { icon: "📱", image: "/corporate/features/cloud-portal.png", title: "顧客ポータル", desc: "お客様専用マイページで予約確認・履歴閲覧・通知受信をセルフサービス化。LINEやメールからワンタップアクセス。" },
+        { icon: "⚡", image: "/corporate/features/cloud-space.png", title: "リアルタイム同期", desc: "WebSocket接続で全端末が即座に同期。予約変更が全スタッフに即反映。操作の衝突も自動検知。" },
       ]}
       subProducts={[
         {

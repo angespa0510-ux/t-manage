@@ -9,9 +9,9 @@ export default function AIProductPage() {
       tagline="AI 業務支援プラットフォーム"
       heroDesc="社内ナレッジの自動学習から、書類のAI読取、経営データの予測分析まで。御社の業務にAIを組み込み、人が本来やるべき仕事に集中できる環境をつくります。"
       keyFeatures={[
-        { icon: "💬", title: "社内AIアシスタント", desc: "業務マニュアル・社内規程・FAQをAIが学習。スタッフの「これどうやるの？」に24時間即答。問い合わせ工数を大幅削減。" },
-        { icon: "📄", title: "書類AI読取・自動分類", desc: "スキャン画像やFAXをAIが読み取り、書類種別の判定・ファイル名の自動付与・PDF変換まで一括処理。" },
-        { icon: "📊", title: "データ分析・予測", desc: "蓄積されたデータからトレンド分析・需要予測・最適なリソース配置をAIが提案。経営判断をデータドリブンに。" },
+        { icon: "💬", image: "/corporate/features/ai-chat.png", title: "社内AIアシスタント", desc: "業務マニュアル・社内規程・FAQをAIが学習。スタッフの「これどうやるの？」に24時間即答。問い合わせ工数を大幅削減。" },
+        { icon: "📄", image: "/corporate/features/ai-scan.png", title: "書類AI読取・自動分類", desc: "スキャン画像やFAXをAIが読み取り、書類種別の判定・ファイル名の自動付与・PDF変換まで一括処理。" },
+        { icon: "📊", image: "/corporate/features/ai-analytics.png", title: "データ分析・予測", desc: "蓄積されたデータからトレンド分析・需要予測・最適なリソース配置をAIが提案。経営判断をデータドリブンに。" },
       ]}
       subProducts={[
         {

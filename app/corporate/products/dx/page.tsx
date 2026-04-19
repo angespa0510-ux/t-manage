@@ -9,9 +9,9 @@ export default function DXProductPage() {
       tagline="DX推進パッケージ"
       heroDesc="紙の契約書、手書きの帳簿、属人的なノウハウ——アナログ業務を一つずつデジタルに置き換え、業務効率と正確性を飛躍的に向上させます。"
       keyFeatures={[
-        { icon: "✍️", title: "電子契約・書類管理", desc: "契約書の電子署名、身分証のデジタル提出、各種届出書のペーパーレス化。LINEやメール経由でスマホから完結。" },
-        { icon: "🧾", title: "AI帳簿・税務支援", desc: "経費のAI自動仕分け、源泉徴収の自動計算、支払調書のPDF生成。確定申告をステップガイドで完全サポート。" },
-        { icon: "📚", title: "ナレッジベース構築", desc: "業務マニュアル・手順書・ノウハウをデジタル化。AIチャットによる質疑応答で、新人教育コストを大幅削減。" },
+        { icon: "✍️", image: "/corporate/features/dx-contract.png", title: "電子契約・書類管理", desc: "契約書の電子署名、身分証のデジタル提出、各種届出書のペーパーレス化。LINEやメール経由でスマホから完結。" },
+        { icon: "🧾", image: "/corporate/features/dx-tax.png", title: "AI帳簿・税務支援", desc: "経費のAI自動仕分け、源泉徴収の自動計算、支払調書のPDF生成。確定申告をステップガイドで完全サポート。" },
+        { icon: "📚", image: "/corporate/features/dx-knowledge.png", title: "ナレッジベース構築", desc: "業務マニュアル・手順書・ノウハウをデジタル化。AIチャットによる質疑応答で、新人教育コストを大幅削減。" },
       ]}
       subProducts={[
         {
