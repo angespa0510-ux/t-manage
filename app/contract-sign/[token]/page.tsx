@@ -243,6 +243,8 @@ export default function ContractSign() {
           <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第12条（合意管轄）</h3>
           <p>本契約に関する紛争については、名古屋地方裁判所を第一審の専属的合意管轄裁判所とする。</p>
 
+          <p style={{ marginTop: 16 }}>本契約は、乙が甲の管理するオンラインシステム（T-MANAGE）上で電子署名を行うことにより締結される。署名済み契約書は甲のシステム内に電磁的に保管され、甲乙双方がいつでも閲覧できるものとする。本書2通の作成および記名押印による交付は要しない。</p>
+
           <p style={{ marginTop: 20, fontSize: 11, color: "#666", textAlign: "center" }}>以上の内容に同意のうえ、以下に署名してください。</p>
         </div>
 
