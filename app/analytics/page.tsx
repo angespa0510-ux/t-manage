@@ -72,7 +72,16 @@ export default function Analytics() {
   const [multiYearLoading, setMultiYearLoading] = useState(false);
   const [multiYearAnchor, setMultiYearAnchor] = useState(() => new Date().getFullYear()); // 表示中5年の最新年
 
-  const [tab, setTab] = useState<Tab>("daily");
+  // F5リロード後もタブ選択を維持 (sessionStorage: タブ閉じで消える)
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "daily";
+    const saved = sessionStorage.getItem("t-manage-analytics-tab");
+    const valid: Tab[] = ["daily", "monthly", "yearly", "therapist", "course", "store", "customer"];
+    return (saved && valid.includes(saved as Tab)) ? (saved as Tab) : "daily";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") sessionStorage.setItem("t-manage-analytics-tab", tab);
+  }, [tab]);
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   // 日別ヘッダークリックで表示するヒント（sales/storeShare/avg/back/card いずれか、null なら非表示）
