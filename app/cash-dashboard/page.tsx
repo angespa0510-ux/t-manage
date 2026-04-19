@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 import { useStaffSession } from "../../lib/staff-session";
 import { useTheme } from "../../lib/theme";
 import { useConfirm } from "../../components/useConfirm";
+import { runAutoSettlementIfDue } from "../../lib/staff-advances";
 
 /* ─────────── 型定義 ─────────── */
 type AtmDeposit = {
@@ -98,6 +99,11 @@ export default function CashDashboard() {
   const [toyohashiMoves, setToyohashiMoves] = useState<ToyohashiMove[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
 
+  // スタッフ前借り
+  const [pendingAdvances, setPendingAdvances] = useState<{ id: number; staff_id: number; advance_date: string; amount: number }[]>([]);
+  const [settledAdvancesThisMonth, setSettledAdvancesThisMonth] = useState<{ amount: number }[]>([]);
+  const [allStaff, setAllStaff] = useState<{ id: number; name: string }[]>([]);
+
   // 豊橋予備金モーダル
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [reserveType, setReserveType] = useState<"withdraw" | "refund" | "initial" | "adjustment">("withdraw");
@@ -167,12 +173,34 @@ export default function CashDashboard() {
       // セラピスト一覧
       const { data: ths } = await supabase.from("therapists").select("id,name").order("name");
       if (ths) setTherapists(ths as Therapist[]);
+
+      // スタッフ前借り（未精算・当月精算済）
+      const { data: pendAdv } = await supabase.from("staff_advances")
+        .select("id,staff_id,advance_date,amount")
+        .eq("status", "pending");
+      setPendingAdvances(pendAdv || []);
+
+      const nowD = new Date();
+      const thisMonthStr = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, "0")}`;
+      const { data: settledThis } = await supabase.from("staff_advances")
+        .select("amount")
+        .eq("status", "settled")
+        .eq("settled_month", thisMonthStr);
+      setSettledAdvancesThisMonth(settledThis || []);
+
+      const { data: stf } = await supabase.from("staff").select("id,name");
+      setAllStaff(stf || []);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { if (canAccessCashDashboard) fetchData(); }, [canAccessCashDashboard, fetchData]);
+
+  // 前借り月末自動精算チェック (cash-dashboard 初回ロード時に一度だけ実行)
+  useEffect(() => {
+    runAutoSettlementIfDue().catch(() => {});
+  }, []);
 
   // ATM預入 → 銀行取引との自動マッチング
   const autoMatchBankTx = async (depositId: number, depositDate: string, amount: number) => {
@@ -368,7 +396,11 @@ export default function CashDashboard() {
   const totalReserveWithdraw = toyohashiMoves.filter(m => m.movement_type === "withdraw").reduce((s, m) => s + m.amount, 0);
   const totalReserveRefund = toyohashiMoves.filter(m => m.movement_type === "refund").reduce((s, m) => s + m.amount, 0);
 
-  const officeCashBalance = cumulativeCashIn + cumulativeIncome - cumulativeExpense - totalReplenishAll - cumulativeAtmDeposit - totalReserveRefund;
+  // 未精算スタッフ前借り累計 (pending 分は管理者金庫から出ている状態)
+  // settled 後は expenses に振替されるので、そちら経由で cumulativeExpense に含まれ、二重控除にならない
+  const totalPendingAdvances = pendingAdvances.reduce((s, a) => s + (a.amount || 0), 0);
+
+  const officeCashBalance = cumulativeCashIn + cumulativeIncome - cumulativeExpense - totalReplenishAll - cumulativeAtmDeposit - totalReserveRefund - totalPendingAdvances;
 
   // 検証済み/未検証のATM預入
   const verifiedAtms = atmDeposits.filter(a => a.bank_verified).length;
@@ -540,6 +572,55 @@ export default function CashDashboard() {
                 </p>
               </div>
             </div>
+
+            {/* スタッフ前借り情報カード */}
+            {(pendingAdvances.length > 0 || settledAdvancesThisMonth.length > 0) && (() => {
+              const pendingByStaff: Record<number, number> = {};
+              pendingAdvances.forEach(a => { pendingByStaff[a.staff_id] = (pendingByStaff[a.staff_id] || 0) + a.amount; });
+              const pendingStaffCount = Object.keys(pendingByStaff).length;
+              const settledTotalThisMonth = settledAdvancesThisMonth.reduce((s, a) => s + (a.amount || 0), 0);
+              const pendingTotal = totalPendingAdvances;
+              return (
+                <div className="rounded-xl p-4" style={{ backgroundColor: "#d4687e10", border: "1px solid #d4687e33" }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[12px] font-medium" style={{ color: "#d4687e" }}>💸 スタッフ前借り</p>
+                    <Link href="/staff?tab=advances" className="text-[10px] cursor-pointer" style={{ color: "#d4687e" }}>詳細 →</Link>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[10px]" style={{ color: T.textSub }}>未精算（管理者金庫から控除中）</p>
+                      <p className="text-[16px] font-medium tabular-nums" style={{ color: "#d4687e" }}>-{fmt(pendingTotal)}</p>
+                      <p className="text-[9px]" style={{ color: T.textFaint }}>{pendingStaffCount}名 / {pendingAdvances.length}件</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px]" style={{ color: T.textSub }}>今月精算済（外注費へ振替）</p>
+                      <p className="text-[16px] font-medium tabular-nums" style={{ color: "#22c55e" }}>{fmt(settledTotalThisMonth)}</p>
+                      <p className="text-[9px]" style={{ color: T.textFaint }}>{settledAdvancesThisMonth.length}件</p>
+                    </div>
+                    <div className="col-span-2 md:col-span-1">
+                      <p className="text-[10px]" style={{ color: T.textSub }}>次回自動精算</p>
+                      <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>毎月 第1月曜 12:00 以降</p>
+                      <p className="text-[9px]" style={{ color: T.textFaint }}>前月分を外注費へ自動振替</p>
+                    </div>
+                  </div>
+                  {pendingStaffCount > 0 && (
+                    <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] mb-1.5" style={{ color: T.textSub }}>未精算内訳</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(pendingByStaff).map(([sid, amt]) => {
+                          const stf = allStaff.find(s => s.id === parseInt(sid));
+                          return (
+                            <span key={sid} className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#d4687e18", color: "#d4687e" }}>
+                              {stf?.name || `ID:${sid}`} -{fmt(amt as number)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* アクションボタン */}
             <div className="flex flex-wrap gap-2">
@@ -953,6 +1034,7 @@ export default function CashDashboard() {
                   <div className="flex justify-between"><span>− 累積釣銭補充（ルームへの補充）</span><span style={{ color: "#c45555" }}>-{fmt(totalReplenishAll)}</span></div>
                   <div className="flex justify-between"><span>− 累積ATM預入（管理者金庫→PayPay銀行）</span><span style={{ color: "#c45555" }}>-{fmt(cumulativeAtmDeposit)}</span></div>
                   <div className="flex justify-between"><span>− 累積予備金補充（スタッフ金庫→豊橋予備金）</span><span style={{ color: "#c45555" }}>-{fmt(totalReserveRefund)}</span></div>
+                  <div className="flex justify-between"><span>− 未精算スタッフ前借り（月末精算で外注費へ振替予定）</span><span style={{ color: "#d4687e" }}>-{fmt(totalPendingAdvances)}</span></div>
                   <div className="flex justify-between pt-2 font-medium text-[13px]" style={{ borderTop: `1px solid ${T.border}`, color: T.text }}>
                     <span>= 管理者金庫 理論値</span>
                     <span>{fmt(officeCashBalance)}</span>

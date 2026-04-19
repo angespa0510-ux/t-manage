@@ -9,6 +9,7 @@ import { useStaffSession } from "../../lib/staff-session";
 import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { useBackNav } from "../../lib/use-back-nav";
 import { useConfirm } from "../../components/useConfirm";
+import { runAutoSettlementIfDue } from "../../lib/staff-advances";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
 
@@ -310,7 +311,21 @@ export default function Dashboard() {
     const safeDepositedAmt = therapistData.filter(t => t.salesCollected && t.safeDeposited).reduce((s, t) => s + (t.changeCollected ? t.replenish : 0) + t.netAfterPay, 0);
     const totalUncollected = therapistData.filter(t => !t.salesCollected).reduce((s, t) => s + t.replenish + t.netAfterPay, 0);
     const totalChangeUncollected = therapistData.filter(t => t.salesCollected && !t.changeCollected).reduce((s, t) => s + t.replenish, 0);
-    const cashOnHand = -totalReplenish - expenseTotal + incomeTotal + staffCollectedAmt;
+
+    // スタッフ前借り(本日分) - 管理者金庫に入る現金から直接差し引かれる
+    const { data: advRows } = await supabase
+      .from("staff_advances")
+      .select("id,staff_id,amount,reason,status")
+      .eq("advance_date", date)
+      .eq("status", "pending");
+    const { data: staffAll } = await supabase.from("staff").select("id,name");
+    const getStaffName = (id: number) => (staffAll || []).find((s: any) => s.id === id)?.name || "不明";
+    const staffAdvanceList = (advRows || []).map((a: any) => ({
+      id: a.id, staff_id: a.staff_id, name: getStaffName(a.staff_id), amount: a.amount, reason: a.reason || "",
+    }));
+    const staffAdvanceTotal = staffAdvanceList.reduce((s: number, a: any) => s + a.amount, 0);
+
+    const cashOnHand = -totalReplenish - expenseTotal + incomeTotal + staffCollectedAmt - staffAdvanceTotal;
     // 金庫未回収（金庫投函済み・未回収）
     const { data: safeUncoll } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).is("safe_collected_date", null);
     const safeUncollectedList = (safeUncoll || []).map((s: any) => {
@@ -375,6 +390,7 @@ export default function Dashboard() {
       expenseList, expenseTotal, incomeList, incomeTotal,
       netProfit, therapistData, totalOut,
       staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
+      staffAdvanceList, staffAdvanceTotal,
       therapistSales, safeUncollectedList, safeTotalUncollected, safeCollectedTodayList, safeCollectedTodayTotal,
       reserveUsedList, reserveUsedTotal, toyohashiBalance,
     });
@@ -387,6 +403,11 @@ export default function Dashboard() {
       fetchClosingReport(closingDate);
     }
   }, [closingDate, activePage, fetchClosingReport]);
+
+  // 前借り月末自動精算チェック (dashboard 初回ロード時に一度だけ実行)
+  useEffect(() => {
+    runAutoSettlementIfDue().catch(() => {});
+  }, []);
 
   const shiftClosingDate = (days: number) => {
     const d = new Date(closingDate + "T00:00:00");
@@ -1016,7 +1037,15 @@ export default function Dashboard() {
                       <div className="flex justify-between"><span>セラピスト支払い（ルーム内現金から）</span><span style={{ color: T.textFaint }}>-{fmt(closingData.totalFinalPay)}</span></div>
                       <p className="text-[9px] pl-2" style={{ color: T.textFaint }}>※ ルーム内で支払済み。スタッフ回収時に相殺されます</p>
                       {closingData.expenseTotal > 0 && <div className="flex justify-between"><span>経費</span><span style={{ color: "#c45555" }}>-{fmt(closingData.expenseTotal)}</span></div>}
-                      <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>出金合計</span><span>-{fmt(closingData.totalOut)}</span></div>
+                      {closingData.staffAdvanceTotal > 0 && (
+                        <>
+                          <div className="flex justify-between"><span>💸 スタッフ前借り</span><span style={{ color: "#d4687e" }}>-{fmt(closingData.staffAdvanceTotal)}</span></div>
+                          {closingData.staffAdvanceList.map((a: any) => (
+                            <div key={a.id} className="flex justify-between pl-3 text-[10px]"><span style={{ color: T.textMuted }}>・{a.name}{a.reason ? `（${a.reason}）` : ""}</span><span style={{ color: T.textMuted }}>-{fmt(a.amount)}</span></div>
+                          ))}
+                        </>
+                      )}
+                      <div className="flex justify-between font-bold pt-1" style={{ borderTop: `1px dashed ${T.border}`, color: "#c45555" }}><span>出金合計</span><span>-{fmt(closingData.totalOut + (closingData.staffAdvanceTotal || 0))}</span></div>
                       {closingData.incomeTotal > 0 && (<><p className="text-[9px] font-medium mt-2" style={{ color: "#22c55e" }}>入金</p><div className="flex justify-between"><span>入金合計</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.incomeTotal)}</span></div></>)}
                       <p className="text-[9px] font-medium mt-3" style={{ color: "#f59e0b" }}>ルーム別 現金状況（未回収 = 事務所にまだ戻っていない）</p>
                       {closingData.therapistData.map((t: any, i: number) => (

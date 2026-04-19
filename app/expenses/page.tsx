@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useBackNav } from "../../lib/use-back-nav";
+import { useStaffSession } from "../../lib/staff-session";
 import { jsPDF } from "jspdf";
 import { useConfirm } from "../../components/useConfirm";
 
@@ -17,6 +18,7 @@ type Expense = {
   payment_method: string; keyword: string; counterpart: string; account_item: string;
   tax_rate: string; has_invoice: boolean; invoice_number: string;
   has_withholding: boolean; receipt_number: string;
+  auto_generated?: boolean; auto_source?: string;
 };
 type Keyword = {
   id: number; name: string; account_item: string;
@@ -45,6 +47,7 @@ export default function ExpensesPage() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
   const { confirm, ConfirmModalNode } = useConfirm();
+  const { canAccessCashDashboard } = useStaffSession();
 
   /* ───── データ ───── */
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -248,9 +251,21 @@ export default function ExpensesPage() {
 
   /* ───── 削除 ───── */
   const handleDelete = async (id: number) => {
+    const target = expenses.find(e => e.id === id);
+    if (target?.auto_generated && !canAccessCashDashboard) {
+      await confirm({
+        title: "🔒 自動生成された経費は削除できません",
+        message: `この経費はシステムが自動生成したものです（${target.auto_source || "自動"}）。削除には社長または経営責任者の権限が必要です。`,
+        variant: "warning",
+        confirmLabel: "閉じる",
+      });
+      return;
+    }
     const ok = await confirm({
-      title: "この経費を削除しますか？",
-      message: "この操作は取り消せません。関連する経費計算にも反映されます。",
+      title: target?.auto_generated ? "⚠️ 自動生成された経費を削除しますか？" : "この経費を削除しますか？",
+      message: target?.auto_generated
+        ? `この経費はシステムが自動生成したものです（${target.auto_source || "自動"}）。削除すると関連する前借り等との整合性が崩れる可能性があります。`
+        : "この操作は取り消せません。関連する経費計算にも反映されます。",
       variant: "danger",
       confirmLabel: "削除する",
     });
