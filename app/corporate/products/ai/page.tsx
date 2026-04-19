@@ -23,7 +23,8 @@ export default function AIProductPage() {
           devVoice: "AIに聞けば分かるという安心感が、スタッフの自立を促します。管理者への問い合わせ件数は導入前の1/3に減少しました。",
           clientVoice: { text: "新人教育のコストが劇的に下がりました。OJTで先輩が付きっきりだった時間がほぼゼロに。", attr: "サービス業 A社 マネージャー" },
           demoImage: "/corporate/demos/chat-demo.jpg",
-          demoCaption: "INTERFACE PREVIEW",
+          demoCaption: "CHAT INTERFACE PREVIEW",
+          demoOrientation: "landscape",
         },
         {
           name: "TERA AI Scan",
@@ -34,7 +35,8 @@ export default function AIProductPage() {
           devVoice: "月次の書類整理に3時間かかっていた作業が10分に短縮。ファイル名の命名規則も統一され、検索性が飛躍的に向上しました。",
           clientVoice: { text: "経理部門の残業が月10時間減りました。紙の山から解放されて本当に助かっています。", attr: "物流業 B社 経理部長" },
           demoImage: "/corporate/demos/scan-demo.jpg",
-          demoCaption: "MOBILE APP PREVIEW",
+          demoCaption: "DASHBOARD PREVIEW",
+          demoOrientation: "landscape",
         },
         {
           name: "TERA AI Analytics",
@@ -45,7 +47,8 @@ export default function AIProductPage() {
           devVoice: "感覚でやっていたシフト調整が数字で裏付けられるようになり、人件費の最適化に直結しました。",
           clientVoice: { text: "来週の繁忙予測が出るので、事前にスタッフを増員できるようになりました。機会損失が確実に減っています。", attr: "飲食業 C社 店長" },
           demoImage: "/corporate/demos/analytics-demo.jpg",
-          demoCaption: "DASHBOARD PREVIEW",
+          demoCaption: "ANALYTICS PORTAL PREVIEW",
+          demoOrientation: "landscape",
         },
       ]}
       techStack={["Anthropic Claude API", "RAG (Retrieval-Augmented Generation)", "Supabase", "Next.js", "TypeScript", "Edge Functions", "Vision API"]}
