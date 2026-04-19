@@ -746,7 +746,7 @@ export default function Analytics() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className={tab === "daily" ? "mx-auto" : "max-w-[1100px] mx-auto"}>
+        <div className={(tab === "daily" || tab === "monthly" || tab === "yearly") ? "mx-auto" : "max-w-[1100px] mx-auto"}>
 
           {/* 日別 */}
           {tab === "daily" && (
