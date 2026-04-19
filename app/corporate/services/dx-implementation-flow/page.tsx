@@ -79,7 +79,7 @@ function TopBar({ layout, setLayout, accentKey }: {
             <div style={{ width: 10, height: 10, borderRadius: 999, background: ACCENT_MAP[accentKey].hex }} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-            <span style={{ fontWeight: 800, letterSpacing: 3, fontSize: 13 }}>T-MANAGE</span>
+            <span style={{ fontWeight: 800, letterSpacing: 3, fontSize: 13 }}>TERA DX</span>
             <span style={{ color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 10, marginTop: 4, letterSpacing: 1 }}>corporate / dx_playbook</span>
           </div>
         </Link>
@@ -709,6 +709,11 @@ function CTASection({ accentKey }: { accentKey: AccentKey }) {
           <div style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.7, marginTop: 18, maxWidth: 560 }}>
             課題整理から費用感、補助金活用まで、1回のミーティングでお伝えします。<br />オンライン / 訪問どちらも対応可能です。
           </div>
+          {/* 敷居の低さを伝えるサブメッセージ */}
+          <div style={{ marginTop: 22, padding: "14px 16px", borderRadius: 10, border: `1px dashed ${accent.hex}40`, background: `${accent.soft.replace("0.14", "0.06")}`, fontSize: 13, color: "var(--text)", lineHeight: 1.7, maxWidth: 560 }}>
+            <span style={{ color: accent.hex, fontWeight: 700 }}>◉ </span>
+            中小企業のDX導入を中心にしていますが、<strong>個人の方のアプリ開発・Webサイト制作・AI活用のご相談</strong>もお気軽に。「こんなこと、できる？」レベルの話でも歓迎です。
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Link href="/corporate#contact" style={{ appearance: "none", border: "none", cursor: "pointer", padding: "16px 28px", borderRadius: 999, background: accent.hex, color: "#000", fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: 2, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>▸ 無料相談を予約する</Link>
@@ -896,8 +901,8 @@ export default function DXImplementationFlowPage() {
 
           <footer style={{ marginTop: 60, paddingTop: 32, borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-end", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--muted)", flexWrap: "wrap", gap: 20 }}>
             <div>
-              <div style={{ color: "var(--text)", fontSize: 16, letterSpacing: 4, fontWeight: 700 }}>T-MANAGE</div>
-              <div style={{ marginTop: 6, lineHeight: 1.6 }}>dx implementation partner<br />for small &amp; mid businesses</div>
+              <div style={{ color: "var(--text)", fontSize: 16, letterSpacing: 4, fontWeight: 700 }}>TERA DX</div>
+              <div style={{ marginTop: 6, lineHeight: 1.6 }}>dx implementation partner<br />中小企業から個人様まで、お気軽に。</div>
             </div>
             <div style={{ textAlign: "right", lineHeight: 1.8 }}>
               <div>© {new Date().getFullYear()} 合同会社テラスライフ</div>

@@ -160,6 +160,7 @@ export default function CorporatePage() {
 
   const NAV = [
     { id: "service", label: "事業内容" },
+    { id: "dx_flow", label: "DX導入", href: "/corporate/services/dx-implementation-flow" },
     { id: "products", label: "プロダクト" },
     { id: "stats", label: "実績" },
     { id: "company", label: "会社概要" },
@@ -213,18 +214,41 @@ export default function CorporatePage() {
             </div>
           </div>
           <div className="nav-links" style={{ display:"flex",gap:28,alignItems:"center" }}>
-            {NAV.map((n) => (
-              <button key={n.id} onClick={() => go(n.id)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:500,letterSpacing:.8,color:"rgba(248,250,252,0.7)",transition:"color .3s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#60a5fa")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(248,250,252,0.7)")}
-              >{n.label}</button>
-            ))}
+            {NAV.map((n) => {
+              const isDxFlow = "href" in n && !!n.href;
+              const common = { background:"none",border:"none",cursor:"pointer",fontSize:12,fontWeight:500,letterSpacing:.8,color: isDxFlow ? "#4dd6e8" : "rgba(248,250,252,0.7)",transition:"color .3s",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6 } as const;
+              if (isDxFlow) {
+                return (
+                  <a key={n.id} href={n.href} style={common}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#7ce5f0")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#4dd6e8")}
+                  >
+                    <span style={{ width:5,height:5,borderRadius:"50%",background:"#4dd6e8",boxShadow:"0 0 8px #4dd6e8" }}/>
+                    {n.label}
+                  </a>
+                );
+              }
+              return (
+                <button key={n.id} onClick={() => go(n.id)} style={common}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#60a5fa")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(248,250,252,0.7)")}
+                >{n.label}</button>
+              );
+            })}
           </div>
           <button className="nav-toggle" onClick={() => setMenuOpen(!menuOpen)} style={{ display:"none",background:"none",border:"none",cursor:"pointer",color:"#f8fafc",fontSize:22 }}>{menuOpen ? "✕" : "☰"}</button>
         </div>
         {menuOpen && (
           <div style={{ background:"rgba(2,6,23,0.95)",backdropFilter:"blur(20px)",padding:"12px 24px",borderTop:"1px solid rgba(96,165,250,0.1)" }}>
-            {NAV.map((n) => (<button key={n.id} onClick={() => go(n.id)} style={{ display:"block",width:"100%",textAlign:"left",padding:"14px 0",background:"none",border:"none",borderBottom:"1px solid rgba(255,255,255,0.05)",fontSize:14,fontWeight:500,color:"#cbd5e1",cursor:"pointer" }}>{n.label}</button>))}
+            {NAV.map((n) => {
+              const isDxFlow = "href" in n && !!n.href;
+              const common = { display:"block",width:"100%",textAlign:"left" as const,padding:"14px 0",background:"none",border:"none",borderBottom:"1px solid rgba(255,255,255,0.05)",fontSize:14,fontWeight:500,color: isDxFlow ? "#4dd6e8" : "#cbd5e1",cursor:"pointer",textDecoration:"none" };
+              return isDxFlow ? (
+                <a key={n.id} href={n.href} style={common}>◉ {n.label}</a>
+              ) : (
+                <button key={n.id} onClick={() => go(n.id)} style={common}>{n.label}</button>
+              );
+            })}
           </div>
         )}
       </nav>
@@ -271,14 +295,18 @@ export default function CorporatePage() {
             <span style={{ color:"#f8fafc" }}>ビジネスの未来を</span><br/>
             <span style={{ background:"linear-gradient(135deg,#2563eb,#06b6d4,#7c3aed)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent" }}>デザインする。</span>
           </h1>
-          <p style={{ fontSize:"clamp(14px,1.8vw,17px)",lineHeight:1.9,color:"#94a3b8",marginTop:28,maxWidth:560,marginLeft:"auto",marginRight:"auto",animation:"fadeUp 1s ease .75s both" }}>
-            AIソリューション開発、Webシステム構築、DX推進支援。<br/>最先端の技術力で、お客様の課題を解決します。
+          <p style={{ fontSize:"clamp(14px,1.8vw,17px)",lineHeight:1.9,color:"#94a3b8",marginTop:28,maxWidth:620,marginLeft:"auto",marginRight:"auto",animation:"fadeUp 1s ease .75s both" }}>
+            中小企業のDX導入から、個人の方のアプリ開発・AI活用まで。<br/>「こんなこと、できる？」の一言から、ご相談ください。
           </p>
           <div style={{ marginTop:44,display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",animation:"fadeUp 1s ease 1s both" }}>
-            <button onClick={() => go("service")} style={{ padding:"16px 40px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontSize:14,fontWeight:700,letterSpacing:.8,boxShadow:"0 0 30px rgba(37,99,235,0.4),0 8px 32px rgba(37,99,235,0.2)",transition:"all .3s" }}
-              onMouseEnter={(e) => { e.currentTarget.style.boxShadow="0 0 50px rgba(37,99,235,0.5),0 12px 40px rgba(37,99,235,0.3)"; e.currentTarget.style.transform="translateY(-2px)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.boxShadow="0 0 30px rgba(37,99,235,0.4),0 8px 32px rgba(37,99,235,0.2)"; e.currentTarget.style.transform="translateY(0)"; }}
-            >事業内容を見る →</button>
+            <a href="/corporate/services/dx-implementation-flow" style={{ padding:"16px 40px",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#4dd6e8,#2dc5db)",color:"#000",fontSize:14,fontWeight:800,letterSpacing:.8,boxShadow:"0 0 30px rgba(77,214,232,0.4),0 8px 32px rgba(77,214,232,0.2)",transition:"all .3s",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:8 }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow="0 0 50px rgba(77,214,232,0.5),0 12px 40px rgba(77,214,232,0.3)"; e.currentTarget.style.transform="translateY(-2px)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow="0 0 30px rgba(77,214,232,0.4),0 8px 32px rgba(77,214,232,0.2)"; e.currentTarget.style.transform="translateY(0)"; }}
+            >◉ DX導入フローを見る →</a>
+            <button onClick={() => go("service")} style={{ padding:"16px 40px",borderRadius:10,cursor:"pointer",background:"rgba(255,255,255,0.03)",backdropFilter:"blur(10px)",border:"1px solid rgba(148,163,184,0.25)",color:"#cbd5e1",fontSize:14,fontWeight:600,letterSpacing:.8,transition:"all .3s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor="rgba(96,165,250,0.5)"; e.currentTarget.style.color="#60a5fa"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor="rgba(148,163,184,0.25)"; e.currentTarget.style.color="#cbd5e1"; }}
+            >事業内容を見る</button>
             <button onClick={() => go("contact")} style={{ padding:"16px 40px",borderRadius:10,cursor:"pointer",background:"rgba(255,255,255,0.03)",backdropFilter:"blur(10px)",border:"1px solid rgba(148,163,184,0.25)",color:"#cbd5e1",fontSize:14,fontWeight:600,letterSpacing:.8,transition:"all .3s" }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor="rgba(96,165,250,0.5)"; e.currentTarget.style.color="#60a5fa"; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor="rgba(148,163,184,0.25)"; e.currentTarget.style.color="#cbd5e1"; }}
@@ -298,6 +326,108 @@ export default function CorporatePage() {
       <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(37,99,235,0.3),rgba(6,182,212,0.3),transparent)",position:"relative" }}>
         <div style={{ position:"absolute",top:-12,left:0,right:0,height:24,background:"radial-gradient(ellipse at 50% 50%,rgba(37,99,235,0.08),transparent 70%)" }}/>
       </div>
+
+      {/* ══════════ DX FLOW FEATURED (中心事業) ══════════ */}
+      <section id="dx_flow" data-a style={{ position:"relative",padding:"100px 24px",background:"#07090c",overflow:"hidden" }}>
+        {/* Grid background */}
+        <div style={{
+          position:"absolute",inset:0,pointerEvents:"none",zIndex:0,
+          backgroundImage:"linear-gradient(to right,rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.015) 1px,transparent 1px)",
+          backgroundSize:"48px 48px",
+          maskImage:"radial-gradient(ellipse at center,black 40%,transparent 85%)",
+          WebkitMaskImage:"radial-gradient(ellipse at center,black 40%,transparent 85%)",
+        }}/>
+        {/* Ambient glows */}
+        <div style={{ position:"absolute",top:-100,right:-100,width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(77,214,232,0.08),transparent 70%)",filter:"blur(60px)",pointerEvents:"none",zIndex:0 }}/>
+        <div style={{ position:"absolute",bottom:-150,left:-150,width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(168,235,110,0.06),transparent 70%)",filter:"blur(60px)",pointerEvents:"none",zIndex:0 }}/>
+
+        <div className={`fu ${show("dx_flow")?"on":""}`} style={{ maxWidth:1200,margin:"0 auto",position:"relative",zIndex:1 }}>
+          {/* ラベル */}
+          <div style={{ textAlign:"center",marginBottom:36 }}>
+            <div style={{ display:"inline-flex",alignItems:"center",gap:10,padding:"6px 14px",border:"1px solid rgba(77,214,232,0.3)",borderRadius:999,background:"rgba(77,214,232,0.06)",marginBottom:22 }}>
+              <span style={{ width:6,height:6,borderRadius:"50%",background:"#4dd6e8",boxShadow:"0 0 8px #4dd6e8" }}/>
+              <span style={{ fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace",fontSize:11,letterSpacing:2,color:"#4dd6e8" }}>OUR CORE SERVICE</span>
+            </div>
+            <h2 style={{ fontFamily:"Inter,'Noto Sans JP'",fontSize:"clamp(32px,5vw,52px)",fontWeight:800,color:"#f8fafc",letterSpacing:-1,lineHeight:1.2 }}>
+              中小企業のための<br/>
+              <span style={{ background:"linear-gradient(135deg,#4dd6e8,#7ce5f0)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent" }}>DX導入フロー</span>
+            </h2>
+            <p style={{ fontSize:"clamp(13px,1.5vw,16px)",color:"#94a3b8",marginTop:22,lineHeight:1.8,maxWidth:680,marginLeft:"auto",marginRight:"auto" }}>
+              ヒアリングから運用まで、5つのフェーズで業務変革を伴走。<br/>
+              「人には、人にしかできない仕事がある」—— 人為的ミスを減らし、生産効率を<br/>
+              <span style={{ color:"#4dd6e8",fontWeight:700 }}>20〜最大70%</span> 向上させ、時間を価値ある仕事に返します。
+            </p>
+          </div>
+
+          {/* 5ステップのミニプレビュー */}
+          <div style={{ marginTop:48,display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8 }} className="dx-steps-preview">
+            {[
+              {num:"01",t:"ヒアリング",en:"Discovery"},
+              {num:"02",t:"分析",en:"Analysis"},
+              {num:"03",t:"提案",en:"Proposal"},
+              {num:"04",t:"実装",en:"Implementation"},
+              {num:"05",t:"運用",en:"Operations"},
+            ].map((s,i) => (
+              <div key={s.num} style={{ position:"relative",padding:"20px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(13,17,23,0.6)",backdropFilter:"blur(10px)" }}>
+                <div style={{ fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace",fontSize:10,letterSpacing:1.5,color:"#4dd6e8" }}>PHASE_{s.num}</div>
+                <div style={{ fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace",fontSize:38,fontWeight:700,color:"#2a323d",letterSpacing:-2,margin:"8px 0 10px",lineHeight:1 }}>{s.num}</div>
+                <div style={{ fontSize:15,fontWeight:700,color:"#e6edf3" }}>{s.t}</div>
+                <div style={{ fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace",fontSize:10,color:"#7d8590",marginTop:3 }}>{s.en}</div>
+                {i < 4 && <div style={{ position:"absolute",right:-8,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"#334155",zIndex:2 }}>→</div>}
+              </div>
+            ))}
+          </div>
+
+          {/* 3つの数値 */}
+          <div style={{ marginTop:40,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:1,borderRadius:14,overflow:"hidden",border:"1px solid rgba(255,255,255,0.06)",background:"rgba(255,255,255,0.06)" }} className="dx-stats-row">
+            {[
+              {label:"平均導入期間",v:"3",u:"ヶ月"},
+              {label:"生産効率向上",v:"20〜70",u:"%",hl:true},
+              {label:"導入後定着率",v:"94",u:"%"},
+            ].map((st) => (
+              <div key={st.label} style={{ padding:"22px 24px",background:"#0d1117",textAlign:"center" }}>
+                <div style={{ fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace",fontSize:10,letterSpacing:1.5,color:"#7d8590",textTransform:"uppercase" }}>{st.label}</div>
+                <div style={{ marginTop:8,display:"flex",alignItems:"baseline",gap:4,justifyContent:"center" }}>
+                  <span style={{ fontSize:"clamp(28px,3.5vw,40px)",fontWeight:700,letterSpacing:-1,color: st.hl ? "#4dd6e8" : "#f8fafc" }}>{st.v}</span>
+                  <span style={{ fontSize:13,color:"#7d8590",fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace" }}>{st.u}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 個人OKの親しみメッセージ */}
+          <div style={{ marginTop:36,padding:"18px 22px",borderRadius:12,border:"1px dashed rgba(168,235,110,0.3)",background:"rgba(168,235,110,0.04)",fontSize:13,color:"#cbd5e1",lineHeight:1.8,textAlign:"center" }}>
+            <span style={{ color:"#a8eb6e",fontWeight:700 }}>◉ </span>
+            BtoBの本格導入だけでなく、<strong style={{ color:"#f8fafc" }}>個人の方のアプリ開発・小規模なツール制作・AI活用のご相談</strong>もお気軽に。「こんなこと、できる？」からで大丈夫です。
+          </div>
+
+          {/* CTAボタン */}
+          <div style={{ marginTop:44,display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap" }}>
+            <a href="/corporate/services/dx-implementation-flow" style={{ display:"inline-flex",alignItems:"center",gap:10,padding:"16px 36px",borderRadius:999,background:"linear-gradient(135deg,#4dd6e8,#2dc5db)",color:"#000",fontSize:13,fontWeight:800,letterSpacing:1.5,fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace",boxShadow:"0 0 30px rgba(77,214,232,0.4)",textDecoration:"none",transition:"transform .3s,box-shadow .3s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 0 50px rgba(77,214,232,0.55),0 12px 40px rgba(77,214,232,0.25)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 0 30px rgba(77,214,232,0.4)"; }}
+            >▸ 導入フローの詳細を見る</a>
+            <button onClick={() => go("contact")} style={{ padding:"16px 36px",borderRadius:999,background:"transparent",border:"1px solid rgba(148,163,184,0.3)",color:"#cbd5e1",fontSize:13,fontWeight:600,letterSpacing:1.5,fontFamily:"'JetBrains Mono',ui-monospace,Menlo,monospace",cursor:"pointer",transition:"border-color .3s,color .3s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor="#4dd6e8"; e.currentTarget.style.color="#4dd6e8"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor="rgba(148,163,184,0.3)"; e.currentTarget.style.color="#cbd5e1"; }}
+            >まずは無料相談</button>
+          </div>
+        </div>
+
+        {/* Responsive */}
+        <style>{`
+          @media (max-width: 900px) {
+            .dx-steps-preview { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+            .dx-stats-row { grid-template-columns: 1fr !important; }
+          }
+          @media (max-width: 500px) {
+            .dx-steps-preview { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(77,214,232,0.25),rgba(168,235,110,0.25),transparent)" }}/>
 
       {/* ══════════ SERVICES ══════════ */}
       <section id="service" data-a style={{ position:"relative",padding:"100px 24px",background:"#020617",overflow:"hidden" }}>
