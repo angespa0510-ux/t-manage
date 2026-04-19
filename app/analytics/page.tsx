@@ -953,36 +953,61 @@ export default function Analytics() {
                   <table className="text-[11px]" style={{ fontVariantNumeric: "tabular-nums", borderCollapse: "collapse", minWidth: "100%" }}>
                     <thead>
                       <tr style={{ backgroundColor: T.cardAlt, borderBottom: `2px solid ${T.border}` }}>
-                        {["月", "予約数", "売上", "割引", "カード", "ペイペイ", "現金", "バック", "インボイス", "源泉", "経費", "利益", "平均単価", "前月比"].map((h, i) => (
-                          <th key={h} className={`py-2.5 px-2.5 font-medium text-[10px] whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`} style={{ color: T.textMuted, borderRight: `1px solid ${T.border}` }}>{h}</th>
+                        {[
+                          { label: "月", align: "left" },
+                          { label: "予約", align: "right" },
+                          { label: "平均単価", align: "right" },
+                          { label: "店取概算", align: "right" },
+                          { label: "売上", align: "right" },
+                          { label: "セラピスト", align: "right" },
+                          { label: "割引", align: "right" },
+                          { label: "カード", align: "right" },
+                          { label: "カード手数料", align: "right" },
+                          { label: "ペイペイ", align: "right" },
+                          { label: "インボイス", align: "right" },
+                          { label: "源泉", align: "right" },
+                          { label: "経費", align: "right" },
+                          { label: "前借り", align: "right" },
+                          { label: "入金", align: "right" },
+                          { label: "売上未回収", align: "right" },
+                          { label: "金庫未回収", align: "right" },
+                          { label: "釣銭", align: "right" },
+                          { label: "豊橋予備金", align: "right" },
+                          { label: "事務所残金", align: "right" },
+                        ].map((h) => (
+                          <th key={h.label} className={`py-2 px-1.5 font-medium text-[10px] text-${h.align} whitespace-nowrap`}
+                            style={{ color: T.textMuted, borderRight: `1px solid ${T.border}`, position: "sticky", top: 0, backgroundColor: T.cardAlt, zIndex: 10 }}>
+                            {h.label}
+                          </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {monthlyData.map((d, idx) => {
-                        const zero = d.count === 0 && d.expense === 0;
-                        const prev = idx > 0 ? monthlyData[idx - 1].sales : 0;
-                        const diff = d.sales - prev;
-                        const diffPct = prev > 0 ? Math.round((diff / prev) * 100) : 0;
-                        const diffColor = diff > 0 ? "#7ab88f" : diff < 0 ? "#c45555" : T.textFaint;
+                      {monthlyData.map((d) => {
+                        const zero = d.count === 0 && d.expense === 0 && d.income === 0 && d.replenish === 0 && d.advance === 0 && d.uncollectedSales === 0 && d.safeUncollected === 0 && d.cashOnHand === 0 && d.reserve === 0 && d.changeNet === 0;
+                        const dash = (v: number, formatted: string) => (zero && v === 0) ? "—" : formatted;
                         return (
                           <tr key={d.month} style={{ borderBottom: `1px solid ${T.border}`, opacity: zero ? 0.45 : 1 }}>
-                            <td className="py-2 px-2.5 font-medium" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
-                            <td className="py-2 px-2.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : `${d.count}件`}</td>
-                            <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{d.sales === 0 ? "—" : fmt(d.sales)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{d.discount === 0 ? "—" : `−${fmt(d.discount)}`}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.card === 0 ? "—" : fmt(d.card)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.paypay === 0 ? "—" : fmt(d.paypay)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.cash === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.cash === 0 ? "—" : fmt(d.cash)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.back === 0 ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{d.back === 0 ? "—" : fmt(d.back)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.invoice === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{d.invoice === 0 ? "—" : fmt(d.invoice)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.withholding === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{d.withholding === 0 ? "—" : fmt(d.withholding)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.expense === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{d.expense === 0 ? "—" : fmt(d.expense)}</td>
-                            <td className="py-2 px-2.5 text-right font-medium whitespace-nowrap" style={{ color: zero ? T.textFaint : d.profit >= 0 ? T.text : "#c45555", borderRight: `1px solid ${T.border}` }}>{zero && d.profit === 0 ? "—" : fmt(d.profit)}</td>
-                            <td className="py-2 px-2.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
-                            <td className="py-2 px-2.5 text-right text-[10px] whitespace-nowrap" style={{ color: idx === 0 || prev === 0 ? T.textFaint : diffColor }}>
-                              {idx === 0 || prev === 0 ? "—" : `${diff >= 0 ? "+" : ""}${diffPct}%`}
-                            </td>
+                            <td className="py-1.5 px-1.5 font-medium whitespace-nowrap" style={{ borderRight: `1px solid ${T.border}` }}>{d.label}</td>
+                            <td className="py-1.5 px-1.5 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{d.count === 0 ? "—" : d.count}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.avgNet === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{d.avgNet === 0 ? "—" : fmt(d.avgNet)}</td>
+                            <td className="py-1.5 px-1.5 text-right font-medium whitespace-nowrap" style={{ color: d.storeShare === 0 ? T.textFaint : d.storeShare >= 0 ? "#85a8c4" : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.storeShare, fmt(d.storeShare))}</td>
+                            <td className="py-1.5 px-1.5 text-right font-medium whitespace-nowrap" style={{ color: d.sales === 0 ? T.textFaint : T.accent, borderRight: `1px solid ${T.border}` }}>{dash(d.sales, fmt(d.sales))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.back === 0 ? T.textFaint : "#7ab88f", borderRight: `1px solid ${T.border}` }}>{dash(d.back, fmt(d.back))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{dash(d.discount, d.discount === 0 ? fmt(0) : `−${fmt(d.discount)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.card === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.card, fmt(d.card))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.cardFee === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{dash(d.cardFee, d.cardFee === 0 ? fmt(0) : `+${fmt(d.cardFee)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.paypay === 0 ? T.textFaint : T.textSub, borderRight: `1px solid ${T.border}` }}>{dash(d.paypay, fmt(d.paypay))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.invoice === 0 ? T.textFaint : "#a855f7", borderRight: `1px solid ${T.border}` }}>{dash(d.invoice, fmt(d.invoice))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.withholding === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{dash(d.withholding, fmt(d.withholding))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.expense === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.expense, fmt(d.expense))}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.advance === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{dash(d.advance, d.advance === 0 ? fmt(0) : `−${fmt(d.advance)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.income === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{dash(d.income, d.income === 0 ? fmt(0) : `+${fmt(d.income)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.uncollectedSales === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.uncollectedSales, d.uncollectedSales === 0 ? fmt(0) : `−${fmt(d.uncollectedSales)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.safeUncollected === 0 ? T.textFaint : "#c45555", borderRight: `1px solid ${T.border}` }}>{dash(d.safeUncollected, d.safeUncollected === 0 ? fmt(0) : `−${fmt(d.safeUncollected)}`)}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.changeNet === 0 ? T.textFaint : d.changeNet > 0 ? "#22c55e" : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{d.changeNet === 0 ? (zero ? "—" : fmt(0)) : d.changeNet > 0 ? `+${fmt(d.changeNet)}` : `−${fmt(Math.abs(d.changeNet))}`}</td>
+                            <td className="py-1.5 px-1.5 text-right whitespace-nowrap" style={{ color: d.reserve === 0 ? T.textFaint : d.reserve > 0 ? "#22c55e" : "#d4687e", borderRight: `1px solid ${T.border}` }}>{d.reserve === 0 ? (zero ? "—" : fmt(0)) : d.reserve > 0 ? `+${fmt(d.reserve)}` : `−${fmt(Math.abs(d.reserve))}`}</td>
+                            <td className="py-1.5 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: zero ? T.textFaint : d.cashOnHand >= 0 ? "#22c55e" : "#c45555", backgroundColor: zero ? "transparent" : "rgba(245,158,11,0.04)" }}>{zero && d.cashOnHand === 0 ? "—" : fmt(d.cashOnHand)}</td>
                           </tr>
                         );
                       })}
@@ -990,28 +1015,48 @@ export default function Analytics() {
                     <tfoot>
                       {(() => {
                         const tot = monthlyData.reduce((a, d) => ({
-                          count: a.count + d.count, sales: a.sales + d.sales, discount: a.discount + d.discount, card: a.card + d.card, paypay: a.paypay + d.paypay, cash: a.cash + d.cash,
-                          back: a.back + d.back, invoice: a.invoice + d.invoice, withholding: a.withholding + d.withholding,
-                          expense: a.expense + d.expense, income: a.income + d.income,
-                        }), { count: 0, sales: 0, discount: 0, card: 0, paypay: 0, cash: 0, back: 0, invoice: 0, withholding: 0, expense: 0, income: 0 });
-                        const profit = tot.sales - tot.back - tot.expense + tot.income;
-                        const avg = tot.count > 0 ? Math.round((tot.sales - tot.back) / tot.count) : 0;
+                          count: a.count + d.count,
+                          sales: a.sales + d.sales,
+                          discount: a.discount + d.discount,
+                          card: a.card + d.card,
+                          cardFee: a.cardFee + d.cardFee,
+                          paypay: a.paypay + d.paypay,
+                          back: a.back + d.back,
+                          invoice: a.invoice + d.invoice,
+                          withholding: a.withholding + d.withholding,
+                          expense: a.expense + d.expense,
+                          advance: a.advance + d.advance,
+                          income: a.income + d.income,
+                          uncollectedSales: a.uncollectedSales + d.uncollectedSales,
+                          safeUncollected: a.safeUncollected + d.safeUncollected,
+                          cashOnHand: a.cashOnHand + d.cashOnHand,
+                          storeShare: a.storeShare + d.storeShare,
+                          reserve: a.reserve + d.reserve,
+                          changeNet: a.changeNet + d.changeNet,
+                        }), { count: 0, sales: 0, discount: 0, card: 0, cardFee: 0, paypay: 0, back: 0, invoice: 0, withholding: 0, expense: 0, advance: 0, income: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0, storeShare: 0, reserve: 0, changeNet: 0 });
+                        const avg = tot.count > 0 ? Math.round(tot.storeShare / tot.count) : 0;
                         return (
                           <tr style={{ borderTop: `2px solid ${T.border}`, backgroundColor: T.cardAlt }}>
-                            <td className="py-2.5 px-2.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }}>年間合計</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}件</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: tot.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.discount === 0 ? fmt(0) : `−${fmt(tot.discount)}`}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.cash)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(tot.back)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.invoice)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(tot.withholding)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.expense)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: profit >= 0 ? T.text : "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(profit)}</td>
-                            <td className="py-2.5 px-2.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{avg > 0 ? fmt(avg) : "—"}</td>
-                            <td className="py-2.5 px-2.5 text-right" style={{ color: T.textFaint }}>—</td>
+                            <td className="py-2 px-1.5 font-bold" style={{ borderRight: `1px solid ${T.border}` }}>年間合計</td>
+                            <td className="py-2 px-1.5 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{tot.count}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{avg > 0 ? fmt(avg) : "—"}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.storeShare >= 0 ? "#85a8c4" : "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.storeShare)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(tot.sales)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(tot.back)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.discount === 0 ? T.textFaint : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.discount === 0 ? fmt(0) : `−${fmt(tot.discount)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.card)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.cardFee === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{tot.cardFee === 0 ? fmt(0) : `+${fmt(tot.cardFee)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(tot.paypay)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#a855f7", borderRight: `1px solid ${T.border}` }}>{fmt(tot.invoice)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#d4687e", borderRight: `1px solid ${T.border}` }}>{fmt(tot.withholding)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{fmt(tot.expense)}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.advance === 0 ? T.textFaint : "#d4687e", borderRight: `1px solid ${T.border}` }}>{tot.advance === 0 ? fmt(0) : `−${fmt(tot.advance)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.income === 0 ? T.textFaint : "#22c55e", borderRight: `1px solid ${T.border}` }}>{tot.income === 0 ? fmt(0) : `+${fmt(tot.income)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.uncollectedSales === 0 ? fmt(0) : `−${fmt(tot.uncollectedSales)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: "#c45555", borderRight: `1px solid ${T.border}` }}>{tot.safeUncollected === 0 ? fmt(0) : `−${fmt(tot.safeUncollected)}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.changeNet === 0 ? T.textFaint : tot.changeNet > 0 ? "#22c55e" : "#f59e0b", borderRight: `1px solid ${T.border}` }}>{tot.changeNet === 0 ? fmt(0) : tot.changeNet > 0 ? `+${fmt(tot.changeNet)}` : `−${fmt(Math.abs(tot.changeNet))}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.reserve === 0 ? T.textFaint : tot.reserve > 0 ? "#22c55e" : "#d4687e", borderRight: `1px solid ${T.border}` }}>{tot.reserve === 0 ? fmt(0) : tot.reserve > 0 ? `+${fmt(tot.reserve)}` : `−${fmt(Math.abs(tot.reserve))}`}</td>
+                            <td className="py-2 px-1.5 text-right font-bold whitespace-nowrap" style={{ color: tot.cashOnHand >= 0 ? "#22c55e" : "#c45555", backgroundColor: "rgba(245,158,11,0.06)" }}>{fmt(tot.cashOnHand)}</td>
                           </tr>
                         );
                       })()}
@@ -1020,8 +1065,9 @@ export default function Analytics() {
                 </div>
               </div>
               <div className="mt-2 space-y-1">
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ オーダーが「終了」になっている予約のみ集計。利益 = 売上 − バック − 経費 + 収入</p>
-                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 平均単価 =（売上 − セラピストバック）÷ 予約数</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 各月の合計は日別の合算で、日別テーブル・営業締めと完全整合</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 店取概算 = 売上 − 割引 − セラピスト − インボイス − 源泉（国へ納付する分は店取りから除外）</p>
+                <p className="text-[10px]" style={{ color: T.textFaint }}>※ 事務所残金 = 各日の事務所残金を月合算した値（資金の動き額）</p>
               </div>
             </div>
           )}
