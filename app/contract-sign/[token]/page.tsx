@@ -4,7 +4,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-type Contract = { id: number; therapist_id: number; token: string; status: string; signer_name: string; signer_address: string; signature_url: string; signed_at: string; created_at: string };
+// 現行の契約書バージョン — 条項を改訂したら必ず更新すること
+// v1.0 = 6条版(株式会社アンジュスパ表記) / v2.0 = 12条版(合同会社テラスライフ)
+const CURRENT_CONTRACT_VERSION = "v2.0";
+
+type Contract = { id: number; therapist_id: number; token: string; status: string; signer_name: string; signer_address: string; signature_url: string; signed_at: string; created_at: string; contract_version: string | null };
 type Therapist = { id: number; name: string };
 
 export default function ContractSign() {
@@ -114,6 +118,7 @@ export default function ContractSign() {
       signer_address: signerAddress.trim(),
       signature_url: urlData.publicUrl,
       signed_at: new Date().toISOString(),
+      contract_version: CURRENT_CONTRACT_VERSION,
     }).eq("id", contract.id);
 
     setDone(true);
@@ -166,7 +171,10 @@ export default function ContractSign() {
 
         {/* 契約書本文 */}
         <div style={{ padding: "20px 16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16, fontSize: 12, lineHeight: 1.8, color: "#333" }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, textAlign: "center", marginBottom: 16, color: "#1a1a2e" }}>業務委託契約書</h2>
+          <div style={{ textAlign: "center", marginBottom: 16 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e", margin: 0 }}>業務委託契約書</h2>
+            <p style={{ fontSize: 10, color: "#999", marginTop: 4 }}>バージョン {CURRENT_CONTRACT_VERSION}</p>
+          </div>
 
           <p>合同会社テラスライフ（屋号：Ange Spa。以下「甲」という）と、受託者（以下「乙」という）は、甲が運営する店舗におけるセラピー業務等の委託に関して、以下の通り契約を締結する。</p>
 
