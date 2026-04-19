@@ -168,25 +168,80 @@ export default function ContractSign() {
         <div style={{ padding: "20px 16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16, fontSize: 12, lineHeight: 1.8, color: "#333" }}>
           <h2 style={{ fontSize: 14, fontWeight: 700, textAlign: "center", marginBottom: 16, color: "#1a1a2e" }}>業務委託契約書</h2>
 
-          <p>株式会社アンジュスパ（以下「甲」という）と、署名者（以下「乙」という）は、以下のとおり業務委託契約を締結する。</p>
+          <p>合同会社テラスライフ（屋号：Ange Spa。以下「甲」という）と、受託者（以下「乙」という）は、甲が運営する店舗におけるセラピー業務等の委託に関して、以下の通り契約を締結する。</p>
 
-          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第1条（委託業務）</h3>
-          <p>甲は乙に対し、リラクゼーション施術業務を委託し、乙はこれを受託する。</p>
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第1条（業務の内容）</h3>
+          <p>乙は、甲の委託を受け、以下の業務を行うものとする。</p>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>顧客へのエステ・セラピーサービスの提供</li>
+            <li>顧客からの代金の受領、代金の管理</li>
+            <li>乙が使用した施術ルームおよび備品の清掃、整理整頓</li>
+            <li>店舗運営に付随する事務連絡への対応</li>
+            <li>前各号に付随する一切の業務</li>
+          </ol>
 
-          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第2条（業務遂行）</h3>
-          <p>乙は、甲の定める施術基準及びマニュアルに従い、誠実に業務を遂行するものとする。</p>
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第2条（業務の実施）</h3>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>乙は、甲との合意の上、自己の裁量により業務日時を設定するものとする。ただし、一度確定した予約またはシフトに関しては、正当な理由なく中止・遅延してはならない。</li>
+            <li>やむを得ぬ理由で業務に従事できない場合は、直ちに甲に通知し、承認を得るものとする。</li>
+          </ol>
 
-          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第3条（報酬）</h3>
-          <p>甲は乙に対し、別途定める報酬規定に基づき、業務委託報酬を支払うものとする。</p>
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第3条（委託料の支払い）</h3>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>甲は、乙に対し、当日の業務終了後に規定の委託料を現金または振込にて支払うものとする。</li>
+            <li>オプション料金等に関しては、乙の自己管理とし、甲はこれに関与せず、一切の責任を負わない。</li>
+            <li>報酬額は消費税相当額を含むものとする。ただし、乙が適格請求書発行事業者でない場合、甲が被る消費税の仕入税額控除の制限相当額について、甲乙協議の上、報酬額を調整できるものとする。</li>
+          </ol>
 
-          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第4条（秘密保持）</h3>
-          <p>乙は、業務上知り得た甲の顧客情報、営業秘密その他の機密情報を第三者に開示・漏洩してはならない。本契約終了後も同様とする。</p>
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第4条（費用負担）</h3>
+          <p>業務遂行に要する消耗品（オイル、タオル等）の費用、および店舗設備の使用料については、別途甲乙間で定める規則に従うものとする。</p>
 
-          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第5条（契約期間）</h3>
-          <p>本契約の有効期間は、契約締結日より1年間とする。期間満了の1ヶ月前までに甲乙いずれからも書面による解約の申し出がない場合、同一条件でさらに1年間自動更新されるものとする。</p>
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第5条（禁止事項）</h3>
+          <p>乙は、以下の行為を行ってはならない。</p>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>接客において、風俗行為・売春行為を行うこと、またはそれを助長すること。</li>
+            <li>宣伝・集客活動において、風俗行為を想起させる文言・画像を使用すること。</li>
+            <li>甲の許可なく、同業他社との兼業（掛け持ち）を行うこと。</li>
+            <li>本契約に基づき知り得た顧客との私的な接触、私的な金銭の授受、または他社への勧誘。</li>
+            <li>甲の名誉や信用を毀損する行為。</li>
+          </ol>
 
-          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第6条（解除）</h3>
-          <p>甲又は乙は、相手方が本契約に違反した場合、催告のうえ本契約を解除することができる。</p>
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第6条（肖像の利用およびプライバシーへの配慮）</h3>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>乙は、甲が店舗の宣伝・広告（ウェブサイト、SNS、広告媒体等）を目的として、乙の容姿を撮影した写真または動画等を利用することを承諾する。ただし、撮影および掲載にあたっては、乙の希望する露出範囲（顔出しの有無、加工の程度等）を事前に確認し、乙のプライバシーおよび身分秘匿に十分配慮するものとする。</li>
+            <li>甲は、前項の目的の範囲内において、乙の肖像を改変（加工・修正・スタンプ等による顔隠し等）して利用することができる。</li>
+            <li>乙は、事前に合意した範囲内での利用である限り、甲による肖像の利用に関し、肖像権、パブリシティ権、著作者人格権等の権利を行使しないものとする。</li>
+            <li>本契約が終了した場合、甲は甲が管理・運用する媒体（公式サイト、自社SNS等）から、速やかに乙の肖像を削除するものとする。</li>
+            <li>甲の管理下にない外部ポータルサイト、検索エンジン、キャッシュ等に掲載された情報について、甲は契約終了後、速やかに当該媒体運営者に対し削除依頼等の可能な限りの措置を講じるものとする。ただし、外部媒体の性質上、完全な削除を保証するものではなく、甲の責めに帰すべき事由によらず削除がなされない場合、甲はその責任を負わないものとする。</li>
+          </ol>
+
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第7条（秘密保持）</h3>
+          <p>甲および乙は、本契約の履行過程で知り得た相手方の機密情報（顧客情報、運営ノウハウ等を含む）を、第三者に開示・漏洩してはならない。本条の義務は本契約終了後も存続する。</p>
+
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第8条（引き抜き等の禁止）</h3>
+          <p>乙は、本契約期間中および本契約終了後2年間、甲の事前の承諾なく以下の行為を行ってはならない。</p>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>甲の顧客に対し、甲を介さず直接連絡を取り、施術等のサービスを提供すること。</li>
+            <li>甲の他のセラピストや従業員を、他店や自己の事業へ勧誘すること。</li>
+          </ol>
+
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第9条（反社会的勢力の排除）</h3>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>甲および乙は、自らが暴力団、暴力団員、暴力団関係企業、総会屋、その他これらに準ずる反社会的勢力に該当しないことを表明し、将来にわたっても該当しないことを確約する。</li>
+            <li>一方が前項に違反した場合、相手方は何ら催告を要せず、直ちに本契約を解除することができる。</li>
+          </ol>
+
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第10条（契約期間・解除）</h3>
+          <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
+            <li>本契約の有効期間は、契約締結日から1ヶ月間とする。期間満了の2週間前までに甲乙いずれからも申し出がない限り、同一条件で1ヶ月ごとに自動更新されるものとする。</li>
+            <li>甲は、乙が本契約の条項に違反した場合、何ら催告を要せず直ちに本契約を解除できるものとする。</li>
+          </ol>
+
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第11条（損害賠償）</h3>
+          <p>甲または乙は、本契約の義務に違反し、相手方に損害を与えた場合、その損害を賠償する責任を負う。乙の不注意により顧客に怪我を負わせる等、甲に損害が生じた場合も同様とする。</p>
+
+          <h3 style={{ fontSize: 12, fontWeight: 600, marginTop: 16, marginBottom: 4, color: "#1a1a2e" }}>第12条（合意管轄）</h3>
+          <p>本契約に関する紛争については、名古屋地方裁判所を第一審の専属的合意管轄裁判所とする。</p>
 
           <p style={{ marginTop: 20, fontSize: 11, color: "#666", textAlign: "center" }}>以上の内容に同意のうえ、以下に署名してください。</p>
         </div>
