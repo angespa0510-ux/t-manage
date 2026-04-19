@@ -55,6 +55,9 @@ export default function Analytics() {
   const [yearSettlements, setYearSettlements] = useState<Settlement[]>([]);
   const [yearExpenses, setYearExpenses] = useState<ExpenseRow[]>([]);
   const [yearReplenishments, setYearReplenishments] = useState<Replenishment[]>([]);
+  const [yearReserveMovements, setYearReserveMovements] = useState<{ movement_date: string; movement_type: string; amount: number }[]>([]);
+  const [yearAdvances, setYearAdvances] = useState<{ advance_date: string; amount: number }[]>([]);
+  const [yearSafeCollected, setYearSafeCollected] = useState<Settlement[]>([]);
 
   const [tab, setTab] = useState<Tab>("daily");
   const [selectedMonth, setSelectedMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
@@ -184,6 +187,14 @@ export default function Analytics() {
     if (ye) setYearExpenses(ye as ExpenseRow[]);
     const { data: yr } = await supabase.from("room_cash_replenishments").select("id,date,room_id,amount").gte("date", yearStart).lte("date", yearEnd).range(0, 49999);
     if (yr) setYearReplenishments(yr as Replenishment[]);
+    // 年間の豊橋予備金・前借り
+    const { data: yrm } = await supabase.from("toyohashi_reserve_movements").select("movement_date,movement_type,amount").gte("movement_date", yearStart).lte("movement_date", yearEnd).range(0, 9999);
+    if (yrm) setYearReserveMovements(yrm as { movement_date: string; movement_type: string; amount: number }[]);
+    const { data: ya } = await supabase.from("staff_advances").select("advance_date,amount").eq("status", "pending").gte("advance_date", yearStart).lte("advance_date", yearEnd).range(0, 9999);
+    if (ya) setYearAdvances(ya as { advance_date: string; amount: number }[]);
+    // 年内に金庫から回収された精算 (投函日は過去の可能性あり)
+    const { data: ysc } = await supabase.from("therapist_daily_settlements").select("id,therapist_id,date,total_cash,total_back,final_payment,room_id,safe_collected_date").eq("safe_deposited", true).gte("safe_collected_date", yearStart).lte("safe_collected_date", yearEnd).range(0, 9999);
+    if (ysc) setYearSafeCollected(ysc as Settlement[]);
   }, [selectedMonth, daysInMonth, selectedYear]);
 
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
@@ -196,188 +207,200 @@ export default function Analytics() {
   const getPrice = (r: Reservation) => (r.total_price ?? 0) || (getCourse(r.course)?.price || 0);
   const getBack = (r: Reservation) => getCourse(r.course)?.therapist_back || 0;
 
+  // ===== 日別集計ロジックを共通化するヘルパー =====
+  // 日別・月別・年別で同じ計算結果が得られるよう、1日分の統計を計算する関数
+  type DayStats = {
+    date: string; count: number;
+    sales: number; discount: number; back: number; card: number; paypay: number; cash: number;
+    invoice: number; withholding: number;
+    expense: number; income: number; replenish: number; advance: number;
+    uncollectedSales: number; safeUncollected: number; cashOnHand: number;
+    avgNet: number; storeShare: number; reserve: number; changeNet: number; cardFee: number;
+  };
+  const computeDayStats = useCallback((
+    date: string,
+    srcReservations: Reservation[],
+    srcSettlements: Settlement[],
+    srcExpenses: ExpenseRow[],
+    srcReplenishments: Replenishment[],
+    srcSafeCollected: Settlement[],
+    srcReserveMovements: { movement_date: string; movement_type: string; amount: number }[],
+    srcAdvances: { advance_date: string; amount: number }[],
+  ): DayStats => {
+    const dayRes = srcReservations.filter((r) => r.date === date);
+    const daySettles = srcSettlements.filter((s) => s.date === date);
+    const dayExp = srcExpenses.filter((e) => e.date === date);
+    const dayReps = srcReplenishments.filter((r) => r.date === date);
+    const collectedToday = srcSafeCollected.filter((s) => s.safe_collected_date === date);
+    const dayMovements = srcReserveMovements.filter((m) => m.movement_date === date);
+    const reserve = dayMovements.reduce((s, m) => s + (m.movement_type === "withdraw" ? -m.amount : m.amount), 0);
+
+    const count = dayRes.length;
+    const sales = dayRes.reduce((s, r) => {
+      const coursePrice = getCourse(r.course)?.price || 0;
+      return s + coursePrice + (r.nomination_fee || 0) + (r.options_total || 0) + (r.extension_price || 0);
+    }, 0);
+    const discount = dayRes.reduce((s, r) => s + (r.discount_amount || 0), 0);
+    const card = dayRes.reduce((s, r) => s + (r.card_billing || 0), 0);
+    const cardFee = card > 0 ? card - Math.round(card / 1.10) : 0;
+    const paypay = dayRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
+    const cash = dayRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
+
+    const back = daySettles.reduce((s, ds) => s + (ds.final_payment || 0), 0);
+    const invoice = daySettles.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
+    const withholding = daySettles.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
+
+    const expense = dayExp.filter((e) => e.type === "expense").reduce((s, e) => s + (e.amount || 0), 0);
+    const income = dayExp.filter((e) => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
+    const replenish = dayReps.reduce((s, r) => s + (r.amount || 0), 0);
+    const advance = srcAdvances.filter((a) => a.advance_date === date).reduce((s, a) => s + (a.amount || 0), 0);
+
+    let staffCollectedAmt = 0;
+    let uncollectedSales = 0;
+    let safeUncollected = 0;
+    const processedTids = new Set<number>();
+
+    const therapistIds = Array.from(new Set(dayRes.map((r) => r.therapist_id)));
+    for (const tid of therapistIds) {
+      const tRes = dayRes.filter((r) => r.therapist_id === tid);
+      const tCash = tRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
+      const ds = daySettles.find((s) => s.therapist_id === tid);
+      const finalPay = ds?.final_payment || 0;
+      const reserveUsed = ds?.reserve_used_amount || 0;
+      const roomId = ds?.room_id || 0;
+      const roomRep = roomId ? dayReps.filter((r) => r.room_id === roomId).reduce((s, r) => s + (r.amount || 0), 0) : 0;
+      const netAfterPay = tCash - finalPay + reserveUsed;
+
+      if (ds?.sales_collected && !ds?.safe_deposited) {
+        staffCollectedAmt += netAfterPay + (ds.change_collected ? roomRep : 0);
+      } else if (ds?.safe_deposited && !ds?.safe_collected_date) {
+        safeUncollected += Math.max(tCash - finalPay, 0) + roomRep;
+      } else {
+        uncollectedSales += netAfterPay + roomRep;
+      }
+      processedTids.add(tid);
+    }
+
+    for (const ds of daySettles) {
+      if (processedTids.has(ds.therapist_id)) continue;
+      const netAfterPay = (ds.total_cash || 0) - (ds.final_payment || 0) + (ds.reserve_used_amount || 0);
+      const roomRep = ds.room_id ? dayReps.filter((r) => r.room_id === ds.room_id).reduce((s, r) => s + (r.amount || 0), 0) : 0;
+      if (ds.sales_collected && !ds.safe_deposited) {
+        staffCollectedAmt += netAfterPay + (ds.change_collected ? roomRep : 0);
+      } else if (ds.safe_deposited && !ds.safe_collected_date) {
+        safeUncollected += Math.max((ds.total_cash || 0) - (ds.final_payment || 0), 0) + roomRep;
+      } else if (!ds.sales_collected) {
+        uncollectedSales += netAfterPay + roomRep;
+      }
+    }
+
+    let safeCollectedTodayTotal = 0;
+    for (const sc of collectedToday) {
+      const net3 = Math.max((sc.total_cash || 0) - (sc.final_payment || 0), 0);
+      const repAmt = sc.room_id ? srcReplenishments.filter((r) => r.date === sc.date && r.room_id === sc.room_id).reduce((s, r) => s + (r.amount || 0), 0) : 0;
+      safeCollectedTodayTotal += net3 + repAmt;
+    }
+
+    const cashOnHand = -replenish - expense - advance + income + staffCollectedAmt + safeCollectedTodayTotal;
+
+    let changeCollectedAmt = 0;
+    const changeCollectedRooms = new Set<number>();
+    for (const ds of daySettles) {
+      if (ds.change_collected && ds.sales_collected && !ds.safe_deposited && ds.room_id && !changeCollectedRooms.has(ds.room_id)) {
+        changeCollectedRooms.add(ds.room_id);
+        const repSum = dayReps.filter((r) => r.room_id === ds.room_id).reduce((x, r) => x + (r.amount || 0), 0);
+        changeCollectedAmt += repSum;
+      }
+    }
+    for (const sc of collectedToday) {
+      if (sc.room_id && !changeCollectedRooms.has(sc.room_id)) {
+        changeCollectedRooms.add(sc.room_id);
+        const repAmt = srcReplenishments.filter((r) => r.date === sc.date && r.room_id === sc.room_id).reduce((s, r) => s + (r.amount || 0), 0);
+        changeCollectedAmt += repAmt;
+      }
+    }
+    const changeNet = changeCollectedAmt - replenish;
+
+    const storeShare = sales - discount - back - invoice - withholding;
+    const avgNet = count > 0 ? Math.round(storeShare / count) : 0;
+
+    return {
+      date, count, sales, discount, back, card, paypay, cash,
+      invoice, withholding, expense, income, replenish, advance,
+      uncollectedSales, safeUncollected, cashOnHand,
+      avgNet, storeShare, reserve, changeNet, cardFee,
+    };
+  }, [courses]);
+
   // ===== 日別データ（営業締めと同じロジックで日ごとに再現） =====
   const dailyData = useMemo(() => {
-    type Row = {
-      date: string; label: string; dow: string; count: number;
-      sales: number; discount: number; back: number; card: number; paypay: number; cash: number;
-      invoice: number; withholding: number;
-      expense: number; income: number; replenish: number; advance: number;
-      uncollectedSales: number; safeUncollected: number; cashOnHand: number;
-      avgNet: number; storeShare: number; reserve: number; changeNet: number; cardFee: number;
-    };
+    type Row = DayStats & { label: string; dow: string };
     const data: Row[] = [];
     const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
     for (let i = 1; i <= daysInMonth; i++) {
       const date = `${selectedMonth}-${String(i).padStart(2, "0")}`;
       const d = new Date(date + "T00:00:00");
-
-      const dayRes = reservations.filter((r) => r.date === date);
-      const daySettles = monthSettlements.filter((s) => s.date === date);
-      const dayExp = monthExpenses.filter((e) => e.date === date);
-      const dayReps = monthReplenishments.filter((r) => r.date === date);
-      const collectedToday = safeCollectedInMonth.filter((s) => s.safe_collected_date === date);
-      const dayMovements = monthReserveMovements.filter((m) => m.movement_date === date);
-      // 豊橋予備金の日次純額: withdraw(立替)=マイナス、refund/initial/adjustment(補充・調整)=プラス
-      const reserve = dayMovements.reduce((s, m) => {
-        return s + (m.movement_type === "withdraw" ? -m.amount : m.amount);
-      }, 0);
-
-      const count = dayRes.length;
-      // 売上 = 定価ベース（コース定価 + 指名料 + オプション + 延長）、割引を引く前の総額
-      const sales = dayRes.reduce((s, r) => {
-        const coursePrice = getCourse(r.course)?.price || 0;
-        return s + coursePrice + (r.nomination_fee || 0) + (r.options_total || 0) + (r.extension_price || 0);
-      }, 0);
-      const discount = dayRes.reduce((s, r) => s + (r.discount_amount || 0), 0);
-      const card = dayRes.reduce((s, r) => s + (r.card_billing || 0), 0);
-      // カード手数料収入（カード決済時に10%上乗せした分） = カード請求額 − カード請求額/1.10
-      //   例: カード ¥17,600 → 手数料 ¥1,600（= 17,600 - 16,000）
-      const cardFee = card > 0 ? card - Math.round(card / 1.10) : 0;
-      const paypay = dayRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
-      const cash = dayRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
-
-      // セラピスト実支給額 = final_payment
-      //   = コース/指名/オプション/延長のバック合計 − インボイス − 源泉 − 備品・リネン代 + 交通費(実費精算) + 調整金
-      const back = daySettles.reduce((s, ds) => s + (ds.final_payment || 0), 0);
-      const invoice = daySettles.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
-      const withholding = daySettles.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
-
-      const expense = dayExp.filter((e) => e.type === "expense").reduce((s, e) => s + (e.amount || 0), 0);
-      const income = dayExp.filter((e) => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
-      const replenish = dayReps.reduce((s, r) => s + (r.amount || 0), 0);
-      // スタッフ前借り（pending のみ）— 営業締めと同じく管理者金庫から控除
-      const advance = monthAdvances.filter((a) => a.advance_date === date).reduce((s, a) => s + (a.amount || 0), 0);
-
-      // セラピスト単位で現金状態を計算（予約ベース + settlementsマッチ、営業締めと同じ）
-      let staffCollectedAmt = 0;
-      let uncollectedSales = 0;
-      let safeUncollected = 0;
-      const processedTids = new Set<number>();
-
-      // 1) 予約のあるセラピストを走査（settlementsが無ければ未精算 = 売上未回収）
-      const therapistIds = Array.from(new Set(dayRes.map((r) => r.therapist_id)));
-      for (const tid of therapistIds) {
-        const tRes = dayRes.filter((r) => r.therapist_id === tid);
-        const tCash = tRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
-        const ds = daySettles.find((s) => s.therapist_id === tid);
-        const finalPay = ds?.final_payment || 0;
-        const reserveUsed = ds?.reserve_used_amount || 0;
-        const roomId = ds?.room_id || 0;
-        const roomRep = roomId ? dayReps.filter((r) => r.room_id === roomId).reduce((s, r) => s + (r.amount || 0), 0) : 0;
-        const netAfterPay = tCash - finalPay + reserveUsed;
-
-        if (ds?.sales_collected && !ds?.safe_deposited) {
-          staffCollectedAmt += netAfterPay + (ds.change_collected ? roomRep : 0);
-        } else if (ds?.safe_deposited && !ds?.safe_collected_date) {
-          safeUncollected += Math.max(tCash - finalPay, 0) + roomRep;
-        } else {
-          // !sales_collected（ds自体が無い場合も含む）
-          uncollectedSales += netAfterPay + roomRep;
-        }
-        processedTids.add(tid);
-      }
-
-      // 2) 予約は無いが settlements のみあるケース（予約外精算等、念のため）
-      for (const ds of daySettles) {
-        if (processedTids.has(ds.therapist_id)) continue;
-        const netAfterPay = (ds.total_cash || 0) - (ds.final_payment || 0) + (ds.reserve_used_amount || 0);
-        const roomRep = ds.room_id ? dayReps.filter((r) => r.room_id === ds.room_id).reduce((s, r) => s + (r.amount || 0), 0) : 0;
-        if (ds.sales_collected && !ds.safe_deposited) {
-          staffCollectedAmt += netAfterPay + (ds.change_collected ? roomRep : 0);
-        } else if (ds.safe_deposited && !ds.safe_collected_date) {
-          safeUncollected += Math.max((ds.total_cash || 0) - (ds.final_payment || 0), 0) + roomRep;
-        } else if (!ds.sales_collected) {
-          uncollectedSales += netAfterPay + roomRep;
-        }
-      }
-
-      // その日に金庫から回収した額（投函日の釣銭も加算）
-      let safeCollectedTodayTotal = 0;
-      for (const sc of collectedToday) {
-        const net3 = Math.max((sc.total_cash || 0) - (sc.final_payment || 0), 0);
-        const repAmt = sc.room_id ? monthReplenishments.filter((r) => r.date === sc.date && r.room_id === sc.room_id).reduce((s, r) => s + (r.amount || 0), 0) : 0;
-        safeCollectedTodayTotal += net3 + repAmt;
-      }
-
-      // 事務所残金 = -釣銭補充 - 経費 - 前借り + 収入 + スタッフ回収 + 本日の金庫回収分
-      //   前借りは pending の間、管理者金庫から差し引かれる扱い (月末に expense に振替)
-      const cashOnHand = -replenish - expense - advance + income + staffCollectedAmt + safeCollectedTodayTotal;
-
-      // 釣銭純額 = 当日回収額 − 当日補充額
-      //   補充（replenish）: room_cash_replenishments の当日分（管理者金庫→ルーム釣銭）
-      //   回収: その日 change_collected=true かつスタッフ持ち帰り（!safe_deposited）したルームの補充額
-      //        + その日 safe_collected_date が該当する settlements の補充額（金庫からの回収時に釣銭も戻る）
-      //   ルーム単位で一意化して過大カウントを防ぐ
-      let changeCollectedAmt = 0;
-      const changeCollectedRooms = new Set<number>();
-      for (const ds of daySettles) {
-        if (ds.change_collected && ds.sales_collected && !ds.safe_deposited && ds.room_id && !changeCollectedRooms.has(ds.room_id)) {
-          changeCollectedRooms.add(ds.room_id);
-          const repSum = dayReps.filter((r) => r.room_id === ds.room_id).reduce((x, r) => x + (r.amount || 0), 0);
-          changeCollectedAmt += repSum;
-        }
-      }
-      for (const sc of collectedToday) {
-        if (sc.room_id && !changeCollectedRooms.has(sc.room_id)) {
-          changeCollectedRooms.add(sc.room_id);
-          const repAmt = monthReplenishments.filter((r) => r.date === sc.date && r.room_id === sc.room_id).reduce((s, r) => s + (r.amount || 0), 0);
-          changeCollectedAmt += repAmt;
-        }
-      }
-      const changeNet = changeCollectedAmt - replenish;
-
-      // 店取概算 = 売上 − 割引 − セラピスト(実支給額) − インボイス − 源泉
-      //   インボイス・源泉はセラピストから預かって国に納付するお金なので、店の取り分から除く
-      const storeShare = sales - discount - back - invoice - withholding;
-      // 平均単価 = 店取概算 ÷ 予約数
-      const avgNet = count > 0 ? Math.round(storeShare / count) : 0;
-
-      data.push({
-        date, label: `${i}`, dow: dayNames[d.getDay()], count,
-        sales, discount, back, card, paypay, cash,
-        invoice, withholding,
-        expense, income, replenish, advance,
-        uncollectedSales, safeUncollected, cashOnHand,
-        avgNet, storeShare, reserve, changeNet, cardFee,
-      });
+      const stats = computeDayStats(date, reservations, monthSettlements, monthExpenses, monthReplenishments, safeCollectedInMonth, monthReserveMovements, monthAdvances);
+      data.push({ ...stats, label: `${i}`, dow: dayNames[d.getDay()] });
     }
     return data;
-  }, [reservations, monthSettlements, monthExpenses, monthReplenishments, monthAdvances, safeCollectedInMonth, monthReserveMovements, selectedMonth, daysInMonth, courses]);
+  }, [reservations, monthSettlements, monthExpenses, monthReplenishments, monthAdvances, safeCollectedInMonth, monthReserveMovements, selectedMonth, daysInMonth, computeDayStats]);
 
-  // ===== 月別データ（日別データと同じ思想で月ごとに集計） =====
+  // ===== 年内全日のデータ（月別・年別の算出に使用） =====
+  const yearlyDaily = useMemo(() => {
+    const data: DayStats[] = [];
+    const yearStart = new Date(selectedYear, 0, 1);
+    const yearEnd = new Date(selectedYear, 11, 31);
+    for (let d = new Date(yearStart); d <= yearEnd; d.setDate(d.getDate() + 1)) {
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      data.push(computeDayStats(dateStr, allReservations, yearSettlements, yearExpenses, yearReplenishments, yearSafeCollected, yearReserveMovements, yearAdvances));
+    }
+    return data;
+  }, [allReservations, yearSettlements, yearExpenses, yearReplenishments, yearSafeCollected, yearReserveMovements, yearAdvances, selectedYear, computeDayStats]);
+
+  // ===== 月別データ（yearlyDaily を月ごとに集計 — 日別と完全整合） =====
   const monthlyData = useMemo(() => {
     type MRow = {
       month: string; label: string; count: number;
       sales: number; discount: number; back: number; card: number; paypay: number; cash: number;
-      invoice: number; withholding: number;
-      expense: number; income: number;
+      invoice: number; withholding: number; cardFee: number; storeShare: number;
+      expense: number; income: number; replenish: number; advance: number;
+      reserve: number; changeNet: number;
+      uncollectedSales: number; safeUncollected: number; cashOnHand: number;
       profit: number; avgNet: number;
     };
     const data: MRow[] = [];
     for (let m = 1; m <= 12; m++) {
       const prefix = `${selectedYear}-${String(m).padStart(2, "0")}`;
-      const mRes = allReservations.filter((r) => r.date.startsWith(prefix));
-      const mSettles = yearSettlements.filter((s) => s.date.startsWith(prefix));
-      const mExp = yearExpenses.filter((e) => e.date.startsWith(prefix));
-      const count = mRes.length;
-      const sales = mRes.reduce((s, r) => s + getPrice(r), 0);
-      const discount = mRes.reduce((s, r) => s + (r.discount_amount || 0), 0);
-      const card = mRes.reduce((s, r) => s + (r.card_billing || 0), 0);
-      const paypay = mRes.reduce((s, r) => s + (r.paypay_amount || 0), 0);
-      const cash = mRes.reduce((s, r) => s + (r.cash_amount || 0), 0);
-      const back = mSettles.reduce((s, ds) => s + (ds.total_back || 0), 0);
-      const invoice = mSettles.reduce((s, ds) => s + (ds.invoice_deduction || 0), 0);
-      const withholding = mSettles.reduce((s, ds) => s + (ds.withholding_tax || 0), 0);
-      const expense = mExp.filter((e) => e.type === "expense").reduce((s, e) => s + (e.amount || 0), 0);
-      const income = mExp.filter((e) => e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
-      // 月次利益（粗い集計）: 売上 - バック - 経費 + 収入
-      const profit = sales - back - expense + income;
-      const avgNet = count > 0 ? Math.round((sales - back) / count) : 0;
-      data.push({ month: prefix, label: `${m}月`, count, sales, discount, back, card, paypay, cash, invoice, withholding, expense, income, profit, avgNet });
+      const monthDays = yearlyDaily.filter((d) => d.date.startsWith(prefix));
+      const agg = monthDays.reduce((a, d) => ({
+        count: a.count + d.count,
+        sales: a.sales + d.sales,
+        discount: a.discount + d.discount,
+        back: a.back + d.back,
+        card: a.card + d.card,
+        paypay: a.paypay + d.paypay,
+        cash: a.cash + d.cash,
+        invoice: a.invoice + d.invoice,
+        withholding: a.withholding + d.withholding,
+        cardFee: a.cardFee + d.cardFee,
+        storeShare: a.storeShare + d.storeShare,
+        expense: a.expense + d.expense,
+        income: a.income + d.income,
+        replenish: a.replenish + d.replenish,
+        advance: a.advance + d.advance,
+        reserve: a.reserve + d.reserve,
+        changeNet: a.changeNet + d.changeNet,
+        uncollectedSales: a.uncollectedSales + d.uncollectedSales,
+        safeUncollected: a.safeUncollected + d.safeUncollected,
+        cashOnHand: a.cashOnHand + d.cashOnHand,
+      }), { count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, cash: 0, invoice: 0, withholding: 0, cardFee: 0, storeShare: 0, expense: 0, income: 0, replenish: 0, advance: 0, reserve: 0, changeNet: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+      const profit = agg.sales - agg.back - agg.expense + agg.income;
+      const avgNet = agg.count > 0 ? Math.round(agg.storeShare / agg.count) : 0;
+      data.push({ month: prefix, label: `${m}月`, ...agg, profit, avgNet });
     }
     return data;
-  }, [allReservations, yearSettlements, yearExpenses, selectedYear, courses]);
+  }, [yearlyDaily, selectedYear]);
 
   // ===== セラピスト別 =====
   const therapistData = useMemo(() => {
@@ -472,12 +495,33 @@ export default function Analytics() {
     return { sales, back, profit: storeShare, storeShare, count, discount, invoice, withholding, avgNet, ...agg };
   }, [reservations, monthSettlements, dailyData, courses]);
 
-  // 年間合計（バックは settlements ベース）
+  // 年間合計（yearlyDaily を全期間サマリー。全指標を含み、月間と同じ形 — 月別タブのサマリーで使用）
   const yearTotal = useMemo(() => {
-    const sales = allReservations.reduce((s, r) => s + getPrice(r), 0);
-    const back = yearSettlements.reduce((s, ds) => s + (ds.total_back || 0), 0);
-    return { sales, back, profit: sales - back, count: allReservations.length };
-  }, [allReservations, yearSettlements, courses]);
+    const agg = yearlyDaily.reduce((a, d) => ({
+      count: a.count + d.count,
+      sales: a.sales + d.sales,
+      discount: a.discount + d.discount,
+      back: a.back + d.back,
+      card: a.card + d.card,
+      paypay: a.paypay + d.paypay,
+      cash: a.cash + d.cash,
+      invoice: a.invoice + d.invoice,
+      withholding: a.withholding + d.withholding,
+      cardFee: a.cardFee + d.cardFee,
+      storeShare: a.storeShare + d.storeShare,
+      expense: a.expense + d.expense,
+      income: a.income + d.income,
+      replenish: a.replenish + d.replenish,
+      advance: a.advance + d.advance,
+      reserve: a.reserve + d.reserve,
+      changeNet: a.changeNet + d.changeNet,
+      uncollectedSales: a.uncollectedSales + d.uncollectedSales,
+      safeUncollected: a.safeUncollected + d.safeUncollected,
+      cashOnHand: a.cashOnHand + d.cashOnHand,
+    }), { count: 0, sales: 0, discount: 0, back: 0, card: 0, paypay: 0, cash: 0, invoice: 0, withholding: 0, cardFee: 0, storeShare: 0, expense: 0, income: 0, replenish: 0, advance: 0, reserve: 0, changeNet: 0, uncollectedSales: 0, safeUncollected: 0, cashOnHand: 0 });
+    const avgNet = agg.count > 0 ? Math.round(agg.storeShare / agg.count) : 0;
+    return { ...agg, avgNet, profit: agg.storeShare };
+  }, [yearlyDaily]);
 
   // 選択範囲の小計（日別タブ 日付クリックで範囲選択）
   const rangeTotal = useMemo(() => {
@@ -539,72 +583,78 @@ export default function Analytics() {
         ))}
       </div>
 
-      {/* Summary Grid — 月間合計の全指標 (ドラッグで並び替え可能) */}
+      {/* Summary Grid — タブに応じて月間/年間合計を切替表示 (ドラッグで並び替え可能) */}
       <div className="px-4 py-3 flex-shrink-0" style={{ backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[9px]" style={{ color: T.textMuted }}>📊 {smYear}年{smMonth}月 合計 <span className="ml-1" style={{ color: T.textFaint }}>（カードをドラッグで並び替え可能）</span></p>
-          <button onClick={resetSummaryOrder} className="text-[9px] px-2 py-0.5 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textMuted }} title="並び順を初期化">↺ リセット</button>
-        </div>
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-1.5">
-          {(() => {
-            const M = monthTotal;
-            const cashColor = M.cashOnHand >= 0 ? "#22c55e" : "#c45555";
-            const changeColor = M.changeNet === 0 ? T.textFaint : M.changeNet > 0 ? "#22c55e" : "#f59e0b";
-            const reserveColor = M.reserve === 0 ? T.textFaint : M.reserve > 0 ? "#22c55e" : "#d4687e";
-            const changeSign = M.changeNet > 0 ? "+" : M.changeNet < 0 ? "−" : "";
-            const reserveSign = M.reserve > 0 ? "+" : M.reserve < 0 ? "−" : "";
-            const itemMap: Record<string, { label: string; value: string; color: string; emphasis?: boolean }> = {
-              sales: { label: "月間売上", value: fmt(M.sales), color: "#c3a782", emphasis: true },
-              count: { label: "予約数", value: `${M.count}件`, color: "#c3a782", emphasis: true },
-              avgNet: { label: "平均単価", value: M.avgNet > 0 ? fmt(M.avgNet) : "—", color: T.textSub },
-              storeShare: { label: "店取概算", value: fmt(M.storeShare), color: "#85a8c4", emphasis: true },
-              back: { label: "セラピスト支給", value: fmt(M.back), color: "#7ab88f" },
-              discount: { label: "割引", value: M.discount === 0 ? "¥0" : `−${fmt(M.discount)}`, color: M.discount === 0 ? T.textFaint : "#f59e0b" },
-              card: { label: "カード", value: fmt(M.card), color: T.textSub },
-              cardFee: { label: "カード手数料", value: M.cardFee === 0 ? "¥0" : `+${fmt(M.cardFee)}`, color: M.cardFee === 0 ? T.textFaint : "#22c55e" },
-              paypay: { label: "ペイペイ", value: fmt(M.paypay), color: T.textSub },
-              invoice: { label: "インボイス", value: fmt(M.invoice), color: M.invoice === 0 ? T.textFaint : "#a855f7" },
-              withholding: { label: "源泉徴収", value: fmt(M.withholding), color: M.withholding === 0 ? T.textFaint : "#d4687e" },
-              expense: { label: "経費", value: fmt(M.expense), color: M.expense === 0 ? T.textFaint : "#c45555" },
-              advance: { label: "前借り", value: M.advance === 0 ? "¥0" : `−${fmt(M.advance)}`, color: M.advance === 0 ? T.textFaint : "#d4687e" },
-              income: { label: "入金", value: M.income === 0 ? "¥0" : `+${fmt(M.income)}`, color: M.income === 0 ? T.textFaint : "#22c55e" },
-              changeNet: { label: "釣銭", value: M.changeNet === 0 ? "¥0" : `${changeSign}${fmt(Math.abs(M.changeNet))}`, color: changeColor },
-              reserve: { label: "豊橋予備金", value: M.reserve === 0 ? "¥0" : `${reserveSign}${fmt(Math.abs(M.reserve))}`, color: reserveColor },
-              uncollectedSales: { label: "売上未回収", value: M.uncollectedSales === 0 ? "¥0" : `−${fmt(M.uncollectedSales)}`, color: M.uncollectedSales === 0 ? T.textFaint : "#c45555" },
-              safeUncollected: { label: "金庫未回収", value: M.safeUncollected === 0 ? "¥0" : `−${fmt(M.safeUncollected)}`, color: M.safeUncollected === 0 ? T.textFaint : "#c45555" },
-              cashOnHand: { label: "事務所残金", value: fmt(M.cashOnHand), color: cashColor, emphasis: true },
-            };
-            return summaryOrder.map((key) => {
-              const s = itemMap[key];
-              if (!s) return null;
-              const isDragging = draggingKey === key;
-              const isDragOver = dragOverKey === key && draggingKey !== key;
-              return (
-                <div
-                  key={key}
-                  draggable
-                  onDragStart={(e) => { setDraggingKey(key); e.dataTransfer.effectAllowed = "move"; }}
-                  onDragEnd={() => { setDraggingKey(null); setDragOverKey(null); }}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOverKey !== key) setDragOverKey(key); }}
-                  onDragLeave={() => { if (dragOverKey === key) setDragOverKey(null); }}
-                  onDrop={(e) => { e.preventDefault(); handleSummaryDrop(key); }}
-                  className="rounded-lg px-2 py-1 border cursor-move transition-all select-none"
-                  style={{
-                    backgroundColor: T.card,
-                    borderColor: isDragOver ? "#c3a782" : T.border,
-                    borderWidth: isDragOver ? 2 : 1,
-                    opacity: isDragging ? 0.4 : 1,
-                    transform: isDragOver ? "scale(1.03)" : "scale(1)",
-                  }}
-                  title="ドラッグで並び替え"
-                >
-                  <p className="text-[9px] whitespace-nowrap leading-tight" style={{ color: T.textMuted }}>{s.label}</p>
-                  <p className={`tabular-nums whitespace-nowrap leading-tight ${s.emphasis ? "text-[13px] font-medium" : "text-[12px]"}`} style={{ color: s.color }}>{s.value}</p>
-                </div>
-              );
-            });
-          })()}
-        </div>
+        {(() => {
+          const isYearScope = tab === "monthly" || tab === "yearly";
+          const M = isYearScope ? yearTotal : monthTotal;
+          const scopeLabel = isYearScope ? `${selectedYear}年` : `${smYear}年${smMonth}月`;
+          const cashColor = M.cashOnHand >= 0 ? "#22c55e" : "#c45555";
+          const changeColor = M.changeNet === 0 ? T.textFaint : M.changeNet > 0 ? "#22c55e" : "#f59e0b";
+          const reserveColor = M.reserve === 0 ? T.textFaint : M.reserve > 0 ? "#22c55e" : "#d4687e";
+          const changeSign = M.changeNet > 0 ? "+" : M.changeNet < 0 ? "−" : "";
+          const reserveSign = M.reserve > 0 ? "+" : M.reserve < 0 ? "−" : "";
+          const itemMap: Record<string, { label: string; value: string; color: string; emphasis?: boolean }> = {
+            sales: { label: isYearScope ? "年間売上" : "月間売上", value: fmt(M.sales), color: "#c3a782", emphasis: true },
+            count: { label: "予約数", value: `${M.count}件`, color: "#c3a782", emphasis: true },
+            avgNet: { label: "平均単価", value: M.avgNet > 0 ? fmt(M.avgNet) : "—", color: T.textSub },
+            storeShare: { label: "店取概算", value: fmt(M.storeShare), color: "#85a8c4", emphasis: true },
+            back: { label: "セラピスト支給", value: fmt(M.back), color: "#7ab88f" },
+            discount: { label: "割引", value: M.discount === 0 ? "¥0" : `−${fmt(M.discount)}`, color: M.discount === 0 ? T.textFaint : "#f59e0b" },
+            card: { label: "カード", value: fmt(M.card), color: T.textSub },
+            cardFee: { label: "カード手数料", value: M.cardFee === 0 ? "¥0" : `+${fmt(M.cardFee)}`, color: M.cardFee === 0 ? T.textFaint : "#22c55e" },
+            paypay: { label: "ペイペイ", value: fmt(M.paypay), color: T.textSub },
+            invoice: { label: "インボイス", value: fmt(M.invoice), color: M.invoice === 0 ? T.textFaint : "#a855f7" },
+            withholding: { label: "源泉徴収", value: fmt(M.withholding), color: M.withholding === 0 ? T.textFaint : "#d4687e" },
+            expense: { label: "経費", value: fmt(M.expense), color: M.expense === 0 ? T.textFaint : "#c45555" },
+            advance: { label: "前借り", value: M.advance === 0 ? "¥0" : `−${fmt(M.advance)}`, color: M.advance === 0 ? T.textFaint : "#d4687e" },
+            income: { label: "入金", value: M.income === 0 ? "¥0" : `+${fmt(M.income)}`, color: M.income === 0 ? T.textFaint : "#22c55e" },
+            changeNet: { label: "釣銭", value: M.changeNet === 0 ? "¥0" : `${changeSign}${fmt(Math.abs(M.changeNet))}`, color: changeColor },
+            reserve: { label: "豊橋予備金", value: M.reserve === 0 ? "¥0" : `${reserveSign}${fmt(Math.abs(M.reserve))}`, color: reserveColor },
+            uncollectedSales: { label: "売上未回収", value: M.uncollectedSales === 0 ? "¥0" : `−${fmt(M.uncollectedSales)}`, color: M.uncollectedSales === 0 ? T.textFaint : "#c45555" },
+            safeUncollected: { label: "金庫未回収", value: M.safeUncollected === 0 ? "¥0" : `−${fmt(M.safeUncollected)}`, color: M.safeUncollected === 0 ? T.textFaint : "#c45555" },
+            cashOnHand: { label: "事務所残金", value: fmt(M.cashOnHand), color: cashColor, emphasis: true },
+          };
+          return (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[9px]" style={{ color: T.textMuted }}>📊 {scopeLabel} 合計 <span className="ml-1" style={{ color: T.textFaint }}>（カードをドラッグで並び替え可能）</span></p>
+                <button onClick={resetSummaryOrder} className="text-[9px] px-2 py-0.5 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textMuted }} title="並び順を初期化">↺ リセット</button>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-1.5">
+                {summaryOrder.map((key) => {
+                  const s = itemMap[key];
+                  if (!s) return null;
+                  const isDragging = draggingKey === key;
+                  const isDragOver = dragOverKey === key && draggingKey !== key;
+                  return (
+                    <div
+                      key={key}
+                      draggable
+                      onDragStart={(e) => { setDraggingKey(key); e.dataTransfer.effectAllowed = "move"; }}
+                      onDragEnd={() => { setDraggingKey(null); setDragOverKey(null); }}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOverKey !== key) setDragOverKey(key); }}
+                      onDragLeave={() => { if (dragOverKey === key) setDragOverKey(null); }}
+                      onDrop={(e) => { e.preventDefault(); handleSummaryDrop(key); }}
+                      className="rounded-lg px-2 py-1 border cursor-move transition-all select-none"
+                      style={{
+                        backgroundColor: T.card,
+                        borderColor: isDragOver ? "#c3a782" : T.border,
+                        borderWidth: isDragOver ? 2 : 1,
+                        opacity: isDragging ? 0.4 : 1,
+                        transform: isDragOver ? "scale(1.03)" : "scale(1)",
+                      }}
+                      title="ドラッグで並び替え"
+                    >
+                      <p className="text-[9px] whitespace-nowrap leading-tight" style={{ color: T.textMuted }}>{s.label}</p>
+                      <p className={`tabular-nums whitespace-nowrap leading-tight ${s.emphasis ? "text-[13px] font-medium" : "text-[12px]"}`} style={{ color: s.color }}>{s.value}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {/* Content */}
