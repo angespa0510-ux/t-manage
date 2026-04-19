@@ -8,9 +8,10 @@ import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
 import { usePinKeyboard } from "../../lib/use-pin-keyboard";
+import { isAdvanceEligible, runAutoSettlementIfDue, type StaffAdvance } from "../../lib/staff-advances";
 import { useConfirm } from "../../components/useConfirm";
 
-type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean; override_is_manager: boolean | null; override_can_tax_portal: boolean | null; override_can_cash_dashboard: boolean | null };
+type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean; override_is_manager: boolean | null; override_can_tax_portal: boolean | null; override_can_cash_dashboard: boolean | null; advance_preset_amount: number | null };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
 type Schedule = { id: number; staff_id: number; date: string; start_time: string; end_time: string; unit_price: number; units: number; commission_fee: number; transport_fee: number; total_payment: number; status: string; notes: string; is_paid: boolean; night_premium: number; license_premium: number; oiri_amount: number; break_minutes: number };
 type OiriSetting = { id: number; sales_threshold: number; count_threshold: number; bonus_amount: number; is_active: boolean };
@@ -21,7 +22,7 @@ export default function StaffPage() {
   const toast = useToast();
   const { activeStaff, isManager, login, logout } = useStaffSession();
   const { confirm, ConfirmModalNode } = useConfirm();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "permissions">("staff");
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "permissions" | "advances">("staff");
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 
@@ -35,12 +36,14 @@ export default function StaffPage() {
   const [addRole, setAddRole] = useState("staff"); const [addPosition, setAddPosition] = useState("業務委託"); const [addAddress, setAddAddress] = useState(""); const [addTransport, setAddTransport] = useState("0");
   const [addUnitPrice, setAddUnitPrice] = useState("1200"); const [addPin, setAddPin] = useState(""); const [addLicense, setAddLicense] = useState(false);
   const [addLicenseNum, setAddLicenseNum] = useState(""); const [addOiriBonus, setAddOiriBonus] = useState("0");
+  const [addAdvanceAmount, setAddAdvanceAmount] = useState("0");
 
   const [editStaff, setEditStaff] = useState<Staff | null>(null);
   const [editName, setEditName] = useState(""); const [editPhone, setEditPhone] = useState(""); const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState("staff"); const [editPosition, setEditPosition] = useState("業務委託"); const [editAddress, setEditAddress] = useState(""); const [editTransport, setEditTransport] = useState("0");
   const [editUnitPrice, setEditUnitPrice] = useState("1200"); const [editPin, setEditPin] = useState(""); const [editLicense, setEditLicense] = useState(false);
   const [editLicenseNum, setEditLicenseNum] = useState(""); const [editOiriBonus, setEditOiriBonus] = useState("0");
+  const [editAdvanceAmount, setEditAdvanceAmount] = useState("0");
 
   // Company states
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [licenseUnitPrice, setLicenseUnitPrice] = useState("50");
@@ -70,6 +73,111 @@ export default function StaffPage() {
   const [payrollData, setPayrollData] = useState<{ type: string; id: number; name: string; address: string; total: number; tax: number }[]>([]);
   const [payrollLoading, setPayrollLoading] = useState(false);
   const [payrollFilter, setPayrollFilter] = useState("all");
+
+  // ========== 前借り (staff_advances) ==========
+  const [advMonth, setAdvMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [advMonthList, setAdvMonthList] = useState<StaffAdvance[]>([]);
+  const [advToday, setAdvToday] = useState<StaffAdvance[]>([]);
+  const [advTodayDate, setAdvTodayDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [advMonthlySchedules, setAdvMonthlySchedules] = useState<{ staff_id: number; date: string; total_payment: number }[]>([]);
+  const [advTodayWorkingStaffIds, setAdvTodayWorkingStaffIds] = useState<number[]>([]);
+  const [advEditModal, setAdvEditModal] = useState<{ staff: Staff; defaultAmount: number } | null>(null);
+  const [advEditAmount, setAdvEditAmount] = useState("");
+  const [advEditReason, setAdvEditReason] = useState("");
+  const [advAutoSettleInfo, setAdvAutoSettleInfo] = useState<{ settled: number; month: string | null } | null>(null);
+
+  const fetchAdvances = useCallback(async () => {
+    // 当月分
+    const [y, m] = advMonth.split("-");
+    const firstDay = `${advMonth}-01`;
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).toISOString().split("T")[0];
+    const { data: monthly } = await supabase
+      .from("staff_advances").select("*")
+      .gte("advance_date", firstDay).lte("advance_date", lastDay)
+      .order("advance_date", { ascending: false });
+    setAdvMonthList((monthly || []) as StaffAdvance[]);
+
+    // 当月のスタッフ稼働報酬見込 (status問わず)
+    const { data: scheds } = await supabase.from("staff_schedules")
+      .select("staff_id, date, total_payment")
+      .gte("date", firstDay).lte("date", lastDay);
+    setAdvMonthlySchedules(scheds || []);
+  }, [advMonth]);
+
+  const fetchAdvTodayData = useCallback(async () => {
+    // 本日分の前借り記録
+    const { data: todays } = await supabase
+      .from("staff_advances").select("*")
+      .eq("advance_date", advTodayDate)
+      .order("created_at", { ascending: true });
+    setAdvToday((todays || []) as StaffAdvance[]);
+
+    // 本日出勤予定のスタッフID一覧
+    const { data: todaySchs } = await supabase.from("staff_schedules")
+      .select("staff_id").eq("date", advTodayDate);
+    const ids = Array.from(new Set((todaySchs || []).map((s: any) => s.staff_id)));
+    setAdvTodayWorkingStaffIds(ids);
+  }, [advTodayDate]);
+
+  // タブ初回アクセス時に自動精算チェック
+  useEffect(() => {
+    if (tab !== "advances") return;
+    runAutoSettlementIfDue().then(result => {
+      if (result.settled > 0) {
+        setAdvAutoSettleInfo(result);
+        toast.show(`${result.month} の前借り ${result.settled} 件を外注費へ自動精算しました`, "success");
+      }
+      fetchAdvances();
+      fetchAdvTodayData();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  useEffect(() => { if (tab === "advances") fetchAdvances(); }, [advMonth, tab, fetchAdvances]);
+  useEffect(() => { if (tab === "advances") fetchAdvTodayData(); }, [advTodayDate, tab, fetchAdvTodayData]);
+
+  // ワンクリック記録
+  const recordAdvance = async (staff: Staff, amount: number, reason: string = "") => {
+    await supabase.from("staff_advances").insert({
+      staff_id: staff.id,
+      advance_date: advTodayDate,
+      amount,
+      reason,
+      status: "pending",
+      recorded_by_name: activeStaff?.name || "",
+    });
+    toast.show(`${staff.name} ¥${amount.toLocaleString()} を記録しました`, "success");
+    fetchAdvTodayData();
+    fetchAdvances();
+  };
+
+  // 「当日なし」記録
+  const recordSkip = async (staff: Staff) => {
+    await supabase.from("staff_advances").insert({
+      staff_id: staff.id,
+      advance_date: advTodayDate,
+      amount: 0,
+      reason: "当日なし",
+      status: "skipped",
+      recorded_by_name: activeStaff?.name || "",
+    });
+    toast.show(`${staff.name} 当日なしを記録`, "info");
+    fetchAdvTodayData();
+    fetchAdvances();
+  };
+
+  // 削除 (pending/skipped のみ可)
+  const deleteAdvance = async (id: number) => {
+    const ok = await confirm({ title: "この前借り記録を削除しますか？", variant: "danger", confirmLabel: "削除" });
+    if (!ok) return;
+    await supabase.from("staff_advances").delete().eq("id", id);
+    toast.show("削除しました", "success");
+    fetchAdvTodayData();
+    fetchAdvances();
+  };
 
   const fetchPayroll = async () => {
     setPayrollLoading(true);
@@ -231,14 +339,14 @@ export default function StaffPage() {
   // Staff CRUD
   const addStaffFn = async () => {
     if (!addName.trim()) return;
-    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, has_withholding: addWithholding, night_start_time: addNightStart, night_end_time: addNightEnd, night_unit_price: parseInt(addNightPrice) || 100, has_invoice: addHasInvoice, invoice_number: addInvoiceNum.trim(), email_verified: false, email_token: crypto.randomUUID(), status: "active" });
+    await supabase.from("staff").insert({ name: addName.trim(), phone: addPhone.trim(), email: addEmail.trim(), role: addRole, company_position: addPosition, address: addAddress.trim(), transport_fee: parseInt(addTransport) || 0, unit_price: parseInt(addUnitPrice) || 1200, pin: addPin.trim(), has_license: addLicenseNum.trim().length === 12 ? true : addLicense, license_number: addLicenseNum.trim(), oiri_bonus: parseInt(addOiriBonus) || 0, has_withholding: addWithholding, night_start_time: addNightStart, night_end_time: addNightEnd, night_unit_price: parseInt(addNightPrice) || 100, has_invoice: addHasInvoice, invoice_number: addInvoiceNum.trim(), advance_preset_amount: (parseInt(addAdvanceAmount) || 0) || null, email_verified: false, email_token: crypto.randomUUID(), status: "active" });
     toast.show("スタッフを登録しました", "success");
-    setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddPosition("業務委託"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false); setAddLicenseNum(""); setAddOiriBonus("0");
+    setShowAdd(false); setAddName(""); setAddPhone(""); setAddEmail(""); setAddRole("staff"); setAddPosition("業務委託"); setAddAddress(""); setAddTransport("0"); setAddUnitPrice("1200"); setAddPin(""); setAddLicense(false); setAddLicenseNum(""); setAddOiriBonus("0"); setAddAdvanceAmount("0");
     fetchData();
   };
   const updateStaffFn = async () => {
     if (!editStaff) return;
-    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, has_withholding: editWithholding, night_start_time: editNightStart, night_end_time: editNightEnd, night_unit_price: parseInt(editNightPrice) || 100, has_invoice: editHasInvoice, invoice_number: editInvoiceNum.trim(), ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
+    await supabase.from("staff").update({ name: editName.trim(), phone: editPhone.trim(), email: editEmail.trim(), role: editRole, company_position: editPosition, address: editAddress.trim(), transport_fee: parseInt(editTransport) || 0, unit_price: parseInt(editUnitPrice) || 1200, pin: editPin.trim(), has_license: editLicenseNum.trim().length === 12 ? true : editLicense, license_number: editLicenseNum.trim(), oiri_bonus: parseInt(editOiriBonus) || 0, has_withholding: editWithholding, night_start_time: editNightStart, night_end_time: editNightEnd, night_unit_price: parseInt(editNightPrice) || 100, has_invoice: editHasInvoice, invoice_number: editInvoiceNum.trim(), advance_preset_amount: (parseInt(editAdvanceAmount) || 0) || null, ...(editEmail.trim() !== (editStaff?.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}) }).eq("id", editStaff.id);
     if (editInvoicePhoto && editStaff) {
       try {
         const file = editInvoicePhoto;
@@ -548,9 +656,9 @@ const openPaymentStatement = (sch: Schedule) => {
 
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["staff", "permissions", "schedule", "oiri", "license"] as const).map(t => (
+          {(["staff", "permissions", "advances", "schedule", "oiri", "license"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: tab === t ? "#c3a78222" : T.cardAlt, color: tab === t ? "#c3a782" : T.textMuted, border: `1px solid ${tab === t ? "#c3a782" : T.border}`, fontWeight: tab === t ? 700 : 400 }}>
-              {t === "staff" ? "👥 スタッフ管理" : t === "permissions" ? "🔐 権限マトリクス" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🚗 免許資格単価設定"}
+              {t === "staff" ? "👥 スタッフ管理" : t === "permissions" ? "🔐 権限マトリクス" : t === "advances" ? "💸 前借り" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🚗 免許資格単価設定"}
             </button>
           ))}
         </div>
@@ -625,13 +733,279 @@ const openPaymentStatement = (sch: Schedule) => {
                 </div>
                 <div className="flex gap-2">
                   {s.email && !s.email_verified && <button onClick={() => sendStaffConfirmEmail(s)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ color: "#3b82f6", backgroundColor: "#3b82f618" }}>📧 確認</button>}
-                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); setEditNightStart(s.night_start_time||"00:00"); setEditNightEnd(s.night_end_time||"05:00"); setEditNightPrice(String(s.night_unit_price||100)); setEditHasInvoice(!!s.has_invoice); setEditInvoiceNum(s.invoice_number||""); setEditInvoicePhoto(null); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                  <button onClick={() => { setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); setEditNightStart(s.night_start_time||"00:00"); setEditNightEnd(s.night_end_time||"05:00"); setEditNightPrice(String(s.night_unit_price||100)); setEditHasInvoice(!!s.has_invoice); setEditInvoiceNum(s.invoice_number||""); setEditAdvanceAmount(String(s.advance_preset_amount||0)); setEditInvoicePhoto(null); }} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                   <button onClick={() => deleteStaffFn(s.id, s.name)} className="text-[10px] px-3 py-1.5 rounded-lg cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        {/* ========== Tab: Advances (前借り) ========== */}
+        {tab === "advances" && (() => {
+          const fmtC = (n: number) => "¥" + (n || 0).toLocaleString();
+          const activeTargetStaffs = staffList.filter(s => s.status === "active" && isAdvanceEligible(s));
+
+          // 当月サマリー集計
+          const monthSummary = activeTargetStaffs.map(s => {
+            const myScheds = advMonthlySchedules.filter(x => x.staff_id === s.id);
+            const workDays = new Set(myScheds.map(x => x.date)).size;
+            const expectedPay = myScheds.reduce((sum, x) => sum + (x.total_payment || 0), 0);
+            const myAdvs = advMonthList.filter(a => a.staff_id === s.id && a.status !== "skipped");
+            const advanceTotal = myAdvs.reduce((sum, a) => sum + (a.amount || 0), 0);
+            const pendingCount = myAdvs.filter(a => a.status === "pending").length;
+            const settledCount = myAdvs.filter(a => a.status === "settled").length;
+            return { staff: s, workDays, expectedPay, advanceTotal, pendingCount, settledCount, diff: expectedPay - advanceTotal };
+          });
+
+          // 本日の記録状況
+          const todayStatus = activeTargetStaffs.map(s => {
+            const myToday = advToday.filter(a => a.staff_id === s.id);
+            const hasRecord = myToday.length > 0;
+            const isSkipped = myToday.some(a => a.status === "skipped");
+            const isRecorded = myToday.some(a => a.status === "pending");
+            const isWorking = advTodayWorkingStaffIds.includes(s.id);
+            return { staff: s, myToday, hasRecord, isSkipped, isRecorded, isWorking };
+          });
+
+          const todayRecordedList = todayStatus.filter(x => x.isRecorded);
+          const todaySkippedList = todayStatus.filter(x => x.isSkipped && !x.isRecorded);
+          // 未記録かつ出勤予定のスタッフが優先、次に対象外の出勤外スタッフ
+          const todayUnrecordedWorking = todayStatus.filter(x => !x.hasRecord && x.isWorking);
+          const todayUnrecordedOther = todayStatus.filter(x => !x.hasRecord && !x.isWorking);
+
+          const todayAmountTotal = advToday.filter(a => a.status === "pending").reduce((s, a) => s + a.amount, 0);
+
+          return (
+            <div className="space-y-5">
+              {/* 自動精算通知 */}
+              {advAutoSettleInfo && advAutoSettleInfo.settled > 0 && (
+                <div className="rounded-xl p-4" style={{ backgroundColor: "#22c55e18", border: "1px solid #22c55e44" }}>
+                  <p className="text-[12px] font-medium" style={{ color: "#22c55e" }}>✅ 月末自動精算実行</p>
+                  <p className="text-[10px] mt-1" style={{ color: T.textSub }}>{advAutoSettleInfo.month} 分の前借り {advAutoSettleInfo.settled} 件を外注費へ自動計上しました。</p>
+                </div>
+              )}
+
+              {/* 説明 */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#d4687e12", border: "1px solid #d4687e33" }}>
+                <div className="flex items-start gap-3">
+                  <span className="text-[18px]">💸</span>
+                  <div>
+                    <p className="text-[12px] font-medium mb-1" style={{ color: "#d4687e" }}>前借りの仕組み</p>
+                    <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
+                      出勤スタッフへの日次前借りを記録します。営業締めで管理者金庫から差し引かれ、毎月第1月曜12:00 以降に自動で外注費へ振替されます。
+                    </p>
+                    <ul className="text-[10px] mt-2 space-y-0.5" style={{ color: T.textSub }}>
+                      <li>・<strong>対象</strong>: 前借りプリセットが設定されているスタッフ（スタッフ管理から編集）</li>
+                      <li>・<strong>運用</strong>: 「¥3,000 前借り」または「✕ なし」をワンクリック記録</li>
+                      <li>・<strong>金額変更</strong>: 金額ボタンを長押しまたは金額カードクリックで編集可能</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* ========== 本日の記録 ========== */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-medium">🗓 本日の前借り</p>
+                    <input type="date" value={advTodayDate} onChange={e => setAdvTodayDate(e.target.value)} className="px-2 py-1 rounded text-[11px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                  </div>
+                  <p className="text-[11px]" style={{ color: T.textSub }}>合計 <span className="text-[14px] font-medium tabular-nums" style={{ color: "#d4687e" }}>-{fmtC(todayAmountTotal)}</span></p>
+                </div>
+
+                {/* 未記録チェック */}
+                {todayUnrecordedWorking.length > 0 && (
+                  <div className="rounded-lg p-2.5 mb-3" style={{ backgroundColor: "#f59e0b18", border: "1px solid #f59e0b44" }}>
+                    <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>⚠️ あと {todayUnrecordedWorking.length} 名未記録（本日出勤予定）</p>
+                    <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>{todayUnrecordedWorking.map(x => x.staff.name).join("・")}</p>
+                  </div>
+                )}
+
+                {/* 記録済み */}
+                {todayRecordedList.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-[10px] mb-1.5" style={{ color: "#22c55e" }}>🟢 記録済み ({todayRecordedList.length})</p>
+                    <div className="space-y-1">
+                      {todayRecordedList.map(x => {
+                        const rec = x.myToday.find(a => a.status === "pending");
+                        if (!rec) return null;
+                        return (
+                          <div key={x.staff.id} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium" style={{ backgroundColor: "#22c55e" }}>{x.staff.name.charAt(0)}</div>
+                              <span className="text-[11px]">{x.staff.name}</span>
+                              {rec.reason && <span className="text-[9px]" style={{ color: T.textFaint }}>({rec.reason})</span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[12px] font-medium tabular-nums" style={{ color: "#d4687e" }}>-{fmtC(rec.amount)}</span>
+                              <button onClick={() => deleteAdvance(rec.id)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>取消</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 未記録（出勤予定） */}
+                {todayUnrecordedWorking.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-[10px] mb-1.5" style={{ color: T.textSub }}>⚪ 未記録（出勤予定）</p>
+                    <div className="space-y-1">
+                      {todayUnrecordedWorking.map(x => {
+                        const preset = x.staff.advance_preset_amount || 3000;
+                        return (
+                          <div key={x.staff.id} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium" style={{ backgroundColor: roleColors[x.staff.role] || "#888" }}>{x.staff.name.charAt(0)}</div>
+                              <span className="text-[11px]">{x.staff.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={() => recordAdvance(x.staff, preset)} className="text-[10px] px-2.5 py-1 rounded cursor-pointer font-medium" style={{ backgroundColor: "#d4687e", color: "#fff" }}>{fmtC(preset)} 前借り</button>
+                              <button onClick={() => { setAdvEditModal({ staff: x.staff, defaultAmount: preset }); setAdvEditAmount(String(preset)); setAdvEditReason(""); }} className="text-[10px] px-2 py-1 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>金額変更</button>
+                              <button onClick={() => recordSkip(x.staff)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}>✕ なし</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* スキップ済み */}
+                {todaySkippedList.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-[10px] mb-1.5" style={{ color: T.textMuted }}>🚫 本日なし ({todaySkippedList.length})</p>
+                    <div className="space-y-1">
+                      {todaySkippedList.map(x => {
+                        const skip = x.myToday.find(a => a.status === "skipped");
+                        if (!skip) return null;
+                        return (
+                          <div key={x.staff.id} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: T.cardAlt, opacity: 0.6 }}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium" style={{ backgroundColor: "#888" }}>{x.staff.name.charAt(0)}</div>
+                              <span className="text-[11px]">{x.staff.name}</span>
+                              <span className="text-[9px]" style={{ color: T.textFaint }}>なし記録</span>
+                            </div>
+                            <button onClick={() => deleteAdvance(skip.id)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>取消</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 未記録（出勤外） */}
+                {todayUnrecordedOther.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="text-[10px] cursor-pointer" style={{ color: T.textFaint }}>
+                      ▶ 出勤予定外のスタッフ ({todayUnrecordedOther.length}) — 必要なら手動で記録可能
+                    </summary>
+                    <div className="space-y-1 mt-2">
+                      {todayUnrecordedOther.map(x => {
+                        const preset = x.staff.advance_preset_amount || 3000;
+                        return (
+                          <div key={x.staff.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg" style={{ backgroundColor: T.cardAlt, opacity: 0.6 }}>
+                            <span className="text-[10px]">{x.staff.name}</span>
+                            <button onClick={() => { setAdvEditModal({ staff: x.staff, defaultAmount: preset }); setAdvEditAmount(String(preset)); setAdvEditReason(""); }} className="text-[9px] px-2 py-0.5 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>記録する</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                )}
+
+                {activeTargetStaffs.length === 0 && (
+                  <p className="text-center py-6 text-[11px]" style={{ color: T.textMuted }}>
+                    前借り対象のスタッフがいません。<br />
+                    スタッフ管理 → 編集 → 💸 前借りプリセットに金額を設定してください。
+                  </p>
+                )}
+              </div>
+
+              {/* ========== 当月サマリー ========== */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[13px] font-medium">📊 当月サマリー</p>
+                  <input type="month" value={advMonth} onChange={e => setAdvMonth(e.target.value)} className="px-2 py-1 rounded text-[11px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+                </div>
+                {monthSummary.length === 0 ? (
+                  <p className="text-center py-6 text-[11px]" style={{ color: T.textMuted }}>対象スタッフなし</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px]" style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: 560 }}>
+                      <thead>
+                        <tr style={{ backgroundColor: T.cardAlt }}>
+                          <th className="text-left px-3 py-2 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}` }}>スタッフ</th>
+                          <th className="text-right px-3 py-2 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}` }}>稼働日</th>
+                          <th className="text-right px-3 py-2 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}` }}>稼働報酬見込</th>
+                          <th className="text-right px-3 py-2 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}` }}>前借り合計</th>
+                          <th className="text-right px-3 py-2 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}` }}>差額(支給予定)</th>
+                          <th className="text-center px-3 py-2 font-medium" style={{ color: T.textSub, borderBottom: `1px solid ${T.border}` }}>状態</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthSummary.map((x, idx) => (
+                          <tr key={x.staff.id} style={{ backgroundColor: idx % 2 === 0 ? "transparent" : (dark ? T.cardAlt : "#f8f6f3") }}>
+                            <td className="px-3 py-2" style={{ borderBottom: `1px solid ${T.border}` }}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-medium" style={{ backgroundColor: roleColors[x.staff.role] || "#888" }}>{x.staff.name.charAt(0)}</div>
+                                <span className="text-[11px]">{x.staff.name}</span>
+                              </div>
+                            </td>
+                            <td className="text-right px-3 py-2 tabular-nums" style={{ borderBottom: `1px solid ${T.border}` }}>{x.workDays}日</td>
+                            <td className="text-right px-3 py-2 tabular-nums" style={{ borderBottom: `1px solid ${T.border}` }}>{fmtC(x.expectedPay)}</td>
+                            <td className="text-right px-3 py-2 tabular-nums" style={{ color: "#d4687e", borderBottom: `1px solid ${T.border}` }}>-{fmtC(x.advanceTotal)}</td>
+                            <td className="text-right px-3 py-2 tabular-nums font-medium" style={{ color: x.diff >= 0 ? "#22c55e" : "#c45555", borderBottom: `1px solid ${T.border}` }}>{fmtC(x.diff)}</td>
+                            <td className="text-center px-3 py-2 text-[9px]" style={{ borderBottom: `1px solid ${T.border}` }}>
+                              {x.pendingCount > 0 && <span className="inline-block px-1.5 py-0.5 rounded mr-1" style={{ backgroundColor: "#f59e0b22", color: "#f59e0b" }}>未精算 {x.pendingCount}</span>}
+                              {x.settledCount > 0 && <span className="inline-block px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e22", color: "#22c55e" }}>精算済 {x.settledCount}</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ========== 全履歴 ========== */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <p className="text-[13px] font-medium mb-3">📋 {advMonth} 全履歴</p>
+                {advMonthList.length === 0 ? (
+                  <p className="text-center py-6 text-[11px]" style={{ color: T.textMuted }}>記録なし</p>
+                ) : (
+                  <div className="space-y-1">
+                    {advMonthList.map(a => {
+                      const s = staffList.find(x => x.id === a.staff_id);
+                      const statusLabel = a.status === "pending" ? "🟡 未精算" : a.status === "settled" ? "✅ 精算済" : "🚫 なし";
+                      const statusColor = a.status === "pending" ? "#f59e0b" : a.status === "settled" ? "#22c55e" : "#888";
+                      return (
+                        <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="text-[10px] tabular-nums" style={{ color: T.textSub, minWidth: 60 }}>{a.advance_date.slice(5)}</span>
+                            <span className="text-[11px] truncate">{s?.name || "不明"}</span>
+                            {a.reason && <span className="text-[9px]" style={{ color: T.textFaint }}>({a.reason})</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-medium tabular-nums" style={{ color: a.status === "skipped" ? T.textFaint : "#d4687e" }}>
+                              {a.status === "skipped" ? "—" : "-" + fmtC(a.amount)}
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: statusColor + "22", color: statusColor }}>{statusLabel}</span>
+                            {a.status !== "settled" && (
+                              <button onClick={() => deleteAdvance(a.id)} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ========== Tab: Permissions Matrix ========== */}
         {tab === "permissions" && (() => {
@@ -848,7 +1222,7 @@ const openPaymentStatement = (sch: Schedule) => {
                             <td className="px-3 py-2 text-center" style={{ borderBottom: `1px solid ${T.border}` }}>
                               <button
                                 onClick={() => {
-                                  setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); setEditNightStart(s.night_start_time||"00:00"); setEditNightEnd(s.night_end_time||"05:00"); setEditNightPrice(String(s.night_unit_price||100)); setEditHasInvoice(!!s.has_invoice); setEditInvoiceNum(s.invoice_number||""); setEditInvoicePhoto(null);
+                                  setEditStaff(s); setEditName(s.name); setEditPhone(s.phone||""); setEditEmail(s.email||""); setEditRole(s.role); setEditPosition(s.company_position||"業務委託"); setEditAddress(s.address||""); setEditTransport(String(s.transport_fee||0)); setEditUnitPrice(String(s.unit_price||1200)); setEditPin(s.pin||""); setEditLicense(!!s.has_license); setEditLicenseNum(s.license_number||""); setEditOiriBonus(String(s.oiri_bonus||0)); setEditWithholding(!!s.has_withholding); setEditNightStart(s.night_start_time||"00:00"); setEditNightEnd(s.night_end_time||"05:00"); setEditNightPrice(String(s.night_unit_price||100)); setEditHasInvoice(!!s.has_invoice); setEditInvoiceNum(s.invoice_number||""); setEditAdvanceAmount(String(s.advance_preset_amount||0)); setEditInvoicePhoto(null);
                                 }}
                                 className="text-[10px] px-2 py-1 rounded cursor-pointer border"
                                 style={{ borderColor: T.border, color: T.textSub }}
@@ -1024,6 +1398,7 @@ const openPaymentStatement = (sch: Schedule) => {
                 {addLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={addOiriBonus} onChange={(e) => setAddOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>💸 前借りプリセット</label><input type="text" inputMode="numeric" value={addAdvanceAmount} onChange={(e) => setAddAdvanceAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="3000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>0 = 前借り対象外（業務委託のみ運用）</p></div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setAddWithholding(!addWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: addWithholding ? "#c4555522" : "#22c55e22", color: addWithholding ? "#c45555" : "#22c55e", border: `1px solid ${addWithholding ? "#c4555544" : "#22c55e44"}` }}>{addWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
               <div className="flex gap-3 pt-2">
                 <button onClick={addStaffFn} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">登録する</button>
@@ -1067,6 +1442,7 @@ const openPaymentStatement = (sch: Schedule) => {
                 {editLicenseNum.length === 12 && <p className="text-[9px] mt-1" style={{ color: "#22c55e" }}>✅ 12桁 OK</p>}
               </div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🎉 大入り金額</label><input type="text" inputMode="numeric" value={editOiriBonus} onChange={(e) => setEditOiriBonus(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>個人別のAmazonギフト額</p></div>
+              <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>💸 前借りプリセット</label><input type="text" inputMode="numeric" value={editAdvanceAmount} onChange={(e) => setEditAdvanceAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="3000" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} /><p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>0 = 前借り対象外</p></div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>源泉徴収</label><button type="button" onClick={() => setEditWithholding(!editWithholding)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer" style={{ backgroundColor: editWithholding ? "#c4555522" : "#22c55e22", color: editWithholding ? "#c45555" : "#22c55e", border: `1px solid ${editWithholding ? "#c4555544" : "#22c55e44"}` }}>{editWithholding ? "✅ 源泉徴収あり（10.21%）" : "⬜ 源泉徴収なし"}</button></div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>🌙 深夜時間帯単価</label><div className="flex gap-2 items-center"><select value={editNightStart} onChange={(e) => setEditNightStart(e.target.value)} className="px-2 py-2 rounded-xl text-[11px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.filter(t => t >= "20:00" || t <= "06:00").map(t => <option key={t} value={t}>{t}</option>)}</select><span className="text-[10px]" style={{ color: T.textFaint }}>〜</span><select value={editNightEnd} onChange={(e) => setEditNightEnd(e.target.value)} className="px-2 py-2 rounded-xl text-[11px] outline-none cursor-pointer" style={inputStyle}>{TIMES_15MIN.filter(t => t >= "00:00" && t <= "08:00").map(t => <option key={t} value={t}>{t}</option>)}</select><span className="text-[10px]" style={{ color: T.textFaint }}>+</span><input type="text" inputMode="numeric" value={editNightPrice} onChange={(e) => setEditNightPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-20 px-2 py-2 rounded-xl text-[11px] outline-none text-center" style={inputStyle} /><span className="text-[10px]" style={{ color: T.textFaint }}>円/u</span></div></div>
               <div><label className="block text-[11px] mb-1" style={{ color: T.textSub }}>📋 適格事業者登録</label><button type="button" onClick={() => setEditHasInvoice(!editHasInvoice)} className="w-full px-3 py-2.5 rounded-xl text-[12px] text-left cursor-pointer mb-2" style={{ backgroundColor: editHasInvoice ? "#22c55e22" : "#88878022", color: editHasInvoice ? "#22c55e" : "#888780", border: `1px solid ${editHasInvoice ? "#22c55e44" : "#88878044"}` }}>{editHasInvoice ? "✅ 適格事業者登録あり" : "⬜ 適格事業者登録なし"}</button>{editHasInvoice && <div className="space-y-2"><input type="text" value={editInvoiceNum} onChange={(e) => setEditInvoiceNum(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2 rounded-xl text-[11px] outline-none" style={inputStyle} /><label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 写真をアップロード<input type="file" accept="image/*" onChange={(e) => setEditInvoicePhoto(e.target.files?.[0] || null)} className="hidden" /></label>{editInvoicePhoto && <span className="text-[10px] ml-2" style={{ color: "#22c55e" }}>✅ {editInvoicePhoto.name}</span>}{editStaff?.invoice_photo_url && <a href={editStaff.invoice_photo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ backgroundColor: "#85a8c412", border: "1px solid #85a8c433" }}><img src={editStaff.invoice_photo_url.replace("invoice_", "invoice_thumb_").replace(".pdf", ".jpg")} alt="適格事業者" className="rounded" style={{ width: 40, height: 40, objectFit: "cover" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} /><span className="text-[10px]" style={{ color: "#85a8c4" }}>📄 適格事業者証明を表示</span></a>}</div>}</div>
@@ -1241,6 +1617,38 @@ const openPaymentStatement = (sch: Schedule) => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 前借り金額変更モーダル */}
+      {advEditModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="rounded-2xl p-5 w-full max-w-sm" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+            <p className="text-[14px] font-medium mb-1">💸 前借り金額変更</p>
+            <p className="text-[11px] mb-4" style={{ color: T.textSub }}>{advEditModal.staff.name}</p>
+            <div className="mb-3">
+              <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>金額</label>
+              <input type="text" inputMode="numeric" value={advEditAmount} onChange={e => setAdvEditAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="3000" className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none tabular-nums text-right" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} autoFocus />
+              <div className="flex gap-1 mt-2">
+                {[1000, 2000, 3000, 5000].map(v => (
+                  <button key={v} onClick={() => setAdvEditAmount(String(v))} className="flex-1 px-2 py-1 rounded text-[10px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}` }}>¥{v.toLocaleString()}</button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>理由（任意）</label>
+              <input type="text" value={advEditReason} onChange={e => setAdvEditReason(e.target.value)} placeholder="例: 短時間勤務のため" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setAdvEditModal(null)} className="flex-1 px-3 py-2 rounded-xl text-[11px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              <button onClick={async () => {
+                const amt = parseInt(advEditAmount) || 0;
+                if (amt <= 0) { toast.show("金額を入力してください", "error"); return; }
+                await recordAdvance(advEditModal.staff, amt, advEditReason.trim());
+                setAdvEditModal(null);
+              }} className="flex-1 px-3 py-2 rounded-xl text-[11px] cursor-pointer font-medium" style={{ backgroundColor: "#d4687e", color: "#fff" }}>記録する</button>
+            </div>
           </div>
         </div>
       )}
