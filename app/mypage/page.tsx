@@ -57,7 +57,7 @@ export default function TherapistMyPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual" | "tax" | "cert">("home");
+  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert">("home");
   const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
@@ -90,6 +90,12 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 　const [calSettlements, setCalSettlements] = useState<Settlement[]>([]);
 　const [calReservations, setCalReservations] = useState<Reservation[]>([]);
 　const [calDetailDate, setCalDetailDate] = useState<string | null>(null);
+
+  // ── セラピストお知らせ関連 (セッション㊸) ──
+  type TherapistNotification = { id: number; title: string; body: string; type: string; target_therapist_id: number | null; created_at: string };
+  const [notifications, setNotifications] = useState<TherapistNotification[]>([]);
+  const [notifReadIds, setNotifReadIds] = useState<number[]>([]);
+  const [notifDetail, setNotifDetail] = useState<TherapistNotification | null>(null);
 
   // ── マニュアル関連 ──
   type ManualCategory = { id: number; name: string; icon: string; color: string; description: string; sort_order: number };
@@ -212,6 +218,17 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     ];
     setCertChecks(checks);
     setCertEligible(checks.every(c => c.ok));
+
+    // 🔔 お知らせ: 全体向け(target_therapist_id=null) + 自分宛のみ
+    const { data: notifs } = await supabase.from("therapist_notifications")
+      .select("*")
+      .or(`target_therapist_id.is.null,target_therapist_id.eq.${tid}`)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (notifs) setNotifications(notifs);
+    const { data: notifReads } = await supabase.from("therapist_notification_reads")
+      .select("notification_id").eq("therapist_id", tid);
+    if (notifReads) setNotifReadIds(notifReads.map((r: { notification_id: number }) => r.notification_id));
   }, [therapist, salaryMonth, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -295,6 +312,25 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   };
 
   const logout = () => { localStorage.removeItem("therapist_session"); setLoggedIn(false); setTherapist(null); setTab("home"); };
+
+  // 🔔 お知らせ既読操作
+  const markNotifRead = async (notifId: number) => {
+    if (!therapist || notifReadIds.includes(notifId)) return;
+    await supabase.from("therapist_notification_reads").insert({ therapist_id: therapist.id, notification_id: notifId });
+    setNotifReadIds(prev => [...prev, notifId]);
+  };
+  const markAllNotifRead = async () => {
+    if (!therapist) return;
+    const unread = notifications.filter(n => !notifReadIds.includes(n.id));
+    for (const n of unread) {
+      try { await supabase.from("therapist_notification_reads").insert({ therapist_id: therapist.id, notification_id: n.id }); } catch {}
+    }
+    setNotifReadIds(notifications.map(n => n.id));
+  };
+  const openNotif = (n: TherapistNotification) => {
+    setNotifDetail(n);
+    markNotifRead(n.id);
+  };
   const chipStyle = (active: boolean, color: string) => ({ backgroundColor: active ? color + "20" : "transparent", color: active ? color : T.textMuted, borderColor: active ? color : T.border });
 
   // マニュアル記事を開く（fromLink=true のとき履歴に追加）
@@ -515,7 +551,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
         {(() => {
           const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
-          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }, { key: "cert" as const, label: "📄 証明書" }, { key: "tax" as const, label: "📊 確定申告" }].map((t) => (
+          const notifUnread = notifications.filter(n => !notifReadIds.includes(n.id)).length;
+          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "notifications" as const, label: notifUnread > 0 ? `🔔 お知らせ(${notifUnread})` : "🔔 お知らせ" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }, { key: "cert" as const, label: "📄 証明書" }, { key: "tax" as const, label: "📊 確定申告" }].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#e8849a")}>{t.label}</button>
         ));
         })()}
@@ -536,6 +573,41 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
               <PushToggle userType="therapist" userId={therapist.id} className="w-full" />
             </div>
           )}
+
+          {/* 📣 最新のお知らせ (直近5件) */}
+          {notifications.length > 0 && (() => {
+            const latest = notifications.slice(0, 5);
+            const unreadCount = notifications.filter(n => !notifReadIds.includes(n.id)).length;
+            return (
+              <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[12px] font-medium">📣 最新のお知らせ</p>
+                  <button onClick={() => setTab("notifications")} className="text-[10px] cursor-pointer" style={{ color: "#e8849a" }}>
+                    {unreadCount > 0 ? `🔴 ${unreadCount}件 未読` : "すべて見る →"}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {latest.map(n => {
+                    const isRead = notifReadIds.includes(n.id);
+                    const icon = n.type === "schedule" ? "📅" : n.type === "warning" ? "⚠️" : "📢";
+                    return (
+                      <div key={n.id} onClick={() => openNotif(n)} className="rounded-xl p-3 cursor-pointer flex items-start gap-2" style={{ backgroundColor: isRead ? T.cardAlt : "#FBEAF018", border: `1px solid ${isRead ? T.border : "#e8849a44"}` }}>
+                        <span className="text-[14px] leading-none mt-0.5">{icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[11px] font-medium truncate" style={{ color: isRead ? T.textSub : T.text }}>{n.title}</p>
+                            {!isRead && <span className="text-[8px] px-1.5 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: "#e8849a" }}>NEW</span>}
+                          </div>
+                          <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textMuted }}>{n.body}</p>
+                          <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>{new Date(n.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* マニュアル未読通知 */}
           {(() => {
@@ -724,6 +796,80 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
           {upcomingShifts.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[11px] font-medium mb-3">直近の出勤予定</p><div className="space-y-1.5">{upcomingShifts.map(s => (<div key={s.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}><span className="text-[11px]">{formatDate(s.date)}</span><div className="flex items-center gap-2">{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f8bbd018", color: "#e091a8" }}>{getStoreShort(s.store_id)}</span>}<span className="text-[11px] font-medium">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div></div>))}</div></div>)}
         </div>)}
+
+        {/* 🔔 お知らせタブ (セッション㊸) */}
+        {tab === "notifications" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[14px] font-medium">🔔 お知らせ</h2>
+              {notifications.filter(n => !notifReadIds.includes(n.id)).length > 0 && (
+                <button onClick={markAllNotifRead} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#e8849a18", color: "#e8849a", border: "1px solid #e8849a44" }}>
+                  ✅ すべて既読にする
+                </button>
+              )}
+            </div>
+
+            {notifications.length === 0 ? (
+              <div className="rounded-2xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                <p className="text-[30px] mb-2">📭</p>
+                <p className="text-[12px]" style={{ color: T.textMuted }}>まだお知らせはありません</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {notifications.map(n => {
+                  const isRead = notifReadIds.includes(n.id);
+                  const icon = n.type === "schedule" ? "📅" : n.type === "warning" ? "⚠️" : "📢";
+                  const borderColor = n.type === "warning" ? "#c4555544" : n.type === "schedule" ? "#85a8c444" : "#e8849a44";
+                  const bgColor = isRead ? T.cardAlt : (n.type === "warning" ? "#c4555508" : n.type === "schedule" ? "#85a8c408" : "#FBEAF015");
+                  return (
+                    <div key={n.id} onClick={() => openNotif(n)} className="rounded-xl p-4 cursor-pointer transition-all hover:shadow-md" style={{ backgroundColor: bgColor, border: `1px solid ${isRead ? T.border : borderColor}` }}>
+                      <div className="flex items-start gap-3">
+                        <span className="text-[20px] leading-none flex-shrink-0 mt-0.5">{icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[13px] font-medium flex-1" style={{ color: isRead ? T.textSub : T.text }}>{n.title}</p>
+                            {!isRead && <span className="text-[9px] px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: "#e8849a" }}>NEW</span>}
+                            {n.target_therapist_id && <span className="text-[9px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>個別</span>}
+                          </div>
+                          <p className="text-[11px] line-clamp-2 mb-1.5" style={{ color: T.textMuted, whiteSpace: "pre-wrap" }}>{n.body}</p>
+                          <p className="text-[9px]" style={{ color: T.textFaint }}>
+                            {new Date(n.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 📖 お知らせ詳細モーダル */}
+        {notifDetail && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.5)" }} onClick={() => setNotifDetail(null)}>
+            <div onClick={e => e.stopPropagation()} className="w-full max-w-[500px] rounded-2xl p-6 animate-[fadeIn_0.2s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[24px]">{notifDetail.type === "schedule" ? "📅" : notifDetail.type === "warning" ? "⚠️" : "📢"}</span>
+                  <div>
+                    <p className="text-[10px]" style={{ color: T.textFaint }}>
+                      {new Date(notifDetail.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setNotifDetail(null)} className="w-8 h-8 rounded-full cursor-pointer flex items-center justify-center text-[16px]" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>✕</button>
+              </div>
+              <h3 className="text-[16px] font-medium mb-3">{notifDetail.title}</h3>
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: T.text }}>{notifDetail.body}</p>
+              </div>
+              <button onClick={() => setNotifDetail(null)} className="w-full mt-4 py-3 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
 
         {tab === "shift" && (<div className="space-y-4">
           <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">📝 シフト希望提出</h2><div className="flex items-center gap-2"><button onClick={() => setWeekOffset(Math.max(1, weekOffset - 1))} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button><span className="text-[11px] font-medium min-w-[120px] text-center">{formatDate(weekDates[0])} 〜 {formatDate(weekDates[6])}</span><button onClick={() => setWeekOffset(weekOffset + 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button></div></div>
