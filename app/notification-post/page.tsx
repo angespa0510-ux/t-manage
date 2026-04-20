@@ -31,6 +31,9 @@ export default function NotificationPost() {
   const [custSearch, setCustSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  // 🔔 プッシュ通知も同時送信するか
+  const [sendPush, setSendPush] = useState(true);
+  const [pushResult, setPushResult] = useState("");
 
   const fetchData = useCallback(async () => {
     const { data: n } = await supabase.from("customer_notifications").select("*").order("created_at", { ascending: false }).limit(50);
@@ -49,7 +52,11 @@ export default function NotificationPost() {
 
   const handlePost = async () => {
     if (!title.trim() || !body.trim()) { setMsg("タイトルと本文を入力してください"); return; }
-    setSaving(true); setMsg("");
+    setSaving(true); setMsg(""); setPushResult("");
+
+    // お知らせの送信先ID (プッシュ通知用)
+    let pushUserIds: number[] = [];
+    let pushBroadcast = false;
 
     if (targetMode === "all") {
       const { error } = await supabase.from("customer_notifications").insert({
@@ -57,6 +64,7 @@ export default function NotificationPost() {
         target_customer_id: null, image_url: null,
       });
       if (error) { setMsg("投稿失敗: " + error.message); setSaving(false); return; }
+      pushBroadcast = true;
     } else if (targetMode === "rank") {
       const filtered = customers.filter(c => targetRank === "all_ranks" || c.rank === targetRank);
       for (const c of filtered) {
@@ -65,6 +73,7 @@ export default function NotificationPost() {
           target_customer_id: c.id, image_url: null,
         });
       }
+      pushUserIds = filtered.map(c => c.id);
     } else if (targetMode === "individual") {
       if (!targetCustomerId) { setMsg("お客様を選択してください"); setSaving(false); return; }
       const { error } = await supabase.from("customer_notifications").insert({
@@ -72,13 +81,48 @@ export default function NotificationPost() {
         target_customer_id: targetCustomerId, image_url: null,
       });
       if (error) { setMsg("投稿失敗: " + error.message); setSaving(false); return; }
+      pushUserIds = [targetCustomerId];
+    }
+
+    // 🔔 プッシュ通知送信 (有効かつ対象者がいる場合)
+    if (sendPush) {
+      try {
+        const pushBody: Record<string, unknown> = {
+          userType: "customer",
+          title: title.trim(),
+          body: body.trim(),
+          url: "/customer-mypage",
+          tag: `notif-${Date.now()}`,
+        };
+        if (pushBroadcast) {
+          pushBody.broadcast = true;
+        } else if (pushUserIds.length === 1) {
+          pushBody.userId = pushUserIds[0];
+        } else if (pushUserIds.length > 1) {
+          pushBody.userIds = pushUserIds;
+        }
+        const res = await fetch("/api/push/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pushBody),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setPushResult(`🔔 プッシュ通知: ${data.sent || 0}件送信 / 失敗${data.failed || 0}件`);
+        } else {
+          setPushResult(`⚠️ プッシュ通知エラー: ${data.error || "unknown"}`);
+        }
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        setPushResult(`⚠️ プッシュ通知送信失敗: ${err.message || ""}`);
+      }
     }
 
     setSaving(false);
     setMsg("お知らせを投稿しました！");
     setTitle(""); setBody(""); setTargetCustomerId(0); setCustSearch("");
     fetchData();
-    setTimeout(() => setMsg(""), 3000);
+    setTimeout(() => { setMsg(""); setPushResult(""); }, 5000);
   };
 
   const deleteNotification = async (id: number) => {
@@ -202,11 +246,23 @@ export default function NotificationPost() {
                 </div>
               )}
 
+              {/* 🔔 プッシュ通知オプション */}
+              <div className="rounded-xl p-3 flex items-start gap-3 cursor-pointer select-none" style={{ backgroundColor: sendPush ? "rgba(195,167,130,0.08)" : T.cardAlt, border: `1px solid ${sendPush ? "#c3a782" : T.border}` }} onClick={() => setSendPush(!sendPush)}>
+                <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: sendPush ? "#c3a782" : T.card, border: `1px solid ${sendPush ? "#c3a782" : T.textMuted}` }}>
+                  {sendPush && <span className="text-white text-[12px] leading-none">✓</span>}
+                </div>
+                <div className="flex-1">
+                  <p className="text-[12px] font-medium">🔔 プッシュ通知としても送信する</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>通知をONにしているお客様のスマホに即時配信されます（未登録のお客様にはマイページ内のみ表示）</p>
+                </div>
+              </div>
+
               {msg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: msg.includes("失敗") || msg.includes("入力") || msg.includes("選択") ? "#c4555518" : "#7ab88f18", color: msg.includes("失敗") || msg.includes("入力") || msg.includes("選択") ? "#c45555" : "#4a7c59" }}>{msg}</div>}
+              {pushResult && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: pushResult.includes("エラー") || pushResult.includes("失敗") ? "#c4555518" : "#85a8c418", color: pushResult.includes("エラー") || pushResult.includes("失敗") ? "#c45555" : "#4a7ca0" }}>{pushResult}</div>}
 
               <button onClick={handlePost} disabled={saving} className="px-6 py-3 text-white text-[12px] rounded-xl cursor-pointer disabled:opacity-60 font-medium"
                 style={{ background: "linear-gradient(135deg, #c3a782, #b09672)" }}>
-                {saving ? "投稿中..." : "📤 お知らせを投稿する"}
+                {saving ? "投稿中..." : sendPush ? "📤 お知らせ投稿 + 🔔 プッシュ通知" : "📤 お知らせを投稿する"}
               </button>
             </div>
           </div>
