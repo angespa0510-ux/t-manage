@@ -7,6 +7,7 @@ import TaxBookkeeping from "../../components/TaxBookkeeping";
 import { useTheme } from "../../lib/theme";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
 import { useConfirm } from "../../components/useConfirm";
+import PushToggle from "../../components/PushToggle";
 
 /* ───────── 型定義 ───────── */
 type Therapist = {
@@ -524,6 +525,17 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         {tab === "home" && (<div className="space-y-4">
           {todayShift ? ((() => { const bldName = getBuildingForDate(today); const rmName = getRoomForDate(today); const keyNum = getKeyNumberForDate(today); return (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: T.textMuted }}>{todayShift.store_id > 0 && <span>🏠 {getStoreName(todayShift.store_id)}</span>}{bldName && <span>🏢 {bldName}</span>}{rmName && <span>🚪 {rmName}</span>}{keyNum && <span style={{ color: "#c3a782", fontWeight: 500 }}>🔑 {keyNum}</span>}</div></div>); })()) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
           <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
+
+          {/* 🔔 プッシュ通知設定 */}
+          {therapist && (
+            <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[12px] font-medium">🔔 プッシュ通知</p>
+                <p className="text-[9px]" style={{ color: T.textMuted }}>シフト確定・お知らせ</p>
+              </div>
+              <PushToggle userType="therapist" userId={therapist.id} className="w-full" />
+            </div>
+          )}
 
           {/* マニュアル未読通知 */}
           {(() => {

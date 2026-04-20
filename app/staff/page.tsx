@@ -10,6 +10,7 @@ import { useStaffSession } from "../../lib/staff-session";
 import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { isAdvanceEligible, runAutoSettlementIfDue, type StaffAdvance } from "../../lib/staff-advances";
 import { useConfirm } from "../../components/useConfirm";
+import PushToggle from "../../components/PushToggle";
 
 type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean; override_is_manager: boolean | null; override_can_tax_portal: boolean | null; override_can_cash_dashboard: boolean | null; advance_preset_amount: number | null };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
@@ -716,6 +717,18 @@ const openPaymentStatement = (sch: Schedule) => {
         {/* ========== Tab 1: Staff Management ========== */}
         {tab === "staff" && (
           <div className="space-y-4">
+            {/* 🔔 自分のプッシュ通知設定 */}
+            {activeStaff && (
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-[12px] font-medium">🔔 プッシュ通知設定（{activeStaff.name}）</p>
+                    <p className="text-[10px]" style={{ color: T.textMuted }}>重要なお知らせ・予約変更等の通知を受け取ります</p>
+                  </div>
+                </div>
+                <PushToggle userType="staff" userId={activeStaff.id} />
+              </div>
+            )}
             {/* PIN 未変更スタッフ警告（active で pin あり かつ pin_updated_at が NULL） */}
             {(() => {
               const unchangedPinStaffs = staffList.filter(s => s.status === "active" && s.pin && !s.pin_updated_at);
