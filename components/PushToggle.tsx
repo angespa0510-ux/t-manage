@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   enablePushNotifications,
   disablePushNotifications,
@@ -73,10 +74,17 @@ export default function PushToggle({ userType, userId, className = "" }: Props) 
   if (!supported) {
     return (
       <div
-        className={`rounded-xl p-3 text-[11px] ${className}`}
+        className={`rounded-xl p-3 ${className}`}
         style={{ backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}
       >
-        ⚠️ このブラウザは通知に対応していません
+        <p className="text-[11px] mb-2">⚠️ このブラウザは通知に対応していません</p>
+        <Link
+          href="/install-guide"
+          className="block text-center rounded-lg px-3 py-2 text-[11px] font-medium cursor-pointer"
+          style={{ backgroundColor: "#c3a782", color: "#ffffff", textDecoration: "none" }}
+        >
+          📱 ホーム画面に追加してアプリとして使う →
+        </Link>
       </div>
     );
   }
@@ -85,13 +93,22 @@ export default function PushToggle({ userType, userId, className = "" }: Props) 
   if (isIos && !standalone) {
     return (
       <div
-        className={`rounded-xl p-3 text-[11px] ${className}`}
+        className={`rounded-xl p-3 ${className}`}
         style={{ backgroundColor: "rgba(133,168,196,0.08)", color: T.text, border: `1px solid #85a8c4` }}
       >
-        📱 iPhoneで通知を受け取るには、<br />
-        ① 下部の「共有」ボタンをタップ<br />
-        ② 「ホーム画面に追加」を選択<br />
-        ③ ホーム画面のアイコンから開き直してください
+        <p className="text-[11px] mb-2">
+          📱 iPhoneで通知を受け取るには、<br />
+          ① 下部の「共有」ボタンをタップ<br />
+          ② 「ホーム画面に追加」を選択<br />
+          ③ ホーム画面のアイコンから開き直してください
+        </p>
+        <Link
+          href="/install-guide"
+          className="block text-center rounded-lg px-3 py-2 text-[11px] font-medium cursor-pointer"
+          style={{ backgroundColor: "#85a8c4", color: "#ffffff", textDecoration: "none" }}
+        >
+          📖 詳しい手順を見る →
+        </Link>
       </div>
     );
   }
