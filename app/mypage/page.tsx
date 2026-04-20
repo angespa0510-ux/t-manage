@@ -8,6 +8,7 @@ import { useTheme } from "../../lib/theme";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
+import InstallPrompt from "../../components/InstallPrompt";
 
 /* ───────── 型定義 ───────── */
 type Therapist = {
@@ -544,9 +545,10 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
       {ConfirmModalNode}
+      <InstallPrompt dismissKey="therapist" />
       <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{therapist?.name?.charAt(0) || "?"}</div><div><p className="text-[13px] font-medium">{therapist?.name}</p><p className="text-[8px]" style={{ color: T.textMuted }}>マイページ</p></div></div>
-        <div className="flex items-center gap-2"><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#fce4ec", color: "#d4687e" }}>ログアウト</button></div>
+        <div className="flex items-center gap-2"><button onClick={() => fetchData()} title="更新" className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>🔄</button><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#fce4ec", color: "#d4687e" }}>ログアウト</button></div>
       </div>
       <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
         {(() => {

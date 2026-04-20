@@ -265,6 +265,9 @@ export default function Home() {
 
         {/* Footer */}
         <div className="text-center mt-8">
+          <a href="/install-guide" className="inline-block mb-3 text-[11px] cursor-pointer" style={{ color: "#c3a782", textDecoration: "underline", textUnderlineOffset: 4 }}>
+            📱 アプリとして使う方法
+          </a>
           <p className="text-[11px] text-[#f0ece4]/20 font-light tracking-[0.5px]">
             &copy; 2026 チョップ. All rights reserved.
           </p>
