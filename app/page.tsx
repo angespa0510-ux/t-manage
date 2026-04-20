@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 
@@ -11,6 +11,44 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // PWA 起動時の自動リダイレクト
+  // ホーム画面アイコンから開いた時、以前ログイン中だったマイページへ自動遷移
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // スタンドアロン PWA として起動されたかチェック
+    type IosWindow = Window & { navigator: Navigator & { standalone?: boolean } };
+    const isStandalone =
+      (window as IosWindow).navigator.standalone === true ||
+      window.matchMedia?.("(display-mode: standalone)").matches;
+
+    if (!isStandalone) return;
+
+    // 優先順位: セラピスト > お客様 > スタッフ (該当するものへ遷移)
+    try {
+      // セラピストセッション
+      const therapistSession = localStorage.getItem("therapist_session");
+      if (therapistSession) {
+        router.replace("/mypage");
+        return;
+      }
+      // お客様セッション
+      const customerId = localStorage.getItem("customer_mypage_id");
+      if (customerId) {
+        router.replace("/customer-mypage");
+        return;
+      }
+      // スタッフセッション (tab閉じで消えるが、稀にあるかも)
+      const staffSession = sessionStorage.getItem("t-manage-staff");
+      if (staffSession) {
+        router.replace("/dashboard");
+        return;
+      }
+    } catch {
+      // localStorage/sessionStorage アクセス失敗時は何もしない
+    }
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,11 +107,29 @@ export default function Home() {
 
         {/* Login Card */}
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8 backdrop-blur-xl">
+          {/* マイページへの直接アクセス（セラピスト/お客様用） */}
+          <div className="mb-6 grid grid-cols-2 gap-2">
+            <a
+              href="/mypage"
+              className="block rounded-lg border border-[#c3a782]/20 bg-[#c3a782]/[0.04] px-3 py-2.5 text-center transition-all hover:bg-[#c3a782]/[0.1] hover:border-[#c3a782]/40"
+            >
+              <div className="text-[10px] text-[#f0ece4]/40 mb-0.5 tracking-wider">THERAPIST</div>
+              <div className="text-[12px] text-[#c3a782] font-medium">セラピスト</div>
+            </a>
+            <a
+              href="/customer-mypage"
+              className="block rounded-lg border border-[#e8849a]/20 bg-[#e8849a]/[0.04] px-3 py-2.5 text-center transition-all hover:bg-[#e8849a]/[0.1] hover:border-[#e8849a]/40"
+            >
+              <div className="text-[10px] text-[#f0ece4]/40 mb-0.5 tracking-wider">CUSTOMER</div>
+              <div className="text-[12px] text-[#e8849a] font-medium">お客様</div>
+            </a>
+          </div>
+
           {/* Divider */}
           <div className="flex items-center gap-4 mb-6">
             <div className="flex-1 h-px bg-white/[0.06]" />
             <span className="text-[10px] tracking-[2px] uppercase text-[#f0ece4]/30">
-              ログイン
+              スタッフログイン
             </span>
             <div className="flex-1 h-px bg-white/[0.06]" />
           </div>
