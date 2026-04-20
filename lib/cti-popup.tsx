@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import { supabase } from "./supabase";
 import { useTheme } from "./theme";
 
@@ -39,12 +40,44 @@ type CtiPopupData = {
 
 export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   const { T } = useTheme();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [popups, setPopups] = useState<CtiPopupData[]>([]);
   const [minimized, setMinimized] = useState<Record<number, boolean>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // CTIを表示しないパス（セラピスト/お客様/法人サイト等）
+  const ctiDisabled = (() => {
+    if (!pathname) return true; // 判定不能なら安全側で無効
+    const noCtiPaths = [
+      "/corporate",
+      "/customer-mypage",
+      "/mypage",
+      "/public-schedule",
+      "/confirm-email",
+      "/confirm-staff-email",
+      "/reservation-confirm",
+      "/camera",
+      "/install-guide",
+      "/contract-sign",
+      "/invoice-upload",
+      "/license-upload",
+      "/mynumber-upload",
+    ];
+    return noCtiPaths.some(p => pathname.startsWith(p));
+  })();
+
   useEffect(() => { setMounted(true); }, []);
+
+  // パス変更でCTI無効化ページに入ったら、既存ポップアップを即時クリア
+  useEffect(() => {
+    if (ctiDisabled && popups.length > 0) {
+      setPopups([]);
+      setMinimized({});
+    }
+    // popupsを依存に入れるとクリア後すぐ再発火するので除外
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctiDisabled]);
 
   // 着信音
   const playSound = useCallback(() => {
@@ -122,10 +155,8 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   // Supabase Realtime 購読
   const lastCallRef = useRef<{ phone: string; time: number }>({ phone: "", time: 0 });
   useEffect(() => {
-    // CTIはスタッフページのみ起動（corporate/customer-mypage/mypage等では無効）
-    const path = window.location.pathname;
-    const noCtiPaths = ["/corporate", "/customer-mypage", "/mypage", "/public-schedule", "/confirm-email", "/confirm-staff-email", "/reservation-confirm", "/camera"];
-    if (noCtiPaths.some(p => path.startsWith(p))) return;
+    // CTI無効化ページではチャンネルを張らない
+    if (ctiDisabled) return;
 
     const channel = supabase
       .channel("cti-calls-realtime")
@@ -151,7 +182,7 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fetchCustomerInfo, playSound]);
+  }, [ctiDisabled, fetchCustomerInfo, playSound]);
 
   // ポップアップ閉じる
   const dismissPopup = (callId: number) => {
@@ -181,7 +212,7 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      {mounted && createPortal(
+      {mounted && !ctiDisabled && createPortal(
         <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 10000, display: "flex", flexDirection: "column-reverse", gap: 12, maxHeight: "80vh", overflowY: "auto" }}>
           {popups.map((p, idx) => {
             const isMin = minimized[p.call.id];
