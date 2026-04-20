@@ -1,0 +1,52 @@
+{
+  "name": "T-MANAGE | チョップ",
+  "short_name": "T-MANAGE",
+  "description": "リラクゼーションサロン「チョップ」の統合管理システム",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f6f3",
+  "theme_color": "#c3a782",
+  "lang": "ja",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "お客様マイページ",
+      "short_name": "マイページ",
+      "description": "予約・歩数・ポイントを確認",
+      "url": "/customer-mypage"
+    },
+    {
+      "name": "セラピストマイページ",
+      "short_name": "セラピスト",
+      "description": "シフト・給料・マニュアル",
+      "url": "/mypage"
+    }
+  ]
+}
