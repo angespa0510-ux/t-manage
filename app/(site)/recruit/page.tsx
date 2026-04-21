@@ -91,7 +91,8 @@ export default function RecruitPage() {
         label="RECRUIT"
         title="セラピスト募集"
         subtitle="一緒に働いてくれる仲間を募集しています。未経験の方も大歓迎、丁寧にサポートいたします。"
-        bgImage="/images/placeholder/recruit.jpg"
+        bgVideo="/videos/recruit.mp4"
+        bgVideoPoster="/videos/recruit-poster.jpg"
       />
 
       {/* ───── MESSAGE ───── */}

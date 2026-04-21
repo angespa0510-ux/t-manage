@@ -536,20 +536,30 @@ export default function HomePage() {
           }}
           className="site-recruit-grid"
         >
-          {/* image: 求人バナー / 1200x800 / ピンク基調・明るく前向き / alt="Ange Spa 求人バナー" */}
+          {/* image: 求人バナー / 動画あり / alt="Ange Spa 求人案内" */}
           <div
             style={{
               position: "relative",
               aspectRatio: "16 / 10",
               backgroundColor: SITE.color.surfaceAlt,
+              overflow: "hidden",
             }}
           >
-            <Image
-              src="/images/placeholder/recruit.jpg"
-              alt="Ange Spa 求人案内"
-              fill
-              style={{ objectFit: "cover" }}
-              sizes="(min-width: 768px) 50vw, 100vw"
+            <video
+              src="/videos/recruit.mp4"
+              poster="/videos/recruit-poster.jpg"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="metadata"
+              aria-label="Ange Spa 求人案内動画"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+              }}
             />
           </div>
           <div

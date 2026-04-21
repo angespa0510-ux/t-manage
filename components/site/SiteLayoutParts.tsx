@@ -67,17 +67,22 @@ export function ViewMoreButton({
  * PageHero — 下層ページの共通上部ヒーロー
  *
  * 背景画像 + 英文ラベル + 和文タイトル + 下に細罫線
+ * bgVideo が指定されたらそちらを優先して動画背景で表示
  */
 export function PageHero({
   label,
   title,
   subtitle,
   bgImage,
+  bgVideo,
+  bgVideoPoster,
 }: {
   label: string;
   title: string;
   subtitle?: string;
   bgImage?: string;
+  bgVideo?: string;
+  bgVideoPoster?: string;
 }) {
   return (
     <section
@@ -93,7 +98,35 @@ export function PageHero({
         backgroundColor: SITE.color.bgSoft,
       }}
     >
-      {bgImage && (
+      {bgVideo ? (
+        <>
+          <video
+            src={bgVideo}
+            poster={bgVideoPoster}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.80) 100%)",
+            }}
+          />
+        </>
+      ) : bgImage ? (
         <>
           <div
             style={{
@@ -113,7 +146,7 @@ export function PageHero({
             }}
           />
         </>
-      )}
+      ) : null}
       <div
         style={{
           position: "relative",
