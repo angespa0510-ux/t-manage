@@ -182,7 +182,7 @@ export default function HomePage() {
           backgroundColor: SITE.color.bgSoft,
         }}
       >
-        {/* 背景画像（ピンク×光の雰囲気写真） */}
+        {/* 背景動画（ピンク夕焼け屋上ブランドルック） */}
         <div
           style={{
             position: "absolute",
@@ -191,18 +191,22 @@ export default function HomePage() {
           }}
           className="site-hero-bg"
         >
-          <Image
-            src="/images/placeholder/top-hero.jpg"
-            alt="Ange Spa トップビジュアル"
-            fill
-            priority
+          <video
+            src="/videos/hero.mp4"
+            poster="/videos/hero-poster.jpg"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            aria-hidden="true"
             style={{
+              width: "100%",
+              height: "100%",
               objectFit: "cover",
               // モバイル: 人物が右にいるので右寄り中央を見せる
-              // デスクトップ: スタイル側で上書き
               objectPosition: "65% center",
             }}
-            sizes="100vw"
           />
           {/* 文字可読性のための微細オーバーレイ
               画像の鮮やかさを活かすため、左側だけ薄い白のグラデを入れる */}
@@ -390,6 +394,31 @@ export default function HomePage() {
           ② CONCEPT
           ═══════════════════════════════════════════════ */}
       <SectionBlock label="CONCEPT" title="私たちについて">
+        {/* image: 手元の花束（夕焼け・ラベンダー・ボケ玉）/ 1600x1000 / alt="Ange Spa コンセプト" */}
+        <div
+          style={{
+            maxWidth: SITE.layout.maxWidthNarrow,
+            margin: `0 auto ${SITE.sp.xl}`,
+            aspectRatio: "16 / 10",
+            overflow: "hidden",
+            backgroundColor: SITE.color.surfaceAlt,
+          }}
+        >
+          <Image
+            src="/images/placeholder/concept.jpg"
+            alt="Ange Spa コンセプト"
+            width={1600}
+            height={1000}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+            sizes="(min-width: 768px) 880px, 100vw"
+          />
+        </div>
+
         <div
           style={{
             textAlign: "center",
@@ -792,8 +821,9 @@ export default function HomePage() {
           /* デスクトップでは左寄せの白グラデを使う */
           .site-hero-overlay { display: block; }
           .site-hero-overlay-mobile { display: none; }
-          /* デスクトップでは画像の中央寄りを見せて、左に空を多めに */
-          .site-hero-bg img {
+          /* デスクトップでは画像/動画の中央寄りを見せて、左に空を多めに */
+          .site-hero-bg img,
+          .site-hero-bg video {
             object-position: center center !important;
           }
         }
