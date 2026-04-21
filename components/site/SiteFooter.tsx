@@ -19,6 +19,7 @@ const FOOTER_NAV = [
   { label: "スケジュール", path: "/schedule" },
   { label: "アクセス",     path: "/access" },
   { label: "求人",         path: "/recruit" },
+  { label: "お問い合わせ", path: "/contact" },
 ];
 
 const LEGAL_NAV = [
