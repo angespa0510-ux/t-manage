@@ -199,7 +199,7 @@ export default function TherapistListPage() {
           padding: `${SITE.sp.xxl} ${SITE.sp.lg} ${SITE.sp.section}`,
           backgroundColor: "#fdf5f7",
           backgroundImage: "url('/patterns/marble-bg.webp')",
-          backgroundSize: "600px 600px",
+          backgroundSize: "1200px 1200px",
           backgroundRepeat: "repeat",
           backgroundAttachment: "fixed",
           marginBottom: `calc(-1 * ${SITE.sp.section})`,
