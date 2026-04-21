@@ -139,13 +139,12 @@ export function generateContractCertificate(store: StoreInfo, th: PersonInfo, ki
 }
 
 /** ② 報酬支払証明書（収入証明） */
-export function generatePaymentCertificate(store: StoreInfo, th: PersonInfo, payment: PaymentInfo, _kind: PersonKind = "therapist") {
-  const w = window.open("", "_blank");
-  if (!w) return;
+/** ② 報酬支払証明書（収入証明）HTMLを返す */
+export function generatePaymentCertificateHtml(store: StoreInfo, th: PersonInfo, payment: PaymentInfo, _kind: PersonKind = "therapist"): string {
   const monthRows = payment.months.map(m =>
     `<tr><td class="center">${payment.year}年${m.month}月</td><td class="right">${fmt(m.amount)}円</td><td class="center">${m.days}日</td></tr>`
   ).join("");
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>報酬支払証明書_${payment.year}_${th.real_name}</title><style>${baseStyle}</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>報酬支払証明書_${payment.year}_${th.real_name}</title><style>${baseStyle}</style></head><body>
     ${docHeader("報酬支払証明書", "Certificate of Remuneration Payment", genDocNo("RP"))}
 
     <p class="section-title">証明対象者</p>
@@ -175,7 +174,13 @@ export function generatePaymentCertificate(store: StoreInfo, th: PersonInfo, pay
 
     ${companyBlock(store)}
     ${noteBlock}
-  </body></html>`);
+  </body></html>`;
+}
+
+export function generatePaymentCertificate(store: StoreInfo, th: PersonInfo, payment: PaymentInfo, kind: PersonKind = "therapist") {
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(generatePaymentCertificateHtml(store, th, payment, kind));
   w.document.close();
 }
 

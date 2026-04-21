@@ -7,7 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useToast } from "../../lib/toast";
-import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
+import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate, generatePaymentCertificateHtml } from "../../lib/certificate-pdf";
 import JSZip from "jszip";
 import { useConfirm } from "../../components/useConfirm";
 
@@ -18,7 +18,7 @@ export default function TaxDashboard() {
   const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, canAccessCashDashboard } = useStaffSession();
 
-  const [dashTab, setDashTab] = useState<"company" | "mynumber" | "certificate" | "vendors" | "documents">("certificate");
+  const [dashTab, setDashTab] = useState<"company" | "mynumber" | "certificate" | "vendors" | "documents" | "delivery">("certificate");
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
   const [corporateNumber, setCorporateNumber] = useState(""); const [fiscalMonth, setFiscalMonth] = useState(3); const [representativeName, setRepresentativeName] = useState(""); const [entityType, setEntityType] = useState("llc"); const [taxOffice, setTaxOffice] = useState(""); const [taxAccountantName, setTaxAccountantName] = useState(""); const [taxAccountantPhone, setTaxAccountantPhone] = useState(""); const [taxAccountantAddress, setTaxAccountantAddress] = useState(""); const [laborConsultantName, setLaborConsultantName] = useState(""); const [laborConsultantPhone, setLaborConsultantPhone] = useState("");
   // コーポレートサイト用
@@ -69,7 +69,7 @@ export default function TaxDashboard() {
           <h1 className="text-[14px] font-medium">バックオフィス</h1>
           </div>
         <div className="flex items-center gap-2">
-          {[{k:"certificate",l:"📄 証明書発行"},{k:"vendors",l:"💼 取引先"},{k:"documents",l:"📋 書類テンプレ"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
+          {[{k:"certificate",l:"📄 証明書発行"},{k:"delivery",l:"📨 書類配信"},{k:"vendors",l:"💼 取引先"},{k:"documents",l:"📋 書類テンプレ"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
             <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
           ))}
         </div>
@@ -94,6 +94,11 @@ export default function TaxDashboard() {
       {dashTab === "documents" && (
         <div className="flex-1 overflow-y-auto p-4">
           <DocumentTemplatesManager T={T} activeStaff={activeStaff} />
+        </div>
+      )}
+      {dashTab === "delivery" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <DocumentDeliveryManager T={T} activeStaff={activeStaff} />
         </div>
       )}
       {dashTab === "company" && (
@@ -2112,6 +2117,444 @@ function DocumentTemplatesManager({ T, activeStaff }: { T: any; activeStaff: any
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any }) {
+  type Recipient = {
+    id: number;
+    name: string;
+    real_name: string | null;
+    address: string | null;
+    entry_date: string | null;
+    login_email?: string | null;   // セラピストのみ
+    email?: string | null;         // スタッフの場合
+    status: string;
+  };
+  type Delivery = {
+    id: number;
+    recipient_kind: string;
+    recipient_id: number;
+    recipient_name: string;
+    recipient_email: string;
+    document_kind: string;
+    target_year: number | null;
+    subject: string;
+    message: string;
+    attachment_url: string;
+    attachment_name: string;
+    delivery_channel: string;
+    status: string;
+    error_message: string;
+    delivered_at: string | null;
+    batch_id: string | null;
+    created_by_name: string;
+    created_at: string;
+  };
+
+  const toast = useToast();
+  const { confirm, ConfirmModalNode } = useConfirm();
+
+  const [kind, setKind] = useState<"therapist" | "staff">("therapist");
+  const [therapists, setTherapists] = useState<Recipient[]>([]);
+  const [staffs, setStaffs] = useState<Recipient[]>([]);
+  const [storeInfo, setStoreInfo] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [search, setSearch] = useState("");
+  const [year, setYear] = useState(new Date().getFullYear() - 1); // 前年がデフォルト（年明けの配信想定）
+
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number; success: number; failed: number } | null>(null);
+
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<"all" | "sent" | "failed" | "pending">("all");
+
+  useEffect(() => { setSelectedIds([]); setSearch(""); }, [kind]);
+
+  const fetchAll = useCallback(async () => {
+    const { data: th } = await supabase.from("therapists").select("id, name, real_name, address, entry_date, login_email, status").neq("status", "trash").order("sort_order");
+    if (th) setTherapists(th as Recipient[]);
+    const { data: st } = await supabase.from("staff").select("id, name, real_name, address, entry_date, email, status").neq("status", "trash").order("id");
+    if (st) setStaffs(st as Recipient[]);
+    const { data: si } = await supabase.from("stores").select("company_name, company_address, company_phone, representative_name");
+    if (si?.[0]) setStoreInfo({
+      company_name: si[0].company_name || "",
+      company_address: si[0].company_address || "",
+      company_phone: si[0].company_phone || "",
+      representative: si[0].representative_name || "",
+    });
+    const { data: d } = await supabase.from("document_deliveries").select("*").order("created_at", { ascending: false }).limit(100);
+    if (d) setDeliveries(d as Delivery[]);
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const people = kind === "therapist" ? therapists : staffs;
+  const filtered = people.filter(p => !search || p.name.includes(search) || (p.real_name || "").includes(search));
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const selectAll = () => setSelectedIds(filtered.filter(p => p.status === "active").map(p => p.id));
+  const clearAll = () => setSelectedIds([]);
+
+  // 支払合計を取得（セラピスト/スタッフ別）
+  const fetchPayment = async (personId: number, targetYear: number) => {
+    const months: { month: number; amount: number; days: number }[] = [];
+    if (kind === "therapist") {
+      const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", personId).gte("date", `${targetYear}-01-01`).lte("date", `${targetYear}-12-31`);
+      for (let m = 1; m <= 12; m++) {
+        const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
+        months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length });
+      }
+    } else {
+      const { data: sch } = await supabase.from("staff_schedules").select("date, commission_fee, night_premium, license_premium").eq("staff_id", personId).eq("status", "completed").gte("date", `${targetYear}-01-01`).lte("date", `${targetYear}-12-31`);
+      for (let m = 1; m <= 12; m++) {
+        const ms = (sch || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
+        months.push({
+          month: m,
+          amount: ms.reduce((a: number, s: any) => a + (s.commission_fee || 0) + (s.night_premium || 0) + (s.license_premium || 0), 0),
+          days: ms.length,
+        });
+      }
+    }
+    return { year: targetYear, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months };
+  };
+
+  // HTMLをStorageにアップロード → 公開URL取得
+  const uploadHtml = async (htmlContent: string, fileName: string): Promise<{ url: string; path: string } | null> => {
+    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+    const path = `payment-certificates/${year}/${Date.now()}_${crypto.randomUUID()}.html`;
+    const { error } = await supabase.storage.from("tax-documents").upload(path, blob, { upsert: false, contentType: "text/html" });
+    if (error) return null;
+    const { data } = supabase.storage.from("tax-documents").getPublicUrl(path);
+    return { url: data.publicUrl, path };
+  };
+
+  // 一括配信実行
+  const executeDelivery = async () => {
+    if (selectedIds.length === 0) { toast.show("配信対象を選択してください", "error"); return; }
+    if (!storeInfo) { toast.show("会社情報が読み込めていません", "error"); return; }
+    if (!subject.trim()) { toast.show("件名を入力してください", "error"); return; }
+
+    const ok = await confirm({
+      title: `${selectedIds.length}名に支払調書を配信しますか？`,
+      message: `対象年度: ${year}年\n配信チャネル: ${kind === "therapist" ? "📱 マイページ通知" : "📧 メール送信"}\n\n実行すると全員に一斉に配信されます。この操作は取り消せません。`,
+      variant: "warning",
+      confirmLabel: `${selectedIds.length}名に配信`,
+      cancelLabel: "キャンセル",
+    });
+    if (!ok) return;
+
+    setSending(true);
+    const batchId = crypto.randomUUID();
+    const targets = people.filter(p => selectedIds.includes(p.id));
+    setProgress({ current: 0, total: targets.length, success: 0, failed: 0 });
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i];
+      setProgress({ current: i + 1, total: targets.length, success: successCount, failed: failedCount });
+      try {
+        // 1. 支払データ取得
+        const payment = await fetchPayment(p.id, year);
+        // 2. HTML生成
+        const th = { real_name: p.real_name || p.name, name: p.name, address: p.address || "", entry_date: p.entry_date || "" };
+        const html = generatePaymentCertificateHtml(storeInfo, th, payment, kind);
+        // 3. Storage にアップロード
+        const fileName = `支払調書_${year}_${p.real_name || p.name}.html`;
+        const up = await uploadHtml(html, fileName);
+        if (!up) throw new Error("Storageアップロード失敗");
+
+        // 4. 配信ログに pending で記録
+        const recipientEmail = (kind === "therapist" ? p.login_email : p.email) || "";
+        const attachmentName = `支払調書_${year}_${p.real_name || p.name}.html`;
+        const { data: delivery, error: de } = await supabase.from("document_deliveries").insert({
+          recipient_kind: kind,
+          recipient_id: p.id,
+          recipient_name: p.real_name || p.name,
+          recipient_email: recipientEmail,
+          document_kind: "payment_certificate",
+          target_year: year,
+          subject: subject.trim(),
+          message: message.trim() || `${year}年分の支払調書をお送りいたします。詳細は添付ファイルをご確認ください。`,
+          attachment_url: up.url,
+          attachment_name: attachmentName,
+          delivery_channel: kind === "therapist" ? "notification" : "email",
+          status: "pending",
+          batch_id: batchId,
+          created_by_name: activeStaff?.name || "",
+        }).select("id").single();
+        if (de || !delivery) throw new Error(de?.message || "配信ログ作成失敗");
+
+        // 5a. セラピスト: therapist_notifications にマイページ通知を作成
+        if (kind === "therapist") {
+          const bodyWithLink = `${(message.trim() || `${year}年分の支払調書をお送りいたします。`)}\n\n📎 ${attachmentName}\n${up.url}`;
+          const { error: ne } = await supabase.from("therapist_notifications").insert({
+            title: subject.trim(),
+            body: bodyWithLink,
+            type: "info",
+            target_therapist_id: p.id,
+          });
+          if (ne) throw new Error(ne.message);
+          // 配信ログを完了に
+          await supabase.from("document_deliveries")
+            .update({ status: "sent", delivered_at: new Date().toISOString() })
+            .eq("id", delivery.id);
+          successCount++;
+        } else {
+          // 5b. スタッフ: /api/deliver-email にPOSTしてメール送信
+          if (!recipientEmail) throw new Error("メールアドレスが登録されていません");
+          const res = await fetch("/api/deliver-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: recipientEmail,
+              subject: subject.trim(),
+              body: message.trim() || `${p.real_name || p.name} 様\n\n${year}年分の支払調書をお送りいたします。\nリンクをクリックして内容をご確認ください。必要に応じて印刷・PDF保存してください。`,
+              attachment_url: up.url,
+              attachment_name: attachmentName,
+              delivery_id: delivery.id,
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: "不明なエラー" }));
+            throw new Error(err.error || "メール送信失敗");
+          }
+          successCount++;
+        }
+      } catch (e: any) {
+        failedCount++;
+        // エラー時も配信ログに記録（既にinsertされているものは上書き、されていないものは新規）
+        await supabase.from("document_deliveries").insert({
+          recipient_kind: kind,
+          recipient_id: p.id,
+          recipient_name: p.real_name || p.name,
+          recipient_email: (kind === "therapist" ? p.login_email : p.email) || "",
+          document_kind: "payment_certificate",
+          target_year: year,
+          subject: subject.trim(),
+          message: message.trim(),
+          delivery_channel: kind === "therapist" ? "notification" : "email",
+          status: "failed",
+          error_message: (e.message || String(e)).slice(0, 500),
+          batch_id: batchId,
+          created_by_name: activeStaff?.name || "",
+        });
+      }
+    }
+
+    setProgress({ current: targets.length, total: targets.length, success: successCount, failed: failedCount });
+    setSending(false);
+    toast.show(`配信完了: 成功 ${successCount}件 / 失敗 ${failedCount}件`, failedCount === 0 ? "success" : "error");
+    setSelectedIds([]);
+    await fetchAll();
+  };
+
+  const filteredDeliveries = deliveries.filter(d => historyFilter === "all" || d.status === historyFilter);
+
+  const DOC_KIND_LABELS: Record<string, string> = {
+    payment_certificate: "💰 支払調書",
+    contract_certificate: "📝 業務委託契約証明",
+    transaction_certificate: "📊 取引実績証明",
+    template: "📋 テンプレート",
+    custom: "✉️ カスタム",
+  };
+  const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+    pending: { label: "送信中", color: "#f59e0b" },
+    sent: { label: "✓ 送信済", color: "#22c55e" },
+    failed: { label: "✕ 失敗", color: "#c45555" },
+  };
+
+  const inputStyle: React.CSSProperties = { backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text };
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", animation: "fadeIn 0.3s" }}>
+      {ConfirmModalNode}
+
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-[16px] font-medium">📨 書類の一括配信</h2>
+          <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>支払調書などの個人向け書類を複数人に一斉送信</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-[11px]" style={{ color: T.textSub }}>
+            対象年度
+            <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-2 py-1 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+              {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}年</option>)}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {/* 配信対象タブ */}
+      <div className="flex items-center gap-1 mb-4">
+        {([["therapist", "💆 セラピストへ（マイページ通知）"], ["staff", "👥 スタッフへ（メール送信）"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setKind(k as any)} disabled={sending} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer font-medium" style={{ backgroundColor: kind === k ? "#c3a78218" : "transparent", color: kind === k ? "#c3a782" : T.textMuted, border: `1px solid ${kind === k ? "#c3a78244" : T.border}`, opacity: sending ? 0.5 : 1 }}>{l}</button>
+        ))}
+      </div>
+
+      <div className="grid gap-4" style={{ gridTemplateColumns: "380px 1fr" }}>
+        {/* 対象者選択 */}
+        <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-medium">配信対象（{selectedIds.length}名選択中）</p>
+            <div className="flex gap-1">
+              <button onClick={selectAll} disabled={sending} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>全選択</button>
+              <button onClick={clearAll} disabled={sending} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textFaint, backgroundColor: T.cardAlt }}>クリア</button>
+            </div>
+          </div>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 名前で検索" className="w-full px-3 py-2 rounded-lg text-[11px] outline-none mb-3" style={inputStyle} />
+          <div className="space-y-1 overflow-y-auto" style={{ maxHeight: 380 }}>
+            {filtered.length === 0 && <p className="text-[10px] text-center py-6" style={{ color: T.textFaint }}>該当者なし</p>}
+            {filtered.map(p => {
+              const email = kind === "therapist" ? p.login_email : p.email;
+              const canDeliver = kind === "therapist" ? true : !!email;
+              return (
+                <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-[11px]" style={{ backgroundColor: selectedIds.includes(p.id) ? "#c3a78215" : "transparent", opacity: canDeliver ? 1 : 0.4 }}>
+                  <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelect(p.id)} disabled={!canDeliver || sending} />
+                  <span style={{ fontWeight: 500 }}>{p.name}</span>
+                  {p.real_name && p.real_name !== p.name && <span className="text-[9px]" style={{ color: T.textFaint }}>({p.real_name})</span>}
+                  <span className="ml-auto text-[8px]" style={{ color: email ? T.textSub : "#c45555" }}>
+                    {kind === "therapist" ? "📱" : (email ? "📧" : "📧なし")}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* メッセージ編集と配信実行 */}
+        <div className="space-y-3">
+          <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <p className="text-[11px] font-medium mb-3">📝 配信内容（全員に同じ内容が送信されます）</p>
+            <div className="space-y-2">
+              <div>
+                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>件名 *</label>
+                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder={`例: ${year}年分 支払調書のご送付`} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                <div className="flex gap-1 mt-1 flex-wrap">
+                  <button onClick={() => setSubject(`【重要】${year}年分 支払調書のご送付`)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>テンプレ: 重要</button>
+                  <button onClick={() => setSubject(`${year}年分 報酬支払証明書のご案内`)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>テンプレ: 通常</button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>本文</label>
+                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={6} placeholder={`${year}年分の支払調書をお送りいたします。\n添付のリンクから内容をご確認ください。\n確定申告の際にご利用ください。\n\nご不明な点がございましたらお気軽にお問い合わせください。`} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none resize-none" style={inputStyle} />
+                <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>💡 空欄の場合は既定の文面が自動挿入されます。{kind === "staff" ? "メール末尾に添付リンクが自動付与されます。" : "通知末尾に支払調書URLが自動付与されます。"}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 進捗表示 */}
+          {progress && (
+            <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-medium">{sending ? "⏳ 配信中..." : "✅ 配信完了"}</p>
+                <p className="text-[10px]" style={{ color: T.textMuted }}>{progress.current} / {progress.total}</p>
+              </div>
+              <div className="w-full h-2 rounded overflow-hidden mb-2" style={{ backgroundColor: T.cardAlt }}>
+                <div style={{ width: `${(progress.current / progress.total) * 100}%`, height: "100%", backgroundColor: "#c3a782", transition: "width 0.3s" }} />
+              </div>
+              <div className="flex gap-4 text-[10px]" style={{ color: T.textSub }}>
+                <span style={{ color: "#22c55e" }}>✓ 成功 {progress.success}</span>
+                {progress.failed > 0 && <span style={{ color: "#c45555" }}>✕ 失敗 {progress.failed}</span>}
+              </div>
+            </div>
+          )}
+
+          {/* 実行ボタン */}
+          <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <button onClick={executeDelivery} disabled={sending || selectedIds.length === 0 || !subject.trim()} className="w-full px-6 py-3 rounded-xl text-[13px] cursor-pointer text-white font-medium" style={{ backgroundColor: "#c3a782", opacity: sending || selectedIds.length === 0 || !subject.trim() ? 0.4 : 1 }}>
+              {sending ? "配信中..." : `🚀 ${selectedIds.length}名に${year}年分 支払調書を配信`}
+            </button>
+            <p className="text-[9px] mt-2 text-center" style={{ color: T.textFaint }}>
+              {kind === "therapist" ? "セラピストのマイページに通知が届き、リンクから支払調書を閲覧できます" : "スタッフの登録メールアドレスに本文とリンクが送信されます"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 配信履歴 */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[13px] font-medium">📋 配信履歴（直近100件）</h3>
+          <div className="flex items-center gap-1 rounded border p-0.5" style={{ borderColor: T.border }}>
+            {([["all", "全て"], ["sent", "✓送信済"], ["failed", "✕失敗"], ["pending", "送信中"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setHistoryFilter(k)} className="px-2 py-0.5 rounded text-[10px] cursor-pointer" style={{ backgroundColor: historyFilter === k ? "#c3a78218" : "transparent", color: historyFilter === k ? "#c3a782" : T.textMuted }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          {filteredDeliveries.length === 0 ? (
+            <p className="text-[11px] text-center py-6" style={{ color: T.textFaint }}>配信履歴がまだありません</p>
+          ) : (
+            <table className="w-full" style={{ fontSize: 11 }}>
+              <thead style={{ backgroundColor: T.cardAlt, color: T.textSub, fontSize: 10 }}>
+                <tr>
+                  <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>日時</th>
+                  <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>対象</th>
+                  <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>書類</th>
+                  <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>件名</th>
+                  <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 90 }}>状態</th>
+                  <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 80 }}>添付</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDeliveries.map(d => {
+                  const st = STATUS_LABELS[d.status] || STATUS_LABELS.pending;
+                  const dt = new Date(d.created_at);
+                  return (
+                    <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: "6px 10px", color: T.textSub, fontSize: 10, whiteSpace: "nowrap" }}>
+                        {dt.getMonth() + 1}/{dt.getDate()} {String(dt.getHours()).padStart(2, "0")}:{String(dt.getMinutes()).padStart(2, "0")}
+                      </td>
+                      <td style={{ padding: "6px 10px" }}>
+                        <span>{d.recipient_name}</span>
+                        <span className="text-[9px] ml-1" style={{ color: T.textFaint }}>
+                          {d.delivery_channel === "email" ? "📧" : "📱"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "6px 10px", color: T.textSub, fontSize: 10 }}>
+                        {DOC_KIND_LABELS[d.document_kind] || d.document_kind}
+                        {d.target_year && <span className="text-[9px] ml-1" style={{ color: T.textFaint }}>({d.target_year}年)</span>}
+                      </td>
+                      <td style={{ padding: "6px 10px", color: T.textSub, fontSize: 10 }}>{d.subject}</td>
+                      <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                        <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: st.color + "18", color: st.color }} title={d.error_message || ""}>
+                          {st.label}
+                        </span>
+                      </td>
+                      <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                        {d.attachment_url ? (
+                          <a href={d.attachment_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>開く</a>
+                        ) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* 注意事項 */}
+      <div className="rounded-xl p-4 mt-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78233" }}>
+        <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 一括配信の使い方</p>
+        <div className="text-[10px] leading-relaxed space-y-1" style={{ color: T.textSub }}>
+          <p>• 支払調書を配信する前に、対象年度の売上データが集計済みであることを確認してください。</p>
+          <p>• セラピストには各自のマイページに通知として届き、本文のリンクから支払調書HTMLを開けます。</p>
+          <p>• スタッフには登録メールアドレスに本文＋リンクが送られます。<strong>メール未登録のスタッフは配信できません</strong>。</p>
+          <p>• 添付ファイルは HTML 形式で、受信者側でブラウザで開き、必要に応じて Ctrl+P → PDF 保存できます。</p>
+          <p>• 失敗した配信は履歴から確認できます。再配信する場合は「対象者選択」からやり直してください。</p>
+        </div>
+      </div>
     </div>
   );
 }
