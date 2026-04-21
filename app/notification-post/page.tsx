@@ -11,6 +11,7 @@ type Notification = {
   id: number; title: string; body: string; type: string;
   image_url: string | null; target_customer_id: number | null;
   created_at: string;
+  show_on_hp?: boolean;
 };
 type Customer = { id: number; name: string; phone: string; rank: string };
 
@@ -34,6 +35,9 @@ export default function NotificationPost() {
   // 🔔 プッシュ通知も同時送信するか
   const [sendPush, setSendPush] = useState(true);
   const [pushResult, setPushResult] = useState("");
+  // 🌐 HP(トップページ)の「最新のお知らせ」セクションにも表示するか
+  //    （target_customer_id が NULL = 全員向け のときのみ有効）
+  const [showOnHp, setShowOnHp] = useState(false);
 
   const fetchData = useCallback(async () => {
     const { data: n } = await supabase.from("customer_notifications").select("*").order("created_at", { ascending: false }).limit(50);
@@ -62,6 +66,7 @@ export default function NotificationPost() {
       const { error } = await supabase.from("customer_notifications").insert({
         title: title.trim(), body: body.trim(), type,
         target_customer_id: null, image_url: null,
+        show_on_hp: showOnHp,
       });
       if (error) { setMsg("投稿失敗: " + error.message); setSaving(false); return; }
       pushBroadcast = true;
@@ -71,6 +76,7 @@ export default function NotificationPost() {
         await supabase.from("customer_notifications").insert({
           title: title.trim(), body: body.trim(), type,
           target_customer_id: c.id, image_url: null,
+          show_on_hp: false,
         });
       }
       pushUserIds = filtered.map(c => c.id);
@@ -79,6 +85,7 @@ export default function NotificationPost() {
       const { error } = await supabase.from("customer_notifications").insert({
         title: title.trim(), body: body.trim(), type,
         target_customer_id: targetCustomerId, image_url: null,
+        show_on_hp: false,
       });
       if (error) { setMsg("投稿失敗: " + error.message); setSaving(false); return; }
       pushUserIds = [targetCustomerId];
@@ -121,6 +128,7 @@ export default function NotificationPost() {
     setSaving(false);
     setMsg("お知らせを投稿しました！");
     setTitle(""); setBody(""); setTargetCustomerId(0); setCustSearch("");
+    setShowOnHp(false);
     fetchData();
     setTimeout(() => { setMsg(""); setPushResult(""); }, 5000);
   };
@@ -257,6 +265,38 @@ export default function NotificationPost() {
                 </div>
               </div>
 
+              {/* 🌐 HP公開オプション（全員向けのときのみ有効） */}
+              <div
+                className={`rounded-xl p-3 flex items-start gap-3 select-none ${targetMode === "all" ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+                style={{
+                  backgroundColor: targetMode === "all" && showOnHp ? "rgba(232,132,154,0.08)" : T.cardAlt,
+                  border: `1px solid ${targetMode === "all" && showOnHp ? "#e8849a" : T.border}`,
+                }}
+                onClick={() => { if (targetMode === "all") setShowOnHp(!showOnHp); }}
+              >
+                <div
+                  className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{
+                    backgroundColor: targetMode === "all" && showOnHp ? "#e8849a" : T.card,
+                    border: `1px solid ${targetMode === "all" && showOnHp ? "#e8849a" : T.textMuted}`,
+                  }}
+                >
+                  {targetMode === "all" && showOnHp && <span className="text-white text-[12px] leading-none">✓</span>}
+                </div>
+                <div className="flex-1">
+                  <p className="text-[12px] font-medium">🌐 公式HPトップの「最新のお知らせ」にも公開する</p>
+                  {targetMode === "all" ? (
+                    <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>
+                      HP (ange-spa.com) のトップページに表示されます。未ログインの訪問者にも見えるため、営業時間変更・お祝い告知・大型キャンペーンなど広く知らせたい内容向けです。
+                    </p>
+                  ) : (
+                    <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>
+                      全員向け（対象 : 全お客様）のときのみ指定できます。特定会員・ランク向けの通知は HP には掲載できません。
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {msg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: msg.includes("失敗") || msg.includes("入力") || msg.includes("選択") ? "#c4555518" : "#7ab88f18", color: msg.includes("失敗") || msg.includes("入力") || msg.includes("選択") ? "#c45555" : "#4a7c59" }}>{msg}</div>}
               {pushResult && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: pushResult.includes("エラー") || pushResult.includes("失敗") ? "#c4555518" : "#85a8c418", color: pushResult.includes("エラー") || pushResult.includes("失敗") ? "#c45555" : "#4a7ca0" }}>{pushResult}</div>}
 
@@ -287,6 +327,9 @@ export default function NotificationPost() {
                             <span className="text-[9px]" style={{ color: T.textFaint }}>👤 {customers.find(c => c.id === n.target_customer_id)?.name || `ID:${n.target_customer_id}`}</span>
                           ) : (
                             <span className="text-[9px]" style={{ color: T.textFaint }}>📣 全員</span>
+                          )}
+                          {n.show_on_hp && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#e8849a22", color: "#c96b83" }}>🌐 HP公開</span>
                           )}
                         </div>
                         <p className="text-[12px] font-medium truncate">{n.title}</p>

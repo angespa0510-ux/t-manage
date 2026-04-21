@@ -38,7 +38,7 @@ export default function SiteHeader() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { customer, isLoggedIn, loading, logout } = useCustomerAuth();
+  const { customer, isLoggedIn, loading, logout, summary } = useCustomerAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -149,7 +149,7 @@ export default function SiteHeader() {
 
           {/* ── 右端アクション（メニューボタン） ── */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* ログイン中バッジ（デスクトップのみ） */}
+            {/* ログイン中バッジ + ポイント（デスクトップのみ） */}
             {!loading && isLoggedIn && (
               <Link
                 href="/customer-mypage"
@@ -157,7 +157,7 @@ export default function SiteHeader() {
                 style={{
                   display: "none",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 10,
                   padding: "8px 14px",
                   textDecoration: "none",
                   border: `1px solid ${SITE.color.borderPink}`,
@@ -169,10 +169,55 @@ export default function SiteHeader() {
                   lineHeight: 1,
                 }}
               >
-                <span style={{ fontFamily: SITE.font.display, fontSize: "10px", letterSpacing: SITE.ls.wide }}>
+                <span
+                  style={{
+                    fontFamily: SITE.font.display,
+                    fontSize: "10px",
+                    letterSpacing: SITE.ls.wide,
+                  }}
+                >
                   MEMBER
                 </span>
                 <span>{displayName(customer)}さま</span>
+                <span
+                  style={{
+                    borderLeft: `1px solid ${SITE.color.borderPink}`,
+                    paddingLeft: 10,
+                    fontFamily: SITE.font.display,
+                    fontSize: "11px",
+                    letterSpacing: SITE.ls.wide,
+                    color: SITE.color.pink,
+                  }}
+                  title="保有ポイント"
+                >
+                  {summary.pointBalance.toLocaleString()} pt
+                </span>
+              </Link>
+            )}
+
+            {/* ログイン中ミニバッジ（モバイル） */}
+            {!loading && isLoggedIn && (
+              <Link
+                href="/customer-mypage"
+                className="site-header-user-sp"
+                aria-label={`${displayName(customer)}さまのマイページ（${summary.pointBalance}pt）`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "6px 10px",
+                  textDecoration: "none",
+                  border: `1px solid ${SITE.color.borderPink}`,
+                  background: SITE.color.pinkSoft,
+                  color: SITE.color.pinkDeep,
+                  fontSize: "10px",
+                  fontFamily: SITE.font.display,
+                  letterSpacing: SITE.ls.normal,
+                  lineHeight: 1,
+                }}
+              >
+                <span>{summary.pointBalance.toLocaleString()}</span>
+                <span style={{ fontSize: "9px", letterSpacing: SITE.ls.wide }}>pt</span>
               </Link>
             )}
 
@@ -547,6 +592,9 @@ export default function SiteHeader() {
           }
           .site-header-user {
             display: inline-flex !important;
+          }
+          .site-header-user-sp {
+            display: none !important;
           }
         }
         .site-header a:hover,

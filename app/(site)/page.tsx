@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { SITE, MARBLE } from "../../lib/site-theme";
 import EventCarousel from "../../components/site/EventCarousel";
+import NewsSection from "../../components/site/NewsSection";
 import { useCustomerAuth, displayName } from "../../lib/customer-auth-context";
 
 /**
@@ -472,6 +473,11 @@ export default function HomePage() {
       </SectionBlock>
 
       {/* ═══════════════════════════════════════════════
+          ②-b NEWS — 最新のお知らせ（全員向けのみ）
+          ═══════════════════════════════════════════════ */}
+      <NewsSection />
+
+      {/* ═══════════════════════════════════════════════
           ③ TODAY'S SCHEDULE
           ═══════════════════════════════════════════════ */}
       <section
@@ -857,16 +863,18 @@ export default function HomePage() {
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 会員登録促進バナー
- * 未ログイン時のみ表示。ヒーロー直下に配置される。
+ * 会員登録促進バナー / ログイン中ダッシュボード
+ * ヒーロー直下に配置される。
  */
 function MemberCtaBanner() {
-  const { isLoggedIn, loading, customer } = useCustomerAuth();
+  const { isLoggedIn, loading, customer, summary } = useCustomerAuth();
 
   if (loading) return null;
 
-  // ログイン済み：さりげなく「マイページへ」導線
+  // ─── ログイン済み：次回予約・ポイント・お気に入り の3カードダッシュボード ───
   if (isLoggedIn) {
+    const next = summary.nextReservation;
+
     return (
       <section
         style={{
@@ -879,59 +887,264 @@ function MemberCtaBanner() {
           style={{
             maxWidth: SITE.layout.maxWidth,
             margin: "0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
           }}
         >
-          <div>
-            <p
-              style={{
-                fontFamily: SITE.font.display,
-                fontSize: "10px",
-                letterSpacing: SITE.ls.wide,
-                color: SITE.color.pink,
-                marginBottom: 4,
-              }}
-            >
-              WELCOME BACK
-            </p>
-            <p
-              style={{
-                fontFamily: SITE.font.serif,
-                fontSize: "15px",
-                letterSpacing: SITE.ls.loose,
-                color: SITE.color.text,
-                margin: 0,
-              }}
-            >
-              {displayName(customer)}さま、いつもありがとうございます。
-            </p>
-          </div>
-          <Link
-            href="/customer-mypage"
+          {/* ヘッダー */}
+          <div
             style={{
-              padding: "12px 24px",
-              border: `1px solid ${SITE.color.pink}`,
-              color: SITE.color.pink,
-              textDecoration: "none",
-              fontFamily: SITE.font.serif,
-              fontSize: "12px",
-              letterSpacing: SITE.ls.loose,
-              transition: SITE.transition.fast,
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              marginBottom: SITE.sp.lg,
+              gap: 16,
+              flexWrap: "wrap",
             }}
-            className="site-mypage-link"
           >
-            会員ページへ →
-          </Link>
+            <div>
+              <p
+                style={{
+                  fontFamily: SITE.font.display,
+                  fontSize: "10px",
+                  letterSpacing: SITE.ls.wide,
+                  color: SITE.color.pink,
+                  marginBottom: 4,
+                }}
+              >
+                WELCOME BACK
+              </p>
+              <p
+                style={{
+                  fontFamily: SITE.font.serif,
+                  fontSize: "17px",
+                  letterSpacing: SITE.ls.loose,
+                  color: SITE.color.text,
+                  margin: 0,
+                  fontWeight: 500,
+                }}
+              >
+                {displayName(customer)} さま、いつもありがとうございます
+              </p>
+            </div>
+            <Link
+              href="/customer-mypage"
+              className="site-mypage-link"
+              style={{
+                padding: "10px 20px",
+                border: `1px solid ${SITE.color.pink}`,
+                color: SITE.color.pink,
+                textDecoration: "none",
+                fontFamily: SITE.font.serif,
+                fontSize: "11px",
+                letterSpacing: SITE.ls.loose,
+                transition: SITE.transition.fast,
+              }}
+            >
+              マイページへ →
+            </Link>
+          </div>
+
+          {/* 3カードダッシュボード */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: SITE.sp.md,
+            }}
+          >
+            {/* 次回予約 */}
+            <DashCard
+              label="NEXT RESERVATION"
+              title="次回のご予約"
+              href="/customer-mypage"
+            >
+              {next ? (
+                <>
+                  <p
+                    style={{
+                      fontFamily: SITE.font.display,
+                      fontSize: "22px",
+                      letterSpacing: SITE.ls.loose,
+                      color: SITE.color.pink,
+                      margin: 0,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {formatDateShort(next.date)}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: SITE.font.serif,
+                      fontSize: "13px",
+                      color: SITE.color.textSub,
+                      marginTop: 4,
+                      letterSpacing: SITE.ls.loose,
+                    }}
+                  >
+                    {next.start_time.slice(0, 5)} 〜 {next.end_time.slice(0, 5)}
+                  </p>
+                  {next.course && (
+                    <p
+                      style={{
+                        fontFamily: SITE.font.serif,
+                        fontSize: "11px",
+                        color: SITE.color.textMuted,
+                        marginTop: 4,
+                        letterSpacing: SITE.ls.normal,
+                      }}
+                    >
+                      {next.course}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p
+                    style={{
+                      fontFamily: SITE.font.serif,
+                      fontSize: "13px",
+                      color: SITE.color.textSub,
+                      margin: 0,
+                      letterSpacing: SITE.ls.loose,
+                    }}
+                  >
+                    ご予約はまだありません
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: SITE.font.serif,
+                      fontSize: "11px",
+                      color: SITE.color.pink,
+                      marginTop: 8,
+                      letterSpacing: SITE.ls.loose,
+                    }}
+                  >
+                    予約する →
+                  </p>
+                </>
+              )}
+            </DashCard>
+
+            {/* ポイント */}
+            <DashCard
+              label="MEMBER POINT"
+              title="保有ポイント"
+              href="/customer-mypage"
+            >
+              <p
+                style={{
+                  fontFamily: SITE.font.display,
+                  fontSize: "32px",
+                  letterSpacing: SITE.ls.loose,
+                  color: SITE.color.pink,
+                  margin: 0,
+                  fontWeight: 500,
+                  lineHeight: 1,
+                }}
+              >
+                {summary.pointBalance.toLocaleString()}
+                <span
+                  style={{
+                    fontSize: "12px",
+                    letterSpacing: SITE.ls.wide,
+                    color: SITE.color.textMuted,
+                    marginLeft: 6,
+                    fontWeight: 400,
+                  }}
+                >
+                  pt
+                </span>
+              </p>
+              <p
+                style={{
+                  fontFamily: SITE.font.serif,
+                  fontSize: "11px",
+                  color: SITE.color.textMuted,
+                  marginTop: 8,
+                  letterSpacing: SITE.ls.normal,
+                }}
+              >
+                次回ご予約時にご利用いただけます
+              </p>
+            </DashCard>
+
+            {/* お気に入り */}
+            <DashCard
+              label="FAVORITES"
+              title="お気に入りセラピスト"
+              href="/customer-mypage"
+            >
+              <p
+                style={{
+                  fontFamily: SITE.font.display,
+                  fontSize: "32px",
+                  letterSpacing: SITE.ls.loose,
+                  color: SITE.color.pink,
+                  margin: 0,
+                  fontWeight: 500,
+                  lineHeight: 1,
+                }}
+              >
+                {summary.favoriteCount}
+                <span
+                  style={{
+                    fontSize: "12px",
+                    letterSpacing: SITE.ls.wide,
+                    color: SITE.color.textMuted,
+                    marginLeft: 6,
+                    fontWeight: 400,
+                  }}
+                >
+                  名
+                </span>
+              </p>
+              <p
+                style={{
+                  fontFamily: SITE.font.serif,
+                  fontSize: "11px",
+                  color: SITE.color.textMuted,
+                  marginTop: 8,
+                  letterSpacing: SITE.ls.normal,
+                }}
+              >
+                {summary.favoriteCount > 0
+                  ? "マイページからスケジュールを確認"
+                  : "気に入ったセラピストをハートで登録"}
+              </p>
+            </DashCard>
+          </div>
+
+          {/* 未読お知らせバナー */}
+          {summary.unreadNotificationCount > 0 && (
+            <Link
+              href="/customer-mypage"
+              style={{
+                marginTop: SITE.sp.md,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "14px 20px",
+                border: `1px solid ${SITE.color.borderPink}`,
+                background: SITE.color.pinkSoft,
+                color: SITE.color.pinkDeep,
+                textDecoration: "none",
+                fontFamily: SITE.font.serif,
+                fontSize: "12px",
+                letterSpacing: SITE.ls.loose,
+              }}
+            >
+              <span>
+                未読のお知らせが {summary.unreadNotificationCount} 件あります
+              </span>
+              <span style={{ fontFamily: SITE.font.display, fontSize: "14px" }}>→</span>
+            </Link>
+          )}
         </div>
       </section>
     );
   }
 
-  // 未ログイン：会員登録CTA
+  // ─── 未ログイン：会員登録CTA ───
   return (
     <section
       style={{
@@ -974,7 +1187,18 @@ function MemberCtaBanner() {
               marginBottom: 6,
             }}
           >
-            今なら新規会員登録で <span style={{ color: SITE.color.pinkDeep, fontFamily: SITE.font.display, fontSize: "20px", fontWeight: 500 }}>500</span> ポイントプレゼント
+            今なら新規会員登録で{" "}
+            <span
+              style={{
+                color: SITE.color.pinkDeep,
+                fontFamily: SITE.font.display,
+                fontSize: "20px",
+                fontWeight: 500,
+              }}
+            >
+              500
+            </span>{" "}
+            ポイントプレゼント
           </p>
           <p
             style={{
@@ -1009,6 +1233,74 @@ function MemberCtaBanner() {
       </div>
     </section>
   );
+}
+
+// 日付短縮表示 (5/22(金)など)
+function formatDateShort(dateStr: string): string {
+  const dt = new Date(dateStr + "T00:00:00");
+  if (isNaN(dt.getTime())) return dateStr;
+  const days = ["日", "月", "火", "水", "木", "金", "土"];
+  return `${dt.getMonth() + 1}/${dt.getDate()}(${days[dt.getDay()]})`;
+}
+
+// ダッシュボードカード共通
+function DashCard({
+  label,
+  title,
+  href,
+  children,
+}: {
+  label: string;
+  title: string;
+  href?: string;
+  children: React.ReactNode;
+}) {
+  const body = (
+    <div
+      className="site-dash-card"
+      style={{
+        padding: SITE.sp.lg,
+        background: SITE.color.surface,
+        border: `1px solid ${SITE.color.border}`,
+        display: "flex",
+        flexDirection: "column",
+        transition: SITE.transition.fast,
+        height: "100%",
+      }}
+    >
+      <p
+        style={{
+          fontFamily: SITE.font.display,
+          fontSize: "10px",
+          letterSpacing: SITE.ls.wide,
+          color: SITE.color.pink,
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </p>
+      <p
+        style={{
+          fontFamily: SITE.font.serif,
+          fontSize: "11px",
+          letterSpacing: SITE.ls.loose,
+          color: SITE.color.textMuted,
+          marginBottom: 12,
+        }}
+      >
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+  if (href) {
+    return (
+      <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>
+        {body}
+      </Link>
+    );
+  }
+  return body;
 }
 
 function SectionBlock({
