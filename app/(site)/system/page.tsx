@@ -79,7 +79,8 @@ export default function SystemPage() {
         label="SYSTEM"
         title="料金・コース"
         subtitle="Ange Spa の各コース料金・オプション・お支払いについてご案内いたします。"
-        bgImage="/images/placeholder/system.jpg"
+        bgVideo="/videos/system.mp4"
+        bgVideoPoster="/videos/system-poster.jpg"
       />
 
       {loading ? (
