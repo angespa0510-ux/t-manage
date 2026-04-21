@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-import { SITE } from "../../lib/site-theme";
+import { SITE, MARBLE } from "../../lib/site-theme";
 
 /**
  * ═══════════════════════════════════════════════════════════
@@ -392,7 +392,7 @@ export default function HomePage() {
       {/* ═══════════════════════════════════════════════
           ② CONCEPT
           ═══════════════════════════════════════════════ */}
-      <SectionBlock label="CONCEPT" title="私たちについて">
+      <SectionBlock label="CONCEPT" title="私たちについて" marble="soft">
         {/* video: 花束が揺れる動画（夕焼け・ラベンダー・ボケ玉） */}
         <div
           style={{
@@ -464,8 +464,8 @@ export default function HomePage() {
           ═══════════════════════════════════════════════ */}
       <section
         style={{
+          ...MARBLE.blue,
           padding: `${SITE.sp.section} ${SITE.sp.lg}`,
-          backgroundColor: SITE.color.bgSoft,
         }}
       >
         <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
@@ -521,7 +521,7 @@ export default function HomePage() {
           ④ PICK UP
           ═══════════════════════════════════════════════ */}
       {!loading && pickups.length > 0 && (
-        <SectionBlock label="PICK UP" title="注目のセラピスト">
+        <SectionBlock label="PICK UP" title="注目のセラピスト" marble="warm">
           <TherapistGrid>
             {pickups.map((t) => (
               <TherapistCard key={t.id} therapist={t} pickup />
@@ -536,8 +536,8 @@ export default function HomePage() {
       {!loading && newcomers.length > 0 && (
         <section
           style={{
+            ...MARBLE.pink,
             padding: `${SITE.sp.section} ${SITE.sp.lg}`,
-            backgroundColor: SITE.color.bgSoft,
           }}
         >
           <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
@@ -664,8 +664,8 @@ export default function HomePage() {
           ═══════════════════════════════════════════════ */}
       <section
         style={{
+          ...MARBLE.beige,
           padding: `${SITE.sp.section} ${SITE.sp.lg}`,
-          backgroundColor: SITE.color.bgSoft,
         }}
       >
         <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
@@ -738,7 +738,13 @@ export default function HomePage() {
       {/* ═══════════════════════════════════════════════
           ⑧ MESSAGE
           ═══════════════════════════════════════════════ */}
-      <section style={{ padding: `${SITE.sp.section} ${SITE.sp.lg}` }}>
+      <section
+        style={{
+          ...MARBLE.soft,
+          padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+          marginBottom: `calc(-1 * ${SITE.sp.section})`,
+        }}
+      >
         <div
           style={{
             maxWidth: SITE.layout.maxWidthText,
@@ -842,13 +848,20 @@ function SectionBlock({
   label,
   title,
   children,
+  marble,
 }: {
   label: string;
   title: string;
   children: React.ReactNode;
+  marble?: keyof typeof MARBLE;
 }) {
   return (
-    <section style={{ padding: `${SITE.sp.section} ${SITE.sp.lg}` }}>
+    <section
+      style={{
+        padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+        ...(marble ? MARBLE[marble] : {}),
+      }}
+    >
       <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
         <SectionHeading label={label} title={title} />
         {children}
