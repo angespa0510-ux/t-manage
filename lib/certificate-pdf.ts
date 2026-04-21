@@ -10,12 +10,24 @@ type StoreInfo = {
   representative?: string;
 };
 
-type TherapistInfo = {
+type PersonInfo = {
   real_name: string;
   name: string;
   address: string;
   entry_date: string;
 };
+
+/** セラピスト / スタッフの区別。契約文面の業務内容と支払項目の表記に影響 */
+type PersonKind = "therapist" | "staff";
+
+/** 業務内容の既定値。PersonKind に応じて切り替える */
+const BUSINESS_DESCRIPTION: Record<PersonKind, string> = {
+  therapist: "リラクゼーション施術業務",
+  staff: "店舗運営業務（予約管理・接客対応・施設管理ほか）",
+};
+
+/** 後方互換: 既存コードは TherapistInfo という名前で import しているケースがあるため alias を残す */
+export type TherapistInfo = PersonInfo;
 
 type PaymentInfo = {
   year: number;
@@ -92,9 +104,10 @@ function genDocNo(prefix: string): string {
 }
 
 /** ① 業務委託契約証明書（在籍証明） */
-export function generateContractCertificate(store: StoreInfo, th: TherapistInfo) {
+export function generateContractCertificate(store: StoreInfo, th: PersonInfo, kind: PersonKind = "therapist") {
   const entryDate = th.entry_date ? new Date(th.entry_date) : null;
   const entryStr = entryDate ? `${entryDate.getFullYear()}年${entryDate.getMonth()+1}月${entryDate.getDate()}日` : "—";
+  const businessDesc = BUSINESS_DESCRIPTION[kind];
   const w = window.open("", "_blank");
   if (!w) return;
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>業務委託契約証明書_${th.real_name}</title><style>${baseStyle}</style></head><body>
@@ -106,7 +119,7 @@ export function generateContractCertificate(store: StoreInfo, th: TherapistInfo)
       <tr><th>住所</th><td>${th.address || "—"}</td></tr>
       <tr><th>契約開始日</th><td>${entryStr}</td></tr>
       <tr><th>契約形態</th><td>業務委託契約</td></tr>
-      <tr><th>業務内容</th><td>リラクゼーション施術業務</td></tr>
+      <tr><th>業務内容</th><td>${businessDesc}</td></tr>
       <tr><th>契約状況</th><td>現在有効</td></tr>
     </table>
 
@@ -126,7 +139,7 @@ export function generateContractCertificate(store: StoreInfo, th: TherapistInfo)
 }
 
 /** ② 報酬支払証明書（収入証明） */
-export function generatePaymentCertificate(store: StoreInfo, th: TherapistInfo, payment: PaymentInfo) {
+export function generatePaymentCertificate(store: StoreInfo, th: PersonInfo, payment: PaymentInfo, _kind: PersonKind = "therapist") {
   const w = window.open("", "_blank");
   if (!w) return;
   const monthRows = payment.months.map(m =>
@@ -167,7 +180,7 @@ export function generatePaymentCertificate(store: StoreInfo, th: TherapistInfo, 
 }
 
 /** ③ 取引実績証明書 */
-export function generateTransactionCertificate(store: StoreInfo, th: TherapistInfo, payment: PaymentInfo) {
+export function generateTransactionCertificate(store: StoreInfo, th: PersonInfo, payment: PaymentInfo, _kind: PersonKind = "therapist") {
   const entryDate = th.entry_date ? new Date(th.entry_date) : null;
   const entryStr = entryDate ? `${entryDate.getFullYear()}年${entryDate.getMonth()+1}月` : "—";
   const monthCount = payment.months.filter(m => m.amount > 0).length;

@@ -819,72 +819,132 @@ ${t.mynumber_photo_url_back ? `<div class="photo-box"><p class="photo-label">裏
 
 
 function CertificateManager({ T }: { T: any }) {
+  // セラピスト / スタッフ のタブ切替
+  const [kind, setKind] = useState<"therapist" | "staff">("therapist");
+
+  // セラピスト側データ
   const [therapists, setTherapists] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
+  const [thTotalDaysMap, setThTotalDaysMap] = useState<Record<number, number>>({});
+  const [thRecentMap, setThRecentMap] = useState<Record<number, boolean>>({});
+
+  // スタッフ側データ
+  const [staffs, setStaffs] = useState<any[]>([]);
+  const [stTotalDaysMap, setStTotalDaysMap] = useState<Record<number, number>>({});
+  const [stRecentMap, setStRecentMap] = useState<Record<number, boolean>>({});
+
+  // 共通
   const [storeInfo, setStoreInfo] = useState<any>(null);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [certYear, setCertYear] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
   const [issuing, setIssuing] = useState(false);
-  const [totalDaysMap, setTotalDaysMap] = useState<Record<number, number>>({});
-  const [recentMap, setRecentMap] = useState<Record<number, boolean>>({});
   const toast = useToast();
+
+  // タブ切替時は選択と検索をリセット
+  useEffect(() => { setSelectedId(0); setSearch(""); }, [kind]);
 
   useEffect(() => {
     const f = async () => {
-      const { data: th } = await supabase.from("therapists").select("id, name, real_name, address, entry_date, status, phone, license_photo_url").neq("status", "trash").order("sort_order"); if (th) setTherapists(th);
+      // 会社情報
       const { data: st } = await supabase.from("stores").select("company_name, company_address, company_phone"); if (st?.[0]) setStoreInfo(st[0]);
+
+      // セラピスト本体＋契約＋出勤集計
+      const { data: th } = await supabase.from("therapists").select("id, name, real_name, address, entry_date, status, phone, license_photo_url").neq("status", "trash").order("sort_order");
+      if (th) setTherapists(th);
       const { data: ct } = await supabase.from("contracts").select("therapist_id, status"); if (ct) setContracts(ct);
-      // Total days per therapist
-      const { data: sett } = await supabase.from("therapist_daily_settlements").select("therapist_id, date").eq("is_settled", true);
-      if (sett) {
+      const { data: thSett } = await supabase.from("therapist_daily_settlements").select("therapist_id, date").eq("is_settled", true);
+      if (thSett) {
         const dm: Record<number, number> = {};
         const rm: Record<number, boolean> = {};
         const now = new Date();
         const three = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().slice(0, 10);
-        sett.forEach((s: any) => { dm[s.therapist_id] = (dm[s.therapist_id] || 0) + 1; if (s.date >= three) rm[s.therapist_id] = true; });
-        setTotalDaysMap(dm); setRecentMap(rm);
+        thSett.forEach((s: any) => { dm[s.therapist_id] = (dm[s.therapist_id] || 0) + 1; if (s.date >= three) rm[s.therapist_id] = true; });
+        setThTotalDaysMap(dm); setThRecentMap(rm);
+      }
+
+      // スタッフ本体＋出勤集計
+      const { data: stfData } = await supabase.from("staff").select("id, name, real_name, address, entry_date, status, phone, id_doc_url, id_photo_url").neq("status", "trash").order("id");
+      if (stfData) setStaffs(stfData);
+      const { data: stSch } = await supabase.from("staff_schedules").select("staff_id, date").eq("status", "completed");
+      if (stSch) {
+        const dm: Record<number, number> = {};
+        const rm: Record<number, boolean> = {};
+        const now = new Date();
+        const three = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().slice(0, 10);
+        stSch.forEach((s: any) => { dm[s.staff_id] = (dm[s.staff_id] || 0) + 1; if (s.date >= three) rm[s.staff_id] = true; });
+        setStTotalDaysMap(dm); setStRecentMap(rm);
       }
     }; f();
   }, []);
 
-  const selected = therapists.find(t => t.id === selectedId);
-  const filtered = therapists.filter(t => !search || t.name.includes(search) || (t.real_name || "").includes(search));
+  // 現在のkindに応じた一覧・マップ
+  const people: any[] = kind === "therapist" ? therapists : staffs;
+  const totalDaysMap = kind === "therapist" ? thTotalDaysMap : stTotalDaysMap;
+  const recentMap = kind === "therapist" ? thRecentMap : stRecentMap;
 
-  const getChecks = (th: any) => {
-    const contract = contracts.find(c => c.therapist_id === th.id && c.status === "signed");
-    const totalDays = totalDaysMap[th.id] || 0;
-    const hasRecent = recentMap[th.id] || false;
+  const selected = people.find(p => p.id === selectedId);
+  const filtered = people.filter(p => !search || p.name.includes(search) || (p.real_name || "").includes(search));
+
+  const getChecks = (p: any) => {
+    const totalDays = totalDaysMap[p.id] || 0;
+    const hasRecent = recentMap[p.id] || false;
+    if (kind === "therapist") {
+      const contract = contracts.find(c => c.therapist_id === p.id && c.status === "signed");
+      return [
+        { label: "身分証提出済み", ok: !!p.license_photo_url, required: true },
+        { label: "業務委託契約署名済み", ok: !!contract, required: true },
+        { label: "本名登録済み", ok: !!(p.real_name && p.real_name.trim()), required: true },
+        { label: "住所登録済み", ok: !!(p.address && p.address.trim()), required: true },
+        { label: `総出勤30日以上（現在${totalDays}日）`, ok: totalDays >= 30, required: true },
+        { label: "直近3ヶ月以内の出勤あり", ok: hasRecent, required: false },
+        { label: "ステータスが稼働中", ok: p.status === "active", required: false },
+      ];
+    }
+    // スタッフ: 契約書署名フローが無いので契約開始日で代替
     return [
-      { label: "身分証提出済み", ok: !!th.license_photo_url, required: true },
-      { label: "業務委託契約署名済み", ok: !!contract, required: true },
-      { label: "本名登録済み", ok: !!(th.real_name && th.real_name.trim()), required: true },
-      { label: "住所登録済み", ok: !!(th.address && th.address.trim()), required: true },
+      { label: "身分証提出済み", ok: !!(p.id_doc_url || p.id_photo_url), required: true },
+      { label: "契約開始日登録済み", ok: !!p.entry_date, required: true },
+      { label: "本名登録済み", ok: !!(p.real_name && p.real_name.trim()), required: true },
+      { label: "住所登録済み", ok: !!(p.address && p.address.trim()), required: true },
       { label: `総出勤30日以上（現在${totalDays}日）`, ok: totalDays >= 30, required: true },
       { label: "直近3ヶ月以内の出勤あり", ok: hasRecent, required: false },
-      { label: "ステータスが稼働中", ok: th.status === "active", required: false },
+      { label: "ステータスが稼働中", ok: p.status === "active", required: false },
     ];
   };
 
   const getStore = () => ({ company_name: storeInfo?.company_name || "", company_address: storeInfo?.company_address || "", company_phone: storeInfo?.company_phone || "" });
-  const getTh = (th: any) => ({ real_name: th.real_name || th.name, name: th.name, address: th.address || "", entry_date: th.entry_date || "" });
+  const getPersonInfo = (p: any) => ({ real_name: p.real_name || p.name, name: p.name, address: p.address || "", entry_date: p.entry_date || "" });
 
-  const fetchPayment = async (thId: number) => {
-    const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", thId).gte("date", `${certYear}-01-01`).lte("date", `${certYear}-12-31`);
+  const fetchPayment = async (personId: number) => {
     const months: { month: number; amount: number; days: number }[] = [];
-    for (let m = 1; m <= 12; m++) {
-      const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
-      months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length });
+    if (kind === "therapist") {
+      const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", personId).gte("date", `${certYear}-01-01`).lte("date", `${certYear}-12-31`);
+      for (let m = 1; m <= 12; m++) {
+        const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
+        months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length });
+      }
+    } else {
+      // スタッフ: コミッション＋夜勤手当＋免許手当を合算（交通費は実費のため除外）
+      const { data: sch } = await supabase.from("staff_schedules").select("date, commission_fee, night_premium, license_premium").eq("staff_id", personId).eq("status", "completed").gte("date", `${certYear}-01-01`).lte("date", `${certYear}-12-31`);
+      for (let m = 1; m <= 12; m++) {
+        const ms = (sch || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
+        months.push({
+          month: m,
+          amount: ms.reduce((a: number, s: any) => a + (s.commission_fee || 0) + (s.night_premium || 0) + (s.license_premium || 0), 0),
+          days: ms.length,
+        });
+      }
     }
     return { year: certYear, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months };
   };
 
   const issue = async (type: "contract" | "payment" | "transaction") => {
-    if (!selected || !storeInfo) { toast.show("セラピストを選択してください", "error"); return; }
+    if (!selected || !storeInfo) { toast.show(`${kind === "therapist" ? "セラピスト" : "スタッフ"}を選択してください`, "error"); return; }
     setIssuing(true);
     try {
-      if (type === "contract") { generateContractCertificate(getStore(), getTh(selected)); }
-      else { const payment = await fetchPayment(selected.id); if (type === "payment") generatePaymentCertificate(getStore(), getTh(selected), payment); else generateTransactionCertificate(getStore(), getTh(selected), payment); }
+      if (type === "contract") { generateContractCertificate(getStore(), getPersonInfo(selected), kind); }
+      else { const payment = await fetchPayment(selected.id); if (type === "payment") generatePaymentCertificate(getStore(), getPersonInfo(selected), payment, kind); else generateTransactionCertificate(getStore(), getPersonInfo(selected), payment, kind); }
       toast.show("証明書を発行しました", "success");
     } catch { toast.show("発行に失敗しました", "error"); }
     setIssuing(false);
@@ -892,8 +952,8 @@ function CertificateManager({ T }: { T: any }) {
 
   const statusMap: Record<string, { label: string; color: string }> = { active: { label: "稼働中", color: "#22c55e" }, inactive: { label: "休止中", color: "#f59e0b" }, retired: { label: "退職", color: "#888780" } };
   const checks = selected ? getChecks(selected) : [];
-  const warnings = checks.filter(c => !c.ok);
   const hasRequiredFail = checks.some(c => c.required && !c.ok);
+  const personLabel = kind === "therapist" ? "セラピスト" : "スタッフ";
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", animation: "fadeIn 0.3s" }}>
@@ -902,43 +962,59 @@ function CertificateManager({ T }: { T: any }) {
         <span className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>会社印が必要な書類</span>
       </div>
 
+      {/* セラピスト / スタッフ タブ */}
+      <div className="flex items-center gap-1 mb-4">
+        {([["therapist", "💆 セラピスト"], ["staff", "👥 スタッフ"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setKind(k as any)} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer font-medium" style={{ backgroundColor: kind === k ? "#c3a78218" : "transparent", color: kind === k ? "#c3a782" : T.textMuted, border: `1px solid ${kind === k ? "#c3a78244" : T.border}` }}>{l}</button>
+        ))}
+        <span className="ml-3 text-[10px]" style={{ color: T.textFaint }}>対象者は業務委託契約に基づき発行します</span>
+      </div>
+
       {/* 発行ポリシー説明 */}
       <div className="rounded-xl border p-4 mb-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
         <p className="text-[11px] font-medium mb-2">📋 証明書発行ポリシー</p>
         <p className="text-[10px] mb-2" style={{ color: T.textMuted }}>証明書は会社の信用を担保に発行する公式書類です。以下の条件を確認してから発行してください。</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-          {[
+          {(kind === "therapist" ? [
             { label: "身分証が提出済みであること", tag: "必須" },
             { label: "業務委託契約書に署名済みであること", tag: "必須" },
             { label: "本名・住所が登録されていること", tag: "必須" },
             { label: "総出勤日数が30日以上であること", tag: "必須" },
             { label: "直近3ヶ月以内に出勤実績があること", tag: "推奨" },
             { label: "ステータスが「稼働中」であること", tag: "推奨" },
-          ].map((r, i) => (
+          ] : [
+            { label: "身分証が提出済みであること", tag: "必須" },
+            { label: "契約開始日が登録されていること", tag: "必須" },
+            { label: "本名・住所が登録されていること", tag: "必須" },
+            { label: "総出勤日数が30日以上であること", tag: "必須" },
+            { label: "直近3ヶ月以内に出勤実績があること", tag: "推奨" },
+            { label: "ステータスが「稼働中」であること", tag: "推奨" },
+          ]).map((r, i) => (
             <p key={i} className="text-[10px] flex items-center gap-2" style={{ color: T.textMuted }}>
               <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: r.tag === "必須" ? "#c4555518" : "#f59e0b18", color: r.tag === "必須" ? "#c45555" : "#f59e0b" }}>{r.tag}</span>
               {r.label}
             </p>
           ))}
         </div>
-        <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>※ バックオフィスでは警告表示の上で発行可能です。セラピストマイページでは必須条件を満たさない場合は発行できません。</p>
+        <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>※ バックオフィスでは警告表示の上で発行可能です。{kind === "therapist" ? "セラピストマイページ" : "スタッフ側画面"}では必須条件を満たさない場合は発行できません。</p>
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "320px 1fr" }}>
         {/* Left */}
         <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-          <p className="text-[11px] font-medium mb-3">セラピストを選択</p>
+          <p className="text-[11px] font-medium mb-3">{personLabel}を選択</p>
           <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 名前で検索" className="w-full px-3 py-2 rounded-lg text-[11px] outline-none mb-3 border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
           <div className="space-y-1 overflow-y-auto" style={{ maxHeight: 400 }}>
-            {filtered.map(th => {
-              const st = statusMap[th.status] || statusMap.active;
-              const thChecks = getChecks(th);
-              const thWarn = thChecks.filter(c => !c.ok && c.required).length;
+            {filtered.length === 0 && <p className="text-[10px] text-center py-6" style={{ color: T.textFaint }}>該当する{personLabel}がいません</p>}
+            {filtered.map(p => {
+              const st = statusMap[p.status] || statusMap.active;
+              const pChecks = getChecks(p);
+              const pWarn = pChecks.filter(c => !c.ok && c.required).length;
               return (
-                <button key={th.id} onClick={() => setSelectedId(th.id)} className="w-full text-left px-3 py-2.5 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: selectedId === th.id ? "#c3a78215" : "transparent", color: T.text, border: `1px solid ${selectedId === th.id ? "#c3a78244" : "transparent"}` }}>
+                <button key={p.id} onClick={() => setSelectedId(p.id)} className="w-full text-left px-3 py-2.5 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: selectedId === p.id ? "#c3a78215" : "transparent", color: T.text, border: `1px solid ${selectedId === p.id ? "#c3a78244" : "transparent"}` }}>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{th.name}</span>
-                    {thWarn > 0 && <span className="text-[8px] px-1 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠{thWarn}</span>}
+                    <span className="font-medium">{p.name}</span>
+                    {pWarn > 0 && <span className="text-[8px] px-1 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>⚠{pWarn}</span>}
                   </div>
                   <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: st.color + "18", color: st.color }}>{st.label}</span>
                 </button>
@@ -997,22 +1073,25 @@ function CertificateManager({ T }: { T: any }) {
                   <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>融資・補助金申請に。</p>
                 </button>
               </div>
+              {kind === "staff" && (
+                <p className="text-[9px] mt-3" style={{ color: T.textFaint }}>※ スタッフの報酬合計は「コミッション + 夜勤手当 + 免許手当」です。交通費（実費精算分）は含まれません。</p>
+              )}
             </div>
 
             {/* 注意事項 */}
             <div className="rounded-xl border p-4" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
               <p className="text-[11px] font-medium mb-2">⚠️ 発行後の手順</p>
               <div className="space-y-1">
-                {["証明書を印刷（Ctrl+P → PDF保存も可）","代表印（実印）を押印","セラピストに手渡しまたはPDF送付","控えを会社で保管"].map((t, i) => (
-                  <p key={i} className="text-[10px] flex gap-2" style={{ color: T.textMuted }}><span style={{ color: "#c3a782" }}>{i+1}.</span>{t}</p>
+                {["証明書を印刷（Ctrl+P → PDF保存も可）", "代表印（実印）を押印", `${personLabel}に手渡しまたはPDF送付`, "控えを会社で保管"].map((t, i) => (
+                  <p key={i} className="text-[10px] flex gap-2" style={{ color: T.textMuted }}><span style={{ color: "#c3a782" }}>{i + 1}.</span>{t}</p>
                 ))}
               </div>
             </div>
           </>) : (
             <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
               <p className="text-[32px] mb-3">📄</p>
-              <p className="text-[14px] font-medium mb-2">セラピストを選択してください</p>
-              <p className="text-[11px]" style={{ color: T.textMuted }}>左のリストから証明書を発行するセラピストを選択してください。</p>
+              <p className="text-[14px] font-medium mb-2">{personLabel}を選択してください</p>
+              <p className="text-[11px]" style={{ color: T.textMuted }}>左のリストから証明書を発行する{personLabel}を選択してください。</p>
             </div>
           )}
         </div>
