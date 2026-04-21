@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
@@ -17,7 +17,20 @@ type Therapist = { id: number; name: string; real_name?: string; has_withholding
 type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
 type TaxDoc = { id: number; category: string; file_name: string; file_url: string; file_path: string; file_size: number; fiscal_period: string; uploaded_by_name: string; notes: string; created_at: string; target_person_name?: string };
 type TaxTaskStatus = { id: number; task_id: string; fiscal_year: number; status: string; note: string; updated_by_name: string; updated_at: string };
-type TaxTask = { id: string; timing: string; month: number; title: string; description: string; assignee: "税理士" | "会社" | "社労士" | "共同"; deadline: string; category: string; importance: "high" | "medium" | "low" };
+type TaxTask = {
+  id: string;
+  timing: string;
+  month: number;
+  title: string;
+  description: string;
+  assignee: "税理士" | "会社" | "社労士" | "共同";
+  deadline: string;
+  category: string;
+  importance: "high" | "medium" | "low";
+  // 案D統合: バックオフィスの年間スケジュールから移管した詳細ガイドとCSVリンク
+  guide?: string; // やること・注意・ポイントの詳細手順（展開時に表示）
+  downloads?: { label: string; sheet: "summary" | "sales" | "expense" | "therapist" | "invoice" | "docs" | "bank" }[]; // 該当シートへ誘導するボタン
+};
 
 type BankTransaction = { id?: number; transaction_date: string; transaction_time: string; order_no: string; description: string; debit_amount: number; credit_amount: number; balance: number; memo: string; account_category: string; account_label: string; is_expense: boolean; is_confirmed: boolean; confirmed_expense_id?: number | null; imported_at?: string; imported_by_name?: string; _tempId?: string };
 type BankRule = { id: number; pattern: string; account_category: string; account_label: string; is_expense: boolean; priority: number; hit_count: number };
@@ -67,26 +80,217 @@ const TAX_TASKS: TaxTask[] = [
   { id: "monthly-kessai", timing: "毎月", month: 0, title: "決済明細の取得・保管", description: "前月分の決済明細PDFを各社管理画面からダウンロードして、書類庫「決済明細」カテゴリに保管:\n□ スターペイメント（カード決済明細）\n　　https://pay2-admin.star-pay.jp/kanri/index.php\n□ PayPay（QR決済明細）\n　　https://www.paypay.ne.jp/portal/oauth2/sign-in?client_id=pay2-merchant-panel-client\n\nファイル名の例: 2026-03_スターペイメント_カード決済明細.pdf\n※ 売上計上と入金の突合に必須の書類。税理士の月次仕訳でも使用。", assignee: "会社", deadline: "毎月10日頃", category: "経理", importance: "medium" },
   { id: "monthly-trial", timing: "毎月", month: 0, title: "月次資料を税理士に提出", description: "前月の売上・経費・銀行明細を税理士ポータルで確認できる状態にして、税理士に試算表作成を依頼（📊 月次サマリーから「月次試算表（管理用）」をPDF出力して送るとスムーズ）", assignee: "共同", deadline: "翌月15日目安", category: "経理", importance: "medium" },
   // 1月
-  { id: "jan-withhold-h2", timing: "1月", month: 1, title: "源泉所得税納付（納特・下半期）", description: "7〜12月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "1/20", category: "源泉", importance: "high" },
-  { id: "jan-shiharai-chosho", timing: "1月", month: 1, title: "法定調書合計表・支払調書提出", description: "セラピスト等への支払調書と法定調書を税務署に提出", assignee: "税理士", deadline: "1/31", category: "源泉", importance: "high" },
-  { id: "jan-kyuyo-hokoku", timing: "1月", month: 1, title: "給与支払報告書提出", description: "社員の前年給与を市区町村に報告（住民税用）", assignee: "税理士", deadline: "1/31", category: "住民税", importance: "high" },
+  { id: "jan-withhold-h2", timing: "1月", month: 1, title: "源泉所得税納付（納特・下半期）", description: "7〜12月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "1/20", category: "源泉", importance: "high",
+    guide: `【やること】
+① 「セラピスト支払・源泉」シートを開く
+② 前年の「下半期（7〜12月）」を選択
+③ 「納付集計表」で金額を確認
+④ 「CSV出力」で税理士さんに送る
+⑤ 税理士さんが作成した納付書で銀行 or e-Taxで納付
+
+【注意】
+• 納期の特例を適用している場合のスケジュール
+• 金額は「納付税額合計」の金額を納付
+• 期限は1月20日（土日の場合は翌営業日）`,
+    downloads: [{ label: "源泉徴収 下半期CSV", sheet: "therapist" }] },
+  { id: "jan-shiharai-chosho", timing: "1月", month: 1, title: "法定調書合計表・支払調書提出", description: "セラピスト等への支払調書と法定調書を税務署に提出", assignee: "税理士", deadline: "1/31", category: "源泉", importance: "high",
+    guide: `【やること】
+① 「セラピスト支払・源泉」シートを開く
+② 前年を選択し、支払調書PDFを出力
+③ 各セラピストの支払調書PDFを保存 or 印刷
+④ 税理士さんに渡す（CSVでもOK）
+⑤ 税理士さんが「法定調書合計表」を作成して提出
+
+【含まれる書類】
+• 報酬、料金、契約金及び賞金の支払調書（セラピスト分）
+• 給与所得の源泉徴収票（従業員分）← 税理士さんが作成
+• 法定調書合計表 ← 税理士さんが作成
+
+【ポイント】
+• 年間5万円超のセラピストは全員提出義務あり
+• マイナンバーがなくても提出可能（空欄でOK）
+• セラピストの本名・住所が必要（源氏名ではなく）`,
+    downloads: [{ label: "セラピスト支払調書", sheet: "therapist" }] },
+  { id: "jan-kyuyo-hokoku", timing: "1月", month: 1, title: "給与支払報告書提出", description: "社員の前年給与を市区町村に報告（住民税用）", assignee: "税理士", deadline: "1/31", category: "住民税", importance: "high",
+    guide: `【対象者】
+• 雇用契約の社員のみ（社労士の大石さんが給与計算を担当）
+• T-MANAGEのセラピスト・業務委託スタッフは対象外
+
+【税理士さん・社労士さんがやること】
+• 社員の給与支払報告書を該当市区町村に提出
+• 住民税の特別徴収（給料天引き）の届出
+
+【会社がやること】
+• 特になし（税理士さん・社労士さんに任せてOK）
+• 社員の住所変更があれば事前に伝える` },
   { id: "jan-shoukyaku", timing: "1月", month: 1, title: "償却資産税申告", description: "該当資産がある場合、市区町村に申告", assignee: "税理士", deadline: "1/31", category: "固定資産", importance: "medium" },
   // 3月
   { id: "mar-tanaoroshi", timing: "3月末", month: 3, title: "棚卸実施", description: "3/31時点の在庫を店舗別に棚卸し。T-MANAGE「📦 棚卸管理」ページで実施:\n□ アンジュスパ三河安城の棚卸（全品目の数量をカウント）\n□ アンジュスパ豊橋の棚卸（全品目の数量をカウント）\n□ 棚卸表PDFを出力\n□ 書類庫の「決算書」カテゴリに保管（ファイル名例: 第3期末_棚卸表_アンジュスパ三河安城.pdf）\n\n※ 税理士への提出も忘れずに。期末の在庫資産金額として決算書に反映されます。", assignee: "会社", deadline: "3/31", category: "決算", importance: "high" },
-  { id: "mar-kessan", timing: "3月末", month: 3, title: "決算日（期末）", description: "期末日 - 決算整理スタート", assignee: "共同", deadline: "3/31", category: "決算", importance: "high" },
+  { id: "mar-kessan", timing: "3月末", month: 3, title: "決算日（期末）", description: "期末日 - 決算整理スタート", assignee: "共同", deadline: "3/31", category: "決算", importance: "high",
+    guide: `【やること】
+① 3月末時点の現金・預金残高を確認する
+② 在庫（貯蔵品：紙パンツ・オイル等）の棚卸しをする（📦 棚卸管理ページ）
+③ 3月分の売上・経費を確認
+④ 未払いの経費がないか確認する
+
+【棚卸しのやり方】
+• 全店舗の備品在庫を数える（紙パンツ○枚、オイル○本…）
+• 仕入単価 × 数量 = 棚卸金額
+• 写真を撮っておくと安心
+
+【税理士さんに渡すもの】
+• 月次サマリーの年次CSV
+• 棚卸しの金額メモ
+• 通帳のコピー or 残高のスクショ`,
+    downloads: [{ label: "月次サマリー", sheet: "summary" }] },
   { id: "mar-kotei", timing: "3〜4月", month: 3, title: "固定資産台帳更新", description: "減価償却計算と台帳更新", assignee: "税理士", deadline: "4月上旬", category: "固定資産", importance: "high" },
+  // 4月
+  { id: "apr-kessan-data", timing: "4月", month: 4, title: "決算データを税理士に提出", description: "税理士さんが申告書を作るために必要なデータを揃えて渡す", assignee: "会社", deadline: "4月末目安", category: "決算", importance: "high",
+    guide: `【渡すもの一覧】
+① T-MANAGE・税理士ポータルから出力
+  • 年間売上データ（月次サマリー年次CSV）
+  • セラピスト別外注費（支払調書CSV）
+  • 源泉徴収集計（源泉CSV）
+
+② 手元の書類
+  • 銀行通帳のコピー（全口座の3月末残高）
+  • 棚卸し結果（在庫の金額）
+  • 保険証書、契約書などの新規分
+  • 車検証、リース契約書（あれば）
+  • 敷金・権利金の領収書（新規物件分）
+
+【ポイント】
+• 遅くとも4月中に渡せば、税理士さんが5月末の期限に間に合う
+• 早めに渡すほど税理士さんも助かる`,
+    downloads: [
+      { label: "月次サマリー", sheet: "summary" },
+      { label: "セラピスト支払・源泉", sheet: "therapist" },
+    ] },
   // 5月
-  { id: "may-houjinzei", timing: "5月末", month: 5, title: "法人税・消費税・住民税・事業税申告", description: "決算から2ヶ月以内に確定申告・納税（最重要）", assignee: "税理士", deadline: "5/31", category: "法人税", importance: "high" },
-  { id: "may-kessan-doc", timing: "5月末", month: 5, title: "決算書・申告書の完成・保管", description: "完成した決算書・申告書を書類庫にアップ", assignee: "税理士", deadline: "5/31", category: "決算", importance: "high" },
+  { id: "may-houjinzei", timing: "5月末", month: 5, title: "法人税・消費税・住民税・事業税申告", description: "決算から2ヶ月以内に確定申告・納税（最重要）", assignee: "税理士", deadline: "5/31", category: "法人税", importance: "high",
+    guide: `【税理士さんがやること】
+• 法人税の確定申告書を作成・提出（e-Tax）
+• 消費税の確定申告書を作成・提出
+• 法人事業税・法人住民税の申告書を作成・提出
+
+【会社がやること】
+• 税理士さんから届く「納付額」を確認する
+• 銀行振込 or e-Taxで納付する
+• 納付期限は5月31日（2ヶ月以内）
+
+【納付額の目安】
+• 黒字の場合：法人税（所得の15〜23%）+ 地方法人税 + 消費税
+• 均等割：約7万円（赤字でも必ず必要）
+
+【複数拠点の注意】
+複数市町村に事業所がある場合：
+• 法人住民税（均等割）→ 各市に納付が必要
+• 法人事業税 → 都道府県に納付
+• 法人税 → 国（管轄税務署）に納付
+
+【注意】
+• 赤字でも「均等割」（最低約7万円）は必ず納付が必要
+• 申告期限の延長を届け出れば+1ヶ月の猶予が可能` },
+  { id: "may-kessan-doc", timing: "5月末", month: 5, title: "決算書・申告書の完成・保管", description: "完成した決算書・申告書を書類庫にアップ", assignee: "税理士", deadline: "5/31", category: "決算", importance: "high",
+    downloads: [{ label: "書類庫にアップ", sheet: "docs" }] },
   { id: "may-sokai", timing: "5月", month: 5, title: "社員総会・期末報告", description: "合同会社の場合は年次報告", assignee: "会社", deadline: "5月中", category: "その他", importance: "medium" },
+  { id: "may-jidosha", timing: "5月末", month: 5, title: "自動車税の納付", description: "法人名義の車両にかかる自動車税を納付する", assignee: "会社", deadline: "5/31", category: "その他", importance: "medium",
+    guide: `【届く書類】
+• 5月上旬に本店所在地に納付書が届く
+• 法人名義の車両すべて分が届く
+
+【納付方法】
+• コンビニ（バーコード付き用紙）
+• 銀行窓口
+• PayPay・LINE Pay等のスマホ決済
+• クレジットカード（手数料あり）
+
+【金額の目安】
+• 普通車：排気量に応じて29,500円〜111,000円
+• 軽自動車：10,800円
+
+【注意】
+• 期限は5月31日（遅れると延滞金がかかる）
+• 届いたらすぐ払うのが安心
+• 経費科目は「租税公課」で計上` },
   // 6月
   { id: "jun-juminzei", timing: "6月", month: 6, title: "住民税特別徴収 年度切替", description: "新年度の住民税を給与から天引き開始", assignee: "会社", deadline: "6月給与", category: "住民税", importance: "high" },
-  { id: "jun-roudou", timing: "6〜7月", month: 6, title: "労働保険年度更新", description: "労災・雇用保険の概算・確定申告", assignee: "社労士", deadline: "7/10", category: "労保", importance: "high" },
+  { id: "jun-roudou", timing: "6〜7月", month: 6, title: "労働保険年度更新", description: "労災・雇用保険の概算・確定申告", assignee: "社労士", deadline: "7/10", category: "労保", importance: "high",
+    guide: `【社労士さんがやること】
+• 前年度の賃金総額をもとに確定保険料を計算
+• 今年度の概算保険料を計算
+• 「労働保険 年度更新申告書」を労基署に提出・納付
+
+【対象】
+• 雇用契約の社員のみ
+• 業務委託のセラピスト・スタッフは対象外
+
+【会社がやること】
+• 社労士さんに任せてOK
+• 社員の給与データを求められたら渡す
+• 保険料の納付（社労士さんから案内あり）
+
+【時期】
+• 6月1日〜7月10日が申告・納付期間
+• 金額が大きい場合は3回分割も可能` },
   // 7月
-  { id: "jul-withhold-h1", timing: "7月", month: 7, title: "源泉所得税納付（納特・上半期）", description: "1〜6月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "7/10", category: "源泉", importance: "high" },
-  { id: "jul-santei", timing: "7月", month: 7, title: "社会保険算定基礎届提出", description: "標準報酬月額の定時決定届", assignee: "社労士", deadline: "7/10", category: "社保", importance: "high" },
+  { id: "jul-withhold-h1", timing: "7月", month: 7, title: "源泉所得税納付（納特・上半期）", description: "1〜6月分の源泉所得税をまとめて納付", assignee: "会社", deadline: "7/10", category: "源泉", importance: "high",
+    guide: `【やること】
+① 「セラピスト支払・源泉」シートを開く
+② 今年の「上半期（1〜6月）」を選択
+③ 「納付集計表」で金額を確認
+④ 「CSV出力」で税理士さんに送る
+⑤ 税理士さんが作成した納付書で銀行 or e-Taxで納付
+
+【注意】
+• 1月の納付と同じ流れ
+• 期限は7月10日（厳守！遅れると不納付加算税）`,
+    downloads: [{ label: "源泉徴収 上半期CSV", sheet: "therapist" }] },
+  { id: "jul-santei", timing: "7月", month: 7, title: "社会保険算定基礎届提出", description: "標準報酬月額の定時決定届", assignee: "社労士", deadline: "7/10", category: "社保", importance: "high",
+    guide: `【社労士さんがやること】
+• 4月・5月・6月の社員給与をもとに、新しい社会保険料を計算
+• 算定基礎届を年金事務所に提出
+• 9月から新しい保険料率が適用される
+
+【対象】
+• 雇用契約の社員のみ
+• 業務委託のセラピスト・スタッフは対象外
+
+【会社がやること】
+• 社労士さんに任せてOK
+• 社員の給与変動があれば報告する` },
+  // 9月
+  { id: "sep-kenshin", timing: "9月末までに", month: 9, title: "従業員の健康診断", description: "社員（雇用契約）に年1回の健康診断を受けさせる（法的義務）", assignee: "会社", deadline: "年度前半目安", category: "その他", importance: "medium",
+    guide: `【法律上の義務】
+• 労働安全衛生法により、事業者は常時雇用する労働者に対して年1回の健康診断が義務
+• 受けさせないと50万円以下の罰金の対象
+
+【対象者】
+• 雇用契約の社員（週30時間以上勤務）
+• 業務委託のセラピスト・スタッフは法的義務なし（ただし受けさせるのは良いこと）
+
+【やること】
+① 近くのクリニック or 健診センターに予約
+② 社員に日時を伝える
+③ 健診結果を会社で保管（5年間保存義務）
+
+【費用】
+• 1人あたり約5,000〜10,000円（会社負担が原則）
+• 経費科目は「福利厚生費」で計上
+
+【おすすめ時期】
+• 年度の前半（4〜9月）に済ませておくと安心
+• 全員同じ日に受けると管理が楽` },
   // 11月
-  { id: "nov-chukan", timing: "11月", month: 11, title: "法人税・消費税中間申告", description: "前期税額が一定以上なら中間申告・納付", assignee: "税理士", deadline: "11/30", category: "法人税", importance: "high" },
+  { id: "nov-chukan", timing: "11月", month: 11, title: "法人税・消費税中間申告", description: "前期税額が一定以上なら中間申告・納付", assignee: "税理士", deadline: "11/30", category: "法人税", importance: "high",
+    guide: `【該当する場合のみ】
+• 前期の法人税が20万円超 → 中間申告が必要
+• 前期の消費税が48万円超 → 中間申告が必要
+• 前期が赤字なら中間申告は不要
+
+【会社がやること】
+• 税理士さんから「中間納付が必要」と言われたら納付する
+• 金額は前期の税額の半分（予定申告）か、仮決算による金額` },
   { id: "nov-nenchou-prep", timing: "11月", month: 11, title: "年末調整の書類回収開始", description: "役員・社員から以下の書類を回収して書類庫「個人確定申告」カテゴリに保管 → 税理士に共有:\n□ 生命保険料控除証明書（10〜11月に各保険会社から郵送）\n□ 地震保険料控除証明書\n□ 社会保険料控除証明書（国民年金等を個人で払っている場合）\n□ iDeCo等の小規模企業共済等掛金払込証明書\n□ 住宅ローン控除関係書類（初年度のみ）\n□ 扶養控除等異動申告書（扶養家族に変化があった場合）", assignee: "共同", deadline: "11月末", category: "源泉", importance: "high" },
   // 12月
   { id: "dec-nenchou", timing: "12月", month: 12, title: "年末調整", description: "11月に回収した書類をもとに、役員・社員の年末調整を実施。12月給与で還付 or 追加徴収の精算。翌年1月に源泉徴収票を発行。\n※ 2社以上から役員報酬を受けている場合は「主たる給与」のみで年末調整し、全体の精算は2〜3月の役員個人の確定申告で行う。", assignee: "税理士", deadline: "12月給与", category: "源泉", importance: "high" },
@@ -237,6 +441,7 @@ export default function TaxPortal() {
   const [taskStatuses, setTaskStatuses] = useState<TaxTaskStatus[]>([]);
   const [scheduleFilter, setScheduleFilter] = useState<string>("all"); // all/税理士/会社/社労士/共同
   const [scheduleMonthFilter, setScheduleMonthFilter] = useState<string>("all");
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null); // 展開中のタスクID（詳細ガイド表示用）
 
   // 銀行取込
   const [bankTxs, setBankTxs] = useState<BankTransaction[]>([]);
@@ -2570,45 +2775,78 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                               const status = getTaskStatus(t.id);
                               const assigneeColors: Record<string, string> = { "税理士": "#85a8c4", "会社": "#c3a782", "社労士": "#7ab88f", "共同": "#a885c4" };
                               const categoryColors: Record<string, string> = { "法人税": "#85a8c4", "消費税": "#85a8c4", "源泉": "#f59e0b", "社保": "#7ab88f", "労保": "#7ab88f", "住民税": "#c4a555", "決算": "#c3a782", "固定資産": "#a885c4", "給与": "#e091a8", "経理": "#888780", "その他": "#888780" };
+                              const hasDetail = !!(t.guide || (t.downloads && t.downloads.length > 0));
+                              const isExpanded = expandedTaskId === t.id;
                               return (
-                                <tr key={t.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40", opacity: status === "done" ? 0.6 : 1 }}>
-                                  <td style={{ padding: "5px 10px", textAlign: "center", color: T.textFaint, fontSize: 10, borderRight: gridBorder }}>{i + 1}</td>
-                                  <td style={{ padding: "5px 10px", borderRight: gridBorder, fontSize: 11, color: T.textSub }}>{t.timing}</td>
-                                  <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
-                                    <div style={{ fontWeight: 500, textDecoration: status === "done" ? "line-through" : "none" }}>{t.title}</div>
-                                    <div className="text-[10px]" style={{ color: T.textMuted, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                                      {t.description.split(/(https?:\/\/[^\s　]+)/g).map((part, idx) => {
-                                        if (/^https?:\/\//.test(part)) {
-                                          return (
-                                            <a
-                                              key={idx}
-                                              href={part}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              style={{ color: "#4a7c9f", textDecoration: "underline", wordBreak: "break-all" }}
-                                              onClick={(e) => e.stopPropagation()}
-                                            >{part}</a>
-                                          );
-                                        }
-                                        return <span key={idx}>{part}</span>;
-                                      })}
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (assigneeColors[t.assignee] || "#888") + "22", color: assigneeColors[t.assignee] || "#888" }}>{t.assignee}</span>
-                                  </td>
-                                  <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (categoryColors[t.category] || "#888") + "18", color: categoryColors[t.category] || "#888" }}>{t.category}</span>
-                                  </td>
-                                  <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder, fontSize: 11, fontWeight: 500, color: t.importance === "high" ? "#c45555" : T.textSub }}>{t.deadline}</td>
-                                  <td style={{ padding: "5px 10px", textAlign: "center" }}>
-                                    <div className="flex gap-1 justify-center">
-                                      <button onClick={() => updateTaskStatus(t.id, "pending")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "pending" ? "#c45555" : T.cardAlt, color: status === "pending" ? "white" : T.textFaint, border: "none" }}>未着手</button>
-                                      <button onClick={() => updateTaskStatus(t.id, "in_progress")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "in_progress" ? "#f59e0b" : T.cardAlt, color: status === "in_progress" ? "white" : T.textFaint, border: "none" }}>準備中</button>
-                                      <button onClick={() => updateTaskStatus(t.id, "done")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "done" ? "#22c55e" : T.cardAlt, color: status === "done" ? "white" : T.textFaint, border: "none" }}>完了</button>
-                                    </div>
-                                  </td>
-                                </tr>
+                                <Fragment key={t.id}>
+                                  <tr
+                                    style={{ borderTop: gridBorder, backgroundColor: isExpanded ? "#c3a78214" : (i % 2 === 0 ? "transparent" : T.cardAlt + "40"), opacity: status === "done" ? 0.6 : 1, cursor: hasDetail ? "pointer" : "default" }}
+                                    onClick={() => { if (hasDetail) setExpandedTaskId(isExpanded ? null : t.id); }}
+                                  >
+                                    <td style={{ padding: "5px 10px", textAlign: "center", color: hasDetail ? "#c3a782" : T.textFaint, fontSize: 10, borderRight: gridBorder }}>
+                                      {hasDetail ? (isExpanded ? "▼" : "▶") : (i + 1)}
+                                    </td>
+                                    <td style={{ padding: "5px 10px", borderRight: gridBorder, fontSize: 11, color: T.textSub }}>{t.timing}</td>
+                                    <td style={{ padding: "5px 10px", borderRight: gridBorder }}>
+                                      <div style={{ fontWeight: 500, textDecoration: status === "done" ? "line-through" : "none" }}>
+                                        {t.title}
+                                        {hasDetail && <span className="ml-2 text-[9px]" style={{ color: "#c3a782" }}>📖 詳細あり</span>}
+                                      </div>
+                                      <div className="text-[10px]" style={{ color: T.textMuted, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                                        {t.description.split(/(https?:\/\/[^\s　]+)/g).map((part, idx) => {
+                                          if (/^https?:\/\//.test(part)) {
+                                            return (
+                                              <a
+                                                key={idx}
+                                                href={part}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{ color: "#4a7c9f", textDecoration: "underline", wordBreak: "break-all" }}
+                                                onClick={(e) => e.stopPropagation()}
+                                              >{part}</a>
+                                            );
+                                          }
+                                          return <span key={idx}>{part}</span>;
+                                        })}
+                                      </div>
+                                    </td>
+                                    <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (assigneeColors[t.assignee] || "#888") + "22", color: assigneeColors[t.assignee] || "#888" }}>{t.assignee}</span>
+                                    </td>
+                                    <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder }}>
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: (categoryColors[t.category] || "#888") + "18", color: categoryColors[t.category] || "#888" }}>{t.category}</span>
+                                    </td>
+                                    <td style={{ padding: "5px 10px", textAlign: "center", borderRight: gridBorder, fontSize: 11, fontWeight: 500, color: t.importance === "high" ? "#c45555" : T.textSub }}>{t.deadline}</td>
+                                    <td style={{ padding: "5px 10px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                                      <div className="flex gap-1 justify-center">
+                                        <button onClick={() => updateTaskStatus(t.id, "pending")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "pending" ? "#c45555" : T.cardAlt, color: status === "pending" ? "white" : T.textFaint, border: "none" }}>未着手</button>
+                                        <button onClick={() => updateTaskStatus(t.id, "in_progress")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "in_progress" ? "#f59e0b" : T.cardAlt, color: status === "in_progress" ? "white" : T.textFaint, border: "none" }}>準備中</button>
+                                        <button onClick={() => updateTaskStatus(t.id, "done")} className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: status === "done" ? "#22c55e" : T.cardAlt, color: status === "done" ? "white" : T.textFaint, border: "none" }}>完了</button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {isExpanded && hasDetail && (
+                                    <tr style={{ backgroundColor: "#c3a7820a" }}>
+                                      <td colSpan={7} style={{ padding: "14px 18px", borderTop: gridBorder }}>
+                                        {t.guide && (
+                                          <pre className="text-[11px] whitespace-pre-wrap leading-relaxed mb-3" style={{ color: T.textSub, fontFamily: "inherit", margin: 0 }}>{t.guide}</pre>
+                                        )}
+                                        {t.downloads && t.downloads.length > 0 && (
+                                          <div className="flex gap-2 flex-wrap mt-3">
+                                            {t.downloads.map((d, di) => (
+                                              <button
+                                                key={di}
+                                                onClick={(e) => { e.stopPropagation(); setSheet(d.sheet); setExpandedTaskId(null); }}
+                                                className="px-3 py-2 text-[10px] rounded-lg cursor-pointer font-medium"
+                                                style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78233" }}
+                                              >📂 {d.label} シートへ →</button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </Fragment>
                               );
                             })}
                           </tbody>
@@ -2623,6 +2861,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                         このスケジュールは<strong>3月決算法人</strong>（合同会社テラスライフ/チョップ）向けです。<br/>
                         ステータスは<strong>期ごと</strong>に別々に記録されるので、毎年リセットされます（タスク一覧は固定）。<br/>
                         <strong>担当別の役割分担:</strong> 税理士=江坂先生 / 社労士=大石さん / 会社=社内対応 / 共同=決算など連携が必要なもの<br/>
+                        <strong>📖 詳細あり</strong> のタスクは行をクリックすると手順・注意・関連シートへのリンクが開きます。<br/>
                         重要度が高いタスクの期限は赤字で表示されます。
                       </p>
                     </div>
