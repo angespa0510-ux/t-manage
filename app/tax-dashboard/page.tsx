@@ -18,7 +18,7 @@ export default function TaxDashboard() {
   const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, canAccessCashDashboard } = useStaffSession();
 
-  const [dashTab, setDashTab] = useState<"company" | "mynumber" | "certificate" | "vendors">("certificate");
+  const [dashTab, setDashTab] = useState<"company" | "mynumber" | "certificate" | "vendors" | "documents">("certificate");
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
   const [corporateNumber, setCorporateNumber] = useState(""); const [fiscalMonth, setFiscalMonth] = useState(3); const [representativeName, setRepresentativeName] = useState(""); const [entityType, setEntityType] = useState("llc"); const [taxOffice, setTaxOffice] = useState(""); const [taxAccountantName, setTaxAccountantName] = useState(""); const [taxAccountantPhone, setTaxAccountantPhone] = useState(""); const [taxAccountantAddress, setTaxAccountantAddress] = useState(""); const [laborConsultantName, setLaborConsultantName] = useState(""); const [laborConsultantPhone, setLaborConsultantPhone] = useState("");
   // コーポレートサイト用
@@ -69,7 +69,7 @@ export default function TaxDashboard() {
           <h1 className="text-[14px] font-medium">バックオフィス</h1>
           </div>
         <div className="flex items-center gap-2">
-          {[{k:"certificate",l:"📄 証明書発行"},{k:"vendors",l:"💼 取引先"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
+          {[{k:"certificate",l:"📄 証明書発行"},{k:"vendors",l:"💼 取引先"},{k:"documents",l:"📋 書類テンプレ"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
             <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
           ))}
         </div>
@@ -89,6 +89,11 @@ export default function TaxDashboard() {
       {dashTab === "vendors" && (
         <div className="flex-1 overflow-y-auto p-4">
           <VendorsManager T={T} />
+        </div>
+      )}
+      {dashTab === "documents" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <DocumentTemplatesManager T={T} activeStaff={activeStaff} />
         </div>
       )}
       {dashTab === "company" && (
@@ -1545,6 +1550,564 @@ function VendorsManager({ T }: { T: any }) {
             <div className="flex gap-2 mt-5">
               <button onClick={closeModal} className="flex-1 px-4 py-2.5 rounded-xl text-[12px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
               <button onClick={save} className="flex-[2] px-4 py-2.5 rounded-xl text-[12px] cursor-pointer text-white font-medium" style={{ backgroundColor: "#c3a782" }}>{modalMode === "add" ? "追加する" : "保存する"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentTemplatesManager({ T, activeStaff }: { T: any; activeStaff: any }) {
+  type Template = {
+    id: number;
+    name: string;
+    category: string;
+    description: string;
+    target_kind: string;
+    status: string;
+    created_by_name: string;
+    created_at: string;
+    updated_at: string;
+  };
+  type TemplateVersion = {
+    id: number;
+    template_id: number;
+    version: string;
+    file_url: string;
+    file_path: string;
+    file_name: string;
+    file_size: number;
+    mime_type: string;
+    change_note: string;
+    effective_from: string | null;
+    is_current: boolean;
+    uploaded_by_name: string;
+    uploaded_at: string;
+  };
+
+  const toast = useToast();
+  const { confirm, ConfirmModalNode } = useConfirm();
+
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [versionsByTemplate, setVersionsByTemplate] = useState<Record<number, TemplateVersion[]>>({});
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [targetFilter, setTargetFilter] = useState<"all" | "therapist" | "staff" | "both" | "vendor" | "customer" | "internal">("all");
+  const [showArchived, setShowArchived] = useState(false);
+
+  // 追加・編集モーダル
+  const [modalMode, setModalMode] = useState<"closed" | "add" | "edit">("closed");
+  const [editingId, setEditingId] = useState<number>(0);
+  const [form, setForm] = useState({ name: "", category: "契約書", description: "", target_kind: "therapist" });
+
+  // 初回バージョンアップロード用
+  const [initialFile, setInitialFile] = useState<File | null>(null);
+  const [initialVersion, setInitialVersion] = useState("1.0");
+  const [initialChangeNote, setInitialChangeNote] = useState("");
+
+  // バージョン詳細モーダル
+  const [versionModalTemplate, setVersionModalTemplate] = useState<Template | null>(null);
+  const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
+  const [newVersionStr, setNewVersionStr] = useState("");
+  const [newVersionChangeNote, setNewVersionChangeNote] = useState("");
+  const [newVersionEffectiveFrom, setNewVersionEffectiveFrom] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  const CATEGORIES = ["契約書", "誓約書", "同意書", "業務マニュアル", "社内規程", "雛形書類", "その他"];
+  const TARGET_LABELS: Record<string, { label: string; color: string }> = {
+    therapist: { label: "💆 セラピスト", color: "#c3a782" },
+    staff: { label: "👥 スタッフ", color: "#85a8c4" },
+    both: { label: "🧑‍🤝‍🧑 両方", color: "#a855f7" },
+    vendor: { label: "💼 取引先", color: "#06b6d4" },
+    customer: { label: "👤 お客様", color: "#d4687e" },
+    internal: { label: "🏢 社内", color: "#888780" },
+  };
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    const { data: tpls, error: te } = await supabase.from("document_templates").select("*").order("category").order("name");
+    if (te) { toast.show(`取得失敗: ${te.message}`, "error"); setLoading(false); return; }
+    setTemplates((tpls || []) as Template[]);
+    const { data: vers, error: ve } = await supabase.from("document_template_versions").select("*").order("uploaded_at", { ascending: false });
+    if (ve) { toast.show(`バージョン取得失敗: ${ve.message}`, "error"); setLoading(false); return; }
+    const grouped: Record<number, TemplateVersion[]> = {};
+    (vers || []).forEach((v: any) => {
+      if (!grouped[v.template_id]) grouped[v.template_id] = [];
+      grouped[v.template_id].push(v as TemplateVersion);
+    });
+    setVersionsByTemplate(grouped);
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const filtered = templates.filter(t => {
+    if (!showArchived && t.status === "archived") return false;
+    if (categoryFilter !== "all" && t.category !== categoryFilter) return false;
+    if (targetFilter !== "all" && t.target_kind !== targetFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!t.name.toLowerCase().includes(q) && !t.description.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const getCurrent = (tId: number): TemplateVersion | undefined => (versionsByTemplate[tId] || []).find(v => v.is_current);
+  const getVersionCount = (tId: number) => (versionsByTemplate[tId] || []).length;
+
+  const openAdd = () => {
+    setForm({ name: "", category: "契約書", description: "", target_kind: "therapist" });
+    setInitialFile(null); setInitialVersion("1.0"); setInitialChangeNote("");
+    setEditingId(0);
+    setModalMode("add");
+  };
+
+  const openEdit = (t: Template) => {
+    setForm({ name: t.name, category: t.category || "契約書", description: t.description || "", target_kind: t.target_kind || "therapist" });
+    setEditingId(t.id);
+    setModalMode("edit");
+  };
+
+  const closeModal = () => {
+    setModalMode("closed"); setEditingId(0);
+    setInitialFile(null); setInitialVersion("1.0"); setInitialChangeNote("");
+  };
+
+  const uploadFile = async (file: File, templateId: number): Promise<{ path: string; publicUrl: string } | null> => {
+    const ext = file.name.split(".").pop() || "bin";
+    const path = `${templateId}/${Date.now()}_${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("document-templates").upload(path, file, { upsert: false, contentType: file.type });
+    if (error) {
+      toast.show(`ファイルアップロード失敗: ${error.message}`, "error");
+      return null;
+    }
+    const { data } = supabase.storage.from("document-templates").getPublicUrl(path);
+    return { path, publicUrl: data.publicUrl };
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) { toast.show("テンプレート名を入力してください", "error"); return; }
+    if (modalMode === "add" && !initialFile) { toast.show("最初のバージョンのファイルをアップロードしてください", "error"); return; }
+
+    setUploading(true);
+    const payload = {
+      name: form.name.trim(), category: form.category, description: form.description.trim(),
+      target_kind: form.target_kind,
+    };
+
+    if (modalMode === "add") {
+      const { data: inserted, error } = await supabase.from("document_templates").insert({ ...payload, status: "active", created_by_name: activeStaff?.name || "" }).select("*").single();
+      if (error || !inserted) { toast.show(`追加失敗: ${error?.message}`, "error"); setUploading(false); return; }
+
+      // 初回バージョンアップロード
+      if (initialFile) {
+        const up = await uploadFile(initialFile, inserted.id);
+        if (!up) { setUploading(false); return; }
+        const { error: ve } = await supabase.from("document_template_versions").insert({
+          template_id: inserted.id,
+          version: initialVersion.trim() || "1.0",
+          file_url: up.publicUrl, file_path: up.path, file_name: initialFile.name,
+          file_size: initialFile.size, mime_type: initialFile.type,
+          change_note: initialChangeNote.trim() || "初版",
+          effective_from: new Date().toISOString().slice(0, 10),
+          is_current: true,
+          uploaded_by_name: activeStaff?.name || "",
+        });
+        if (ve) { toast.show(`バージョン追加失敗: ${ve.message}`, "error"); setUploading(false); return; }
+      }
+      toast.show(`「${form.name}」を追加しました`, "success");
+    } else {
+      const { error } = await supabase.from("document_templates").update(payload).eq("id", editingId);
+      if (error) { toast.show(`更新失敗: ${error.message}`, "error"); setUploading(false); return; }
+      toast.show(`「${form.name}」を更新しました`, "success");
+    }
+
+    setUploading(false);
+    closeModal();
+    fetchAll();
+  };
+
+  const openVersionModal = (t: Template) => {
+    setVersionModalTemplate(t);
+    setNewVersionFile(null);
+    // 現行版から次バージョン案を提案（"1.0" → "1.1"、"1.5" → "1.6"）
+    const cur = getCurrent(t.id);
+    if (cur) {
+      const parts = cur.version.split(".").map(x => parseInt(x) || 0);
+      if (parts.length >= 2) parts[parts.length - 1] += 1;
+      else parts.push(1);
+      setNewVersionStr(parts.join("."));
+    } else {
+      setNewVersionStr("1.0");
+    }
+    setNewVersionChangeNote("");
+    setNewVersionEffectiveFrom(new Date().toISOString().slice(0, 10));
+  };
+
+  const closeVersionModal = () => {
+    setVersionModalTemplate(null);
+    setNewVersionFile(null); setNewVersionStr(""); setNewVersionChangeNote(""); setNewVersionEffectiveFrom("");
+  };
+
+  const addVersion = async () => {
+    if (!versionModalTemplate || !newVersionFile) { toast.show("ファイルを選択してください", "error"); return; }
+    if (!newVersionStr.trim()) { toast.show("バージョン番号を入力してください", "error"); return; }
+    setUploading(true);
+    const up = await uploadFile(newVersionFile, versionModalTemplate.id);
+    if (!up) { setUploading(false); return; }
+    const { error } = await supabase.from("document_template_versions").insert({
+      template_id: versionModalTemplate.id,
+      version: newVersionStr.trim(),
+      file_url: up.publicUrl, file_path: up.path, file_name: newVersionFile.name,
+      file_size: newVersionFile.size, mime_type: newVersionFile.type,
+      change_note: newVersionChangeNote.trim(),
+      effective_from: newVersionEffectiveFrom || null,
+      is_current: true, // 新しいバージョンは自動で現行版に（DBトリガーで他はfalseに）
+      uploaded_by_name: activeStaff?.name || "",
+    });
+    setUploading(false);
+    if (error) { toast.show(`追加失敗: ${error.message}`, "error"); return; }
+    toast.show(`v${newVersionStr} をアップロードしました`, "success");
+    closeVersionModal();
+    fetchAll();
+  };
+
+  const setAsCurrent = async (ver: TemplateVersion) => {
+    const ok = await confirm({
+      title: "現行版を切り替え", message: `v${ver.version} を現行版にします。既存の現行版は履歴として残ります。`,
+      variant: "info", confirmLabel: "切り替え", cancelLabel: "キャンセル",
+    });
+    if (!ok) return;
+    const { error } = await supabase.from("document_template_versions").update({ is_current: true }).eq("id", ver.id);
+    if (error) { toast.show(`切り替え失敗: ${error.message}`, "error"); return; }
+    toast.show(`v${ver.version} を現行版にしました`, "success");
+    fetchAll();
+  };
+
+  const deleteVersion = async (ver: TemplateVersion) => {
+    const ok = await confirm({
+      title: "バージョンを削除", message: `v${ver.version} を完全に削除します。ファイルもStorageから削除されます。元に戻せません。`,
+      variant: "danger", confirmLabel: "削除する", cancelLabel: "キャンセル",
+    });
+    if (!ok) return;
+    if (ver.file_path) await supabase.storage.from("document-templates").remove([ver.file_path]);
+    const { error } = await supabase.from("document_template_versions").delete().eq("id", ver.id);
+    if (error) { toast.show(`削除失敗: ${error.message}`, "error"); return; }
+    toast.show("削除しました", "success");
+    fetchAll();
+  };
+
+  const archiveTemplate = async (t: Template) => {
+    const ok = await confirm({
+      title: "テンプレートをアーカイブ", message: `「${t.name}」をアーカイブします。過去のバージョン履歴は保持されます。`,
+      variant: "warning", confirmLabel: "アーカイブ", cancelLabel: "キャンセル",
+    });
+    if (!ok) return;
+    const { error } = await supabase.from("document_templates").update({ status: "archived" }).eq("id", t.id);
+    if (error) { toast.show(`失敗: ${error.message}`, "error"); return; }
+    toast.show("アーカイブしました", "success");
+    fetchAll();
+  };
+
+  const unarchiveTemplate = async (t: Template) => {
+    const { error } = await supabase.from("document_templates").update({ status: "active" }).eq("id", t.id);
+    if (error) { toast.show(`失敗: ${error.message}`, "error"); return; }
+    toast.show("復元しました", "success");
+    fetchAll();
+  };
+
+  const hardDeleteTemplate = async (t: Template) => {
+    const ok = await confirm({
+      title: "テンプレートを完全削除", message: `「${t.name}」と全バージョンを完全削除します。Storageのファイルも削除されます。元に戻せません。`,
+      variant: "danger", confirmLabel: "削除する", cancelLabel: "キャンセル",
+    });
+    if (!ok) return;
+    // バージョン側のファイルをStorageから削除
+    const vers = versionsByTemplate[t.id] || [];
+    const paths = vers.map(v => v.file_path).filter(Boolean);
+    if (paths.length > 0) await supabase.storage.from("document-templates").remove(paths);
+    // テーブル削除（CASCADE で versions も消える）
+    const { error } = await supabase.from("document_templates").delete().eq("id", t.id);
+    if (error) { toast.show(`削除失敗: ${error.message}`, "error"); return; }
+    toast.show("完全削除しました", "success");
+    fetchAll();
+  };
+
+  const fmtBytes = (n: number) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const inputStyle: React.CSSProperties = { backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text };
+
+  // 統計
+  const activeCount = templates.filter(t => t.status === "active").length;
+  const totalVersions = (Object.values(versionsByTemplate) as TemplateVersion[][]).reduce((a, arr) => a + arr.length, 0);
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", animation: "fadeIn 0.3s" }}>
+      {ConfirmModalNode}
+
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-[16px] font-medium">📋 書類テンプレート管理</h2>
+          <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>契約書・誓約書などのテンプレートをバージョン管理</p>
+        </div>
+        <button onClick={openAdd} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer font-medium text-white" style={{ backgroundColor: "#c3a782" }}>+ テンプレートを追加</button>
+      </div>
+
+      {/* サマリー */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>テンプレ数（稼働中）</p>
+          <p className="text-[20px] font-medium">{activeCount}</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>総バージョン数</p>
+          <p className="text-[20px] font-medium" style={{ color: "#c3a782" }}>{totalVersions}</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>カテゴリ数</p>
+          <p className="text-[20px] font-medium">{new Set(templates.filter(t => t.status === "active").map(t => t.category)).size}</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>アーカイブ</p>
+          <p className="text-[20px] font-medium" style={{ color: "#888780" }}>{templates.filter(t => t.status === "archived").length}</p>
+        </div>
+      </div>
+
+      {/* フィルタ */}
+      <div className="rounded-xl border p-3 mb-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 テンプレ名・説明で検索" className="flex-1 min-w-[200px] px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="px-3 py-2 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+          <option value="all">すべてのカテゴリ</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={targetFilter} onChange={e => setTargetFilter(e.target.value as any)} className="px-3 py-2 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+          <option value="all">すべての対象者</option>
+          {Object.entries(TARGET_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: T.textSub }}>
+          <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
+          アーカイブ表示
+        </label>
+      </div>
+
+      {/* 一覧 */}
+      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        {loading ? (
+          <p className="text-[12px] text-center py-8" style={{ color: T.textMuted }}>読み込み中...</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>該当するテンプレートがありません</p>
+        ) : (
+          <table className="w-full" style={{ fontSize: 12 }}>
+            <thead style={{ backgroundColor: T.cardAlt, color: T.textSub, fontSize: 11 }}>
+              <tr>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>テンプレート名</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 110 }}>カテゴリ</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 120 }}>対象者</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 110 }}>現行版</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 110 }}>適用開始</th>
+                <th style={{ padding: "8px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 200 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((t, i) => {
+                const cur = getCurrent(t.id);
+                const vCount = getVersionCount(t.id);
+                const tgt = TARGET_LABELS[t.target_kind] || TARGET_LABELS.internal;
+                return (
+                  <tr key={t.id} style={{ borderTop: i === 0 ? "none" : `1px solid ${T.border}`, opacity: t.status === "archived" ? 0.5 : 1 }}>
+                    <td style={{ padding: "8px 10px" }}>
+                      <div style={{ fontWeight: 500 }}>{t.name}</div>
+                      {t.description && <div className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>{t.description}</div>}
+                      {t.status === "archived" && <span className="text-[8px] px-1.5 py-0.5 rounded mt-0.5 inline-block" style={{ backgroundColor: "#88878018", color: "#888780" }}>アーカイブ</span>}
+                    </td>
+                    <td style={{ padding: "8px 10px", color: T.textSub, fontSize: 11 }}>{t.category}</td>
+                    <td style={{ padding: "8px 10px" }}>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: tgt.color + "18", color: tgt.color }}>{tgt.label}</span>
+                    </td>
+                    <td style={{ padding: "8px 10px" }}>
+                      {cur ? (
+                        <div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded mr-1" style={{ backgroundColor: "#c3a78218", color: "#c3a782", fontFamily: "monospace" }}>v{cur.version}</span>
+                          <span className="text-[9px]" style={{ color: T.textFaint }}>{vCount}版</span>
+                        </div>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>ファイル未登録</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "8px 10px", color: T.textSub, fontSize: 11 }}>{cur?.effective_from || "—"}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                      <div className="flex gap-1 justify-center flex-wrap">
+                        {cur && (
+                          <a href={cur.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>📥 DL</a>
+                        )}
+                        <button onClick={() => openVersionModal(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>📜 履歴</button>
+                        <button onClick={() => openEdit(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                        {t.status === "active" ? (
+                          <button onClick={() => archiveTemplate(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#f59e0b12", color: "#f59e0b" }}>🗃</button>
+                        ) : (
+                          <>
+                            <button onClick={() => unarchiveTemplate(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e12", color: "#22c55e" }}>↩</button>
+                            <button onClick={() => hardDeleteTemplate(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* 参考情報 */}
+      <div className="rounded-xl p-4 mt-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78233" }}>
+        <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 バージョン管理の使い方</p>
+        <div className="text-[10px] leading-relaxed space-y-1" style={{ color: T.textSub }}>
+          <p>• 法改正や社内規程変更で書類を更新する際は、「📜 履歴」から新バージョンをアップロード。</p>
+          <p>• 過去のバージョンも保持されるので、「このセラピストと契約した時の契約書」の復元が可能。</p>
+          <p>• 対応ファイル形式: PDF / Word / Excel / テキスト / 画像（最大10MB目安）。</p>
+          <p>• 誤ってアップロードした場合は「📜 履歴」から個別削除可能。</p>
+        </div>
+      </div>
+
+      {/* 追加・編集モーダル */}
+      {modalMode !== "closed" && (
+        <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <div onClick={e => e.stopPropagation()} className="rounded-2xl border p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <h2 className="text-[15px] font-medium mb-4">{modalMode === "add" ? "テンプレートを追加" : "テンプレートを編集"}</h2>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>テンプレート名 *</label>
+                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="例: 業務委託契約書、誓約書、マイナンバー取扱同意書" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>カテゴリ</label>
+                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>対象者</label>
+                  <select value={form.target_kind} onChange={e => setForm(f => ({ ...f, target_kind: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                    {Object.entries(TARGET_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>説明</label>
+                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="どんな書類か、使用場面などをメモ" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} />
+              </div>
+
+              {/* 新規時のみ: 初回バージョンアップロード */}
+              {modalMode === "add" && (
+                <div className="rounded-xl p-4 space-y-2" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <p className="text-[11px] font-medium">📎 最初のバージョンをアップロード</p>
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>ファイル *</label>
+                    <input type="file" onChange={e => setInitialFile(e.target.files?.[0] || null)} accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg" className="w-full text-[11px]" style={{ color: T.text }} />
+                    {initialFile && <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>{initialFile.name} ({fmtBytes(initialFile.size)})</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>バージョン番号</label>
+                      <input type="text" value={initialVersion} onChange={e => setInitialVersion(e.target.value)} placeholder="1.0" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card, fontFamily: "monospace" }} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>変更内容（任意）</label>
+                      <input type="text" value={initialChangeNote} onChange={e => setInitialChangeNote(e.target.value)} placeholder="初版" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={closeModal} disabled={uploading} className="flex-1 px-4 py-2.5 rounded-xl text-[12px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              <button onClick={save} disabled={uploading} className="flex-[2] px-4 py-2.5 rounded-xl text-[12px] cursor-pointer text-white font-medium" style={{ backgroundColor: "#c3a782", opacity: uploading ? 0.6 : 1 }}>{uploading ? "処理中..." : modalMode === "add" ? "追加する" : "保存する"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* バージョン履歴モーダル */}
+      {versionModalTemplate && (
+        <div onClick={closeVersionModal} className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <div onClick={e => e.stopPropagation()} className="rounded-2xl border p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <div className="mb-4">
+              <h2 className="text-[15px] font-medium">📜 バージョン履歴</h2>
+              <p className="text-[12px] mt-1" style={{ color: T.textMuted }}>{versionModalTemplate.name}</p>
+            </div>
+
+            {/* 新バージョンアップロード */}
+            <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+              <p className="text-[11px] font-medium mb-2">📎 新しいバージョンをアップロード</p>
+              <div className="space-y-2">
+                <input type="file" onChange={e => setNewVersionFile(e.target.files?.[0] || null)} accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg" className="w-full text-[11px]" style={{ color: T.text }} />
+                {newVersionFile && <p className="text-[9px]" style={{ color: T.textFaint }}>{newVersionFile.name} ({fmtBytes(newVersionFile.size)})</p>}
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] mb-0.5" style={{ color: T.textMuted }}>バージョン *</label>
+                    <input type="text" value={newVersionStr} onChange={e => setNewVersionStr(e.target.value)} placeholder="1.1" className="w-full px-2 py-1.5 rounded text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card, fontFamily: "monospace" }} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-0.5" style={{ color: T.textMuted }}>適用開始日</label>
+                    <input type="date" value={newVersionEffectiveFrom} onChange={e => setNewVersionEffectiveFrom(e.target.value)} className="w-full px-2 py-1.5 rounded text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] mb-0.5" style={{ color: T.textMuted }}>変更内容</label>
+                    <input type="text" value={newVersionChangeNote} onChange={e => setNewVersionChangeNote(e.target.value)} placeholder="例: 税率改定に対応" className="w-full px-2 py-1.5 rounded text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                  </div>
+                </div>
+                <button onClick={addVersion} disabled={uploading || !newVersionFile} className="w-full px-3 py-2 rounded-lg text-[11px] cursor-pointer text-white font-medium" style={{ backgroundColor: "#c3a782", opacity: uploading || !newVersionFile ? 0.5 : 1 }}>
+                  {uploading ? "アップロード中..." : "🚀 アップロードして現行版にする"}
+                </button>
+              </div>
+            </div>
+
+            {/* 履歴一覧 */}
+            <div className="space-y-2">
+              {(versionsByTemplate[versionModalTemplate.id] || []).length === 0 ? (
+                <p className="text-[11px] text-center py-4" style={{ color: T.textFaint }}>まだバージョンが登録されていません</p>
+              ) : (
+                (versionsByTemplate[versionModalTemplate.id] || []).sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()).map(ver => (
+                  <div key={ver.id} className="rounded-xl p-3 border" style={{ backgroundColor: ver.is_current ? "#c3a78208" : T.card, borderColor: ver.is_current ? "#c3a78255" : T.border }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[12px] font-medium px-2 py-0.5 rounded" style={{ backgroundColor: ver.is_current ? "#c3a78222" : T.cardAlt, color: ver.is_current ? "#c3a782" : T.text, fontFamily: "monospace" }}>v{ver.version}</span>
+                        {ver.is_current && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✓ 現行版</span>}
+                        <span className="text-[10px]" style={{ color: T.textSub }}>{ver.file_name}</span>
+                        <span className="text-[9px]" style={{ color: T.textFaint }}>{fmtBytes(ver.file_size)}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <a href={ver.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>📥 DL</a>
+                        {!ver.is_current && <button onClick={() => setAsCurrent(ver)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>現行版にする</button>}
+                        <button onClick={() => deleteVersion(ver)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
+                      </div>
+                    </div>
+                    {ver.change_note && <p className="text-[10px] mt-1.5" style={{ color: T.textSub }}>📝 {ver.change_note}</p>}
+                    <div className="flex items-center gap-3 mt-1 text-[9px]" style={{ color: T.textFaint }}>
+                      {ver.effective_from && <span>適用開始: {ver.effective_from}</span>}
+                      <span>アップロード: {new Date(ver.uploaded_at).toLocaleDateString("ja-JP")}{ver.uploaded_by_name ? ` by ${ver.uploaded_by_name}` : ""}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-5">
+              <button onClick={closeVersionModal} className="w-full px-4 py-2.5 rounded-xl text-[12px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
             </div>
           </div>
         </div>
