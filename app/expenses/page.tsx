@@ -68,6 +68,8 @@ export default function ExpensesPage() {
   /* ───── UI状態 ───── */
   const [tab, setTab] = useState<"list" | "keywords">("list");
   const [filterType, setFilterType] = useState("all");
+  const [filterVendor, setFilterVendor] = useState<number | "all" | "unlinked">("all");
+  const [filterInvoice, setFilterInvoice] = useState<"all" | "registered" | "unregistered">("all");
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
 
@@ -379,9 +381,30 @@ export default function ExpensesPage() {
   };
 
   /* ───── フィルタ・集計 ───── */
-  const filtered = expenses.filter((e) => filterType === "all" || e.type === filterType);
+  const filtered = expenses.filter((e) => {
+    if (filterType !== "all" && e.type !== filterType) return false;
+    // 取引先フィルタ
+    if (filterVendor === "unlinked") {
+      if (e.vendor_id) return false;
+    } else if (filterVendor !== "all") {
+      if (e.vendor_id !== filterVendor) return false;
+    }
+    // インボイス状況フィルタ（取引先マスター連携があればそちらを優先、なければ経費レコード自身のhas_invoice）
+    if (filterInvoice !== "all") {
+      const v = e.vendor_id ? vendors.find(x => x.id === e.vendor_id) : null;
+      const isReg = v ? v.has_invoice : !!e.has_invoice;
+      if (filterInvoice === "registered" && !isReg) return false;
+      if (filterInvoice === "unregistered" && isReg) return false;
+    }
+    return true;
+  });
   const totalExpense = expenses.filter((e) => e.type !== "income").reduce((s, e) => s + e.amount, 0);
   const totalIncome = expenses.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+
+  // 絞込み中の小計（フィルタが掛かっている場合のみ表示）
+  const filteredSubtotalExpense = filtered.filter((e) => e.type !== "income").reduce((s, e) => s + e.amount, 0);
+  const filteredSubtotalIncome = filtered.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+  const isVendorFilterActive = filterVendor !== "all" || filterInvoice !== "all";
 
   const prevMonth = () => { const d = new Date(smYear, smMonth - 2, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
   const nextMonth = () => { const d = new Date(smYear, smMonth, 1); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
@@ -449,7 +472,7 @@ export default function ExpensesPage() {
           </div>
 
           {/* Filter */}
-          <div className="px-4 py-2 flex items-center gap-2 flex-shrink-0 border-b" style={{ borderColor: T.border }}>
+          <div className="px-4 py-2 flex items-center gap-2 flex-shrink-0 border-b flex-wrap" style={{ borderColor: T.border }}>
             {[
               { key: "all", label: "全て", color: T.accent || "#c3a782" },
               { key: "expense", label: "経費", color: "#c45555" },
@@ -461,6 +484,45 @@ export default function ExpensesPage() {
                 {f.label}
               </button>
             ))}
+
+            <span className="w-px h-4" style={{ backgroundColor: T.border }} />
+
+            {/* 取引先フィルタ */}
+            <select value={String(filterVendor)} onChange={(e) => {
+              const v = e.target.value;
+              if (v === "all" || v === "unlinked") setFilterVendor(v);
+              else setFilterVendor(Number(v));
+            }} className="px-2 py-1 rounded text-[10px] cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>
+              <option value="all">取引先：全て</option>
+              <option value="unlinked">⚡ マスター未連携のみ</option>
+              {vendors.map(v => (
+                <option key={v.id} value={v.id}>
+                  {v.has_invoice ? "✓ " : "⚠ "}{v.name}
+                </option>
+              ))}
+            </select>
+
+            {/* インボイス状況フィルタ */}
+            <div className="flex items-center gap-1 rounded border p-0.5" style={{ borderColor: T.border }}>
+              {([["all", "INV全て"], ["registered", "✓登録済"], ["unregistered", "⚠未登録"]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setFilterInvoice(k)} className="px-2 py-0.5 rounded text-[10px] cursor-pointer" style={{ backgroundColor: filterInvoice === k ? (k === "registered" ? "#22c55e18" : k === "unregistered" ? "#c4555518" : "#c3a78218") : "transparent", color: filterInvoice === k ? (k === "registered" ? "#22c55e" : k === "unregistered" ? "#c45555" : "#c3a782") : T.textMuted }}>{l}</button>
+              ))}
+            </div>
+
+            {isVendorFilterActive && (
+              <button onClick={() => { setFilterVendor("all"); setFilterInvoice("all"); }} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textFaint, backgroundColor: T.cardAlt }}>
+                ✕ 絞込み解除
+              </button>
+            )}
+
+            {isVendorFilterActive && (
+              <div className="ml-auto flex items-center gap-2 text-[10px]" style={{ color: T.textSub }}>
+                <span>絞込み小計:</span>
+                {filteredSubtotalExpense > 0 && <span style={{ color: "#c45555", fontWeight: 500 }}>-{fmt(filteredSubtotalExpense)}</span>}
+                {filteredSubtotalIncome > 0 && <span style={{ color: "#22c55e", fontWeight: 500 }}>+{fmt(filteredSubtotalIncome)}</span>}
+                <span style={{ color: T.textFaint }}>({filtered.length}件)</span>
+              </div>
+            )}
           </div>
 
           {/* List */}
@@ -500,7 +562,13 @@ export default function ExpensesPage() {
                                       <span>{v.name}</span>
                                     </span>
                                   );
-                                  return e.counterpart || "—";
+                                  if (e.counterpart) return (
+                                    <span className="inline-flex items-center gap-1" title="取引先マスターに未連携。マスター登録すると自動でインボイス番号が入ります">
+                                      <span className="text-[8px]" style={{ color: "#f59e0b" }}>⚡</span>
+                                      <span>{e.counterpart}</span>
+                                    </span>
+                                  );
+                                  return "—";
                                 })()}
                               </td>
                               <td className="py-2 px-2 font-medium max-w-[150px] truncate">{e.name}</td>
