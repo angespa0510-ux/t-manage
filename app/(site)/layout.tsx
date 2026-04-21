@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Noto_Serif_JP, Noto_Sans_JP, Cormorant_Garamond } from "next/font/google";
 import { SITE } from "../../lib/site-theme";
+import SiteHeader from "../../components/site/SiteHeader";
+import SiteFooter from "../../components/site/SiteFooter";
 
 /**
  * ═══════════════════════════════════════════════════════════
@@ -83,13 +85,20 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         lineHeight: 1.8,
       }}
     >
-      {/* ヘッダーはコミット #4 で実装 */}
-      {/* <SiteHeader /> */}
+      {/* 共通ヘッダー */}
+      <SiteHeader />
 
-      <main style={{ minHeight: "calc(100vh - 200px)" }}>{children}</main>
+      <main
+        style={{
+          minHeight: "calc(100vh - 200px)",
+          paddingTop: SITE.layout.headerHeightSp,
+        }}
+      >
+        {children}
+      </main>
 
-      {/* フッターはコミット #4 で実装 */}
-      {/* <SiteFooter /> */}
+      {/* 共通フッター */}
+      <SiteFooter />
     </div>
   );
 }
