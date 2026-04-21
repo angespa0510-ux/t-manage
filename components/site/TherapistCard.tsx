@@ -56,6 +56,7 @@ export default function TherapistCard({
         textDecoration: "none",
         color: SITE.color.text,
         position: "relative",
+        boxShadow: "0 2px 10px rgba(43, 43, 43, 0.05)",
       }}
     >
       {/* キャッチコピー帯 */}
@@ -115,15 +116,27 @@ export default function TherapistCard({
               width: "100%",
               height: "100%",
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
+              backgroundColor: "#ffffff",
               color: SITE.color.textFaint,
               fontFamily: SITE.font.display,
               fontSize: "11px",
               letterSpacing: SITE.ls.wide,
+              gap: 10,
             }}
           >
-            NO IMAGE
+            {/* 薄い円の枠で「写真スペース」を明示 */}
+            <div
+              style={{
+                width: "38%",
+                aspectRatio: "1 / 1",
+                borderRadius: "50%",
+                border: `1px dashed ${SITE.color.border}`,
+              }}
+            />
+            <span>NO IMAGE</span>
           </div>
         )}
 
