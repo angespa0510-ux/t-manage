@@ -194,7 +194,16 @@ export default function TherapistListPage() {
         bgVideoPoster="/videos/therapist-poster.jpg"
       />
 
-      <section style={{ padding: `${SITE.sp.xxl} ${SITE.sp.lg}` }}>
+      <section
+        style={{
+          padding: `${SITE.sp.xxl} ${SITE.sp.lg}`,
+          backgroundColor: "#faf8f4",
+          backgroundImage: "url('/patterns/marble-bg.svg')",
+          backgroundSize: "800px 800px",
+          backgroundRepeat: "repeat",
+          backgroundAttachment: "fixed",
+        }}
+      >
         <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
           {/* フィルタトグル */}
           <div
