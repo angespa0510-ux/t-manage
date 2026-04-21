@@ -18,6 +18,7 @@ type Expense = {
   payment_method: string; keyword: string; counterpart: string; account_item: string;
   tax_rate: string; has_invoice: boolean; invoice_number: string;
   has_withholding: boolean; receipt_number: string;
+  vendor_id: number | null;
   auto_generated?: boolean; auto_source?: string;
 };
 type Keyword = {
@@ -25,6 +26,11 @@ type Keyword = {
   default_tax_rate: string; default_invoice: boolean; default_withholding: boolean; sort_order: number;
 };
 type Store = { id: number; name: string };
+type Vendor = {
+  id: number; name: string; kana: string;
+  invoice_number: string; has_invoice: boolean;
+  category: string; status: string;
+};
 
 /* ───────── 定数 ───────── */
 const ACCOUNT_ITEMS = [
@@ -41,6 +47,7 @@ const emptyForm = {
   counterpart: "", name: "", account_item: "", tax_rate: "10%",
   has_invoice: true, invoice_number: "", has_withholding: false, receipt_number: "",
   type: "expense", store_id: 0, notes: "",
+  vendor_id: 0 as number,
 };
 
 export default function ExpensesPage() {
@@ -53,6 +60,7 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
@@ -88,14 +96,16 @@ export default function ExpensesPage() {
   const fetchData = useCallback(async () => {
     const startDate = `${selectedMonth}-01`;
     const endDate = `${selectedMonth}-${String(daysInMonth).padStart(2, "0")}`;
-    const [{ data: e }, { data: k }, { data: s }] = await Promise.all([
+    const [{ data: e }, { data: k }, { data: s }, { data: v }] = await Promise.all([
       supabase.from("expenses").select("*").gte("date", startDate).lte("date", endDate).order("date", { ascending: false }),
       supabase.from("expense_keywords").select("*").order("sort_order").order("name"),
       supabase.from("stores").select("*").order("id"),
+      supabase.from("vendors").select("id, name, kana, invoice_number, has_invoice, category, status").eq("status", "active").order("kana", { ascending: true }).order("name", { ascending: true }),
     ]);
     if (e) setExpenses(e);
     if (k) setKeywords(k);
     if (s) setStores(s);
+    if (v) setVendors(v as Vendor[]);
   }, [selectedMonth, daysInMonth]);
 
   useEffect(() => {
@@ -199,8 +209,29 @@ export default function ExpensesPage() {
       invoice_number: e.invoice_number || "",
       has_withholding: e.has_withholding ?? false, receipt_number: e.receipt_number || "",
       type: e.type || "expense", store_id: e.store_id || 0, notes: e.notes || "",
+      vendor_id: e.vendor_id || 0,
     });
     setReceiptFile(null); setKeywordHistory([]); setShowForm(true); setMsg("");
+  };
+
+  /* ───── 取引先選択時の自動補完 ───── */
+  const onVendorChange = (vendorId: number) => {
+    if (vendorId === 0) {
+      // 「取引先なし」に戻したときは vendor_id だけクリア（counterpart等は残す）
+      setForm(f => ({ ...f, vendor_id: 0 }));
+      return;
+    }
+    const v = vendors.find(x => x.id === vendorId);
+    if (!v) return;
+    setForm(f => ({
+      ...f,
+      vendor_id: vendorId,
+      counterpart: v.name,
+      has_invoice: v.has_invoice,
+      invoice_number: v.invoice_number || "",
+      // カテゴリ（account_item）は未入力時のみマスターの category を流用（既存入力は尊重）
+      account_item: f.account_item || v.category || "",
+    }));
   };
 
   /* ───── 保存（新規 / 更新） ───── */
@@ -212,6 +243,7 @@ export default function ExpensesPage() {
       type: form.type, category: form.type === "income" ? "income" : "other",
       payment_method: form.payment_method, keyword: form.keyword, counterpart: form.counterpart.trim(),
       account_item: form.account_item,
+      vendor_id: form.vendor_id || null,
       tax_rate: form.tax_rate, has_invoice: form.has_invoice,
       invoice_number: form.has_invoice ? form.invoice_number : "",
       has_withholding: form.has_withholding,
@@ -459,7 +491,18 @@ export default function ExpensesPage() {
                                 }}>{e.payment_method === "card" ? "💳" : "💴"}</span>
                               </td>
                               <td className="py-2 px-2 text-[10px]" style={{ color: "#c3a782" }}>{e.keyword || "—"}</td>
-                              <td className="py-2 px-2 text-[10px]" style={{ color: "#85a8c4" }}>{e.counterpart || "—"}</td>
+                              <td className="py-2 px-2 text-[10px]" style={{ color: "#85a8c4" }}>
+                                {(() => {
+                                  const v = e.vendor_id ? vendors.find(x => x.id === e.vendor_id) : null;
+                                  if (v) return (
+                                    <span className="inline-flex items-center gap-1" title={`取引先マスター連携: ${v.name}${v.has_invoice ? " / インボイス登録済" : " / インボイス未登録"}`}>
+                                      <span className="text-[8px]" style={{ color: v.has_invoice ? "#22c55e" : "#c45555" }}>{v.has_invoice ? "✓" : "⚠"}</span>
+                                      <span>{v.name}</span>
+                                    </span>
+                                  );
+                                  return e.counterpart || "—";
+                                })()}
+                              </td>
                               <td className="py-2 px-2 font-medium max-w-[150px] truncate">{e.name}</td>
                               <td className="py-2 px-2 text-[10px]" style={{ color: T.textSub }}>{e.account_item || "—"}</td>
                               <td className="py-2 px-2 text-[10px]">{e.tax_rate || "—"}</td>
@@ -712,11 +755,38 @@ export default function ExpensesPage() {
                 </div>
               )}
 
-              {/* ⑤ 相手先 */}
+              {/* ⑤ 相手先（取引先マスター連携） */}
               <div>
-                <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>⑤ 相手先</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px]" style={{ color: T.textSub }}>⑤ 相手先</label>
+                  {form.vendor_id > 0 && (() => {
+                    const v = vendors.find(x => x.id === form.vendor_id);
+                    if (!v) return null;
+                    return (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: v.has_invoice ? "#22c55e18" : "#c4555518", color: v.has_invoice ? "#22c55e" : "#c45555" }}>
+                        {v.has_invoice ? "✓ インボイス登録済" : "⚠ インボイス未登録"}
+                      </span>
+                    );
+                  })()}
+                </div>
+                {vendors.length > 0 && (
+                  <select value={form.vendor_id} onChange={(e) => onVendorChange(Number(e.target.value))}
+                    className="w-full px-3 py-2 mb-2 rounded-xl text-[11px] outline-none cursor-pointer" style={inputStyle}>
+                    <option value={0}>— 取引先マスターから選ぶ（任意） —</option>
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.has_invoice ? "✓ " : "⚠ "}{v.name}{v.category ? `（${v.category}）` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <input type="text" value={form.counterpart} onChange={(e) => setForm({ ...form, counterpart: e.target.value })}
                   placeholder="例: 株式会社○○、ダイソー、中部電力" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                {vendors.length === 0 && (
+                  <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>
+                    💡 バックオフィス →「💼 取引先」から取引先を登録すると、ここで選ぶだけでインボイス番号が自動入力されます。
+                  </p>
+                )}
               </div>
 
               {/* ⑥ 内容 */}

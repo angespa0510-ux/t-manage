@@ -1146,6 +1146,10 @@ function VendorsManager({ T }: { T: any }) {
     notes: "", started_at: null, ended_at: null,
   });
 
+  // 取引先ごとの年間取引額集計（現在年度のexpensesから集計）
+  const [vendorSummary, setVendorSummary] = useState<Record<number, { amount: number; count: number }>>({});
+  const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
+
   const fetchVendors = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.from("vendors").select("*").order("kana", { ascending: true }).order("name", { ascending: true });
@@ -1154,7 +1158,26 @@ function VendorsManager({ T }: { T: any }) {
     setLoading(false);
   }, [toast]);
 
+  // 年間取引額の逆引き
+  const fetchVendorSummary = useCallback(async (year: number) => {
+    const { data } = await supabase
+      .from("expenses")
+      .select("vendor_id, amount")
+      .gte("date", `${year}-01-01`)
+      .lte("date", `${year}-12-31`)
+      .not("vendor_id", "is", null);
+    const map: Record<number, { amount: number; count: number }> = {};
+    (data || []).forEach((e: any) => {
+      if (!e.vendor_id) return;
+      if (!map[e.vendor_id]) map[e.vendor_id] = { amount: 0, count: 0 };
+      map[e.vendor_id].amount += e.amount || 0;
+      map[e.vendor_id].count += 1;
+    });
+    setVendorSummary(map);
+  }, []);
+
   useEffect(() => { fetchVendors(); }, [fetchVendors]);
+  useEffect(() => { fetchVendorSummary(summaryYear); }, [fetchVendorSummary, summaryYear]);
 
   // カテゴリ候補（動的に生成＋デフォルト）
   const DEFAULT_CATEGORIES = ["仕入（備品・オイル）", "仕入（消耗品）", "地代家賃", "水道光熱費", "通信費", "リース料", "保険料", "専門家（税理士・社労士）", "広告宣伝", "修繕", "その他"];
@@ -1266,6 +1289,13 @@ function VendorsManager({ T }: { T: any }) {
   const unregisteredCount = activeVendors.filter(v => !v.has_invoice).length;
   const registeredRate = activeVendors.length > 0 ? Math.round((registeredCount / activeVendors.length) * 100) : 0;
 
+  // 取引額ベースの統計（summaryYear年のexpenses.vendor_idから逆引き集計）
+  const summaryList: { amount: number; count: number }[] = Object.values(vendorSummary);
+  const totalCount = summaryList.reduce((a, s) => a + s.count, 0);
+  const totalAmount = summaryList.reduce((a, s) => a + s.amount, 0);
+  const registeredAmount = vendors.filter(v => v.has_invoice).reduce((a, v) => a + (vendorSummary[v.id]?.amount || 0), 0);
+  const unregisteredAmount = vendors.filter(v => !v.has_invoice).reduce((a, v) => a + (vendorSummary[v.id]?.amount || 0), 0);
+
   const inputStyle: React.CSSProperties = { backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text };
 
   return (
@@ -1301,6 +1331,25 @@ function VendorsManager({ T }: { T: any }) {
         </div>
       </div>
 
+      {/* 取引額ベースのサマリー */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>{summaryYear}年 総取引額（紐付済のみ）</p>
+          <p className="text-[18px] font-medium">¥{totalAmount.toLocaleString()}</p>
+          <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>{totalCount}件の経費が取引先に紐付いています</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>✓ インボイス登録済への支払</p>
+          <p className="text-[18px] font-medium" style={{ color: "#22c55e" }}>¥{registeredAmount.toLocaleString()}</p>
+          <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>仕入税額控除の対象</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>⚠ 未登録先への支払</p>
+          <p className="text-[18px] font-medium" style={{ color: "#c45555" }}>¥{unregisteredAmount.toLocaleString()}</p>
+          <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>仕入税額控除できない（10%相当 約¥{Math.round(unregisteredAmount / 11).toLocaleString()} 増税インパクト）</p>
+        </div>
+      </div>
+
       {/* フィルタ */}
       <div className="rounded-xl border p-3 mb-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 名前・フリガナ・インボイス番号で検索" className="flex-1 min-w-[200px] px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
@@ -1320,6 +1369,15 @@ function VendorsManager({ T }: { T: any }) {
       </div>
 
       {/* 一覧 */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px]" style={{ color: T.textMuted }}>{filtered.length}件の取引先</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px]" style={{ color: T.textMuted }}>年間取引額の対象年</span>
+          <select value={summaryYear} onChange={e => setSummaryYear(Number(e.target.value))} className="px-2 py-1 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+            {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}年</option>)}
+          </select>
+        </div>
+      </div>
       <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
         {loading ? (
           <p className="text-[12px] text-center py-8" style={{ color: T.textMuted }}>読み込み中...</p>
@@ -1333,12 +1391,15 @@ function VendorsManager({ T }: { T: any }) {
                 <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 120 }}>カテゴリ</th>
                 <th style={{ padding: "8px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 90 }}>インボイス</th>
                 <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 170 }}>登録番号</th>
+                <th style={{ padding: "8px 10px", textAlign: "right", borderBottom: `1px solid ${T.border}`, width: 140 }}>{summaryYear}年取引額</th>
                 <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 110 }}>取引開始</th>
                 <th style={{ padding: "8px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 120 }}></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((v, i) => (
+              {filtered.map((v, i) => {
+                const s = vendorSummary[v.id] || { amount: 0, count: 0 };
+                return (
                 <tr key={v.id} style={{ borderTop: i === 0 ? "none" : `1px solid ${T.border}`, opacity: v.status === "archived" ? 0.5 : 1 }}>
                   <td style={{ padding: "8px 10px" }}>
                     <div style={{ fontWeight: 500 }}>{v.name}</div>
@@ -1354,6 +1415,16 @@ function VendorsManager({ T }: { T: any }) {
                     )}
                   </td>
                   <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: v.has_invoice ? T.text : T.textFaint }}>{v.invoice_number || "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontSize: 11 }}>
+                    {s.count > 0 ? (
+                      <div>
+                        <div style={{ fontWeight: 500, color: T.text }}>¥{s.amount.toLocaleString()}</div>
+                        <div className="text-[9px]" style={{ color: T.textFaint }}>{s.count}件</div>
+                      </div>
+                    ) : (
+                      <span style={{ color: T.textFaint }}>—</span>
+                    )}
+                  </td>
                   <td style={{ padding: "8px 10px", color: T.textSub, fontSize: 11 }}>{v.started_at || "—"}</td>
                   <td style={{ padding: "8px 10px", textAlign: "center" }}>
                     <div className="flex gap-1 justify-center">
@@ -1369,7 +1440,8 @@ function VendorsManager({ T }: { T: any }) {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
