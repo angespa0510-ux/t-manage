@@ -190,7 +190,8 @@ export default function TherapistListPage() {
         label="THERAPIST"
         title="セラピスト一覧"
         subtitle="在籍セラピストの一覧です。条件を絞り込んでお好みのセラピストを探せます。"
-        bgImage="/images/placeholder/top-hero.jpg"
+        bgVideo="/videos/therapist.mp4"
+        bgVideoPoster="/videos/therapist-poster.jpg"
       />
 
       <section style={{ padding: `${SITE.sp.xxl} ${SITE.sp.lg}` }}>
@@ -369,8 +370,9 @@ export default function TherapistListPage() {
               className="site-therapist-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
                 gap: SITE.sp.md,
+                justifyContent: "center",
               }}
             >
               {filtered.map((t) => (
@@ -388,13 +390,13 @@ export default function TherapistListPage() {
 
       <style>{`
         @media (min-width: 520px) {
-          .site-therapist-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .site-therapist-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 240px)) !important; }
         }
         @media (min-width: 768px) {
-          .site-therapist-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: ${SITE.sp.lg}; }
+          .site-therapist-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 260px)) !important; gap: ${SITE.sp.lg}; }
         }
         @media (min-width: 1024px) {
-          .site-therapist-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+          .site-therapist-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 240px)) !important; }
         }
       `}</style>
     </>

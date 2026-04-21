@@ -930,17 +930,23 @@ function TherapistGrid({ children }: { children: React.ReactNode }) {
       className="site-therapist-grid"
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
         gap: SITE.sp.md,
+        justifyContent: "center",
       }}
     >
       {children}
       <style>{`
         @media (min-width: 520px) {
-          .site-therapist-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .site-therapist-grid {
+            grid-template-columns: repeat(auto-fit, minmax(180px, 240px)) !important;
+          }
         }
         @media (min-width: 768px) {
-          .site-therapist-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: ${SITE.sp.lg}; }
+          .site-therapist-grid {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 260px)) !important;
+            gap: ${SITE.sp.lg};
+          }
         }
       `}</style>
     </div>

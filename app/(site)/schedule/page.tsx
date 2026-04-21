@@ -364,8 +364,9 @@ export default function SchedulePage() {
                 className="site-schedule-grid"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
                   gap: SITE.sp.md,
+                  justifyContent: "center",
                 }}
               >
                 {therapistsOfDay.map(({ therapist, shift, status }) => (
@@ -484,13 +485,13 @@ export default function SchedulePage() {
       <style>{`
         .site-date-scroll::-webkit-scrollbar { height: 0; }
         @media (min-width: 520px) {
-          .site-schedule-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          .site-schedule-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 240px)) !important; }
         }
         @media (min-width: 768px) {
-          .site-schedule-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: ${SITE.sp.lg}; }
+          .site-schedule-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 260px)) !important; gap: ${SITE.sp.lg}; }
         }
         @media (min-width: 1024px) {
-          .site-schedule-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+          .site-schedule-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 240px)) !important; }
         }
       `}</style>
     </>
