@@ -18,7 +18,7 @@ export default function TaxDashboard() {
   const { confirm, ConfirmModalNode } = useConfirm();
   const { activeStaff, canAccessCashDashboard } = useStaffSession();
 
-  const [dashTab, setDashTab] = useState<"company" | "mynumber" | "certificate">("certificate");
+  const [dashTab, setDashTab] = useState<"company" | "mynumber" | "certificate" | "vendors">("certificate");
   const [companyName, setCompanyName] = useState(""); const [companyAddress, setCompanyAddress] = useState(""); const [companyPhone, setCompanyPhone] = useState(""); const [invoiceNumber, setInvoiceNumber] = useState(""); const [companyStoreId, setCompanyStoreId] = useState<number>(0);
   const [corporateNumber, setCorporateNumber] = useState(""); const [fiscalMonth, setFiscalMonth] = useState(3); const [representativeName, setRepresentativeName] = useState(""); const [entityType, setEntityType] = useState("llc"); const [taxOffice, setTaxOffice] = useState(""); const [taxAccountantName, setTaxAccountantName] = useState(""); const [taxAccountantPhone, setTaxAccountantPhone] = useState(""); const [taxAccountantAddress, setTaxAccountantAddress] = useState(""); const [laborConsultantName, setLaborConsultantName] = useState(""); const [laborConsultantPhone, setLaborConsultantPhone] = useState("");
   // コーポレートサイト用
@@ -69,7 +69,7 @@ export default function TaxDashboard() {
           <h1 className="text-[14px] font-medium">バックオフィス</h1>
           </div>
         <div className="flex items-center gap-2">
-          {[{k:"certificate",l:"📄 証明書発行"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
+          {[{k:"certificate",l:"📄 証明書発行"},{k:"vendors",l:"💼 取引先"},{k:"company",l:"🏢 会社情報"},{k:"mynumber",l:"🔒 マイナンバー"}].map(t => (
             <button key={t.k} onClick={() => setDashTab(t.k as any)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: dashTab === t.k ? "#c3a78222" : "transparent", color: dashTab === t.k ? "#c3a782" : T.textMuted, fontWeight: dashTab === t.k ? 700 : 400, border: `1px solid ${dashTab === t.k ? "#c3a78244" : T.border}` }}>{t.l}</button>
           ))}
         </div>
@@ -84,6 +84,11 @@ export default function TaxDashboard() {
       {dashTab === "certificate" && (
         <div className="flex-1 overflow-y-auto p-4">
           <CertificateManager T={T} />
+        </div>
+      )}
+      {dashTab === "vendors" && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <VendorsManager T={T} />
         </div>
       )}
       {dashTab === "company" && (
@@ -1096,6 +1101,382 @@ function CertificateManager({ T }: { T: any }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function VendorsManager({ T }: { T: any }) {
+  type Vendor = {
+    id: number;
+    name: string;
+    kana: string;
+    invoice_number: string;
+    has_invoice: boolean;
+    category: string;
+    address: string;
+    phone: string;
+    email: string;
+    website: string;
+    payment_bank: string;
+    payment_account: string;
+    payment_account_name: string;
+    notes: string;
+    started_at: string | null;
+    ended_at: string | null;
+    status: string;
+  };
+
+  const toast = useToast();
+  const { confirm, ConfirmModalNode } = useConfirm();
+
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [invoiceFilter, setInvoiceFilter] = useState<"all" | "registered" | "unregistered">("all");
+  const [showArchived, setShowArchived] = useState(false);
+
+  // 追加・編集モーダル
+  const [modalMode, setModalMode] = useState<"closed" | "add" | "edit">("closed");
+  const [editingId, setEditingId] = useState<number>(0);
+  const [form, setForm] = useState<Omit<Vendor, "id" | "status">>({
+    name: "", kana: "", invoice_number: "", has_invoice: false, category: "",
+    address: "", phone: "", email: "", website: "",
+    payment_bank: "", payment_account: "", payment_account_name: "",
+    notes: "", started_at: null, ended_at: null,
+  });
+
+  const fetchVendors = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("vendors").select("*").order("kana", { ascending: true }).order("name", { ascending: true });
+    if (error) { toast.show("取引先の取得に失敗しました", "error"); setLoading(false); return; }
+    setVendors((data || []) as Vendor[]);
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { fetchVendors(); }, [fetchVendors]);
+
+  // カテゴリ候補（動的に生成＋デフォルト）
+  const DEFAULT_CATEGORIES = ["仕入（備品・オイル）", "仕入（消耗品）", "地代家賃", "水道光熱費", "通信費", "リース料", "保険料", "専門家（税理士・社労士）", "広告宣伝", "修繕", "その他"];
+  const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...vendors.map(v => v.category).filter(Boolean)]));
+
+  // フィルタ適用
+  const filtered = vendors.filter(v => {
+    if (!showArchived && v.status === "archived") return false;
+    if (categoryFilter !== "all" && v.category !== categoryFilter) return false;
+    if (invoiceFilter === "registered" && !v.has_invoice) return false;
+    if (invoiceFilter === "unregistered" && v.has_invoice) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const hit = v.name.toLowerCase().includes(q) || v.kana.toLowerCase().includes(q) || v.invoice_number.toLowerCase().includes(q) || v.category.toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    return true;
+  });
+
+  // インボイス番号のバリデーション: T + 13桁の数字
+  const isValidInvoiceNumber = (num: string) => /^T\d{13}$/.test(num);
+
+  // インボイス番号入力時、正しいフォーマットなら自動で has_invoice を true に
+  const onInvoiceNumberChange = (val: string) => {
+    const cleaned = val.trim().toUpperCase();
+    const newHasInvoice = isValidInvoiceNumber(cleaned);
+    setForm(f => ({ ...f, invoice_number: cleaned, has_invoice: newHasInvoice || f.has_invoice }));
+  };
+
+  const openAdd = () => {
+    setForm({
+      name: "", kana: "", invoice_number: "", has_invoice: false, category: "",
+      address: "", phone: "", email: "", website: "",
+      payment_bank: "", payment_account: "", payment_account_name: "",
+      notes: "", started_at: null, ended_at: null,
+    });
+    setEditingId(0);
+    setModalMode("add");
+  };
+
+  const openEdit = (v: Vendor) => {
+    setForm({
+      name: v.name, kana: v.kana || "", invoice_number: v.invoice_number || "", has_invoice: v.has_invoice,
+      category: v.category || "", address: v.address || "", phone: v.phone || "", email: v.email || "",
+      website: v.website || "", payment_bank: v.payment_bank || "", payment_account: v.payment_account || "",
+      payment_account_name: v.payment_account_name || "", notes: v.notes || "",
+      started_at: v.started_at, ended_at: v.ended_at,
+    });
+    setEditingId(v.id);
+    setModalMode("edit");
+  };
+
+  const closeModal = () => { setModalMode("closed"); setEditingId(0); };
+
+  const save = async () => {
+    if (!form.name.trim()) { toast.show("取引先名を入力してください", "error"); return; }
+    if (form.invoice_number && !isValidInvoiceNumber(form.invoice_number)) {
+      toast.show("インボイス番号は T + 13桁の数字で入力してください（例: T1234567890123）", "error");
+      return;
+    }
+    const payload = {
+      name: form.name.trim(), kana: form.kana.trim(), invoice_number: form.invoice_number.trim(),
+      has_invoice: form.has_invoice, category: form.category.trim(),
+      address: form.address.trim(), phone: form.phone.trim(), email: form.email.trim(), website: form.website.trim(),
+      payment_bank: form.payment_bank.trim(), payment_account: form.payment_account.trim(), payment_account_name: form.payment_account_name.trim(),
+      notes: form.notes.trim(), started_at: form.started_at, ended_at: form.ended_at,
+    };
+    if (modalMode === "add") {
+      const { error } = await supabase.from("vendors").insert({ ...payload, status: "active" });
+      if (error) { toast.show(`追加に失敗しました: ${error.message}`, "error"); return; }
+      toast.show(`「${form.name}」を追加しました`, "success");
+    } else {
+      const { error } = await supabase.from("vendors").update(payload).eq("id", editingId);
+      if (error) { toast.show(`更新に失敗しました: ${error.message}`, "error"); return; }
+      toast.show(`「${form.name}」を更新しました`, "success");
+    }
+    closeModal();
+    fetchVendors();
+  };
+
+  const archive = async (v: Vendor) => {
+    const ok = await confirm({ title: "取引先をアーカイブ", message: `「${v.name}」をアーカイブします。過去データは保持され、デフォルトの一覧からは非表示になります。よろしいですか？`, variant: "warning", confirmLabel: "アーカイブ", cancelLabel: "キャンセル" });
+    if (!ok) return;
+    const { error } = await supabase.from("vendors").update({ status: "archived", ended_at: v.ended_at || new Date().toISOString().slice(0, 10) }).eq("id", v.id);
+    if (error) { toast.show(`アーカイブに失敗しました: ${error.message}`, "error"); return; }
+    toast.show("アーカイブしました", "success");
+    fetchVendors();
+  };
+
+  const unarchive = async (v: Vendor) => {
+    const { error } = await supabase.from("vendors").update({ status: "active" }).eq("id", v.id);
+    if (error) { toast.show(`復元に失敗しました: ${error.message}`, "error"); return; }
+    toast.show("復元しました", "success");
+    fetchVendors();
+  };
+
+  const hardDelete = async (v: Vendor) => {
+    const ok = await confirm({ title: "取引先を完全削除", message: `「${v.name}」を完全に削除します。この操作は元に戻せません。よろしいですか？`, variant: "danger", confirmLabel: "削除する", cancelLabel: "キャンセル" });
+    if (!ok) return;
+    const { error } = await supabase.from("vendors").delete().eq("id", v.id);
+    if (error) { toast.show(`削除に失敗しました: ${error.message}`, "error"); return; }
+    toast.show("削除しました", "success");
+    fetchVendors();
+  };
+
+  // 統計
+  const activeVendors = vendors.filter(v => v.status === "active");
+  const registeredCount = activeVendors.filter(v => v.has_invoice).length;
+  const unregisteredCount = activeVendors.filter(v => !v.has_invoice).length;
+  const registeredRate = activeVendors.length > 0 ? Math.round((registeredCount / activeVendors.length) * 100) : 0;
+
+  const inputStyle: React.CSSProperties = { backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text };
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto", animation: "fadeIn 0.3s" }}>
+      {ConfirmModalNode}
+
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-[16px] font-medium">💼 取引先マスター</h2>
+          <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>経費・仕入の支払先と適格請求書発行事業者番号を一元管理</p>
+        </div>
+        <button onClick={openAdd} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer font-medium text-white" style={{ backgroundColor: "#c3a782" }}>+ 取引先を追加</button>
+      </div>
+
+      {/* サマリー */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>登録数（稼働中）</p>
+          <p className="text-[20px] font-medium">{activeVendors.length}</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>インボイス登録済</p>
+          <p className="text-[20px] font-medium" style={{ color: "#22c55e" }}>{registeredCount}</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>未登録</p>
+          <p className="text-[20px] font-medium" style={{ color: "#c45555" }}>{unregisteredCount}</p>
+        </div>
+        <div className="rounded-xl p-4 border" style={{ backgroundColor: T.card, borderColor: T.border }}>
+          <p className="text-[10px] mb-1" style={{ color: T.textMuted }}>登録率</p>
+          <p className="text-[20px] font-medium" style={{ color: registeredRate >= 80 ? "#22c55e" : registeredRate >= 50 ? "#f59e0b" : "#c45555" }}>{registeredRate}%</p>
+        </div>
+      </div>
+
+      {/* フィルタ */}
+      <div className="rounded-xl border p-3 mb-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 名前・フリガナ・インボイス番号で検索" className="flex-1 min-w-[200px] px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="px-3 py-2 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+          <option value="all">すべてのカテゴリ</option>
+          {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <div className="flex items-center gap-1 rounded-lg p-1 border" style={{ borderColor: T.border }}>
+          {([["all", "全て"], ["registered", "登録済"], ["unregistered", "未登録"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setInvoiceFilter(k)} className="px-3 py-1 rounded text-[10px] cursor-pointer" style={{ backgroundColor: invoiceFilter === k ? "#c3a78218" : "transparent", color: invoiceFilter === k ? "#c3a782" : T.textMuted }}>{l}</button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: T.textSub }}>
+          <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
+          アーカイブ表示
+        </label>
+      </div>
+
+      {/* 一覧 */}
+      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+        {loading ? (
+          <p className="text-[12px] text-center py-8" style={{ color: T.textMuted }}>読み込み中...</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>該当する取引先がいません</p>
+        ) : (
+          <table className="w-full" style={{ fontSize: 12 }}>
+            <thead style={{ backgroundColor: T.cardAlt, color: T.textSub, fontSize: 11 }}>
+              <tr>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>取引先名</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 120 }}>カテゴリ</th>
+                <th style={{ padding: "8px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 90 }}>インボイス</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 170 }}>登録番号</th>
+                <th style={{ padding: "8px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 110 }}>取引開始</th>
+                <th style={{ padding: "8px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 120 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((v, i) => (
+                <tr key={v.id} style={{ borderTop: i === 0 ? "none" : `1px solid ${T.border}`, opacity: v.status === "archived" ? 0.5 : 1 }}>
+                  <td style={{ padding: "8px 10px" }}>
+                    <div style={{ fontWeight: 500 }}>{v.name}</div>
+                    {v.kana && <div className="text-[9px]" style={{ color: T.textFaint }}>{v.kana}</div>}
+                    {v.status === "archived" && <span className="text-[8px] px-1.5 py-0.5 rounded mt-0.5 inline-block" style={{ backgroundColor: "#88878018", color: "#888780" }}>アーカイブ</span>}
+                  </td>
+                  <td style={{ padding: "8px 10px", color: T.textSub, fontSize: 11 }}>{v.category || "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                    {v.has_invoice ? (
+                      <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✓ 登録済</span>
+                    ) : (
+                      <span className="text-[9px] px-2 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>未登録</span>
+                    )}
+                  </td>
+                  <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: v.has_invoice ? T.text : T.textFaint }}>{v.invoice_number || "—"}</td>
+                  <td style={{ padding: "8px 10px", color: T.textSub, fontSize: 11 }}>{v.started_at || "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                    <div className="flex gap-1 justify-center">
+                      <button onClick={() => openEdit(v)} className="text-[10px] px-2 py-1 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
+                      {v.status === "active" ? (
+                        <button onClick={() => archive(v)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#f59e0b12", color: "#f59e0b" }}>🗃 保管</button>
+                      ) : (
+                        <>
+                          <button onClick={() => unarchive(v)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e12", color: "#22c55e" }}>↩ 復元</button>
+                          <button onClick={() => hardDelete(v)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c4555512", color: "#c45555" }}>削除</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* 参考情報 */}
+      <div className="rounded-xl p-4 mt-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78233" }}>
+        <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 インボイス登録番号について</p>
+        <div className="text-[10px] leading-relaxed space-y-1" style={{ color: T.textSub }}>
+          <p>• 適格請求書発行事業者番号は「T + 13桁の数字」で、インボイス番号を入力すると自動でインボイス登録済として扱います。</p>
+          <p>• <strong>登録済</strong>の取引先: 仕入税額控除OK。経費100円につき約9.1円分を消費税から差し引ける（原則課税の場合）。</p>
+          <p>• <strong>未登録</strong>の取引先: 仕入税額控除できない。実質負担が1割増える。大口の未登録先は登録依頼の優先対象。</p>
+          <p>• 国税庁の適格請求書発行事業者公表サイトで登録番号を確認できます: <a href="https://www.invoice-kohyo.nta.go.jp/" target="_blank" rel="noopener noreferrer" style={{ color: "#c3a782", textDecoration: "underline" }}>invoice-kohyo.nta.go.jp</a></p>
+        </div>
+      </div>
+
+      {/* 追加・編集モーダル */}
+      {modalMode !== "closed" && (
+        <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <div onClick={e => e.stopPropagation()} className="rounded-2xl border p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <h2 className="text-[15px] font-medium mb-4">{modalMode === "add" ? "取引先を追加" : "取引先を編集"}</h2>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>取引先名 *</label>
+                  <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="株式会社〇〇" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>フリガナ</label>
+                  <input type="text" value={form.kana} onChange={e => setForm(f => ({ ...f, kana: e.target.value }))} placeholder="カブシキガイシャマルマル" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>カテゴリ</label>
+                <input type="text" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} list="vendor-categories" placeholder="例: 仕入（備品・オイル）" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                <datalist id="vendor-categories">
+                  {allCategories.map(c => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[11px] font-medium mb-2">🧾 インボイス情報</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>登録番号</label>
+                    <input type="text" value={form.invoice_number} onChange={e => onInvoiceNumberChange(e.target.value)} placeholder="T1234567890123" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, fontFamily: "monospace", backgroundColor: T.card }} />
+                    <p className="text-[9px] mt-1" style={{ color: form.invoice_number && !isValidInvoiceNumber(form.invoice_number) ? "#c45555" : T.textFaint }}>
+                      {form.invoice_number && !isValidInvoiceNumber(form.invoice_number) ? "⚠ T + 13桁の数字で入力してください" : "形式: T + 13桁の数字"}
+                    </p>
+                  </div>
+                  <div className="flex items-center">
+                    <label className="flex items-center gap-2 text-[11px] cursor-pointer" style={{ color: T.textSub }}>
+                      <input type="checkbox" checked={form.has_invoice} onChange={e => setForm(f => ({ ...f, has_invoice: e.target.checked }))} />
+                      インボイス登録済み事業者
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[11px] font-medium mb-2">📍 連絡先・取引期間</p>
+                <div className="space-y-2">
+                  <input type="text" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="住所" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="電話番号" className="px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                    <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="メール" className="px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                  </div>
+                  <input type="text" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="サイトURL" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] mb-0.5" style={{ color: T.textMuted }}>取引開始日</label>
+                      <input type="date" value={form.started_at || ""} onChange={e => setForm(f => ({ ...f, started_at: e.target.value || null }))} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] mb-0.5" style={{ color: T.textMuted }}>取引終了日</label>
+                      <input type="date" value={form.ended_at || ""} onChange={e => setForm(f => ({ ...f, ended_at: e.target.value || null }))} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[11px] font-medium mb-2">🏦 支払先口座（任意）</p>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={form.payment_bank} onChange={e => setForm(f => ({ ...f, payment_bank: e.target.value }))} placeholder="銀行名・支店（例: 三井住友銀行 栄支店）" className="px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                    <input type="text" value={form.payment_account} onChange={e => setForm(f => ({ ...f, payment_account: e.target.value }))} placeholder="口座（例: 普通 1234567）" className="px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                  </div>
+                  <input type="text" value={form.payment_account_name} onChange={e => setForm(f => ({ ...f, payment_account_name: e.target.value }))} placeholder="口座名義（カナ）" className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={{ ...inputStyle, backgroundColor: T.card }} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] mb-1" style={{ color: T.textSub }}>メモ</label>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="取引の経緯・窓口担当者・契約条件など" className="w-full px-3 py-2 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={closeModal} className="flex-1 px-4 py-2.5 rounded-xl text-[12px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              <button onClick={save} className="flex-[2] px-4 py-2.5 rounded-xl text-[12px] cursor-pointer text-white font-medium" style={{ backgroundColor: "#c3a782" }}>{modalMode === "add" ? "追加する" : "保存する"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
