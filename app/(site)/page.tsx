@@ -178,20 +178,18 @@ export default function HomePage() {
           position: "relative",
           minHeight: `calc(100vh - ${SITE.layout.headerHeightSp})`,
           marginTop: `calc(-1 * ${SITE.layout.headerHeightSp})`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
           overflow: "hidden",
           backgroundColor: SITE.color.bgSoft,
         }}
       >
-        {/* 背景画像（プレースホルダー） */}
+        {/* 背景画像（ピンク×光の雰囲気写真） */}
         <div
           style={{
             position: "absolute",
             inset: 0,
             zIndex: 0,
           }}
+          className="site-hero-bg"
         >
           <Image
             src="/images/placeholder/top-hero.jpg"
@@ -200,30 +198,51 @@ export default function HomePage() {
             priority
             style={{
               objectFit: "cover",
-              opacity: 0.9,
+              // モバイル: 人物が右にいるので右寄り中央を見せる
+              // デスクトップ: スタイル側で上書き
+              objectPosition: "65% center",
             }}
             sizes="100vw"
           />
-          {/* 白の薄いオーバーレイ（文字の可読性確保） */}
+          {/* 文字可読性のための微細オーバーレイ
+              画像の鮮やかさを活かすため、左側だけ薄い白のグラデを入れる */}
           <div
             style={{
               position: "absolute",
               inset: 0,
               background:
-                "linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.75) 100%)",
+                "linear-gradient(90deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.25) 40%, rgba(255,255,255,0) 70%)",
             }}
+            className="site-hero-overlay"
+          />
+          {/* モバイル用はやや強めの白フェード */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.45) 100%)",
+            }}
+            className="site-hero-overlay-mobile"
           />
         </div>
 
-        {/* 中央コンテンツ */}
+        {/* 左寄せコンテンツ */}
         <div
+          className="site-hero-content"
           style={{
             position: "relative",
             zIndex: 1,
-            textAlign: "center",
+            maxWidth: SITE.layout.maxWidth,
+            margin: "0 auto",
             padding: "120px 24px 80px",
-            maxWidth: 720,
-            animation: "siteFadeUp 1.2s cubic-bezier(0.4, 0, 0.2, 1)",
+            minHeight: `calc(100vh - ${SITE.layout.headerHeightSp})`,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "flex-start",
+            textAlign: "left",
+            animation: "siteFadeUp 1.4s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
           {/* 装飾細線 */}
@@ -232,7 +251,7 @@ export default function HomePage() {
               width: 1,
               height: 48,
               backgroundColor: SITE.color.pink,
-              margin: "0 auto 40px",
+              marginBottom: 40,
             }}
           />
 
@@ -246,6 +265,7 @@ export default function HomePage() {
               color: SITE.color.pink,
               lineHeight: 1,
               marginBottom: 16,
+              textShadow: "0 2px 16px rgba(255,255,255,0.4)",
             }}
           >
             Ange Spa
@@ -268,12 +288,13 @@ export default function HomePage() {
           <p
             style={{
               fontFamily: SITE.font.serif,
-              fontSize: SITE.fs.hero,
+              fontSize: "clamp(22px, 4.5vw, 40px)",
               lineHeight: SITE.lh.loose,
               color: SITE.color.text,
               letterSpacing: SITE.ls.loose,
               marginBottom: 48,
               fontWeight: 500,
+              textShadow: "0 1px 12px rgba(255,255,255,0.5)",
             }}
           >
             可愛らしい女の子と<br />
@@ -286,8 +307,9 @@ export default function HomePage() {
               fontFamily: SITE.font.display,
               fontSize: "11px",
               letterSpacing: SITE.ls.wider,
-              color: SITE.color.textMuted,
+              color: SITE.color.textSub,
               marginBottom: 48,
+              fontWeight: 500,
             }}
           >
             NAGOYA &nbsp;/&nbsp; MIKAWA-ANJO &nbsp;/&nbsp; TOYOHASHI
@@ -300,8 +322,8 @@ export default function HomePage() {
               flexDirection: "column",
               gap: 10,
               alignItems: "stretch",
+              width: "100%",
               maxWidth: 320,
-              margin: "0 auto",
             }}
           >
             <Link
@@ -318,6 +340,7 @@ export default function HomePage() {
                 textDecoration: "none",
                 textAlign: "center",
                 transition: SITE.transition.base,
+                boxShadow: "0 4px 20px rgba(232,132,154,0.3)",
               }}
               className="site-cta-primary"
             >
@@ -328,7 +351,9 @@ export default function HomePage() {
               style={{
                 display: "block",
                 padding: "16px 24px",
-                backgroundColor: "transparent",
+                backgroundColor: "rgba(255,255,255,0.7)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
                 border: `1px solid ${SITE.color.pink}`,
                 color: SITE.color.pink,
                 fontFamily: SITE.font.display,
@@ -350,8 +375,10 @@ export default function HomePage() {
               marginTop: 48,
               fontSize: "11px",
               letterSpacing: SITE.ls.loose,
-              color: SITE.color.textMuted,
+              color: SITE.color.textSub,
               lineHeight: SITE.lh.body,
+              fontWeight: 500,
+              textShadow: "0 1px 8px rgba(255,255,255,0.5)",
             }}
           >
             営業 12:00 — 深夜 27:00 ／ 最終受付 26:00
@@ -743,9 +770,21 @@ export default function HomePage() {
         .site-therapist-card:hover .site-therapist-img-wrap {
           opacity: 0.85;
         }
+
+        /* メインビジュアル モバイル/デスクトップ出し分け */
+        .site-hero-overlay { display: none; }
+        .site-hero-overlay-mobile { display: block; }
+
         @media (min-width: 768px) {
           .site-recruit-grid {
             grid-template-columns: 1fr 1fr !important;
+          }
+          /* デスクトップでは左寄せの白グラデを使う */
+          .site-hero-overlay { display: block; }
+          .site-hero-overlay-mobile { display: none; }
+          /* デスクトップでは画像の中央寄りを見せて、左に空を多めに */
+          .site-hero-bg img {
+            object-position: center center !important;
           }
         }
       `}</style>
