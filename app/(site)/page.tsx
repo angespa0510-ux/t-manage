@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { SITE } from "../../lib/site-theme";
@@ -10,18 +11,22 @@ import { SITE } from "../../lib/site-theme";
  * ═══════════════════════════════════════════════════════════
  * Ange Spa 公式HP — HOME
  *
- * 現行HP (ange-spa.com) のレイアウト構成を踏襲:
- *   1. メインビジュアル（フルスクリーン、ロゴ+キャッチ+CTA）
- *   2. Our Concept
- *   3. Today's Schedule（本日の出勤ダイジェスト）
- *   4. PICK UP（is_pickup=true）
- *   5. NEW FACE（is_newcomer=true or entry_date が直近90日）
- *   6. RECRUIT
- *   7. CONTENTS（料金・アクセス・予約への導線）
- *   8. メッセージ
+ * 方針（■19・■20 準拠）:
+ *  - ホワイト基調、清潔感・清楚感
+ *  - 絵文字・アイコン非使用
+ *  - 明朝体（Noto Serif JP）統一
+ *  - 余白・罫線・タイポグラフィで世界観を構築
+ *  - 画像は next/image + プレースホルダーで管理
  *
- * ルートグループ (site) の layout.tsx により、ヘッダー・フッターは
- * 自動で表示される。このページ本体は main コンテンツのみ。
+ * 構成:
+ *  1. メインビジュアル（プレースホルダー画像 + キャッチ）
+ *  2. CONCEPT — 私たちについて
+ *  3. TODAY'S SCHEDULE — 本日の出勤ダイジェスト
+ *  4. PICK UP — 注目セラピスト
+ *  5. NEW FACE — 新人セラピスト
+ *  6. RECRUIT — 求人案内
+ *  7. CONTENTS — 各ページへの導線
+ *  8. MESSAGE — 店からのメッセージ
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -42,8 +47,6 @@ type Therapist = {
   is_pickup?: boolean;
   is_newcomer?: boolean;
   public_sort_order?: number;
-  blog_url?: string;
-  twitter_url?: string;
 };
 
 type Shift = {
@@ -80,12 +83,11 @@ const getWorkStatus = (shift: Shift | undefined) => {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const startMin = sh * 60 + sm;
   const endMin = eh * 60 + em;
-  // 深夜跨ぎ対応
   const normEnd = endMin < startMin ? endMin + 24 * 60 : endMin;
   const normNow = nowMin < startMin ? nowMin + 24 * 60 : nowMin;
-  if (normNow >= startMin && normNow <= normEnd) return "working"; // 出勤中
-  if (normNow < startMin) return "upcoming"; // 出勤前
-  return "finished"; // 終了
+  if (normNow >= startMin && normNow <= normEnd) return "working";
+  if (normNow < startMin) return "upcoming";
+  return "finished";
 };
 
 // ─── ページ本体 ─────────────────────────────────────────────
@@ -96,7 +98,7 @@ export default function HomePage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ─── PWA 自動リダイレクト（ホーム画面起動のスタッフ/顧客を即遷移） ───
+  // PWA 自動リダイレクト
   useEffect(() => {
     if (typeof window === "undefined") return;
     type IosWindow = Window & { navigator: Navigator & { standalone?: boolean } };
@@ -104,30 +106,23 @@ export default function HomePage() {
       (window as IosWindow).navigator.standalone === true ||
       window.matchMedia?.("(display-mode: standalone)").matches;
     if (!isStandalone) return;
-
     try {
-      // 優先: セラピスト > お客様 > スタッフ
-      const therapistSession = localStorage.getItem("therapist_session");
-      if (therapistSession) {
+      if (localStorage.getItem("therapist_session")) {
         router.replace("/mypage");
         return;
       }
-      const customerId = localStorage.getItem("customer_mypage_id");
-      if (customerId) {
+      if (localStorage.getItem("customer_mypage_id")) {
         router.replace("/customer-mypage");
         return;
       }
-      const staffSession = sessionStorage.getItem("t-manage-staff");
-      if (staffSession) {
+      if (sessionStorage.getItem("t-manage-staff")) {
         router.replace("/dashboard");
         return;
       }
-    } catch {
-      // localStorage アクセス失敗時は通常表示
-    }
+    } catch {}
   }, [router]);
 
-  // ─── データ取得 ───
+  // データ取得
   useEffect(() => {
     (async () => {
       const t = todayStr();
@@ -150,7 +145,6 @@ export default function HomePage() {
     })();
   }, []);
 
-  // ─── セグメント計算 ───
   const shiftByTherapist: Record<number, Shift | undefined> = {};
   for (const s of shifts) shiftByTherapist[s.therapist_id] = s;
 
@@ -178,41 +172,48 @@ export default function HomePage() {
       {/* ═══════════════════════════════════════════════
           ① メインビジュアル
           ═══════════════════════════════════════════════ */}
+      {/* image: トップメインビジュアル / 1920x1080 / ピンク基調・上品・柔らかい自然光 / alt="Ange Spa トップビジュアル" */}
       <section
         style={{
           position: "relative",
-          minHeight: "calc(100vh - 56px)",
+          minHeight: `calc(100vh - ${SITE.layout.headerHeightSp})`,
           marginTop: `calc(-1 * ${SITE.layout.headerHeightSp})`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           overflow: "hidden",
-          padding: "60px 20px",
+          backgroundColor: SITE.color.bgSoft,
         }}
       >
-        {/* 背景グラデ + ラジアル */}
+        {/* 背景画像（プレースホルダー） */}
         <div
           style={{
             position: "absolute",
             inset: 0,
-            background: `
-              radial-gradient(ellipse at 30% 20%, rgba(232,132,154,0.18) 0%, transparent 50%),
-              radial-gradient(ellipse at 70% 80%, rgba(195,167,130,0.12) 0%, transparent 50%),
-              linear-gradient(180deg, #1a0f14 0%, #0f0a0d 100%)
-            `,
+            zIndex: 0,
           }}
-        />
-
-        {/* 薄いテクスチャ（ノイズ） */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            opacity: 0.03,
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-          }}
-        />
+        >
+          <Image
+            src="/images/placeholder/top-hero.jpg"
+            alt="Ange Spa トップビジュアル"
+            fill
+            priority
+            style={{
+              objectFit: "cover",
+              opacity: 0.9,
+            }}
+            sizes="100vw"
+          />
+          {/* 白の薄いオーバーレイ（文字の可読性確保） */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.75) 100%)",
+            }}
+          />
+        </div>
 
         {/* 中央コンテンツ */}
         <div
@@ -220,31 +221,31 @@ export default function HomePage() {
             position: "relative",
             zIndex: 1,
             textAlign: "center",
+            padding: "120px 24px 80px",
             maxWidth: 720,
             animation: "siteFadeUp 1.2s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
-          {/* 装飾ライン */}
+          {/* 装飾細線 */}
           <div
             style={{
               width: 1,
-              height: 60,
-              background: `linear-gradient(180deg, transparent, ${SITE.color.pink})`,
-              margin: "0 auto 32px",
+              height: 48,
+              backgroundColor: SITE.color.pink,
+              margin: "0 auto 40px",
             }}
           />
 
-          {/* ブランドロゴ（テキスト） */}
+          {/* ブランドロゴ */}
           <h1
             style={{
               fontFamily: SITE.font.display,
-              fontSize: "clamp(48px, 12vw, 96px)",
+              fontSize: "clamp(44px, 10vw, 84px)",
               fontWeight: 500,
-              letterSpacing: "0.12em",
+              letterSpacing: SITE.ls.loose,
               color: SITE.color.pink,
               lineHeight: 1,
-              marginBottom: 12,
-              textShadow: "0 4px 24px rgba(232,132,154,0.3)",
+              marginBottom: 16,
             }}
           >
             Ange Spa
@@ -252,11 +253,12 @@ export default function HomePage() {
           <p
             style={{
               fontFamily: SITE.font.serif,
-              fontSize: "clamp(13px, 2.5vw, 16px)",
+              fontSize: "clamp(12px, 2vw, 15px)",
               letterSpacing: "0.5em",
               color: SITE.color.textSub,
-              marginBottom: 48,
+              marginBottom: 56,
               paddingLeft: "0.5em",
+              fontWeight: 400,
             }}
           >
             アンジュスパ
@@ -266,28 +268,29 @@ export default function HomePage() {
           <p
             style={{
               fontFamily: SITE.font.serif,
-              fontSize: "clamp(16px, 3.5vw, 22px)",
-              lineHeight: 2.2,
+              fontSize: SITE.fs.hero,
+              lineHeight: SITE.lh.loose,
               color: SITE.color.text,
-              letterSpacing: "0.1em",
-              marginBottom: 40,
+              letterSpacing: SITE.ls.loose,
+              marginBottom: 48,
+              fontWeight: 500,
             }}
           >
             可愛らしい女の子と<br />
             癒しのひと時を、、
           </p>
 
-          {/* エリア表記 */}
+          {/* エリア */}
           <p
             style={{
               fontFamily: SITE.font.display,
               fontSize: "11px",
-              letterSpacing: "0.3em",
+              letterSpacing: SITE.ls.wider,
               color: SITE.color.textMuted,
               marginBottom: 48,
             }}
           >
-            NAGOYA × MIKAWA-ANJO × TOYOHASHI
+            NAGOYA &nbsp;/&nbsp; MIKAWA-ANJO &nbsp;/&nbsp; TOYOHASHI
           </p>
 
           {/* CTA */}
@@ -295,8 +298,8 @@ export default function HomePage() {
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 12,
-              alignItems: "center",
+              gap: 10,
+              alignItems: "stretch",
               maxWidth: 320,
               margin: "0 auto",
             }}
@@ -304,124 +307,90 @@ export default function HomePage() {
             <Link
               href="/schedule"
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                width: "100%",
-                padding: "16px 32px",
-                borderRadius: SITE.radius.pill,
-                background: `linear-gradient(135deg, ${SITE.color.pink} 0%, ${SITE.color.pinkDeep} 100%)`,
-                color: "#fff",
+                display: "block",
+                padding: "18px 24px",
+                backgroundColor: SITE.color.pink,
+                color: "#ffffff",
+                fontFamily: SITE.font.serif,
                 fontSize: "14px",
-                fontWeight: 600,
-                letterSpacing: "0.15em",
+                fontWeight: 500,
+                letterSpacing: SITE.ls.wide,
                 textDecoration: "none",
-                boxShadow: SITE.shadow.pink,
+                textAlign: "center",
                 transition: SITE.transition.base,
               }}
+              className="site-cta-primary"
             >
-              <span style={{ fontFamily: SITE.font.display }}>WEB RESERVE</span>
-              <span style={{ fontSize: 16 }}>→</span>
+              WEB予約をする
             </Link>
             <a
               href="tel:070-1675-5900"
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                width: "100%",
-                padding: "14px 28px",
-                borderRadius: SITE.radius.pill,
-                background: "transparent",
-                border: `1px solid ${SITE.color.pink}88`,
+                display: "block",
+                padding: "16px 24px",
+                backgroundColor: "transparent",
+                border: `1px solid ${SITE.color.pink}`,
                 color: SITE.color.pink,
-                fontSize: "13px",
-                letterSpacing: "0.1em",
-                textDecoration: "none",
                 fontFamily: SITE.font.display,
+                fontSize: "14px",
+                letterSpacing: SITE.ls.loose,
+                textDecoration: "none",
+                textAlign: "center",
+                transition: SITE.transition.base,
               }}
+              className="site-cta-secondary"
             >
-              📞 070-1675-5900
+              電話 070-1675-5900
             </a>
           </div>
 
           {/* 営業時間 */}
           <p
             style={{
-              marginTop: 40,
+              marginTop: 48,
               fontSize: "11px",
-              letterSpacing: "0.1em",
+              letterSpacing: SITE.ls.loose,
               color: SITE.color.textMuted,
-              fontFamily: SITE.font.display,
+              lineHeight: SITE.lh.body,
             }}
           >
-            OPEN 12:00 — LAST 27:00 ／ RECEPTION UNTIL 26:00
+            営業 12:00 — 深夜 27:00 ／ 最終受付 26:00
           </p>
-        </div>
-
-        {/* スクロール誘導 */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 20,
-            left: "50%",
-            transform: "translateX(-50%)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 6,
-            color: SITE.color.textMuted,
-            animation: "siteBounce 2.4s ease-in-out infinite",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: SITE.font.display,
-              fontSize: 9,
-              letterSpacing: "0.3em",
-            }}
-          >
-            SCROLL
-          </span>
-          <span style={{ fontSize: 16 }}>↓</span>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════
-          ② Our Concept
+          ② CONCEPT
           ═══════════════════════════════════════════════ */}
       <SectionBlock label="CONCEPT" title="私たちについて">
         <div
           style={{
             textAlign: "center",
-            maxWidth: 640,
+            maxWidth: SITE.layout.maxWidthText,
             margin: "0 auto",
-            padding: `${SITE.sp.xl} 0`,
           }}
         >
           <p
             style={{
               fontFamily: SITE.font.serif,
-              fontSize: "clamp(16px, 3vw, 20px)",
-              lineHeight: 2.5,
+              fontSize: SITE.fs.lead,
+              lineHeight: SITE.lh.loose,
               color: SITE.color.text,
-              letterSpacing: "0.1em",
-              marginBottom: 32,
+              letterSpacing: SITE.ls.loose,
+              marginBottom: 40,
+              fontWeight: 400,
             }}
           >
             清楚で可憐な彼女たちは<br />
             ビジュアル面でも目を引きますが<br />
             それ以上に最高のマナーを兼ね備え<br />
-            <span style={{ color: SITE.color.pink }}>安らぎと癒し</span>
-            を運びます
+            <span style={{ color: SITE.color.pink }}>安らぎと癒し</span>を運びます
           </p>
           <p
             style={{
               fontFamily: SITE.font.display,
-              fontSize: 11,
-              letterSpacing: "0.2em",
+              fontSize: "11px",
+              letterSpacing: SITE.ls.wide,
               color: SITE.color.textMuted,
               lineHeight: 2,
             }}
@@ -433,60 +402,62 @@ export default function HomePage() {
       </SectionBlock>
 
       {/* ═══════════════════════════════════════════════
-          ③ 本日の出勤
+          ③ TODAY'S SCHEDULE
           ═══════════════════════════════════════════════ */}
-      <SectionBlock
-        label="TODAY'S SCHEDULE"
-        title="本日の出勤セラピスト"
-        badge={loading ? undefined : `${workingToday.length}名`}
+      <section
+        style={{
+          padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+          backgroundColor: SITE.color.bgSoft,
+        }}
       >
-        {loading ? (
-          <LoadingBlock />
-        ) : workingToday.length === 0 ? (
-          <EmptyBlock
-            emoji="🌸"
-            title="本日出勤予定のセラピストはまだ公開されていません"
-            sub="明日以降のスケジュールも順次公開されます"
-            link={{ href: "/schedule", label: "スケジュールを見る →" }}
+        <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
+          <SectionHeading
+            label="TODAY'S SCHEDULE"
+            title="本日の出勤セラピスト"
+            badge={loading ? undefined : `${workingToday.length}名`}
           />
-        ) : (
-          <>
-            <TherapistGrid>
-              {workingToday.map((t) => {
-                const shift = shiftByTherapist[t.id];
-                const work = getWorkStatus(shift);
-                return (
-                  <TherapistCard
-                    key={t.id}
-                    therapist={t}
-                    timeLabel={
-                      shift ? `${timeHM(shift.start_time)} — ${timeHM(shift.end_time)}` : ""
-                    }
-                    statusLabel={
-                      work === "working"
-                        ? "出勤中"
-                        : work === "upcoming"
-                        ? "出勤前"
-                        : work === "finished"
-                        ? "本日終了"
-                        : ""
-                    }
-                    statusColor={
-                      work === "working"
-                        ? SITE.color.success
-                        : work === "upcoming"
-                        ? SITE.color.pink
-                        : SITE.color.textMuted
-                    }
-                    storeName={shift ? getStoreName(shift.store_id) : ""}
-                  />
-                );
-              })}
-            </TherapistGrid>
-            <ViewMoreButton href="/schedule" label="VIEW ALL SCHEDULE" />
-          </>
-        )}
-      </SectionBlock>
+          {loading ? (
+            <LoadingBlock />
+          ) : workingToday.length === 0 ? (
+            <EmptyBlock
+              title="本日出勤予定のセラピストはまだ公開されていません"
+              sub="明日以降のスケジュールも順次公開されます"
+              link={{ href: "/schedule", label: "スケジュールを見る" }}
+            />
+          ) : (
+            <>
+              <TherapistGrid>
+                {workingToday.map((t) => {
+                  const shift = shiftByTherapist[t.id];
+                  const work = getWorkStatus(shift);
+                  return (
+                    <TherapistCard
+                      key={t.id}
+                      therapist={t}
+                      timeLabel={
+                        shift
+                          ? `${timeHM(shift.start_time)} — ${timeHM(shift.end_time)}`
+                          : ""
+                      }
+                      statusLabel={
+                        work === "working"
+                          ? "出勤中"
+                          : work === "upcoming"
+                          ? "出勤前"
+                          : work === "finished"
+                          ? "本日終了"
+                          : ""
+                      }
+                      storeName={shift ? getStoreName(shift.store_id) : ""}
+                    />
+                  );
+                })}
+              </TherapistGrid>
+              <ViewMoreButton href="/schedule" label="スケジュールをすべて見る" />
+            </>
+          )}
+        </div>
+      </section>
 
       {/* ═══════════════════════════════════════════════
           ④ PICK UP
@@ -505,14 +476,22 @@ export default function HomePage() {
           ⑤ NEW FACE
           ═══════════════════════════════════════════════ */}
       {!loading && newcomers.length > 0 && (
-        <SectionBlock label="NEW FACE" title="新人セラピスト">
-          <TherapistGrid>
-            {newcomers.map((t) => (
-              <TherapistCard key={t.id} therapist={t} newBadge />
-            ))}
-          </TherapistGrid>
-          <ViewMoreButton href="/therapist" label="VIEW ALL THERAPIST" />
-        </SectionBlock>
+        <section
+          style={{
+            padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+            backgroundColor: SITE.color.bgSoft,
+          }}
+        >
+          <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
+            <SectionHeading label="NEW FACE" title="新人セラピスト" />
+            <TherapistGrid>
+              {newcomers.map((t) => (
+                <TherapistCard key={t.id} therapist={t} newBadge />
+              ))}
+            </TherapistGrid>
+            <ViewMoreButton href="/therapist" label="セラピスト一覧を見る" />
+          </div>
+        </section>
       )}
 
       {/* ═══════════════════════════════════════════════
@@ -521,188 +500,253 @@ export default function HomePage() {
       <SectionBlock label="RECRUIT" title="セラピストさん大募集">
         <div
           style={{
-            maxWidth: 720,
+            maxWidth: SITE.layout.maxWidthNarrow,
             margin: "0 auto",
-            padding: `${SITE.sp.xl} ${SITE.sp.md}`,
-            borderRadius: SITE.radius.lg,
-            background: `linear-gradient(135deg, ${SITE.color.surface} 0%, ${SITE.color.surfaceAlt} 100%)`,
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: 0,
             border: `1px solid ${SITE.color.border}`,
-            textAlign: "center",
-            position: "relative",
-            overflow: "hidden",
           }}
+          className="site-recruit-grid"
         >
+          {/* image: 求人バナー / 1200x800 / ピンク基調・明るく前向き / alt="Ange Spa 求人バナー" */}
           <div
             style={{
-              position: "absolute",
-              top: -80,
-              right: -80,
-              width: 200,
-              height: 200,
-              borderRadius: "50%",
-              background: `radial-gradient(circle, ${SITE.color.pink}33 0%, transparent 70%)`,
+              position: "relative",
+              aspectRatio: "16 / 10",
+              backgroundColor: SITE.color.surfaceAlt,
+            }}
+          >
+            <Image
+              src="/images/placeholder/recruit.jpg"
+              alt="Ange Spa 求人案内"
+              fill
+              style={{ objectFit: "cover" }}
+              sizes="(min-width: 768px) 50vw, 100vw"
+            />
+          </div>
+          <div
+            style={{
+              padding: `${SITE.sp.xl} ${SITE.sp.lg}`,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              backgroundColor: SITE.color.surface,
+            }}
+          >
+            <p
+              style={{
+                fontFamily: SITE.font.display,
+                fontSize: "11px",
+                letterSpacing: SITE.ls.wide,
+                color: SITE.color.pink,
+                marginBottom: 16,
+              }}
+            >
+              JOIN US
+            </p>
+            <h3
+              style={{
+                fontFamily: SITE.font.serif,
+                fontSize: SITE.fs.h3,
+                lineHeight: SITE.lh.heading,
+                letterSpacing: SITE.ls.loose,
+                marginBottom: 20,
+                fontWeight: 500,
+              }}
+            >
+              一緒に働いてくれる<br />
+              仲間を募集しています
+            </h3>
+            <p
+              style={{
+                fontSize: "13px",
+                lineHeight: SITE.lh.body,
+                color: SITE.color.textSub,
+                letterSpacing: SITE.ls.normal,
+                marginBottom: 28,
+              }}
+            >
+              未経験の方も大歓迎。<br />
+              スタッフが丁寧にサポートいたします。
+            </p>
+            <Link
+              href="/recruit"
+              style={{
+                alignSelf: "flex-start",
+                padding: "12px 32px",
+                backgroundColor: SITE.color.pink,
+                color: "#ffffff",
+                fontFamily: SITE.font.serif,
+                fontSize: "13px",
+                letterSpacing: SITE.ls.loose,
+                textDecoration: "none",
+                transition: SITE.transition.base,
+              }}
+              className="site-cta-primary"
+            >
+              求人情報を見る
+            </Link>
+          </div>
+        </div>
+      </SectionBlock>
+
+      {/* ═══════════════════════════════════════════════
+          ⑦ CONTENTS
+          ═══════════════════════════════════════════════ */}
+      <section
+        style={{
+          padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+          backgroundColor: SITE.color.bgSoft,
+        }}
+      >
+        <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
+          <SectionHeading label="CONTENTS" title="サービス案内" />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: SITE.sp.md,
+            }}
+          >
+            {[
+              { en: "SYSTEM",  jp: "料金・コース",       href: "/system" },
+              { en: "ACCESS",  jp: "店舗・アクセス",     href: "/access" },
+              { en: "RESERVE", jp: "WEB予約",           href: "/schedule" },
+              { en: "CONTACT", jp: "お問い合わせ",       href: "/contact" },
+            ].map((c) => (
+              <Link
+                key={c.href}
+                href={c.href}
+                className="site-content-card"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: `${SITE.sp.xl} ${SITE.sp.lg}`,
+                  backgroundColor: SITE.color.surface,
+                  border: `1px solid ${SITE.color.border}`,
+                  color: SITE.color.text,
+                  textDecoration: "none",
+                  textAlign: "center",
+                  transition: SITE.transition.base,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: SITE.font.display,
+                    fontSize: "20px",
+                    fontWeight: 500,
+                    letterSpacing: SITE.ls.wide,
+                    color: SITE.color.pink,
+                  }}
+                >
+                  {c.en}
+                </span>
+                <span
+                  style={{
+                    width: 24,
+                    height: 1,
+                    backgroundColor: SITE.color.border,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontFamily: SITE.font.serif,
+                    color: SITE.color.textSub,
+                    letterSpacing: SITE.ls.loose,
+                  }}
+                >
+                  {c.jp}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════
+          ⑧ MESSAGE
+          ═══════════════════════════════════════════════ */}
+      <section style={{ padding: `${SITE.sp.section} ${SITE.sp.lg}` }}>
+        <div
+          style={{
+            maxWidth: SITE.layout.maxWidthText,
+            margin: "0 auto",
+            textAlign: "center",
+          }}
+        >
+          <p
+            style={{
+              fontFamily: SITE.font.display,
+              fontSize: "11px",
+              letterSpacing: SITE.ls.wide,
+              color: SITE.color.pink,
+              marginBottom: 16,
+            }}
+          >
+            MESSAGE
+          </p>
+          <h2
+            style={{
+              fontFamily: SITE.font.serif,
+              fontSize: SITE.fs.h3,
+              letterSpacing: SITE.ls.loose,
+              marginBottom: 32,
+              fontWeight: 500,
+            }}
+          >
+            当店から皆様へ
+          </h2>
+          <div
+            style={{
+              width: SITE.accent.underlineW,
+              height: SITE.accent.underlineH,
+              backgroundColor: SITE.color.pink,
+              margin: `0 auto ${SITE.sp.xl}`,
             }}
           />
           <p
             style={{
               fontFamily: SITE.font.serif,
-              fontSize: "clamp(15px, 3vw, 18px)",
-              lineHeight: 2,
-              color: SITE.color.text,
-              marginBottom: 24,
-              position: "relative",
-            }}
-          >
-            一緒に働いてくれる仲間を<br />
-            募集しています
-          </p>
-          <Link
-            href="/recruit"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "12px 32px",
-              borderRadius: SITE.radius.pill,
-              background: SITE.color.pink,
-              color: "#fff",
-              fontSize: 13,
-              fontFamily: SITE.font.display,
-              letterSpacing: "0.2em",
-              textDecoration: "none",
-              boxShadow: SITE.shadow.pink,
-            }}
-          >
-            VIEW MORE <span>→</span>
-          </Link>
-        </div>
-      </SectionBlock>
-
-      {/* ═══════════════════════════════════════════════
-          ⑦ CONTENTS（各ページへの導線）
-          ═══════════════════════════════════════════════ */}
-      <SectionBlock label="CONTENTS" title="サービス案内">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: SITE.sp.md,
-            maxWidth: SITE.layout.maxWidth,
-            margin: "0 auto",
-          }}
-        >
-          {[
-            { en: "SYSTEM", jp: "料金・コース", href: "/system", icon: "💴" },
-            { en: "ACCESS", jp: "アクセス", href: "/access", icon: "📍" },
-            { en: "RESERVE", jp: "WEB予約", href: "/schedule", icon: "📅" },
-            { en: "CONTACT", jp: "お問い合わせ", href: "/contact", icon: "💌" },
-          ].map((c) => (
-            <Link
-              key={c.href}
-              href={c.href}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 10,
-                padding: `${SITE.sp.xl} ${SITE.sp.md}`,
-                borderRadius: SITE.radius.lg,
-                background: SITE.color.surface,
-                border: `1px solid ${SITE.color.border}`,
-                color: SITE.color.text,
-                textDecoration: "none",
-                textAlign: "center",
-                transition: SITE.transition.base,
-              }}
-              className="site-content-card"
-            >
-              <span style={{ fontSize: 32 }}>{c.icon}</span>
-              <span
-                style={{
-                  fontFamily: SITE.font.display,
-                  fontSize: 14,
-                  letterSpacing: "0.2em",
-                  color: SITE.color.pink,
-                }}
-              >
-                {c.en}
-              </span>
-              <span style={{ fontSize: 11, color: SITE.color.textSub }}>{c.jp}</span>
-            </Link>
-          ))}
-        </div>
-      </SectionBlock>
-
-      {/* ═══════════════════════════════════════════════
-          ⑧ メッセージ
-          ═══════════════════════════════════════════════ */}
-      <section style={{ padding: `${SITE.sp.xxxl} ${SITE.sp.md}` }}>
-        <div
-          style={{
-            maxWidth: 640,
-            margin: "0 auto",
-            textAlign: "center",
-            padding: SITE.sp.xl,
-          }}
-        >
-          <p
-            style={{
-              fontFamily: SITE.font.display,
-              fontSize: 11,
-              letterSpacing: "0.3em",
-              color: SITE.color.pink,
-              marginBottom: 24,
-            }}
-          >
-            MESSAGE
-          </p>
-          <p
-            style={{
-              fontFamily: SITE.font.serif,
-              fontSize: "clamp(13px, 2.5vw, 15px)",
-              lineHeight: 2.4,
+              fontSize: SITE.fs.bodyLg,
+              lineHeight: SITE.lh.loose,
               color: SITE.color.textSub,
-              letterSpacing: "0.08em",
+              letterSpacing: SITE.ls.loose,
             }}
           >
             Ange Spa ではマッサージ技術だけでなく<br />
-            接客指導に力を入れております。<br />
+            接客指導にも力を入れております。<br />
             皆様の日頃の疲れを癒やすお手伝いが<br />
-            出来れば幸いです。
+            出来ましたら幸いです。
           </p>
         </div>
       </section>
 
-      {/* ─── アニメーション定義 ─── */}
+      {/* ─── アニメーション・ホバー ─── */}
       <style>{`
         @keyframes siteFadeUp {
-          from { opacity: 0; transform: translateY(30px); }
+          from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes siteBounce {
-          0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.5; }
-          50% { transform: translateX(-50%) translateY(6px); opacity: 1; }
+        .site-cta-primary:hover {
+          background-color: ${SITE.color.pinkDeep} !important;
         }
-        @keyframes siteFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .site-content-card {
-          transition: ${SITE.transition.base};
+        .site-cta-secondary:hover {
+          background-color: ${SITE.color.pinkSoft} !important;
         }
         .site-content-card:hover {
-          transform: translateY(-4px);
-          border-color: ${SITE.color.pink}66 !important;
-          box-shadow: ${SITE.shadow.pink};
+          border-color: ${SITE.color.pink} !important;
         }
-        .site-therapist-card {
-          transition: ${SITE.transition.base};
+        .site-therapist-card:hover .site-therapist-img-wrap {
+          opacity: 0.85;
         }
-        .site-therapist-card:hover {
-          transform: translateY(-4px);
-        }
-        .site-therapist-card:hover .site-therapist-img {
-          transform: scale(1.05);
+        @media (min-width: 768px) {
+          .site-recruit-grid {
+            grid-template-columns: 1fr 1fr !important;
+          }
         }
       `}</style>
     </>
@@ -710,88 +754,104 @@ export default function HomePage() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// サブコンポーネント群
+// サブコンポーネント
 // ═══════════════════════════════════════════════════════════
 
 function SectionBlock({
   label,
   title,
-  badge,
   children,
 }: {
   label: string;
   title: string;
-  badge?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ padding: `${SITE.sp.xxl} ${SITE.sp.md}` }}>
+    <section style={{ padding: `${SITE.sp.section} ${SITE.sp.lg}` }}>
       <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: SITE.sp.xl }}>
-          <p
-            style={{
-              fontFamily: SITE.font.display,
-              fontSize: 11,
-              letterSpacing: "0.3em",
-              color: SITE.color.pink,
-              marginBottom: 8,
-            }}
-          >
-            {label}
-          </p>
-          <h2
-            style={{
-              fontFamily: SITE.font.serif,
-              fontSize: SITE.fs.h2,
-              color: SITE.color.text,
-              letterSpacing: "0.08em",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            {title}
-            {badge && (
-              <span
-                style={{
-                  fontFamily: SITE.font.display,
-                  fontSize: 12,
-                  letterSpacing: "0.1em",
-                  color: SITE.color.pink,
-                  padding: "4px 12px",
-                  borderRadius: SITE.radius.pill,
-                  background: SITE.color.pinkGhost,
-                  border: `1px solid ${SITE.color.pink}44`,
-                }}
-              >
-                {badge}
-              </span>
-            )}
-          </h2>
-          <div
-            style={{
-              width: 40,
-              height: 1,
-              background: SITE.color.pink,
-              margin: `${SITE.sp.md} auto 0`,
-            }}
-          />
-        </div>
+        <SectionHeading label={label} title={title} />
         {children}
       </div>
     </section>
   );
 }
 
+function SectionHeading({
+  label,
+  title,
+  badge,
+}: {
+  label: string;
+  title: string;
+  badge?: string;
+}) {
+  return (
+    <div style={{ textAlign: "center", marginBottom: SITE.sp.xl }}>
+      <p
+        style={{
+          fontFamily: SITE.font.display,
+          fontSize: "11px",
+          letterSpacing: SITE.ls.wide,
+          color: SITE.color.pink,
+          marginBottom: 12,
+          fontWeight: 500,
+        }}
+      >
+        {label}
+      </p>
+      <h2
+        style={{
+          fontFamily: SITE.font.serif,
+          fontSize: SITE.fs.h2,
+          color: SITE.color.text,
+          letterSpacing: SITE.ls.loose,
+          fontWeight: 500,
+          marginBottom: 16,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+          justifyContent: "center",
+        }}
+      >
+        {title}
+        {badge && (
+          <span
+            style={{
+              fontFamily: SITE.font.display,
+              fontSize: "12px",
+              letterSpacing: SITE.ls.loose,
+              color: SITE.color.pink,
+              padding: "3px 14px",
+              border: `1px solid ${SITE.color.borderPink}`,
+              fontWeight: 400,
+            }}
+          >
+            {badge}
+          </span>
+        )}
+      </h2>
+      <div
+        style={{
+          width: SITE.accent.underlineW,
+          height: SITE.accent.underlineH,
+          backgroundColor: SITE.color.pink,
+          margin: "0 auto",
+        }}
+      />
+    </div>
+  );
+}
+
 function TherapistGrid({ children }: { children: React.ReactNode }) {
   return (
     <div
+      className="site-therapist-grid"
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
         gap: SITE.sp.md,
       }}
-      className="site-therapist-grid"
     >
       {children}
       <style>{`
@@ -799,7 +859,7 @@ function TherapistGrid({ children }: { children: React.ReactNode }) {
           .site-therapist-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
         @media (min-width: 768px) {
-          .site-therapist-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          .site-therapist-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: ${SITE.sp.lg}; }
         }
       `}</style>
     </div>
@@ -810,7 +870,6 @@ function TherapistCard({
   therapist,
   timeLabel,
   statusLabel,
-  statusColor,
   storeName,
   pickup,
   newBadge,
@@ -818,7 +877,6 @@ function TherapistCard({
   therapist: Therapist;
   timeLabel?: string;
   statusLabel?: string;
-  statusColor?: string;
   storeName?: string;
   pickup?: boolean;
   newBadge?: boolean;
@@ -831,10 +889,7 @@ function TherapistCard({
       style={{
         display: "flex",
         flexDirection: "column",
-        borderRadius: SITE.radius.md,
-        background: SITE.color.surface,
-        border: `1px solid ${SITE.color.border}`,
-        overflow: "hidden",
+        backgroundColor: SITE.color.surface,
         textDecoration: "none",
         color: SITE.color.text,
         position: "relative",
@@ -849,14 +904,15 @@ function TherapistCard({
             left: 0,
             right: 0,
             zIndex: 2,
-            padding: "6px 8px",
-            fontSize: 9,
-            fontWeight: 500,
-            letterSpacing: "0.05em",
-            background: "linear-gradient(180deg, rgba(232,132,154,0.95), rgba(201,107,131,0.85))",
-            color: "#fff",
+            padding: "6px 10px",
+            fontFamily: SITE.font.serif,
+            fontSize: "10px",
+            letterSpacing: SITE.ls.loose,
+            backgroundColor: SITE.color.pink,
+            color: "#ffffff",
             textAlign: "center",
             lineHeight: 1.4,
+            fontWeight: 400,
           }}
         >
           {t.catchphrase}
@@ -865,25 +921,26 @@ function TherapistCard({
 
       {/* 写真 */}
       <div
+        className="site-therapist-img-wrap"
         style={{
           width: "100%",
           aspectRatio: "3 / 4",
-          overflow: "hidden",
           position: "relative",
-          background: SITE.color.surfaceAlt,
+          backgroundColor: SITE.color.surfaceAlt,
+          transition: SITE.transition.base,
         }}
       >
         {t.photo_url ? (
+          // セラピスト写真は外部URL（Supabase Storage）なので next/image ではなく <img> を使用
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={t.photo_url}
             alt={t.name}
-            className="site-therapist-img"
             style={{
               width: "100%",
               height: "100%",
               objectFit: "cover",
-              transition: SITE.transition.slow,
+              display: "block",
             }}
             loading="lazy"
           />
@@ -895,85 +952,88 @@ function TherapistCard({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: SITE.color.textMuted,
-              fontSize: 28,
+              color: SITE.color.textFaint,
+              fontFamily: SITE.font.display,
+              fontSize: "11px",
+              letterSpacing: SITE.ls.wide,
             }}
           >
-            🌸
+            NO IMAGE
           </div>
         )}
 
-        {/* バッジ */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 8,
-            left: 8,
-            display: "flex",
-            gap: 4,
-            flexWrap: "wrap",
-          }}
-        >
-          {newBadge && (
-            <span
-              style={{
-                padding: "3px 8px",
-                borderRadius: SITE.radius.pill,
-                background: SITE.color.pink,
-                color: "#fff",
-                fontSize: 9,
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                boxShadow: SITE.shadow.pink,
-              }}
-            >
-              NEW
-            </span>
-          )}
-          {pickup && (
-            <span
-              style={{
-                padding: "3px 8px",
-                borderRadius: SITE.radius.pill,
-                background: SITE.color.gold,
-                color: "#fff",
-                fontSize: 9,
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-              }}
-            >
-              PICK UP
-            </span>
-          )}
-          {statusLabel && (
-            <span
-              style={{
-                padding: "3px 8px",
-                borderRadius: SITE.radius.pill,
-                background: "rgba(0,0,0,0.7)",
-                color: statusColor || SITE.color.text,
-                fontSize: 9,
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              {statusLabel}
-            </span>
-          )}
-        </div>
+        {/* バッジ（左下） */}
+        {(newBadge || pickup || statusLabel) && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 8,
+              left: 8,
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap",
+            }}
+          >
+            {newBadge && (
+              <span
+                style={{
+                  padding: "3px 10px",
+                  backgroundColor: SITE.color.pink,
+                  color: "#ffffff",
+                  fontFamily: SITE.font.display,
+                  fontSize: "10px",
+                  letterSpacing: SITE.ls.wide,
+                  fontWeight: 500,
+                }}
+              >
+                NEW
+              </span>
+            )}
+            {pickup && (
+              <span
+                style={{
+                  padding: "3px 10px",
+                  backgroundColor: "rgba(43,43,43,0.85)",
+                  color: "#ffffff",
+                  fontFamily: SITE.font.display,
+                  fontSize: "10px",
+                  letterSpacing: SITE.ls.wide,
+                  fontWeight: 500,
+                }}
+              >
+                PICK UP
+              </span>
+            )}
+            {statusLabel && (
+              <span
+                style={{
+                  padding: "3px 10px",
+                  backgroundColor: "rgba(255,255,255,0.92)",
+                  color: SITE.color.text,
+                  fontFamily: SITE.font.serif,
+                  fontSize: "10px",
+                  letterSpacing: SITE.ls.loose,
+                  fontWeight: 500,
+                  border: `1px solid ${SITE.color.border}`,
+                }}
+              >
+                {statusLabel}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 情報 */}
-      <div style={{ padding: "12px 12px 14px" }}>
+      <div style={{ padding: "14px 4px 20px" }}>
         <div
           style={{
             fontFamily: SITE.font.serif,
-            fontSize: 15,
+            fontSize: "15px",
             fontWeight: 500,
             color: SITE.color.text,
-            marginBottom: 4,
-            letterSpacing: "0.05em",
+            marginBottom: 6,
+            letterSpacing: SITE.ls.loose,
           }}
         >
           {t.name}
@@ -981,34 +1041,42 @@ function TherapistCard({
         <div
           style={{
             fontFamily: SITE.font.display,
-            fontSize: 10,
-            color: SITE.color.textSub,
-            letterSpacing: "0.08em",
+            fontSize: "11px",
+            color: SITE.color.textMuted,
+            letterSpacing: SITE.ls.loose,
             marginBottom: timeLabel || storeName ? 8 : 0,
           }}
         >
-          {t.age ? `${t.age}歳` : ""}
-          {t.height_cm ? ` · ${t.height_cm}cm` : ""}
-          {t.cup ? ` · ${t.cup}cup` : ""}
+          {[
+            t.age ? `${t.age}歳` : null,
+            t.height_cm ? `${t.height_cm}cm` : null,
+            t.cup ? `${t.cup}cup` : null,
+          ]
+            .filter(Boolean)
+            .join(" ／ ")}
         </div>
         {timeLabel && (
           <div
             style={{
               fontFamily: SITE.font.display,
-              fontSize: 11,
+              fontSize: "12px",
               color: SITE.color.pink,
-              letterSpacing: "0.1em",
+              letterSpacing: SITE.ls.loose,
               fontWeight: 500,
             }}
           >
             {timeLabel}
           </div>
         )}
-        {storeName && !timeLabel && (
-          <div style={{ fontSize: 10, color: SITE.color.textMuted }}>{storeName}</div>
-        )}
-        {storeName && timeLabel && (
-          <div style={{ fontSize: 10, color: SITE.color.textMuted, marginTop: 4 }}>
+        {storeName && (
+          <div
+            style={{
+              fontSize: "10px",
+              color: SITE.color.textMuted,
+              marginTop: 4,
+              letterSpacing: SITE.ls.loose,
+            }}
+          >
             {storeName}
           </div>
         )}
@@ -1023,22 +1091,20 @@ function ViewMoreButton({ href, label }: { href: string; label: string }) {
       <Link
         href={href}
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "12px 32px",
-          borderRadius: SITE.radius.pill,
+          display: "inline-block",
+          padding: "14px 40px",
           background: "transparent",
-          border: `1px solid ${SITE.color.pink}66`,
+          border: `1px solid ${SITE.color.pink}`,
           color: SITE.color.pink,
-          fontFamily: SITE.font.display,
-          fontSize: 12,
-          letterSpacing: "0.25em",
+          fontFamily: SITE.font.serif,
+          fontSize: "13px",
+          letterSpacing: SITE.ls.wide,
           textDecoration: "none",
           transition: SITE.transition.base,
         }}
+        className="site-cta-secondary"
       >
-        {label} <span>→</span>
+        {label}
       </Link>
     </div>
   );
@@ -1051,22 +1117,21 @@ function LoadingBlock() {
         padding: SITE.sp.xxl,
         textAlign: "center",
         color: SITE.color.textMuted,
-        fontSize: 12,
-        letterSpacing: "0.1em",
+        fontFamily: SITE.font.display,
+        fontSize: "11px",
+        letterSpacing: SITE.ls.wide,
       }}
     >
-      Loading...
+      LOADING
     </div>
   );
 }
 
 function EmptyBlock({
-  emoji,
   title,
   sub,
   link,
 }: {
-  emoji: string;
   title: string;
   sub?: string;
   link?: { href: string; label: string };
@@ -1074,41 +1139,50 @@ function EmptyBlock({
   return (
     <div
       style={{
-        padding: `${SITE.sp.xxl} ${SITE.sp.md}`,
+        padding: `${SITE.sp.xxl} ${SITE.sp.lg}`,
         textAlign: "center",
-        borderRadius: SITE.radius.lg,
-        background: SITE.color.surface,
+        backgroundColor: SITE.color.surface,
         border: `1px solid ${SITE.color.border}`,
       }}
     >
-      <div style={{ fontSize: 40, marginBottom: 12 }}>{emoji}</div>
       <p
         style={{
-          fontSize: 13,
+          fontFamily: SITE.font.serif,
+          fontSize: "14px",
           color: SITE.color.text,
-          marginBottom: 6,
-          letterSpacing: "0.05em",
+          marginBottom: sub ? 8 : 20,
+          letterSpacing: SITE.ls.loose,
         }}
       >
         {title}
       </p>
       {sub && (
-        <p style={{ fontSize: 11, color: SITE.color.textMuted, marginBottom: 20 }}>{sub}</p>
+        <p
+          style={{
+            fontSize: "12px",
+            color: SITE.color.textMuted,
+            marginBottom: 24,
+            letterSpacing: SITE.ls.normal,
+          }}
+        >
+          {sub}
+        </p>
       )}
       {link && (
         <Link
           href={link.href}
           style={{
             display: "inline-block",
-            padding: "10px 24px",
-            borderRadius: SITE.radius.pill,
-            border: `1px solid ${SITE.color.pink}66`,
+            padding: "12px 32px",
+            border: `1px solid ${SITE.color.pink}`,
             color: SITE.color.pink,
-            fontFamily: SITE.font.display,
-            fontSize: 11,
-            letterSpacing: "0.2em",
+            fontFamily: SITE.font.serif,
+            fontSize: "12px",
+            letterSpacing: SITE.ls.wide,
             textDecoration: "none",
+            transition: SITE.transition.base,
           }}
+          className="site-cta-secondary"
         >
           {link.label}
         </Link>

@@ -1,34 +1,18 @@
 import type { Metadata } from "next";
-import { Noto_Serif_JP, Noto_Sans_JP, Cormorant_Garamond } from "next/font/google";
+import { Noto_Serif_JP, Cormorant_Garamond } from "next/font/google";
 import { SITE } from "../../lib/site-theme";
 import SiteHeader from "../../components/site/SiteHeader";
 import SiteFooter from "../../components/site/SiteFooter";
 
 /**
- * ═══════════════════════════════════════════════════════════
  * Ange Spa 公式HP 共通レイアウト
  *
- * Next.js のルートグループ (site) により、新HP群のページだけ
- * にこのレイアウトを適用する。URL には (site) は含まれない。
- *
- * 対象ページ:
- *   /            ← app/(site)/page.tsx（HOME、コミット #7 で実装）
- *   /system      ← app/(site)/system/page.tsx（コミット #8）
- *   /therapist   ← app/(site)/therapist/page.tsx（コミット #9）
- *   /schedule    ← app/(site)/schedule/page.tsx（コミット #11）
- *   /access      ← app/(site)/access/page.tsx（コミット #12）
- *   /recruit     ← app/(site)/recruit/page.tsx（コミット #12）
- *
- * このレイアウトは app/layout.tsx（ルート）の内側に入るため、
- * ThemeProvider 等の管理系プロバイダーは継承される。
- * HP側で useTheme / useStaffSession を呼ばなければ無害。
- *
- * ヘッダー・フッター・ハンバーガー等の UI コンポーネントは
- * コミット #4 で追加予定。このファイルは骨組みのみ。
- * ═══════════════════════════════════════════════════════════
+ * 方針（■19・■20 準拠）:
+ *  - ホワイト基調
+ *  - Noto Serif JP 統一（サンセリフ原則使用しない）
+ *  - 絵文字・アイコン非使用
  */
 
-// フォント読み込み（新HP専用、Google Fonts から）
 const serifJP = Noto_Serif_JP({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -36,31 +20,22 @@ const serifJP = Noto_Serif_JP({
   display: "swap",
 });
 
-const sansJP = Noto_Sans_JP({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-sans-jp",
-  display: "swap",
-});
-
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
   variable: "--font-display",
   display: "swap",
 });
 
-// このルートグループのデフォルト metadata
-// 各ページで個別に上書き可
 export const metadata: Metadata = {
   title: {
-    default: "Ange Spa〜アンジュスパ｜名古屋・三河安城・豊橋メンズエステ",
-    template: "%s ｜ Ange Spa",
+    default: "Ange Spa｜名古屋・三河安城・豊橋メンズエステ",
+    template: "%s｜Ange Spa",
   },
   description:
-    "名古屋・三河安城・豊橋エリアで展開するメンズリラクゼーションサロン「Ange Spa〜アンジュスパ」公式サイト。可愛らしい女の子と癒しのひと時を。",
+    "名古屋・三河安城・豊橋エリアで展開するメンズリラクゼーションサロン「Ange Spa（アンジュスパ）」公式サイト。清楚で可憐なセラピストによる癒しのひと時を。",
   openGraph: {
-    title: "Ange Spa〜アンジュスパ",
+    title: "Ange Spa",
     description: "名古屋・三河安城・豊橋のメンズリラクゼーションサロン",
     locale: "ja_JP",
     type: "website",
@@ -74,30 +49,23 @@ export const metadata: Metadata = {
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className={`${serifJP.variable} ${sansJP.variable} ${cormorant.variable}`}
+      className={`${serifJP.variable} ${cormorant.variable}`}
       style={{
         minHeight: "100vh",
         backgroundColor: SITE.color.bg,
-        background: `linear-gradient(180deg, ${SITE.color.bgGrad1} 0%, ${SITE.color.bgGrad2} 100%)`,
         color: SITE.color.text,
-        fontFamily: SITE.font.sans,
+        fontFamily: SITE.font.serif,
         fontSize: SITE.fs.body,
-        lineHeight: 1.8,
+        lineHeight: SITE.lh.body,
+        fontWeight: 400,
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
       }}
     >
-      {/* 共通ヘッダー */}
       <SiteHeader />
 
-      <main
-        style={{
-          minHeight: "calc(100vh - 200px)",
-          paddingTop: SITE.layout.headerHeightSp,
-        }}
-      >
-        {children}
-      </main>
+      <main style={{ paddingTop: SITE.layout.headerHeightSp }}>{children}</main>
 
-      {/* 共通フッター */}
       <SiteFooter />
     </div>
   );

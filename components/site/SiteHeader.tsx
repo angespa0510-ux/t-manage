@@ -8,56 +8,50 @@ import { SITE } from "../../lib/site-theme";
 /**
  * Ange Spa 公式HP 共通ヘッダー
  *
- * デスクトップ: 横並びナビ + 右端に電話/LINE ボタン
- * モバイル: ハンバーガーメニュー（開くとフルスクリーンドロワー）
- *
- * スクロール時に半透明黒背景 + blur が乗って視認性を確保
+ * 方針（■19・■20 準拠）:
+ *  - 絵文字・三本線アイコン非使用（「メニュー」テキスト）
+ *  - 白基調、細い罫線のみ、影ほぼなし
+ *  - 明朝体（Noto Serif JP）
+ *  - 活性状態はピンクの下線で表現
  */
 
-// ─── ナビ項目定義 ─────────────────────────────────
 const NAV_ITEMS = [
-  { en: "HOME",       jp: "トップ",           path: "/" },
-  { en: "SYSTEM",     jp: "料金",             path: "/system" },
-  { en: "THERAPIST",  jp: "セラピスト",       path: "/therapist" },
-  { en: "SCHEDULE",   jp: "スケジュール",     path: "/schedule" },
-  { en: "ACCESS",     jp: "アクセス",         path: "/access" },
-  { en: "RECRUIT",    jp: "求人",             path: "/recruit" },
+  { label: "トップ",           en: "HOME",       path: "/" },
+  { label: "料金",             en: "SYSTEM",     path: "/system" },
+  { label: "セラピスト",       en: "THERAPIST",  path: "/therapist" },
+  { label: "スケジュール",     en: "SCHEDULE",   path: "/schedule" },
+  { label: "アクセス",         en: "ACCESS",     path: "/access" },
+  { label: "求人",             en: "RECRUIT",    path: "/recruit" },
 ];
 
-// サブナビ（ハンバーガー内のみ）
 const SUB_NAV_ITEMS = [
-  { en: "RESERVE",      jp: "WEB予約",       path: "/schedule" },
-  { en: "CONTACT",      jp: "お問い合わせ",  path: "/contact" },
-  { en: "MEMBER",       jp: "会員ページ",    path: "/customer-mypage" },
+  { label: "WEB予約",       path: "/schedule" },
+  { label: "お問い合わせ",  path: "/contact" },
+  { label: "会員ページ",    path: "/customer-mypage" },
 ];
 
-// 電話番号（DBから取るのはコミット #6 以降）
-const TEL_PRIMARY = "070-1675-5900";
+const TEL_PRIMARY   = "070-1675-5900";
 const TEL_SECONDARY = "080-9486-2282";
-const LINE_URL = "https://lin.ee/tJtwJL9";
+const LINE_URL      = "https://lin.ee/tJtwJL9";
 
 export default function SiteHeader() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // スクロール検知
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => setScrolled(window.scrollY > 10);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // メニュー開いてる時はbodyスクロール停止
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
-
-  // ※ メニューのクローズは各 Link の onClick で実施（pathname 監視不要）
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
@@ -66,8 +60,8 @@ export default function SiteHeader() {
 
   return (
     <>
-      {/* ── デスクトップ + モバイル共通ヘッダー ── */}
       <header
+        className="site-header"
         style={{
           position: "fixed",
           top: 0,
@@ -75,33 +69,32 @@ export default function SiteHeader() {
           right: 0,
           zIndex: SITE.z.sticky,
           height: SITE.layout.headerHeightSp,
-          backgroundColor: scrolled ? "rgba(15,10,13,0.85)" : "transparent",
-          backdropFilter: scrolled ? "blur(16px)" : "none",
-          WebkitBackdropFilter: scrolled ? "blur(16px)" : "none",
-          borderBottom: scrolled ? `1px solid ${SITE.color.borderSoft}` : "1px solid transparent",
+          backgroundColor: scrolled ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.75)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          borderBottom: scrolled ? `1px solid ${SITE.color.border}` : "1px solid transparent",
           transition: SITE.transition.base,
         }}
-        className="site-header"
       >
         <div
           style={{
             maxWidth: SITE.layout.maxWidth,
             height: "100%",
             margin: "0 auto",
-            padding: "0 16px",
+            padding: "0 20px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: SITE.sp.md,
+            gap: 16,
           }}
         >
-          {/* ── ロゴ ── */}
+          {/* ── ロゴ（テキスト） ── */}
           <Link
             href="/"
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: "8px",
+              alignItems: "baseline",
+              gap: 10,
               textDecoration: "none",
               color: SITE.color.text,
             }}
@@ -110,8 +103,8 @@ export default function SiteHeader() {
               style={{
                 fontFamily: SITE.font.display,
                 fontSize: "22px",
-                fontWeight: 600,
-                letterSpacing: "0.08em",
+                fontWeight: 500,
+                letterSpacing: SITE.ls.loose,
                 color: SITE.color.pink,
                 lineHeight: 1,
               }}
@@ -119,158 +112,88 @@ export default function SiteHeader() {
               Ange Spa
             </span>
             <span
+              className="site-header-sub"
               style={{
+                display: "none",
                 fontFamily: SITE.font.serif,
                 fontSize: "10px",
-                color: SITE.color.textSub,
-                letterSpacing: "0.1em",
+                color: SITE.color.textMuted,
+                letterSpacing: SITE.ls.loose,
                 lineHeight: 1,
-                display: "none",
               }}
-              className="site-header-sub"
             >
               アンジュスパ
             </span>
           </Link>
 
-          {/* ── デスクトップナビ（md以上で表示） ── */}
+          {/* ── デスクトップナビ ── */}
           <nav className="site-header-nav" style={{ display: "none" }}>
-            {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.path}
-                href={item.path}
-                style={{
-                  display: "inline-flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  padding: "0 12px",
-                  textDecoration: "none",
-                  color: isActive(item.path) ? SITE.color.pink : SITE.color.text,
-                  transition: SITE.transition.fast,
-                  borderBottom: isActive(item.path)
-                    ? `2px solid ${SITE.color.pink}`
-                    : "2px solid transparent",
-                  height: SITE.layout.headerHeight,
-                  justifyContent: "center",
-                }}
-              >
-                <span
+            {NAV_ITEMS.map((item) => {
+              const active = isActive(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
                   style={{
-                    fontFamily: SITE.font.display,
-                    fontSize: "12px",
-                    letterSpacing: "0.15em",
+                    display: "inline-block",
+                    padding: "0 14px",
+                    lineHeight: SITE.layout.headerHeight,
+                    textDecoration: "none",
+                    color: active ? SITE.color.pink : SITE.color.text,
+                    fontSize: "13px",
+                    fontFamily: SITE.font.serif,
                     fontWeight: 500,
+                    letterSpacing: SITE.ls.loose,
+                    borderBottom: active
+                      ? `1px solid ${SITE.color.pink}`
+                      : "1px solid transparent",
+                    transition: SITE.transition.fast,
                   }}
                 >
-                  {item.en}
-                </span>
-                <span
-                  style={{
-                    fontSize: "9px",
-                    marginTop: "2px",
-                    letterSpacing: "0.1em",
-                    color: SITE.color.textMuted,
-                  }}
-                >
-                  {item.jp}
-                </span>
-              </Link>
-            ))}
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
-          {/* ── 右端アクション ── */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {/* TEL（デスクトップのみ） */}
+          {/* ── 右端アクション（メニューボタン） ── */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <a
               href={`tel:${TEL_PRIMARY}`}
               className="site-header-tel"
               style={{
                 display: "none",
                 alignItems: "center",
-                gap: "6px",
-                padding: "8px 14px",
-                borderRadius: SITE.radius.pill,
-                border: `1px solid ${SITE.color.pink}66`,
+                padding: "8px 18px",
+                border: `1px solid ${SITE.color.pink}`,
                 color: SITE.color.pink,
                 fontSize: "12px",
-                fontWeight: 500,
+                fontFamily: SITE.font.display,
+                letterSpacing: SITE.ls.loose,
                 textDecoration: "none",
-                letterSpacing: "0.05em",
                 transition: SITE.transition.fast,
               }}
             >
-              <span>📞</span>
-              <span style={{ fontFamily: SITE.font.display }}>{TEL_PRIMARY}</span>
+              {TEL_PRIMARY}
             </a>
 
-            {/* LINE（デスクトップのみ） */}
-            <a
-              href={LINE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="site-header-line"
-              style={{
-                display: "none",
-                alignItems: "center",
-                gap: "6px",
-                padding: "8px 14px",
-                borderRadius: SITE.radius.pill,
-                background: "#06c755",
-                color: "#fff",
-                fontSize: "12px",
-                fontWeight: 500,
-                textDecoration: "none",
-                letterSpacing: "0.05em",
-                transition: SITE.transition.fast,
-              }}
-            >
-              <span>💬</span>
-              <span>LINE</span>
-            </a>
-
-            {/* ハンバーガーボタン（モバイル・デスクトップ両方） */}
             <button
               onClick={() => setMenuOpen(true)}
               aria-label="メニューを開く"
               style={{
-                width: "42px",
-                height: "42px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "5px",
+                padding: "10px 18px",
                 background: "transparent",
                 border: `1px solid ${SITE.color.border}`,
-                borderRadius: SITE.radius.md,
+                color: SITE.color.text,
+                fontFamily: SITE.font.serif,
+                fontSize: "11px",
+                letterSpacing: SITE.ls.loose,
                 cursor: "pointer",
-                padding: 0,
+                lineHeight: 1,
+                transition: SITE.transition.fast,
               }}
             >
-              <span
-                style={{
-                  width: "18px",
-                  height: "1px",
-                  backgroundColor: SITE.color.pink,
-                  display: "block",
-                }}
-              />
-              <span
-                style={{
-                  width: "18px",
-                  height: "1px",
-                  backgroundColor: SITE.color.pink,
-                  display: "block",
-                }}
-              />
-              <span
-                style={{
-                  width: "18px",
-                  height: "1px",
-                  backgroundColor: SITE.color.pink,
-                  display: "block",
-                }}
-              />
+              メニュー
             </button>
           </div>
         </div>
@@ -284,211 +207,216 @@ export default function SiteHeader() {
             position: "fixed",
             inset: 0,
             zIndex: SITE.z.modal,
-            background: "rgba(15,10,13,0.97)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            animation: "site-fade-in 0.3s ease",
+            background: "rgba(255,255,255,0.98)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            animation: "siteFade 0.3s ease",
+            overflowY: "auto",
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              maxWidth: "520px",
+              maxWidth: "560px",
               margin: "0 auto",
-              padding: "24px",
+              padding: "24px 28px 64px",
               minHeight: "100vh",
               display: "flex",
               flexDirection: "column",
             }}
           >
-            {/* クローズボタン */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "32px" }}>
+            {/* クローズ */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 56,
+                paddingBottom: 16,
+                borderBottom: `1px solid ${SITE.color.border}`,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: SITE.font.display,
+                  fontSize: "20px",
+                  color: SITE.color.pink,
+                  letterSpacing: SITE.ls.loose,
+                }}
+              >
+                Ange Spa
+              </span>
               <button
                 onClick={() => setMenuOpen(false)}
                 aria-label="メニューを閉じる"
                 style={{
-                  width: "42px",
-                  height: "42px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  padding: "8px 16px",
                   background: "transparent",
                   border: `1px solid ${SITE.color.border}`,
-                  borderRadius: SITE.radius.md,
-                  color: SITE.color.pink,
-                  fontSize: "20px",
+                  color: SITE.color.text,
+                  fontFamily: SITE.font.serif,
+                  fontSize: "11px",
+                  letterSpacing: SITE.ls.loose,
                   cursor: "pointer",
+                  lineHeight: 1,
                 }}
               >
-                ✕
+                閉じる
               </button>
             </div>
 
             {/* メインナビ */}
-            <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+            <nav style={{ display: "flex", flexDirection: "column" }}>
               {NAV_ITEMS.map((item, i) => (
                 <Link
                   key={item.path}
                   href={item.path}
                   onClick={() => setMenuOpen(false)}
                   style={{
-                    padding: "20px 16px",
+                    display: "flex",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    padding: "22px 0",
                     borderBottom: `1px solid ${SITE.color.borderSoft}`,
                     color: isActive(item.path) ? SITE.color.pink : SITE.color.text,
                     textDecoration: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    animation: `site-slide-in 0.4s ease ${i * 0.05}s backwards`,
+                    animation: `siteSlideIn 0.4s ease ${i * 0.04}s backwards`,
                   }}
                 >
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    <span
-                      style={{
-                        fontFamily: SITE.font.display,
-                        fontSize: "22px",
-                        letterSpacing: "0.12em",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {item.en}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        letterSpacing: "0.08em",
-                        color: SITE.color.textSub,
-                      }}
-                    >
-                      {item.jp}
-                    </span>
-                  </div>
-                  <span style={{ color: SITE.color.pink, fontSize: "14px" }}>→</span>
-                </Link>
-              ))}
-
-              {/* サブナビ */}
-              <div style={{ marginTop: "32px", paddingTop: "20px", borderTop: `1px solid ${SITE.color.border}` }}>
-                {SUB_NAV_ITEMS.map((item) => (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    onClick={() => setMenuOpen(false)}
+                  <span
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "14px 16px",
-                      color: SITE.color.textSub,
-                      textDecoration: "none",
-                      fontSize: "13px",
+                      fontFamily: SITE.font.serif,
+                      fontSize: "22px",
+                      fontWeight: 500,
+                      letterSpacing: SITE.ls.loose,
                     }}
                   >
-                    <span style={{ fontFamily: SITE.font.display, letterSpacing: "0.1em" }}>
-                      {item.en}
-                    </span>
-                    <span style={{ fontSize: "11px" }}>{item.jp}</span>
-                  </Link>
-                ))}
-              </div>
+                    {item.label}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: SITE.font.display,
+                      fontSize: "11px",
+                      letterSpacing: SITE.ls.wide,
+                      color: SITE.color.textMuted,
+                    }}
+                  >
+                    {item.en}
+                  </span>
+                </Link>
+              ))}
             </nav>
 
-            {/* CTA ボタン群 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "24px" }}>
+            {/* サブナビ */}
+            <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 2 }}>
+              {SUB_NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={() => setMenuOpen(false)}
+                  style={{
+                    padding: "12px 0",
+                    color: SITE.color.textSub,
+                    textDecoration: "none",
+                    fontSize: "13px",
+                    fontFamily: SITE.font.serif,
+                    letterSpacing: SITE.ls.loose,
+                  }}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+
+            {/* CTAブロック */}
+            <div
+              style={{
+                marginTop: 48,
+                paddingTop: 32,
+                borderTop: `1px solid ${SITE.color.border}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
               <a
                 href={`tel:${TEL_PRIMARY}`}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  padding: "16px",
-                  borderRadius: SITE.radius.md,
-                  background: `linear-gradient(135deg, ${SITE.color.pink} 0%, ${SITE.color.pinkDeep} 100%)`,
-                  color: "#fff",
+                  display: "block",
+                  padding: "18px 24px",
+                  background: SITE.color.pink,
+                  color: "#ffffff",
                   textDecoration: "none",
-                  fontWeight: 600,
+                  textAlign: "center",
+                  fontFamily: SITE.font.display,
                   fontSize: "15px",
-                  boxShadow: SITE.shadow.pink,
+                  letterSpacing: SITE.ls.wide,
                 }}
               >
-                <span>📞</span>
-                <span style={{ fontFamily: SITE.font.display, letterSpacing: "0.05em" }}>
-                  {TEL_PRIMARY}
-                </span>
+                電話 {TEL_PRIMARY}
               </a>
               <a
                 href={`tel:${TEL_SECONDARY}`}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  padding: "14px",
-                  borderRadius: SITE.radius.md,
+                  display: "block",
+                  padding: "16px 24px",
                   background: "transparent",
-                  border: `1px solid ${SITE.color.pink}66`,
+                  border: `1px solid ${SITE.color.pink}`,
                   color: SITE.color.pink,
                   textDecoration: "none",
-                  fontSize: "13px",
+                  textAlign: "center",
+                  fontFamily: SITE.font.display,
+                  fontSize: "14px",
+                  letterSpacing: SITE.ls.loose,
                 }}
               >
-                <span>📞</span>
-                <span style={{ fontFamily: SITE.font.display }}>
-                  {TEL_SECONDARY}
-                </span>
-                <span style={{ fontSize: "10px", color: SITE.color.textMuted, marginLeft: "4px" }}>
-                  予備回線
-                </span>
+                予備回線 {TEL_SECONDARY}
               </a>
               <a
                 href={LINE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  padding: "14px",
-                  borderRadius: SITE.radius.md,
-                  background: "#06c755",
-                  color: "#fff",
+                  display: "block",
+                  padding: "16px 24px",
+                  background: "transparent",
+                  border: `1px solid ${SITE.color.border}`,
+                  color: SITE.color.text,
                   textDecoration: "none",
-                  fontWeight: 600,
-                  fontSize: "14px",
+                  textAlign: "center",
+                  fontFamily: SITE.font.serif,
+                  fontSize: "13px",
+                  letterSpacing: SITE.ls.loose,
                 }}
               >
-                <span>💬</span>
-                <span>LINE で予約・相談</span>
+                LINEで予約・相談
               </a>
+              <p
+                style={{
+                  marginTop: 16,
+                  fontSize: "11px",
+                  color: SITE.color.textMuted,
+                  textAlign: "center",
+                  lineHeight: SITE.lh.body,
+                  letterSpacing: SITE.ls.normal,
+                }}
+              >
+                営業時間 12:00 — 深夜 27:00<br />
+                最終受付 26:00（電話受付 11:00〜）
+              </p>
             </div>
-
-            {/* 営業時間 */}
-            <p
-              style={{
-                marginTop: "20px",
-                fontSize: "10px",
-                color: SITE.color.textMuted,
-                textAlign: "center",
-                letterSpacing: "0.08em",
-              }}
-            >
-              営業時間 12:00 – 深夜27:00 ／ 最終受付 26:00
-            </p>
           </div>
         </div>
       )}
 
-      {/* ── レスポンシブ CSS（scoped） ── */}
       <style>{`
-        @keyframes site-fade-in {
+        @keyframes siteFade {
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        @keyframes site-slide-in {
-          from { opacity: 0; transform: translateX(-10px); }
-          to { opacity: 1; transform: translateX(0); }
+        @keyframes siteSlideIn {
+          from { opacity: 0; transform: translateY(-6px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @media (min-width: 768px) {
           .site-header {
@@ -501,10 +429,14 @@ export default function SiteHeader() {
             display: flex !important;
             align-items: center;
           }
-          .site-header-tel,
-          .site-header-line {
+          .site-header-tel {
             display: inline-flex !important;
           }
+        }
+        .site-header a:hover,
+        .site-header button:hover {
+          color: ${SITE.color.pink} !important;
+          border-color: ${SITE.color.pink} !important;
         }
       `}</style>
     </>

@@ -2,78 +2,55 @@
  * ═══════════════════════════════════════════════════════════
  * Ange Spa 公式HP デザインシステム
  *
- * T-MANAGE 内で動く公開サイト（/ /system /therapist /schedule
- * /access /recruit）共通のカラー・タイポ・余白のトークン定義。
- *
- * 管理画面側の lib/theme.tsx（ダーク/ライト切替）とは独立。
- * 公開HPは「ピンク × ダーク × ゴールド」の常時固定配色で、
- * 現行HP (ange-spa.com) の世界観を踏襲する。
- *
- * 使い方:
- *   import { SITE } from "@/lib/site-theme";
- *   <div style={{ backgroundColor: SITE.color.bg }} />
+ * 方針（プロジェクト仕様 ■19・■20 準拠）:
+ *  - ベース: ホワイト（清潔感・清楚感）
+ *  - カラー: ピンク + 白 + ベージュ + ダークグレー の4色以内
+ *  - タイポグラフィ: Noto Serif JP 統一（見出しも本文も明朝）
+ *  - 絵文字・アイコンは使用しない
+ *  - グラデーション・過度な影は使用しない
+ *  - 余白・罫線・タイポで世界観を作る
  * ═══════════════════════════════════════════════════════════
  */
 
-// ─── カラーパレット ───────────────────────────────────────
+// ─── カラー（4色以内の原則に従う） ───────────────────────
 export const SITE_COLORS = {
-  // ブランド ピンク
-  pink:        "#e8849a",  // メインピンク（見出し・CTA）
-  pinkDeep:    "#c96b83",  // 濃ピンク（ホバー・強調）
-  pinkSoft:    "#f5d5dd",  // 淡ピンク（背景アクセント）
-  pinkGhost:   "rgba(232,132,154,0.08)", // ごく淡い背景オーバーレイ
+  // ベース（ホワイト基調）
+  bg:          "#ffffff",
+  bgSoft:      "#fdfaf7",
+  surface:     "#ffffff",
+  surfaceAlt:  "#faf6f1",
 
-  // ブランド ゴールド（既存T-MANAGEと統一、上品さの担保）
-  gold:        "#c3a782",
-  goldDeep:    "#a88d68",
-  goldSoft:    "rgba(195,167,130,0.15)",
+  // ブランド ピンク（3階調）
+  pink:        "#e8849a",
+  pinkDeep:    "#c96b83",
+  pinkSoft:    "#f7e3e7",
 
-  // ベース
-  bg:          "#0f0a0d",  // 最暗 背景（ダーク基調）
-  bgGrad1:     "#1a0f14",  // グラデ用（上）
-  bgGrad2:     "#0f0a0d",  // グラデ用（下）
-  surface:     "#1a1318",  // カード背景
-  surfaceAlt:  "#231820",  // サブカード・ホバー
-  border:      "#3a2830",  // 枠線
-  borderSoft:  "#2a1e25",  // 弱い枠線
+  // ダークグレー（テキスト系）
+  text:        "#2b2b2b",
+  textSub:     "#555555",
+  textMuted:   "#8a8a8a",
+  textFaint:   "#b5b5b5",
 
-  // テキスト
-  text:        "#f5ebea",  // 本文メイン
-  textSub:     "#bfa8a8",  // サブテキスト
-  textMuted:   "#8a7275",  // 薄めテキスト
-  textFaint:   "#5a4548",  // ごく薄いテキスト
-
-  // 機能色
-  success:     "#7ab88f",
-  warning:     "#f5b86b",
-  danger:      "#d4736c",
-  info:        "#85a8c4",
-
-  // オーバーレイ
-  overlay:     "rgba(0,0,0,0.6)",
-  overlayLight:"rgba(0,0,0,0.3)",
+  // 罫線
+  border:      "#e5ded6",
+  borderPink:  "#ead3da",
+  borderSoft:  "#f0ebe4",
 } as const;
 
-// ─── カラー（別名エクスポート、読みやすさのため） ───────
 export const SITE = {
   color: SITE_COLORS,
 
-  // ─── タイポグラフィ ───────────────────────────────
   font: {
-    // 見出しは明朝で上品さを演出
-    serif:    "'Noto Serif JP', 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif",
-    // 本文は Sans（既存T-MANAGEで読み込み済の Geist も流用可）
-    sans:     "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', system-ui, sans-serif",
-    // アルファベット・数字用（ロゴ・時刻表示）
-    display:  "'Cormorant Garamond', 'Noto Serif JP', serif",
+    serif:    "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif",
+    display:  "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif",
   },
 
-  // ─── フォントサイズ ───────────────────────────────
   fs: {
-    hero:     "clamp(32px, 7vw, 64px)",   // メインビジュアル見出し
-    h1:       "clamp(24px, 4vw, 36px)",
-    h2:       "clamp(20px, 3vw, 28px)",
-    h3:       "18px",
+    hero:     "clamp(28px, 6vw, 52px)",
+    h1:       "clamp(28px, 4.5vw, 44px)",
+    h2:       "clamp(22px, 3.5vw, 32px)",
+    h3:       "clamp(18px, 2.5vw, 22px)",
+    lead:     "clamp(15px, 2vw, 17px)",
     body:     "14px",
     bodyLg:   "15px",
     sm:       "12px",
@@ -81,7 +58,20 @@ export const SITE = {
     tiny:     "10px",
   },
 
-  // ─── ブレイクポイント（スマホファースト） ───────
+  lh: {
+    heading: 1.5,
+    body:    1.9,
+    loose:   2.2,
+  },
+
+  ls: {
+    tight:  "0em",
+    normal: "0.02em",
+    loose:  "0.08em",
+    wide:   "0.15em",
+    wider:  "0.25em",
+  },
+
   bp: {
     sm:  "480px",
     md:  "768px",
@@ -89,73 +79,67 @@ export const SITE = {
     xl:  "1280px",
   },
 
-  // ─── 余白（8px グリッド） ─────────────────────────
   sp: {
-    xs: "4px",
-    sm: "8px",
-    md: "16px",
-    lg: "24px",
-    xl: "40px",
-    xxl:"64px",
+    xs:  "4px",
+    sm:  "8px",
+    md:  "16px",
+    lg:  "24px",
+    xl:  "40px",
+    xxl: "64px",
     xxxl:"96px",
+    section:   "clamp(64px, 12vw, 160px)",
+    sectionSm: "clamp(40px, 8vw, 96px)",
   },
 
-  // ─── 角丸 ─────────────────────────────────────────
   radius: {
-    sm: "6px",
-    md: "10px",
-    lg: "16px",
-    xl: "24px",
+    sm: "2px",
+    md: "4px",
+    lg: "8px",
+    xl: "12px",
     pill: "999px",
   },
 
-  // ─── シャドウ ─────────────────────────────────────
   shadow: {
-    sm:   "0 2px 8px rgba(0,0,0,0.3)",
-    md:   "0 8px 24px rgba(0,0,0,0.4)",
-    lg:   "0 16px 48px rgba(0,0,0,0.5)",
-    pink: "0 8px 32px rgba(232,132,154,0.25)",
-    gold: "0 8px 32px rgba(195,167,130,0.25)",
+    none: "none",
+    soft: "0 1px 2px rgba(0,0,0,0.04)",
+    card: "0 2px 8px rgba(0,0,0,0.04)",
   },
 
-  // ─── トランジション ───────────────────────────────
   transition: {
     fast:   "all 0.2s ease",
     base:   "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     slow:   "all 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
   },
 
-  // ─── z-index 階層 ─────────────────────────────────
   z: {
     base:       1,
-    dropdown:  10,
     sticky:    20,
     overlay:   30,
     modal:     40,
-    toast:     50,
     top:      100,
   },
 
-  // ─── レイアウト ───────────────────────────────────
   layout: {
-    maxWidth:      "1280px",   // コンテンツ最大幅
-    maxWidthNarrow:"960px",    // テキスト主体ページ向け
-    headerHeight:  "72px",     // PCヘッダー
-    headerHeightSp:"56px",     // スマホヘッダー
-    footerHeight:  "auto",
+    maxWidth:       "1200px",
+    maxWidthNarrow: "880px",
+    maxWidthText:   "640px",
+    headerHeight:   "76px",
+    headerHeightSp: "60px",
+  },
+
+  accent: {
+    underlineW: "40px",
+    underlineH: "1px",
   },
 } as const;
 
-// ─── ユーティリティ: 画面幅判定用メディアクエリ文字列 ───
 export const MQ = {
   sm: `@media (min-width: ${SITE.bp.sm})`,
   md: `@media (min-width: ${SITE.bp.md})`,
   lg: `@media (min-width: ${SITE.bp.lg})`,
   xl: `@media (min-width: ${SITE.bp.xl})`,
-  // スマホのみ・タブレット以上の出し分け
   mobileOnly: `@media (max-width: calc(${SITE.bp.md} - 1px))`,
   desktopOnly:`@media (min-width: ${SITE.bp.md})`,
 } as const;
 
-// ─── 型エクスポート ───────────────────────────────────────
 export type SiteColorKey = keyof typeof SITE_COLORS;

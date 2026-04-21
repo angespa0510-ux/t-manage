@@ -6,70 +6,71 @@ import { SITE } from "../../lib/site-theme";
 /**
  * Ange Spa 公式HP 共通フッター
  *
- * - ナビ再掲（SEO / ユーザビリティ）
- * - 店舗情報（NAP: Name / Address / Phone）
- * - 特商法・プライバシー等のリーガルリンク
- * - 著作権表記
+ * 方針（■19・■20 準拠）:
+ *  - 絵文字非使用、SNSはテキストリンク
+ *  - 店舗情報は「住所：／電話：／営業：」のラベル方式
+ *  - 白基調、細い罫線
  */
 
 const FOOTER_NAV = [
-  { en: "HOME",      jp: "トップ",        path: "/" },
-  { en: "SYSTEM",    jp: "料金",          path: "/system" },
-  { en: "THERAPIST", jp: "セラピスト",    path: "/therapist" },
-  { en: "SCHEDULE",  jp: "スケジュール",  path: "/schedule" },
-  { en: "ACCESS",    jp: "アクセス",      path: "/access" },
-  { en: "RECRUIT",   jp: "求人",          path: "/recruit" },
+  { label: "トップ",       path: "/" },
+  { label: "料金",         path: "/system" },
+  { label: "セラピスト",   path: "/therapist" },
+  { label: "スケジュール", path: "/schedule" },
+  { label: "アクセス",     path: "/access" },
+  { label: "求人",         path: "/recruit" },
 ];
 
 const LEGAL_NAV = [
-  { label: "特定商取引法",       path: "/corporate/legal" },
+  { label: "特定商取引法",        path: "/corporate/legal" },
   { label: "プライバシーポリシー", path: "/corporate/privacy" },
-  { label: "会員ページ",          path: "/customer-mypage" },
+  { label: "会員ページ",           path: "/customer-mypage" },
+  { label: "STAFF",                path: "/staff-login" },
 ];
 
-const TEL_PRIMARY = "070-1675-5900";
+const TEL_PRIMARY   = "070-1675-5900";
 const TEL_SECONDARY = "080-9486-2282";
 
 export default function SiteFooter() {
   return (
     <footer
       style={{
-        marginTop: SITE.sp.xxxl,
+        marginTop: SITE.sp.section,
         paddingTop: SITE.sp.xxl,
         paddingBottom: SITE.sp.xl,
-        background: `linear-gradient(180deg, transparent 0%, rgba(15,10,13,0.8) 100%)`,
-        borderTop: `1px solid ${SITE.color.borderSoft}`,
+        background: SITE.color.bgSoft,
+        borderTop: `1px solid ${SITE.color.border}`,
       }}
     >
       <div
         style={{
           maxWidth: SITE.layout.maxWidth,
           margin: "0 auto",
-          padding: `0 ${SITE.sp.md}`,
+          padding: `0 ${SITE.sp.lg}`,
         }}
       >
-        {/* ── 上段: ロゴ + ナビ ── */}
+        {/* ── 上段: ロゴ / ナビ / 連絡先 ── */}
         <div
+          className="site-footer-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr",
             gap: SITE.sp.xl,
             paddingBottom: SITE.sp.xl,
-            borderBottom: `1px solid ${SITE.color.borderSoft}`,
+            borderBottom: `1px solid ${SITE.color.border}`,
           }}
-          className="site-footer-grid"
         >
           {/* ロゴ + キャッチ */}
           <div>
             <div
               style={{
                 fontFamily: SITE.font.display,
-                fontSize: "28px",
-                fontWeight: 600,
-                letterSpacing: "0.08em",
+                fontSize: "26px",
+                fontWeight: 500,
+                letterSpacing: SITE.ls.loose,
                 color: SITE.color.pink,
                 lineHeight: 1,
-                marginBottom: "12px",
+                marginBottom: 12,
               }}
             >
               Ange Spa
@@ -79,19 +80,19 @@ export default function SiteFooter() {
                 fontFamily: SITE.font.serif,
                 fontSize: "13px",
                 color: SITE.color.textSub,
-                letterSpacing: "0.05em",
-                lineHeight: 1.8,
+                letterSpacing: SITE.ls.normal,
+                lineHeight: SITE.lh.body,
                 marginBottom: SITE.sp.md,
               }}
             >
               可愛らしい女の子と<br />
-              癒しのひと時を。
+              癒しのひと時を、、
             </p>
             <p
               style={{
                 fontSize: "11px",
                 color: SITE.color.textMuted,
-                lineHeight: 1.8,
+                lineHeight: SITE.lh.body,
               }}
             >
               名古屋・三河安城・豊橋エリアの<br />
@@ -104,10 +105,11 @@ export default function SiteFooter() {
             <h3
               style={{
                 fontFamily: SITE.font.display,
-                fontSize: "12px",
-                letterSpacing: "0.15em",
+                fontSize: "11px",
+                letterSpacing: SITE.ls.wide,
                 color: SITE.color.pink,
                 marginBottom: SITE.sp.md,
+                fontWeight: 500,
               }}
             >
               MENU
@@ -117,9 +119,9 @@ export default function SiteFooter() {
                 listStyle: "none",
                 padding: 0,
                 margin: 0,
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "10px 20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
               }}
             >
               {FOOTER_NAV.map((item) => (
@@ -129,89 +131,105 @@ export default function SiteFooter() {
                     style={{
                       color: SITE.color.text,
                       textDecoration: "none",
-                      fontSize: "12px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "2px",
+                      fontSize: "13px",
+                      fontFamily: SITE.font.serif,
+                      letterSpacing: SITE.ls.loose,
                       transition: SITE.transition.fast,
                     }}
                   >
-                    <span
-                      style={{
-                        fontFamily: SITE.font.display,
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      {item.en}
-                    </span>
-                    <span style={{ fontSize: "10px", color: SITE.color.textMuted }}>
-                      {item.jp}
-                    </span>
+                    {item.label}
                   </Link>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* 連絡先 */}
+          {/* 連絡先（ラベル方式、絵文字なし） */}
           <div>
             <h3
               style={{
                 fontFamily: SITE.font.display,
-                fontSize: "12px",
-                letterSpacing: "0.15em",
+                fontSize: "11px",
+                letterSpacing: SITE.ls.wide,
                 color: SITE.color.pink,
                 marginBottom: SITE.sp.md,
+                fontWeight: 500,
               }}
             >
               CONTACT
             </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <a
-                href={`tel:${TEL_PRIMARY}`}
-                style={{
-                  fontFamily: SITE.font.display,
-                  fontSize: "18px",
-                  color: SITE.color.text,
-                  textDecoration: "none",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                📞 {TEL_PRIMARY}
-              </a>
-              <a
-                href={`tel:${TEL_SECONDARY}`}
-                style={{
-                  fontFamily: SITE.font.display,
-                  fontSize: "14px",
-                  color: SITE.color.textSub,
-                  textDecoration: "none",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                📞 {TEL_SECONDARY}
-                <span
-                  style={{
-                    fontSize: "10px",
-                    color: SITE.color.textMuted,
-                    marginLeft: "6px",
-                  }}
-                >
-                  予備回線
-                </span>
-              </a>
-              <p
+            <dl style={{ margin: 0, padding: 0 }}>
+              <dt
                 style={{
                   fontSize: "11px",
                   color: SITE.color.textMuted,
-                  marginTop: "8px",
-                  lineHeight: 1.8,
+                  letterSpacing: SITE.ls.loose,
+                  marginBottom: 4,
                 }}
               >
-                営業時間 12:00 – 深夜27:00<br />
-                最終受付 26:00（電話 11:00 –）
-              </p>
-            </div>
+                電話：
+              </dt>
+              <dd style={{ margin: "0 0 10px 0" }}>
+                <a
+                  href={`tel:${TEL_PRIMARY}`}
+                  style={{
+                    fontFamily: SITE.font.display,
+                    fontSize: "18px",
+                    color: SITE.color.text,
+                    textDecoration: "none",
+                    letterSpacing: SITE.ls.loose,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {TEL_PRIMARY}
+                </a>
+              </dd>
+              <dt
+                style={{
+                  fontSize: "11px",
+                  color: SITE.color.textMuted,
+                  letterSpacing: SITE.ls.loose,
+                  marginBottom: 4,
+                }}
+              >
+                予備回線：
+              </dt>
+              <dd style={{ margin: "0 0 16px 0" }}>
+                <a
+                  href={`tel:${TEL_SECONDARY}`}
+                  style={{
+                    fontFamily: SITE.font.display,
+                    fontSize: "14px",
+                    color: SITE.color.textSub,
+                    textDecoration: "none",
+                    letterSpacing: SITE.ls.loose,
+                  }}
+                >
+                  {TEL_SECONDARY}
+                </a>
+              </dd>
+              <dt
+                style={{
+                  fontSize: "11px",
+                  color: SITE.color.textMuted,
+                  letterSpacing: SITE.ls.loose,
+                  marginBottom: 4,
+                }}
+              >
+                営業：
+              </dt>
+              <dd
+                style={{
+                  margin: 0,
+                  fontSize: "12px",
+                  color: SITE.color.textSub,
+                  lineHeight: SITE.lh.body,
+                }}
+              >
+                12:00 — 深夜 27:00<br />
+                最終受付 26:00
+              </dd>
+            </dl>
           </div>
         </div>
 
@@ -220,7 +238,7 @@ export default function SiteFooter() {
           style={{
             display: "flex",
             flexWrap: "wrap",
-            gap: "20px",
+            gap: "16px 28px",
             justifyContent: "center",
             padding: `${SITE.sp.lg} 0`,
           }}
@@ -230,30 +248,20 @@ export default function SiteFooter() {
               key={item.path}
               href={item.path}
               style={{
-                color: SITE.color.textSub,
+                color: SITE.color.textMuted,
                 fontSize: "11px",
                 textDecoration: "none",
+                fontFamily: SITE.font.serif,
+                letterSpacing: SITE.ls.loose,
                 transition: SITE.transition.fast,
               }}
             >
               {item.label}
             </Link>
           ))}
-          <Link
-            href="/staff-login"
-            style={{
-              color: SITE.color.textFaint,
-              fontSize: "10px",
-              textDecoration: "none",
-              transition: SITE.transition.fast,
-              letterSpacing: "0.1em",
-            }}
-          >
-            STAFF
-          </Link>
         </div>
 
-        {/* ── 下段: 18禁 + 著作権 ── */}
+        {/* ── 下段: 著作権表記 ── */}
         <div
           style={{
             textAlign: "center",
@@ -263,13 +271,13 @@ export default function SiteFooter() {
         >
           <p
             style={{
+              fontFamily: SITE.font.display,
               fontSize: "10px",
               color: SITE.color.textMuted,
-              letterSpacing: "0.1em",
-              marginBottom: "8px",
+              letterSpacing: SITE.ls.wide,
             }}
           >
-            © {new Date().getFullYear()} Ange Spa〜アンジュスパ. All rights reserved.
+            &copy; {new Date().getFullYear()} Ange Spa. All rights reserved.
           </p>
         </div>
       </div>
@@ -277,7 +285,7 @@ export default function SiteFooter() {
       <style>{`
         @media (min-width: 768px) {
           .site-footer-grid {
-            grid-template-columns: 1.5fr 1fr 1fr !important;
+            grid-template-columns: 1.4fr 1fr 1fr !important;
           }
         }
         footer a:hover {
