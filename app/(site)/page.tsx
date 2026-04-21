@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { SITE } from "../../lib/site-theme";
@@ -394,7 +393,7 @@ export default function HomePage() {
           ② CONCEPT
           ═══════════════════════════════════════════════ */}
       <SectionBlock label="CONCEPT" title="私たちについて">
-        {/* image: 手元の花束（夕焼け・ラベンダー・ボケ玉）/ 1600x1000 / alt="Ange Spa コンセプト" */}
+        {/* video: 花束が揺れる動画（夕焼け・ラベンダー・ボケ玉） */}
         <div
           style={{
             maxWidth: SITE.layout.maxWidthNarrow,
@@ -404,18 +403,21 @@ export default function HomePage() {
             backgroundColor: SITE.color.surfaceAlt,
           }}
         >
-          <Image
-            src="/images/placeholder/concept.jpg"
-            alt="Ange Spa コンセプト"
-            width={1600}
-            height={1000}
+          <video
+            src="/videos/concept.mp4"
+            poster="/videos/concept-poster.jpg"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            aria-hidden="true"
             style={{
               width: "100%",
               height: "100%",
               objectFit: "cover",
               display: "block",
             }}
-            sizes="(min-width: 768px) 880px, 100vw"
           />
         </div>
 

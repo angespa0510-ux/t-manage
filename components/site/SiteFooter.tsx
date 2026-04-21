@@ -63,18 +63,18 @@ export default function SiteFooter() {
         >
           {/* ロゴ + キャッチ */}
           <div>
-            <div
-              style={{
-                fontFamily: SITE.font.display,
-                fontSize: "26px",
-                fontWeight: 500,
-                letterSpacing: SITE.ls.loose,
-                color: SITE.color.pink,
-                lineHeight: 1,
-                marginBottom: 12,
-              }}
-            >
-              Ange Spa
+            <div style={{ marginBottom: 16, display: "flex", alignItems: "center" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo/ange-spa-logo.png"
+                alt="Ange Spa"
+                style={{
+                  height: 64,
+                  width: "auto",
+                  objectFit: "contain",
+                  display: "block",
+                }}
+              />
             </div>
             <p
               style={{

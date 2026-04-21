@@ -88,42 +88,32 @@ export default function SiteHeader() {
             gap: 16,
           }}
         >
-          {/* ── ロゴ（テキスト） ── */}
+          {/* ── ロゴ（画像） ── */}
           <Link
             href="/"
             style={{
               display: "flex",
-              alignItems: "baseline",
-              gap: 10,
+              alignItems: "center",
               textDecoration: "none",
               color: SITE.color.text,
+              height: "100%",
+              padding: "6px 0",
             }}
+            aria-label="Ange Spa トップページ"
           >
-            <span
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo/ange-spa-logo.png"
+              alt="Ange Spa"
               style={{
-                fontFamily: SITE.font.display,
-                fontSize: "22px",
-                fontWeight: 500,
-                letterSpacing: SITE.ls.loose,
-                color: SITE.color.pink,
-                lineHeight: 1,
+                height: "100%",
+                width: "auto",
+                maxHeight: 44,
+                objectFit: "contain",
+                display: "block",
               }}
-            >
-              Ange Spa
-            </span>
-            <span
-              className="site-header-sub"
-              style={{
-                display: "none",
-                fontFamily: SITE.font.serif,
-                fontSize: "10px",
-                color: SITE.color.textMuted,
-                letterSpacing: SITE.ls.loose,
-                lineHeight: 1,
-              }}
-            >
-              アンジュスパ
-            </span>
+              className="site-header-logo"
+            />
           </Link>
 
           {/* ── デスクトップナビ ── */}
@@ -238,13 +228,22 @@ export default function SiteHeader() {
             >
               <span
                 style={{
-                  fontFamily: SITE.font.display,
-                  fontSize: "20px",
-                  color: SITE.color.pink,
-                  letterSpacing: SITE.ls.loose,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  height: 40,
                 }}
               >
-                Ange Spa
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo/ange-spa-logo.png"
+                  alt="Ange Spa"
+                  style={{
+                    height: "100%",
+                    width: "auto",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
               </span>
               <button
                 onClick={() => setMenuOpen(false)}
@@ -422,8 +421,8 @@ export default function SiteHeader() {
           .site-header {
             height: ${SITE.layout.headerHeight} !important;
           }
-          .site-header-sub {
-            display: inline !important;
+          .site-header-logo {
+            max-height: 52px !important;
           }
           .site-header-nav {
             display: flex !important;
