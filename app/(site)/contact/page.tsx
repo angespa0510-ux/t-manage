@@ -1,6 +1,6 @@
 "use client";
 
-import { SITE } from "../../../lib/site-theme";
+import { SITE, MARBLE } from "../../../lib/site-theme";
 import SectionHeading from "../../../components/site/SectionHeading";
 import { PageHero } from "../../../components/site/SiteLayoutParts";
 
@@ -73,6 +73,14 @@ export default function ContactPage() {
         subtitle="ご予約・ご質問・求人応募など、お気軽にお問い合わせください。"
       />
 
+      <div
+        style={{
+          ...MARBLE.soft,
+          marginBottom: `calc(-1 * ${SITE.sp.section})`,
+          paddingBottom: SITE.sp.section,
+          minHeight: "60vh",
+        }}
+      >
       {/* ───── CHANNELS ───── */}
       <section style={{ padding: `${SITE.sp.section} ${SITE.sp.lg}` }}>
         <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
@@ -208,7 +216,6 @@ export default function ContactPage() {
       <section
         style={{
           padding: `${SITE.sp.section} ${SITE.sp.lg}`,
-          backgroundColor: SITE.color.bgSoft,
         }}
       >
         <div style={{ maxWidth: SITE.layout.maxWidthNarrow, margin: "0 auto" }}>
@@ -312,6 +319,7 @@ export default function ContactPage() {
           </div>
         </div>
       </section>
+      </div>
     </>
   );
 }

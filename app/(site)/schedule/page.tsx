@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../../lib/supabase";
-import { SITE } from "../../../lib/site-theme";
+import { SITE, MARBLE } from "../../../lib/site-theme";
 import { PageHero, LoadingBlock, EmptyBlock } from "../../../components/site/SiteLayoutParts";
 import TherapistCard from "../../../components/site/TherapistCard";
 
@@ -337,7 +337,13 @@ export default function SchedulePage() {
       )}
 
       {/* 出勤セラピスト */}
-      <section style={{ padding: `${SITE.sp.xxl} ${SITE.sp.lg}` }}>
+      <section
+        style={{
+          ...MARBLE.blue,
+          padding: `${SITE.sp.xxl} ${SITE.sp.lg}`,
+          minHeight: "60vh",
+        }}
+      >
         <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
           {loading ? (
             <LoadingBlock />

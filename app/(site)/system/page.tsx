@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase";
-import { SITE } from "../../../lib/site-theme";
+import { SITE, MARBLE } from "../../../lib/site-theme";
 import SectionHeading from "../../../components/site/SectionHeading";
 import {
   PageHero,
@@ -83,6 +83,14 @@ export default function SystemPage() {
         bgVideoPoster="/videos/system-poster.jpg"
       />
 
+      <div
+        style={{
+          ...MARBLE.warm,
+          marginBottom: `calc(-1 * ${SITE.sp.section})`,
+          paddingBottom: SITE.sp.section,
+          minHeight: "60vh",
+        }}
+      >
       {loading ? (
         <section style={{ padding: SITE.sp.section }}>
           <LoadingBlock />
@@ -127,7 +135,7 @@ export default function SystemPage() {
             <section
               style={{
                 padding: `${SITE.sp.section} ${SITE.sp.lg}`,
-                backgroundColor: SITE.color.bgSoft,
+
               }}
             >
               <div
@@ -174,7 +182,7 @@ export default function SystemPage() {
             <section
               style={{
                 padding: `${SITE.sp.section} ${SITE.sp.lg}`,
-                backgroundColor: SITE.color.bgSoft,
+
               }}
             >
               <div
@@ -273,7 +281,7 @@ export default function SystemPage() {
           <section
             style={{
               padding: `${SITE.sp.section} ${SITE.sp.lg}`,
-              backgroundColor: SITE.color.bgSoft,
+
             }}
           >
             <div
@@ -412,6 +420,7 @@ export default function SystemPage() {
           </section>
         </>
       )}
+      </div>
     </>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase";
-import { SITE } from "../../../lib/site-theme";
+import { SITE, MARBLE } from "../../../lib/site-theme";
 import SectionHeading from "../../../components/site/SectionHeading";
 import { PageHero, LoadingBlock } from "../../../components/site/SiteLayoutParts";
 
@@ -58,6 +58,14 @@ export default function AccessPage() {
         bgImage="/images/placeholder/access.jpg"
       />
 
+      <div
+        style={{
+          ...MARBLE.beige,
+          marginBottom: `calc(-1 * ${SITE.sp.section})`,
+          paddingBottom: SITE.sp.section,
+          minHeight: "60vh",
+        }}
+      >
       {loading ? (
         <section style={{ padding: SITE.sp.section }}>
           <LoadingBlock />
@@ -359,6 +367,7 @@ export default function AccessPage() {
           `}</style>
         </>
       )}
+      </div>
     </>
   );
 }

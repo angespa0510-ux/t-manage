@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../../../lib/supabase";
-import { SITE } from "../../../lib/site-theme";
+import { SITE, MARBLE } from "../../../lib/site-theme";
 import { PageHero, LoadingBlock, EmptyBlock } from "../../../components/site/SiteLayoutParts";
 import TherapistCard from "../../../components/site/TherapistCard";
 
@@ -196,12 +196,8 @@ export default function TherapistListPage() {
 
       <section
         style={{
+          ...MARBLE.pink,
           padding: `${SITE.sp.xxl} ${SITE.sp.lg} ${SITE.sp.section}`,
-          backgroundColor: "#fdf5f7",
-          backgroundImage: "url('/patterns/marble-bg.webp')",
-          backgroundSize: "1200px 1200px",
-          backgroundRepeat: "repeat",
-          backgroundAttachment: "fixed",
           marginBottom: `calc(-1 * ${SITE.sp.section})`,
           minHeight: "60vh",
         }}

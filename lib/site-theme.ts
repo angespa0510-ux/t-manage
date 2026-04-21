@@ -12,6 +12,8 @@
  * ═══════════════════════════════════════════════════════════
  */
 
+import type { CSSProperties } from "react";
+
 // ─── カラー（4色以内の原則に従う） ───────────────────────
 export const SITE_COLORS = {
   // ベース（ホワイト基調）
@@ -141,5 +143,56 @@ export const MQ = {
   mobileOnly: `@media (max-width: calc(${SITE.bp.md} - 1px))`,
   desktopOnly:`@media (min-width: ${SITE.bp.md})`,
 } as const;
+
+/**
+ * ═══════════════════════════════════════════════════════════
+ * 大理石背景バリエーション
+ *
+ * 各ページ・セクションで個別の大理石トーンを適用する際に使う。
+ * 4方向ミラー合成でシームレス化済み（2400x2400タイル）。
+ *
+ * 色のイメージ:
+ *  - pink  : ブランドカラー寄り、華やか（セラピスト系）
+ *  - warm  : 温かみのあるピーチピンク（料金/案内系）
+ *  - beige : ベージュ・温かみ（店舗/場所系）
+ *  - soft  : 薄いグレー・落ち着き（フォーム/静寂系）
+ *  - blue  : クールなブルーグレー（スケジュール/情報系）
+ * ═══════════════════════════════════════════════════════════
+ */
+type MarbleStyle = CSSProperties;
+
+const marbleBase: MarbleStyle = {
+  backgroundSize: "1200px 1200px",
+  backgroundRepeat: "repeat",
+  backgroundAttachment: "fixed",
+};
+
+export const MARBLE: Record<"pink" | "warm" | "beige" | "soft" | "blue", MarbleStyle> = {
+  pink: {
+    ...marbleBase,
+    backgroundColor: "#fdf5f7",
+    backgroundImage: "url('/patterns/marble-pink.webp')",
+  },
+  warm: {
+    ...marbleBase,
+    backgroundColor: "#fdf6f3",
+    backgroundImage: "url('/patterns/marble-warm.webp')",
+  },
+  beige: {
+    ...marbleBase,
+    backgroundColor: "#fcf8f2",
+    backgroundImage: "url('/patterns/marble-beige.webp')",
+  },
+  soft: {
+    ...marbleBase,
+    backgroundColor: "#fafafa",
+    backgroundImage: "url('/patterns/marble-soft.webp')",
+  },
+  blue: {
+    ...marbleBase,
+    backgroundColor: "#f5f8fa",
+    backgroundImage: "url('/patterns/marble-blue.webp')",
+  },
+};
 
 export type SiteColorKey = keyof typeof SITE_COLORS;
