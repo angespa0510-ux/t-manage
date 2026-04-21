@@ -2157,12 +2157,19 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
   const { confirm, ConfirmModalNode } = useConfirm();
 
   const [kind, setKind] = useState<"therapist" | "staff">("therapist");
+  const [deliveryMode, setDeliveryMode] = useState<"payment" | "template">("payment");
   const [therapists, setTherapists] = useState<Recipient[]>([]);
   const [staffs, setStaffs] = useState<Recipient[]>([]);
   const [storeInfo, setStoreInfo] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [search, setSearch] = useState("");
   const [year, setYear] = useState(new Date().getFullYear() - 1); // 前年がデフォルト（年明けの配信想定）
+
+  // テンプレ配信モード用
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [templateVersions, setTemplateVersions] = useState<Record<number, any[]>>({});
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number>(0);
+  const [selectedVersionId, setSelectedVersionId] = useState<number>(0);
 
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -2171,8 +2178,10 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [historyFilter, setHistoryFilter] = useState<"all" | "sent" | "failed" | "pending">("all");
+  const [resending, setResending] = useState<number | null>(null);
 
-  useEffect(() => { setSelectedIds([]); setSearch(""); }, [kind]);
+  useEffect(() => { setSelectedIds([]); setSearch(""); setSelectedTemplateId(0); setSelectedVersionId(0); }, [kind]);
+  useEffect(() => { setSelectedTemplateId(0); setSelectedVersionId(0); setSubject(""); setMessage(""); }, [deliveryMode]);
 
   const fetchAll = useCallback(async () => {
     const { data: th } = await supabase.from("therapists").select("id, name, real_name, address, entry_date, login_email, status").neq("status", "trash").order("sort_order");
@@ -2188,6 +2197,18 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
     });
     const { data: d } = await supabase.from("document_deliveries").select("*").order("created_at", { ascending: false }).limit(100);
     if (d) setDeliveries(d as Delivery[]);
+    // テンプレート情報取得（稼働中のみ）
+    const { data: tpls } = await supabase.from("document_templates").select("*").eq("status", "active").order("category").order("name");
+    if (tpls) setTemplates(tpls);
+    const { data: vers } = await supabase.from("document_template_versions").select("*").order("uploaded_at", { ascending: false });
+    if (vers) {
+      const grouped: Record<number, any[]> = {};
+      (vers || []).forEach((v: any) => {
+        if (!grouped[v.template_id]) grouped[v.template_id] = [];
+        grouped[v.template_id].push(v);
+      });
+      setTemplateVersions(grouped);
+    }
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -2234,15 +2255,126 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
     return { url: data.publicUrl, path };
   };
 
+  // 単一対象への配信処理（共通ヘルパー。モードに関わらず使う）
+  // attachmentUrl/Name と件名/本文は呼び出し側で事前に準備済みの想定
+  const sendOneDelivery = async (
+    recipient: Recipient,
+    batchId: string,
+    docKind: string,
+    subj: string,
+    msg: string,
+    attachUrl: string,
+    attachName: string,
+    targetYear: number | null,
+    templateIdFk: number | null,
+    templateVersionIdFk: number | null,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const recipientEmail = (kind === "therapist" ? recipient.login_email : recipient.email) || "";
+    try {
+      // 配信ログを pending で先に作成
+      const { data: delivery, error: de } = await supabase.from("document_deliveries").insert({
+        recipient_kind: kind,
+        recipient_id: recipient.id,
+        recipient_name: recipient.real_name || recipient.name,
+        recipient_email: recipientEmail,
+        document_kind: docKind,
+        document_template_id: templateIdFk,
+        document_template_version_id: templateVersionIdFk,
+        target_year: targetYear,
+        subject: subj,
+        message: msg,
+        attachment_url: attachUrl,
+        attachment_name: attachName,
+        delivery_channel: kind === "therapist" ? "notification" : "email",
+        status: "pending",
+        batch_id: batchId,
+        created_by_name: activeStaff?.name || "",
+      }).select("id").single();
+      if (de || !delivery) throw new Error(de?.message || "配信ログ作成失敗");
+
+      if (kind === "therapist") {
+        // セラピスト: マイページ通知
+        const bodyWithLink = attachUrl
+          ? `${msg}\n\n📎 ${attachName}\n${attachUrl}`
+          : msg;
+        const { error: ne } = await supabase.from("therapist_notifications").insert({
+          title: subj, body: bodyWithLink, type: "info",
+          target_therapist_id: recipient.id,
+        });
+        if (ne) throw new Error(ne.message);
+        await supabase.from("document_deliveries")
+          .update({ status: "sent", delivered_at: new Date().toISOString() })
+          .eq("id", delivery.id);
+      } else {
+        // スタッフ: メール送信
+        if (!recipientEmail) throw new Error("メールアドレスが登録されていません");
+        const res = await fetch("/api/deliver-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: recipientEmail,
+            subject: subj,
+            body: msg,
+            attachment_url: attachUrl,
+            attachment_name: attachName,
+            delivery_id: delivery.id,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "不明なエラー" }));
+          throw new Error(err.error || "メール送信失敗");
+        }
+      }
+      return { ok: true };
+    } catch (e: any) {
+      // エラー時も配信ログに記録
+      await supabase.from("document_deliveries").insert({
+        recipient_kind: kind,
+        recipient_id: recipient.id,
+        recipient_name: recipient.real_name || recipient.name,
+        recipient_email: recipientEmail,
+        document_kind: docKind,
+        document_template_id: templateIdFk,
+        document_template_version_id: templateVersionIdFk,
+        target_year: targetYear,
+        subject: subj,
+        message: msg,
+        attachment_url: attachUrl,
+        attachment_name: attachName,
+        delivery_channel: kind === "therapist" ? "notification" : "email",
+        status: "failed",
+        error_message: (e.message || String(e)).slice(0, 500),
+        batch_id: batchId,
+        created_by_name: activeStaff?.name || "",
+      });
+      return { ok: false, error: e.message || String(e) };
+    }
+  };
+
   // 一括配信実行
   const executeDelivery = async () => {
     if (selectedIds.length === 0) { toast.show("配信対象を選択してください", "error"); return; }
-    if (!storeInfo) { toast.show("会社情報が読み込めていません", "error"); return; }
     if (!subject.trim()) { toast.show("件名を入力してください", "error"); return; }
 
+    if (deliveryMode === "payment" && !storeInfo) {
+      toast.show("会社情報が読み込めていません", "error"); return;
+    }
+
+    // テンプレモードの事前チェック
+    let selectedTemplate: any = null;
+    let selectedVersion: any = null;
+    if (deliveryMode === "template") {
+      if (!selectedTemplateId) { toast.show("配信するテンプレートを選択してください", "error"); return; }
+      if (!selectedVersionId) { toast.show("使用するバージョンを選択してください", "error"); return; }
+      selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+      selectedVersion = (templateVersions[selectedTemplateId] || []).find((v: any) => v.id === selectedVersionId);
+      if (!selectedTemplate || !selectedVersion) { toast.show("選択したテンプレート情報が見つかりません", "error"); return; }
+    }
+
+    const modeLabel = deliveryMode === "payment" ? `${year}年分 支払調書` : `「${selectedTemplate?.name}」v${selectedVersion?.version}`;
     const ok = await confirm({
-      title: `${selectedIds.length}名に支払調書を配信しますか？`,
-      message: `対象年度: ${year}年\n配信チャネル: ${kind === "therapist" ? "📱 マイページ通知" : "📧 メール送信"}\n\n実行すると全員に一斉に配信されます。この操作は取り消せません。`,
+      title: `${selectedIds.length}名に配信しますか？`,
+      message: `配信内容: ${modeLabel}\n配信チャネル: ${kind === "therapist" ? "📱 マイページ通知" : "📧 メール送信"}\n\n実行すると全員に一斉に配信されます。この操作は取り消せません。`,
       variant: "warning",
       confirmLabel: `${selectedIds.length}名に配信`,
       cancelLabel: "キャンセル",
@@ -2260,92 +2392,52 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
     for (let i = 0; i < targets.length; i++) {
       const p = targets[i];
       setProgress({ current: i + 1, total: targets.length, success: successCount, failed: failedCount });
-      try {
-        // 1. 支払データ取得
-        const payment = await fetchPayment(p.id, year);
-        // 2. HTML生成
-        const th = { real_name: p.real_name || p.name, name: p.name, address: p.address || "", entry_date: p.entry_date || "" };
-        const html = generatePaymentCertificateHtml(storeInfo, th, payment, kind);
-        // 3. Storage にアップロード
-        const fileName = `支払調書_${year}_${p.real_name || p.name}.html`;
-        const up = await uploadHtml(html, fileName);
-        if (!up) throw new Error("Storageアップロード失敗");
 
-        // 4. 配信ログに pending で記録
-        const recipientEmail = (kind === "therapist" ? p.login_email : p.email) || "";
-        const attachmentName = `支払調書_${year}_${p.real_name || p.name}.html`;
-        const { data: delivery, error: de } = await supabase.from("document_deliveries").insert({
-          recipient_kind: kind,
-          recipient_id: p.id,
-          recipient_name: p.real_name || p.name,
-          recipient_email: recipientEmail,
-          document_kind: "payment_certificate",
-          target_year: year,
-          subject: subject.trim(),
-          message: message.trim() || `${year}年分の支払調書をお送りいたします。詳細は添付ファイルをご確認ください。`,
-          attachment_url: up.url,
-          attachment_name: attachmentName,
-          delivery_channel: kind === "therapist" ? "notification" : "email",
-          status: "pending",
-          batch_id: batchId,
-          created_by_name: activeStaff?.name || "",
-        }).select("id").single();
-        if (de || !delivery) throw new Error(de?.message || "配信ログ作成失敗");
-
-        // 5a. セラピスト: therapist_notifications にマイページ通知を作成
-        if (kind === "therapist") {
-          const bodyWithLink = `${(message.trim() || `${year}年分の支払調書をお送りいたします。`)}\n\n📎 ${attachmentName}\n${up.url}`;
-          const { error: ne } = await supabase.from("therapist_notifications").insert({
-            title: subject.trim(),
-            body: bodyWithLink,
-            type: "info",
-            target_therapist_id: p.id,
+      if (deliveryMode === "payment") {
+        // ===== 支払調書モード =====
+        try {
+          const payment = await fetchPayment(p.id, year);
+          const th = { real_name: p.real_name || p.name, name: p.name, address: p.address || "", entry_date: p.entry_date || "" };
+          const html = generatePaymentCertificateHtml(storeInfo, th, payment, kind);
+          const up = await uploadHtml(html, `支払調書_${year}_${p.real_name || p.name}.html`);
+          if (!up) throw new Error("Storageアップロード失敗");
+          const attachName = `支払調書_${year}_${p.real_name || p.name}.html`;
+          const defaultMsg = kind === "therapist"
+            ? `${year}年分の支払調書をお送りいたします。詳細は添付ファイルをご確認ください。`
+            : `${p.real_name || p.name} 様\n\n${year}年分の支払調書をお送りいたします。\nリンクをクリックして内容をご確認ください。必要に応じて印刷・PDF保存してください。`;
+          const r = await sendOneDelivery(
+            p, batchId, "payment_certificate",
+            subject.trim(), message.trim() || defaultMsg,
+            up.url, attachName, year, null, null,
+          );
+          if (r.ok) successCount++; else failedCount++;
+        } catch (e: any) {
+          failedCount++;
+          // HTML生成・アップロード失敗時も失敗ログ記録
+          await supabase.from("document_deliveries").insert({
+            recipient_kind: kind, recipient_id: p.id,
+            recipient_name: p.real_name || p.name,
+            recipient_email: (kind === "therapist" ? p.login_email : p.email) || "",
+            document_kind: "payment_certificate",
+            target_year: year, subject: subject.trim(), message: message.trim(),
+            delivery_channel: kind === "therapist" ? "notification" : "email",
+            status: "failed", error_message: (e.message || String(e)).slice(0, 500),
+            batch_id: batchId, created_by_name: activeStaff?.name || "",
           });
-          if (ne) throw new Error(ne.message);
-          // 配信ログを完了に
-          await supabase.from("document_deliveries")
-            .update({ status: "sent", delivered_at: new Date().toISOString() })
-            .eq("id", delivery.id);
-          successCount++;
-        } else {
-          // 5b. スタッフ: /api/deliver-email にPOSTしてメール送信
-          if (!recipientEmail) throw new Error("メールアドレスが登録されていません");
-          const res = await fetch("/api/deliver-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: recipientEmail,
-              subject: subject.trim(),
-              body: message.trim() || `${p.real_name || p.name} 様\n\n${year}年分の支払調書をお送りいたします。\nリンクをクリックして内容をご確認ください。必要に応じて印刷・PDF保存してください。`,
-              attachment_url: up.url,
-              attachment_name: attachmentName,
-              delivery_id: delivery.id,
-            }),
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: "不明なエラー" }));
-            throw new Error(err.error || "メール送信失敗");
-          }
-          successCount++;
         }
-      } catch (e: any) {
-        failedCount++;
-        // エラー時も配信ログに記録（既にinsertされているものは上書き、されていないものは新規）
-        await supabase.from("document_deliveries").insert({
-          recipient_kind: kind,
-          recipient_id: p.id,
-          recipient_name: p.real_name || p.name,
-          recipient_email: (kind === "therapist" ? p.login_email : p.email) || "",
-          document_kind: "payment_certificate",
-          target_year: year,
-          subject: subject.trim(),
-          message: message.trim(),
-          delivery_channel: kind === "therapist" ? "notification" : "email",
-          status: "failed",
-          error_message: (e.message || String(e)).slice(0, 500),
-          batch_id: batchId,
-          created_by_name: activeStaff?.name || "",
-        });
+      } else {
+        // ===== テンプレ配信モード =====
+        const attachName = `${selectedTemplate.name}_v${selectedVersion.version}_${selectedVersion.file_name}`;
+        const defaultMsg = kind === "therapist"
+          ? `${selectedTemplate.name}（v${selectedVersion.version}）をお送りします。添付のリンクからダウンロードしてください。`
+          : `${p.real_name || p.name} 様\n\n${selectedTemplate.name}（v${selectedVersion.version}）をお送りします。\n添付のリンクからダウンロードしてください。`;
+        const r = await sendOneDelivery(
+          p, batchId, "template",
+          subject.trim(), message.trim() || defaultMsg,
+          selectedVersion.file_url, attachName, null,
+          selectedTemplate.id, selectedVersion.id,
+        );
+        if (r.ok) successCount++; else failedCount++;
       }
     }
 
@@ -2354,6 +2446,106 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
     toast.show(`配信完了: 成功 ${successCount}件 / 失敗 ${failedCount}件`, failedCount === 0 ? "success" : "error");
     setSelectedIds([]);
     await fetchAll();
+  };
+
+  // 配信履歴から再送
+  const resendDelivery = async (d: Delivery) => {
+    const ok = await confirm({
+      title: "この配信を再送しますか？",
+      message: `対象: ${d.recipient_name}\n内容: ${d.subject}\nチャネル: ${d.delivery_channel === "email" ? "📧 メール送信" : "📱 マイページ通知"}\n\n新しい配信として記録されます（元の履歴は残ります）。`,
+      variant: "info",
+      confirmLabel: "再送する",
+      cancelLabel: "キャンセル",
+    });
+    if (!ok) return;
+    setResending(d.id);
+    const batchId = crypto.randomUUID();
+    const originalKind = kind;
+    // 一時的に配信先の種別に切り替える（セラピスト履歴からの再送ならtherapistにする必要あり）
+    // ただし sendOneDelivery は kind state に依存しているので、ここで切り替える
+    const needKindSwitch = d.recipient_kind !== kind;
+    if (needKindSwitch) setKind(d.recipient_kind as "therapist" | "staff");
+
+    // state 切替は非同期なので、recipient を改めて取得
+    // d.recipient_kind を信じて直接処理するために、擬似recipientを作る
+    const pseudo: Recipient = d.recipient_kind === "therapist"
+      ? ({
+          id: d.recipient_id, name: d.recipient_name, real_name: d.recipient_name,
+          address: null, entry_date: null, login_email: d.recipient_email, status: "active",
+        } as any)
+      : ({
+          id: d.recipient_id, name: d.recipient_name, real_name: d.recipient_name,
+          address: null, entry_date: null, email: d.recipient_email, status: "active",
+        } as any);
+
+    // 直接 supabase で再送処理（sendOneDelivery は kind state を見るので使えない）
+    try {
+      if (d.recipient_kind === "therapist") {
+        const bodyWithLink = d.attachment_url
+          ? `${d.message}\n\n📎 ${d.attachment_name}\n${d.attachment_url}`
+          : d.message;
+        const { data: newDelivery, error: de } = await supabase.from("document_deliveries").insert({
+          recipient_kind: "therapist", recipient_id: d.recipient_id,
+          recipient_name: d.recipient_name, recipient_email: d.recipient_email,
+          document_kind: d.document_kind, target_year: d.target_year,
+          subject: d.subject, message: d.message,
+          attachment_url: d.attachment_url, attachment_name: d.attachment_name,
+          delivery_channel: "notification", status: "pending",
+          batch_id: batchId, created_by_name: activeStaff?.name || "",
+        }).select("id").single();
+        if (de || !newDelivery) throw new Error(de?.message || "配信ログ作成失敗");
+        const { error: ne } = await supabase.from("therapist_notifications").insert({
+          title: d.subject, body: bodyWithLink, type: "info",
+          target_therapist_id: d.recipient_id,
+        });
+        if (ne) throw new Error(ne.message);
+        await supabase.from("document_deliveries")
+          .update({ status: "sent", delivered_at: new Date().toISOString() })
+          .eq("id", newDelivery.id);
+        toast.show(`${d.recipient_name} に再送しました`, "success");
+      } else {
+        if (!d.recipient_email) throw new Error("メールアドレスが記録されていません");
+        const { data: newDelivery, error: de } = await supabase.from("document_deliveries").insert({
+          recipient_kind: "staff", recipient_id: d.recipient_id,
+          recipient_name: d.recipient_name, recipient_email: d.recipient_email,
+          document_kind: d.document_kind, target_year: d.target_year,
+          subject: d.subject, message: d.message,
+          attachment_url: d.attachment_url, attachment_name: d.attachment_name,
+          delivery_channel: "email", status: "pending",
+          batch_id: batchId, created_by_name: activeStaff?.name || "",
+        }).select("id").single();
+        if (de || !newDelivery) throw new Error(de?.message || "配信ログ作成失敗");
+        const res = await fetch("/api/deliver-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: d.recipient_email, subject: d.subject, body: d.message,
+            attachment_url: d.attachment_url, attachment_name: d.attachment_name,
+            delivery_id: newDelivery.id,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "不明なエラー" }));
+          throw new Error(err.error || "メール送信失敗");
+        }
+        toast.show(`${d.recipient_name} に再送しました`, "success");
+      }
+    } catch (e: any) {
+      toast.show(`再送失敗: ${e.message}`, "error");
+      await supabase.from("document_deliveries").insert({
+        recipient_kind: d.recipient_kind, recipient_id: d.recipient_id,
+        recipient_name: d.recipient_name, recipient_email: d.recipient_email,
+        document_kind: d.document_kind, target_year: d.target_year,
+        subject: d.subject, message: d.message,
+        attachment_url: d.attachment_url, attachment_name: d.attachment_name,
+        delivery_channel: d.delivery_channel, status: "failed",
+        error_message: (e.message || String(e)).slice(0, 500),
+        batch_id: batchId, created_by_name: activeStaff?.name || "",
+      });
+    }
+    if (needKindSwitch) setKind(originalKind);
+    setResending(null);
+    fetchAll();
   };
 
   const filteredDeliveries = deliveries.filter(d => historyFilter === "all" || d.status === historyFilter);
@@ -2384,19 +2576,29 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
           <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>支払調書などの個人向け書類を複数人に一斉送信</p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-[11px]" style={{ color: T.textSub }}>
-            対象年度
-            <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-2 py-1 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
-              {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}年</option>)}
-            </select>
-          </label>
+          {deliveryMode === "payment" && (
+            <label className="flex items-center gap-2 text-[11px]" style={{ color: T.textSub }}>
+              対象年度
+              <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-2 py-1 rounded-lg text-[11px] outline-none cursor-pointer" style={inputStyle}>
+                {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}年</option>)}
+              </select>
+            </label>
+          )}
         </div>
       </div>
 
       {/* 配信対象タブ */}
-      <div className="flex items-center gap-1 mb-4">
+      <div className="flex items-center gap-1 mb-3">
         {([["therapist", "💆 セラピストへ（マイページ通知）"], ["staff", "👥 スタッフへ（メール送信）"]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setKind(k as any)} disabled={sending} className="px-4 py-2 rounded-xl text-[11px] cursor-pointer font-medium" style={{ backgroundColor: kind === k ? "#c3a78218" : "transparent", color: kind === k ? "#c3a782" : T.textMuted, border: `1px solid ${kind === k ? "#c3a78244" : T.border}`, opacity: sending ? 0.5 : 1 }}>{l}</button>
+        ))}
+      </div>
+
+      {/* 配信モード切替 */}
+      <div className="flex items-center gap-1 mb-4">
+        <span className="text-[10px] mr-2" style={{ color: T.textMuted }}>配信内容:</span>
+        {([["payment", "💰 支払調書（自動生成）"], ["template", "📋 書類テンプレート"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setDeliveryMode(k as any)} disabled={sending} className="px-3 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: deliveryMode === k ? "#85a8c418" : "transparent", color: deliveryMode === k ? "#85a8c4" : T.textMuted, border: `1px solid ${deliveryMode === k ? "#85a8c444" : T.border}`, opacity: sending ? 0.5 : 1 }}>{l}</button>
         ))}
       </div>
 
@@ -2435,18 +2637,65 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
           <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
             <p className="text-[11px] font-medium mb-3">📝 配信内容（全員に同じ内容が送信されます）</p>
             <div className="space-y-2">
+              {/* テンプレ配信モード: テンプレート選択UI */}
+              {deliveryMode === "template" && (() => {
+                const eligibleTemplates = templates.filter(t => t.target_kind === kind || t.target_kind === "both");
+                const availableVersions = selectedTemplateId ? (templateVersions[selectedTemplateId] || []) : [];
+                return (
+                  <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                    <p className="text-[10px] font-medium" style={{ color: T.textSub }}>📋 配信する書類テンプレート</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] mb-0.5" style={{ color: T.textMuted }}>テンプレート</label>
+                        <select value={selectedTemplateId} onChange={e => { setSelectedTemplateId(Number(e.target.value)); setSelectedVersionId(0); }} className="w-full px-2 py-1.5 rounded text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, backgroundColor: T.card }}>
+                          <option value={0}>— 選択してください —</option>
+                          {eligibleTemplates.length === 0 && <option value={0} disabled>対象{kind === "therapist" ? "セラピスト" : "スタッフ"}向けのテンプレなし</option>}
+                          {eligibleTemplates.map(t => (
+                            <option key={t.id} value={t.id}>{t.category}: {t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] mb-0.5" style={{ color: T.textMuted }}>使用バージョン</label>
+                        <select value={selectedVersionId} onChange={e => setSelectedVersionId(Number(e.target.value))} disabled={!selectedTemplateId} className="w-full px-2 py-1.5 rounded text-[12px] outline-none cursor-pointer" style={{ ...inputStyle, backgroundColor: T.card, opacity: selectedTemplateId ? 1 : 0.5 }}>
+                          <option value={0}>— バージョンを選択 —</option>
+                          {availableVersions.map((v: any) => (
+                            <option key={v.id} value={v.id}>v{v.version}{v.is_current ? "（現行版）" : ""}{v.effective_from ? ` - ${v.effective_from}〜` : ""}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {selectedTemplateId > 0 && availableVersions.length === 0 && (
+                      <p className="text-[9px]" style={{ color: "#c45555" }}>⚠ このテンプレートにはまだファイルがアップロードされていません。</p>
+                    )}
+                    {eligibleTemplates.length === 0 && (
+                      <p className="text-[9px]" style={{ color: T.textFaint }}>💡 バックオフィス →「📋 書類テンプレ」から {kind === "therapist" ? "セラピスト" : "スタッフ"} 向けまたは両方向けのテンプレを登録すると表示されます。</p>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div>
                 <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>件名 *</label>
-                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder={`例: ${year}年分 支払調書のご送付`} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
+                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder={deliveryMode === "payment" ? `例: ${year}年分 支払調書のご送付` : `例: 新しい業務委託契約書のご送付`} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none" style={inputStyle} />
                 <div className="flex gap-1 mt-1 flex-wrap">
-                  <button onClick={() => setSubject(`【重要】${year}年分 支払調書のご送付`)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>テンプレ: 重要</button>
-                  <button onClick={() => setSubject(`${year}年分 報酬支払証明書のご案内`)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>テンプレ: 通常</button>
+                  {deliveryMode === "payment" ? (
+                    <>
+                      <button onClick={() => setSubject(`【重要】${year}年分 支払調書のご送付`)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>テンプレ: 重要</button>
+                      <button onClick={() => setSubject(`${year}年分 報酬支払証明書のご案内`)} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>テンプレ: 通常</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => { const t = templates.find(x => x.id === selectedTemplateId); if (t) setSubject(`【重要】${t.name}のご送付`); }} disabled={!selectedTemplateId} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted, opacity: selectedTemplateId ? 1 : 0.5 }}>テンプレ: 重要</button>
+                      <button onClick={() => { const t = templates.find(x => x.id === selectedTemplateId); if (t) setSubject(`${t.name}をお送りします`); }} disabled={!selectedTemplateId} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted, opacity: selectedTemplateId ? 1 : 0.5 }}>テンプレ: 通常</button>
+                    </>
+                  )}
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] mb-1" style={{ color: T.textSub }}>本文</label>
-                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={6} placeholder={`${year}年分の支払調書をお送りいたします。\n添付のリンクから内容をご確認ください。\n確定申告の際にご利用ください。\n\nご不明な点がございましたらお気軽にお問い合わせください。`} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none resize-none" style={inputStyle} />
-                <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>💡 空欄の場合は既定の文面が自動挿入されます。{kind === "staff" ? "メール末尾に添付リンクが自動付与されます。" : "通知末尾に支払調書URLが自動付与されます。"}</p>
+                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={6} placeholder={deliveryMode === "payment" ? `${year}年分の支払調書をお送りいたします。\n添付のリンクから内容をご確認ください。\n確定申告の際にご利用ください。\n\nご不明な点がございましたらお気軽にお問い合わせください。` : `お世話になっております。\n最新版の書類をお送りいたします。\nご確認のほどよろしくお願いいたします。`} className="w-full px-3 py-2 rounded-lg text-[12px] outline-none resize-none" style={inputStyle} />
+                <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>💡 空欄の場合は既定の文面が自動挿入されます。{kind === "staff" ? "メール末尾に添付リンクが自動付与されます。" : "通知末尾にファイルURLが自動付与されます。"}</p>
               </div>
             </div>
           </div>
@@ -2470,11 +2719,24 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
 
           {/* 実行ボタン */}
           <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <button onClick={executeDelivery} disabled={sending || selectedIds.length === 0 || !subject.trim()} className="w-full px-6 py-3 rounded-xl text-[13px] cursor-pointer text-white font-medium" style={{ backgroundColor: "#c3a782", opacity: sending || selectedIds.length === 0 || !subject.trim() ? 0.4 : 1 }}>
-              {sending ? "配信中..." : `🚀 ${selectedIds.length}名に${year}年分 支払調書を配信`}
-            </button>
+            {(() => {
+              const tplMissing = deliveryMode === "template" && (!selectedTemplateId || !selectedVersionId);
+              const disabled = sending || selectedIds.length === 0 || !subject.trim() || tplMissing;
+              const selTpl = deliveryMode === "template" ? templates.find(t => t.id === selectedTemplateId) : null;
+              const selVer = deliveryMode === "template" && selectedTemplateId ? (templateVersions[selectedTemplateId] || []).find((v: any) => v.id === selectedVersionId) : null;
+              const label = deliveryMode === "payment"
+                ? `🚀 ${selectedIds.length}名に${year}年分 支払調書を配信`
+                : (selTpl && selVer ? `🚀 ${selectedIds.length}名に「${selTpl.name}」v${selVer.version} を配信` : `🚀 ${selectedIds.length}名に配信`);
+              return (
+                <button onClick={executeDelivery} disabled={disabled} className="w-full px-6 py-3 rounded-xl text-[13px] cursor-pointer text-white font-medium" style={{ backgroundColor: "#c3a782", opacity: disabled ? 0.4 : 1 }}>
+                  {sending ? "配信中..." : label}
+                </button>
+              );
+            })()}
             <p className="text-[9px] mt-2 text-center" style={{ color: T.textFaint }}>
-              {kind === "therapist" ? "セラピストのマイページに通知が届き、リンクから支払調書を閲覧できます" : "スタッフの登録メールアドレスに本文とリンクが送信されます"}
+              {kind === "therapist"
+                ? `セラピストのマイページに通知が届き、リンクから${deliveryMode === "payment" ? "支払調書" : "ファイル"}を閲覧できます`
+                : `スタッフの登録メールアドレスに本文とリンクが送信されます`}
             </p>
           </div>
         </div>
@@ -2502,13 +2764,15 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
                   <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>書類</th>
                   <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>件名</th>
                   <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 90 }}>状態</th>
-                  <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 80 }}>添付</th>
+                  <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 70 }}>添付</th>
+                  <th style={{ padding: "6px 10px", textAlign: "center", borderBottom: `1px solid ${T.border}`, width: 80 }}>再送</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredDeliveries.map(d => {
                   const st = STATUS_LABELS[d.status] || STATUS_LABELS.pending;
                   const dt = new Date(d.created_at);
+                  const canResend = d.status !== "pending" && !!d.attachment_url;
                   return (
                     <tr key={d.id} style={{ borderTop: `1px solid ${T.border}` }}>
                       <td style={{ padding: "6px 10px", color: T.textSub, fontSize: 10, whiteSpace: "nowrap" }}>
@@ -2534,6 +2798,15 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
                         {d.attachment_url ? (
                           <a href={d.attachment_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>開く</a>
                         ) : "—"}
+                      </td>
+                      <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                        {canResend ? (
+                          <button onClick={() => resendDelivery(d)} disabled={resending === d.id} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", opacity: resending === d.id ? 0.5 : 1 }} title="同じ内容で再送信">
+                            {resending === d.id ? "..." : "🔄 再送"}
+                          </button>
+                        ) : (
+                          <span className="text-[9px]" style={{ color: T.textFaint }}>—</span>
+                        )}
                       </td>
                     </tr>
                   );
