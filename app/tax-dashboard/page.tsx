@@ -1620,6 +1620,21 @@ function DocumentTemplatesManager({ T, activeStaff }: { T: any; activeStaff: any
   const [newVersionEffectiveFrom, setNewVersionEffectiveFrom] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  // 適用状況モーダル
+  type AppliedRecord = {
+    source: "contract" | "delivery";
+    recipient_kind: string;
+    recipient_id: number;
+    recipient_name: string;
+    version_id: number | null;
+    applied_at: string;
+  };
+  const [applyModalTemplate, setApplyModalTemplate] = useState<Template | null>(null);
+  const [appliedRecords, setAppliedRecords] = useState<AppliedRecord[]>([]);
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [therapistsMap, setTherapistsMap] = useState<Record<number, string>>({});
+  const [staffsMap, setStaffsMap] = useState<Record<number, string>>({});
+
   const CATEGORIES = ["契約書", "誓約書", "同意書", "業務マニュアル", "社内規程", "雛形書類", "その他"];
   const TARGET_LABELS: Record<string, { label: string; color: string }> = {
     therapist: { label: "💆 セラピスト", color: "#c3a782" },
@@ -1643,6 +1658,15 @@ function DocumentTemplatesManager({ T, activeStaff }: { T: any; activeStaff: any
       grouped[v.template_id].push(v as TemplateVersion);
     });
     setVersionsByTemplate(grouped);
+    // セラピスト・スタッフ名マップ（適用状況表示用）
+    const { data: therapists } = await supabase.from("therapists").select("id, name").neq("status", "trash");
+    const { data: staffs } = await supabase.from("staff").select("id, name").neq("status", "trash");
+    const tMap: Record<number, string> = {};
+    (therapists || []).forEach((t: any) => { tMap[t.id] = t.name; });
+    setTherapistsMap(tMap);
+    const sMap: Record<number, string> = {};
+    (staffs || []).forEach((s: any) => { sMap[s.id] = s.name; });
+    setStaffsMap(sMap);
     setLoading(false);
   }, [toast]);
 
@@ -1754,6 +1778,60 @@ function DocumentTemplatesManager({ T, activeStaff }: { T: any; activeStaff: any
   const closeVersionModal = () => {
     setVersionModalTemplate(null);
     setNewVersionFile(null); setNewVersionStr(""); setNewVersionChangeNote(""); setNewVersionEffectiveFrom("");
+  };
+
+  // 適用状況モーダル: contracts + document_deliveries から UNION で取得
+  const openApplyModal = async (t: Template) => {
+    setApplyModalTemplate(t);
+    setApplyLoading(true);
+    setAppliedRecords([]);
+    try {
+      // contracts（セラピスト契約書の署名済み分）
+      const { data: contracts } = await supabase
+        .from("contracts")
+        .select("therapist_id, signer_name, document_template_id, document_template_version_id, signed_at, status")
+        .eq("document_template_id", t.id)
+        .eq("status", "signed");
+      // document_deliveries（一括配信で送付済みのテンプレ配信）
+      const { data: deliveries } = await supabase
+        .from("document_deliveries")
+        .select("recipient_kind, recipient_id, recipient_name, document_template_id, document_template_version_id, delivered_at, status")
+        .eq("document_template_id", t.id)
+        .eq("status", "sent");
+
+      const records: AppliedRecord[] = [];
+      (contracts || []).forEach((c: any) => {
+        records.push({
+          source: "contract",
+          recipient_kind: "therapist",
+          recipient_id: c.therapist_id,
+          recipient_name: c.signer_name || therapistsMap[c.therapist_id] || `ID:${c.therapist_id}`,
+          version_id: c.document_template_version_id,
+          applied_at: c.signed_at || "",
+        });
+      });
+      (deliveries || []).forEach((d: any) => {
+        records.push({
+          source: "delivery",
+          recipient_kind: d.recipient_kind,
+          recipient_id: d.recipient_id,
+          recipient_name: d.recipient_name,
+          version_id: d.document_template_version_id,
+          applied_at: d.delivered_at || "",
+        });
+      });
+      // 日時降順
+      records.sort((a, b) => (b.applied_at || "").localeCompare(a.applied_at || ""));
+      setAppliedRecords(records);
+    } catch (e: any) {
+      toast.show(`取得失敗: ${e.message}`, "error");
+    }
+    setApplyLoading(false);
+  };
+
+  const closeApplyModal = () => {
+    setApplyModalTemplate(null);
+    setAppliedRecords([]);
   };
 
   const addVersion = async () => {
@@ -1953,6 +2031,7 @@ function DocumentTemplatesManager({ T, activeStaff }: { T: any; activeStaff: any
                           <a href={cur.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>📥 DL</a>
                         )}
                         <button onClick={() => openVersionModal(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>📜 履歴</button>
+                        <button onClick={() => openApplyModal(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }} title="このテンプレを誰に渡したかを確認">📊 適用</button>
                         <button onClick={() => openEdit(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>編集</button>
                         {t.status === "active" ? (
                           <button onClick={() => archiveTemplate(t)} className="text-[10px] px-2 py-1 rounded cursor-pointer" style={{ backgroundColor: "#f59e0b12", color: "#f59e0b" }}>🗃</button>
@@ -2113,6 +2192,156 @@ function DocumentTemplatesManager({ T, activeStaff }: { T: any; activeStaff: any
 
             <div className="mt-5">
               <button onClick={closeVersionModal} className="w-full px-4 py-2.5 rounded-xl text-[12px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 適用状況モーダル */}
+      {applyModalTemplate && (
+        <div onClick={closeApplyModal} className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <div onClick={e => e.stopPropagation()} className="rounded-2xl border p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }}>
+            <div className="mb-4">
+              <h2 className="text-[15px] font-medium">📊 適用状況</h2>
+              <p className="text-[12px] mt-1" style={{ color: T.textMuted }}>{applyModalTemplate.name}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: T.textFaint }}>このテンプレートのどのバージョンを誰に渡したかの履歴</p>
+            </div>
+
+            {applyLoading ? (
+              <p className="text-[11px] text-center py-6" style={{ color: T.textMuted }}>読み込み中...</p>
+            ) : (() => {
+              // バージョン別に集計
+              const versions = versionsByTemplate[applyModalTemplate.id] || [];
+              const currentVer = versions.find(v => v.is_current);
+
+              // バージョンIDごとに記録をグルーピング
+              const byVersion: Record<string, AppliedRecord[]> = {};
+              appliedRecords.forEach(r => {
+                const key = r.version_id ? String(r.version_id) : "unknown";
+                if (!byVersion[key]) byVersion[key] = [];
+                byVersion[key].push(r);
+              });
+
+              // このテンプレが適用されている人全員のIDセット（重複排除）
+              const appliedPersonKeys = new Set(appliedRecords.map(r => `${r.recipient_kind}:${r.recipient_id}`));
+
+              // 未適用者一覧（現行版がある場合のみ）
+              const unappliedTherapists = currentVer && (applyModalTemplate.target_kind === "therapist" || applyModalTemplate.target_kind === "both")
+                ? Object.entries(therapistsMap)
+                    .filter(([id]) => !appliedPersonKeys.has(`therapist:${id}`))
+                    .map(([id, name]) => ({ id: Number(id), name, kind: "therapist" }))
+                : [];
+              const unappliedStaffs = currentVer && (applyModalTemplate.target_kind === "staff" || applyModalTemplate.target_kind === "both")
+                ? Object.entries(staffsMap)
+                    .filter(([id]) => !appliedPersonKeys.has(`staff:${id}`))
+                    .map(([id, name]) => ({ id: Number(id), name, kind: "staff" }))
+                : [];
+
+              // 現行版以外のバージョンを渡された人（更新が必要）
+              const outdatedRecords = currentVer
+                ? appliedRecords.filter(r => r.version_id && r.version_id !== currentVer.id)
+                : [];
+
+              return (
+                <div className="space-y-4">
+                  {/* サマリー */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-xl p-3 border" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+                      <p className="text-[9px]" style={{ color: T.textMuted }}>適用済み</p>
+                      <p className="text-[18px] font-medium" style={{ color: "#22c55e" }}>{appliedPersonKeys.size}</p>
+                      <p className="text-[8px]" style={{ color: T.textFaint }}>人（重複除く）</p>
+                    </div>
+                    <div className="rounded-xl p-3 border" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+                      <p className="text-[9px]" style={{ color: T.textMuted }}>⚠ 更新必要</p>
+                      <p className="text-[18px] font-medium" style={{ color: "#f59e0b" }}>{outdatedRecords.length}</p>
+                      <p className="text-[8px]" style={{ color: T.textFaint }}>現行版以外を渡している</p>
+                    </div>
+                    <div className="rounded-xl p-3 border" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}>
+                      <p className="text-[9px]" style={{ color: T.textMuted }}>未適用</p>
+                      <p className="text-[18px] font-medium" style={{ color: "#c45555" }}>{unappliedTherapists.length + unappliedStaffs.length}</p>
+                      <p className="text-[8px]" style={{ color: T.textFaint }}>一度も渡していない</p>
+                    </div>
+                  </div>
+
+                  {/* 現行版 */}
+                  {currentVer && (
+                    <div className="rounded-xl p-3" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78244" }}>
+                      <p className="text-[10px]" style={{ color: "#c3a782" }}>✓ 現行版: v{currentVer.version}{currentVer.effective_from ? ` (適用開始 ${currentVer.effective_from})` : ""}</p>
+                    </div>
+                  )}
+
+                  {/* 適用済みリスト */}
+                  <div>
+                    <h3 className="text-[12px] font-medium mb-2">適用済みの記録（{appliedRecords.length}件）</h3>
+                    {appliedRecords.length === 0 ? (
+                      <p className="text-[11px] text-center py-4" style={{ color: T.textFaint }}>まだこのテンプレが誰にも適用されていません</p>
+                    ) : (
+                      <div className="rounded-xl border overflow-hidden" style={{ borderColor: T.border }}>
+                        <table className="w-full" style={{ fontSize: 11 }}>
+                          <thead style={{ backgroundColor: T.cardAlt, color: T.textSub, fontSize: 10 }}>
+                            <tr>
+                              <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>対象者</th>
+                              <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 90 }}>バージョン</th>
+                              <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 110 }}>適用日時</th>
+                              <th style={{ padding: "6px 10px", textAlign: "left", borderBottom: `1px solid ${T.border}`, width: 100 }}>経路</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {appliedRecords.map((r, i) => {
+                              const v = versions.find(x => x.id === r.version_id);
+                              const isOutdated = currentVer && r.version_id && r.version_id !== currentVer.id;
+                              const appDate = r.applied_at ? new Date(r.applied_at) : null;
+                              return (
+                                <tr key={i} style={{ borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+                                  <td style={{ padding: "6px 10px" }}>
+                                    <span className="text-[9px] mr-1" style={{ color: T.textFaint }}>{r.recipient_kind === "therapist" ? "💆" : "👥"}</span>
+                                    {r.recipient_name}
+                                  </td>
+                                  <td style={{ padding: "6px 10px" }}>
+                                    {v ? (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: isOutdated ? "#f59e0b18" : "#22c55e18", color: isOutdated ? "#f59e0b" : "#22c55e", fontFamily: "monospace" }}>
+                                        v{v.version}{isOutdated ? " ⚠" : ""}
+                                      </span>
+                                    ) : <span className="text-[10px]" style={{ color: T.textFaint }}>（削除済版）</span>}
+                                  </td>
+                                  <td style={{ padding: "6px 10px", color: T.textSub, fontSize: 10 }}>
+                                    {appDate ? `${appDate.getFullYear()}/${appDate.getMonth() + 1}/${appDate.getDate()}` : "—"}
+                                  </td>
+                                  <td style={{ padding: "6px 10px", color: T.textSub, fontSize: 10 }}>
+                                    {r.source === "contract" ? "📝 契約書署名" : "📨 一括配信"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 未適用者リスト */}
+                  {(unappliedTherapists.length > 0 || unappliedStaffs.length > 0) && (
+                    <div>
+                      <h3 className="text-[12px] font-medium mb-2" style={{ color: "#c45555" }}>未適用者（{unappliedTherapists.length + unappliedStaffs.length}名）</h3>
+                      <div className="rounded-xl p-3" style={{ backgroundColor: "#c4555510", border: "1px solid #c4555533" }}>
+                        <div className="flex flex-wrap gap-1">
+                          {unappliedTherapists.map(p => (
+                            <span key={`t-${p.id}`} className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }}>💆 {p.name}</span>
+                          ))}
+                          {unappliedStaffs.map(p => (
+                            <span key={`s-${p.id}`} className="text-[10px] px-2 py-0.5 rounded" style={{ backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}` }}>👥 {p.name}</span>
+                          ))}
+                        </div>
+                        <p className="text-[9px] mt-2" style={{ color: T.textFaint }}>💡 「📨 書類配信」タブで、このテンプレートを未適用者に配信できます。</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="mt-5">
+              <button onClick={closeApplyModal} className="w-full px-4 py-2.5 rounded-xl text-[12px] cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
             </div>
           </div>
         </div>
