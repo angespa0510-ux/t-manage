@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
 import InstallPrompt from "../../components/InstallPrompt";
+import { fetchActiveEvents, formatEventPeriod, type Event as EventItem } from "../../lib/events";
 
 type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number; point_used?: number };
@@ -116,7 +117,28 @@ export default function CustomerMypage() {
   const [memoSaving, setMemoSaving] = useState(false);
   const [showMemoModal, setShowMemoModal] = useState(false);
 
+  // イベント（マイページ用に取得・Session 56）
+  const [customerEvents, setCustomerEvents] = useState<EventItem[]>([]);
+
   useEffect(() => { const saved = localStorage.getItem("customer_mypage_id"); if (saved) { supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) { setCustomer(data); setSetEmail(data.login_email || ""); setSetBday(data.birthday || ""); setSetSelfN(data.self_name || data.name || ""); } }); } }, []);
+
+  // URLパラメータ ?register=1 で登録モードで開く（HPからの会員登録導線）
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("register") === "1") {
+      setAuthMode("register");
+    }
+  }, []);
+
+  // イベント取得（ログイン中のみ）
+  useEffect(() => {
+    if (!customer) return;
+    fetchActiveEvents("mypage").then((es) => {
+      // members_only を含む形で取得済み。ログイン中なので全部見せてOK
+      setCustomerEvents(es);
+    });
+  }, [customer]);
   useEffect(() => { supabase.from("store_settings").select("value").eq("key", "cancel_phone").maybeSingle().then(({ data }) => { if (data?.value) setCancelPhone(data.value); }); }, []);
 
   const fetchData = useCallback(async () => {
@@ -456,6 +478,50 @@ export default function CustomerMypage() {
       {/* ═══ ホーム ═══ */}
       {tab === "home" && (<div className="space-y-4 animate-[fadeIn_0.3s]">
         {unreadCount > 0 && (<button onClick={() => setTab("notifications")} className="w-full rounded-xl border p-3 flex items-center gap-3 cursor-pointer" style={{ backgroundColor: "#f59e0b08", borderColor: "#f59e0b44" }}><span className="text-[20px]">🔔</span><span className="text-[12px] font-medium" style={{ color: "#b45309" }}>未読のお知らせが{unreadCount}件あります</span><span className="ml-auto text-[11px]" style={{ color: C.textMuted }}>→</span></button>)}
+
+        {/* 開催中のイベント */}
+        {customerEvents.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <h2 className="text-[13px] font-medium" style={{ color: C.textSub }}>🎁 開催中のイベント</h2>
+              <span className="text-[10px]" style={{ color: C.textMuted }}>{customerEvents.length}件</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4" style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+              {customerEvents.map(ev => {
+                const hasLink = !!ev.cta_url;
+                const accent = ev.accent_color || C.accent;
+                const period = formatEventPeriod(ev);
+                const inner = (
+                  <div key={ev.id} className="flex-shrink-0 rounded-2xl border overflow-hidden" style={{ width: "280px", scrollSnapAlign: "start", backgroundColor: C.card, borderColor: C.border }}>
+                    <div className="relative w-full" style={{ aspectRatio: "16 / 10", backgroundColor: ev.image_url ? C.cardAlt : accent + "20", backgroundImage: ev.image_url ? `url(${ev.image_url})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
+                      {!ev.image_url && <div className="absolute inset-0 flex items-center justify-center text-[28px]" style={{ color: accent }}>🎉</div>}
+                      {ev.badge_label && <span className="absolute top-2 left-2 px-2 py-0.5 text-[9px] font-medium text-white rounded" style={{ backgroundColor: accent }}>{ev.badge_label}</span>}
+                      {period && <span className="absolute bottom-2 right-2 px-2 py-0.5 text-[9px] rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.92)", color: C.text }}>{period}</span>}
+                    </div>
+                    <div className="p-3">
+                      {ev.subtitle && <p className="text-[10px] mb-1" style={{ color: accent, fontWeight: 500 }}>{ev.subtitle}</p>}
+                      <h3 className="text-[13px] font-medium mb-1" style={{ color: C.text }}>{ev.title}</h3>
+                      {ev.description && <p className="text-[10px] line-clamp-2" style={{ color: C.textSub, lineHeight: 1.6 }}>{ev.description}</p>}
+                      {ev.cta_label && hasLink && (
+                        <div className="mt-2 pt-2 flex items-center justify-between border-t" style={{ borderColor: C.border }}>
+                          <span className="text-[10px] font-medium" style={{ color: accent }}>{ev.cta_label}</span>
+                          <span className="text-[12px]" style={{ color: accent }}>→</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+                if (hasLink) {
+                  const isExternal = /^https?:\/\//.test(ev.cta_url);
+                  if (isExternal) return <a key={ev.id} href={ev.cta_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", display: "contents" }}>{inner}</a>;
+                  return <a key={ev.id} href={ev.cta_url} style={{ textDecoration: "none", display: "contents" }}>{inner}</a>;
+                }
+                return inner;
+              })}
+            </div>
+          </div>
+        )}
+
         <button onClick={() => { setTab("schedule"); setSchedView("day"); setSchedDate(today); }} className="w-full py-4 rounded-2xl text-[15px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>📅 予約する</button>
         <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><h2 className="text-[13px] font-medium mb-3" style={{ color: C.textSub }}>📅 次回のご予約</h2>{upcomingRes.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>現在予約はありません</p>) : (<div className="space-y-3">{upcomingRes.slice(0, 3).map(r => (<div key={r.id} className="rounded-xl p-4" style={{ backgroundColor: C.accentBg, border: `1px solid ${C.accent}30` }}><div className="flex items-center justify-between mb-1"><span className="text-[15px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color }}>{getStatusBadge(r.status).label}</span></div><p className="text-[13px]">{r.start_time}〜{r.end_time}</p><div className="flex flex-wrap gap-x-4 mt-1 text-[11px]" style={{ color: C.textSub }}>{r.course && <span>💆 {r.course}</span>}{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}</div>{r.total_price > 0 && <p className="text-[12px] mt-1 font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</p>}{r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f20" }}><p className="text-[9px] mb-1" style={{ color: "#3d6b9f" }}>💳 カード決済額: <strong>{fmt(Math.round(r.total_price * 1.1))}</strong>（税10%込）</p><button onClick={(e) => { e.stopPropagation(); window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank"); }} className="w-full py-1.5 rounded-lg text-[10px] font-medium cursor-pointer text-white flex items-center justify-center gap-1" style={{ background: "linear-gradient(135deg, #3d6b9f, #2d5a8e)" }}>💳 クレジットカードで支払う</button></div>}{/* キャンセルボタン */}<div className="mt-2"><button onClick={() => handleCancelClick(r)} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer" style={{ backgroundColor: canCancelDirectly(r) ? "#c4555510" : "#88878010", color: canCancelDirectly(r) ? C.red : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? "#c4555525" : "#88878020"}` }}>{canCancelDirectly(r) ? "✕ この予約をキャンセル" : "📞 キャンセル・変更について"}</button></div></div>))}</div>)}{/* キャンセルポリシー */}<div className="mt-3 rounded-lg p-3" style={{ backgroundColor: "#c4555506", border: `1px solid #c4555515` }}><p className="text-[10px] font-medium mb-1" style={{ color: C.red }}>📌 キャンセル・変更について</p><p className="text-[9px] m-0" style={{ color: C.textMuted, lineHeight: 1.7 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。<br />当日のキャンセルにつきましては、<strong style={{ color: C.red }}>100％キャンセル料</strong>を頂戴いたします。</p><a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-medium no-underline" style={{ color: C.accent }}>📞 {cancelPhone}</a></div></div>
         <div className="grid grid-cols-3 gap-3">{[{ label: "累計来店", value: String(totalVisits), unit: "回", color: C.accent }, { label: "今月利用", value: fmt(monthTotal), unit: "", color: C.green }, { label: "ポイント", value: pointBalance.toLocaleString(), unit: "pt", color: C.blue }].map((s, i) => (<div key={i} className="rounded-xl border p-3 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[9px] mb-1" style={{ color: C.textMuted }}>{s.label}</p><p className="text-[16px] font-bold" style={{ color: s.color }}>{s.value}<span className="text-[10px] font-normal">{s.unit}</span></p></div>))}</div>

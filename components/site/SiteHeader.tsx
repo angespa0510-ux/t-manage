@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SITE } from "../../lib/site-theme";
+import { useCustomerAuth, displayName } from "../../lib/customer-auth-context";
 
 /**
  * Ange Spa 公式HP 共通ヘッダー
@@ -13,6 +14,11 @@ import { SITE } from "../../lib/site-theme";
  *  - 白基調、細い罫線のみ、影ほぼなし
  *  - 明朝体（Noto Serif JP）
  *  - 活性状態はピンクの下線で表現
+ *
+ * 追加（Session 56）:
+ *  - ログイン中のお客様名をヘッダーに表示
+ *  - ドロワーの「会員ページ」→ 名前表示 + ログアウト
+ *  - 未ログイン時は「会員登録（500ptプレゼント）」を目立たせる
  */
 
 const NAV_ITEMS = [
@@ -24,12 +30,6 @@ const NAV_ITEMS = [
   { label: "求人",             en: "RECRUIT",    path: "/recruit" },
 ];
 
-const SUB_NAV_ITEMS = [
-  { label: "WEB予約",       path: "/schedule" },
-  { label: "お問い合わせ",  path: "/contact" },
-  { label: "会員ページ",    path: "/customer-mypage" },
-];
-
 const TEL_PRIMARY   = "070-1675-5900";
 const TEL_SECONDARY = "080-9486-2282";
 const LINE_URL      = "https://lin.ee/tJtwJL9";
@@ -38,6 +38,7 @@ export default function SiteHeader() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { customer, isLoggedIn, loading, logout } = useCustomerAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -148,6 +149,33 @@ export default function SiteHeader() {
 
           {/* ── 右端アクション（メニューボタン） ── */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* ログイン中バッジ（デスクトップのみ） */}
+            {!loading && isLoggedIn && (
+              <Link
+                href="/customer-mypage"
+                className="site-header-user"
+                style={{
+                  display: "none",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  textDecoration: "none",
+                  border: `1px solid ${SITE.color.borderPink}`,
+                  background: SITE.color.pinkSoft,
+                  color: SITE.color.pinkDeep,
+                  fontSize: "11px",
+                  fontFamily: SITE.font.serif,
+                  letterSpacing: SITE.ls.loose,
+                  lineHeight: 1,
+                }}
+              >
+                <span style={{ fontFamily: SITE.font.display, fontSize: "10px", letterSpacing: SITE.ls.wide }}>
+                  MEMBER
+                </span>
+                <span>{displayName(customer)}さま</span>
+              </Link>
+            )}
+
             <a
               href={`tel:${TEL_PRIMARY}`}
               className="site-header-tel"
@@ -308,24 +336,110 @@ export default function SiteHeader() {
 
             {/* サブナビ */}
             <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 2 }}>
-              {SUB_NAV_ITEMS.map((item) => (
+              <Link
+                href="/schedule"
+                onClick={() => setMenuOpen(false)}
+                style={subNavLinkStyle}
+              >
+                WEB予約
+              </Link>
+              <Link
+                href="/contact"
+                onClick={() => setMenuOpen(false)}
+                style={subNavLinkStyle}
+              >
+                お問い合わせ
+              </Link>
+
+              {/* 会員エリア：ログイン状態で出し分け */}
+              {!loading && isLoggedIn ? (
+                <>
+                  <Link
+                    href="/customer-mypage"
+                    onClick={() => setMenuOpen(false)}
+                    style={{
+                      ...subNavLinkStyle,
+                      color: SITE.color.pinkDeep,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {displayName(customer)}さまの会員ページ →
+                  </Link>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setMenuOpen(false);
+                    }}
+                    style={{
+                      ...subNavLinkStyle,
+                      textAlign: "left",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "11px",
+                      color: SITE.color.textMuted,
+                    }}
+                  >
+                    ログアウト
+                  </button>
+                </>
+              ) : (
                 <Link
-                  key={item.path}
-                  href={item.path}
+                  href="/customer-mypage"
                   onClick={() => setMenuOpen(false)}
-                  style={{
-                    padding: "12px 0",
-                    color: SITE.color.textSub,
-                    textDecoration: "none",
-                    fontSize: "13px",
-                    fontFamily: SITE.font.serif,
-                    letterSpacing: SITE.ls.loose,
-                  }}
+                  style={subNavLinkStyle}
                 >
-                  {item.label}
+                  会員ログイン
                 </Link>
-              ))}
+              )}
             </div>
+
+            {/* 未ログイン時：会員登録CTA */}
+            {!loading && !isLoggedIn && (
+              <Link
+                href="/customer-mypage?register=1"
+                onClick={() => setMenuOpen(false)}
+                style={{
+                  marginTop: 28,
+                  padding: "18px 22px",
+                  border: `1px solid ${SITE.color.borderPink}`,
+                  background: SITE.color.pinkSoft,
+                  color: SITE.color.pinkDeep,
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <span>
+                  <span
+                    style={{
+                      display: "block",
+                      fontFamily: SITE.font.display,
+                      fontSize: "10px",
+                      letterSpacing: SITE.ls.wide,
+                      color: SITE.color.pink,
+                      marginBottom: 4,
+                    }}
+                  >
+                    JOIN MEMBER
+                  </span>
+                  <span
+                    style={{
+                      display: "block",
+                      fontFamily: SITE.font.serif,
+                      fontSize: "13px",
+                      letterSpacing: SITE.ls.loose,
+                      fontWeight: 500,
+                    }}
+                  >
+                    新規会員登録で 500pt プレゼント
+                  </span>
+                </span>
+                <span style={{ fontFamily: SITE.font.display, fontSize: "16px" }}>→</span>
+              </Link>
+            )}
 
             {/* CTAブロック */}
             <div
@@ -431,6 +545,9 @@ export default function SiteHeader() {
           .site-header-tel {
             display: inline-flex !important;
           }
+          .site-header-user {
+            display: inline-flex !important;
+          }
         }
         .site-header a:hover,
         .site-header button:hover {
@@ -441,3 +558,14 @@ export default function SiteHeader() {
     </>
   );
 }
+
+// ─── サブナビ共通スタイル ──────────────────────────────
+const subNavLinkStyle = {
+  padding: "12px 0",
+  color: SITE.color.textSub,
+  textDecoration: "none",
+  fontSize: "13px",
+  fontFamily: SITE.font.serif,
+  letterSpacing: SITE.ls.loose,
+  display: "block",
+} as const;

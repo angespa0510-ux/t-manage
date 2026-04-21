@@ -11,6 +11,7 @@ import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { isAdvanceEligible, runAutoSettlementIfDue, type StaffAdvance } from "../../lib/staff-advances";
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
+import EventsPanel from "../../components/EventsPanel";
 
 type Staff = { id: number; name: string; phone: string; email: string; role: string; address: string; transport_fee: number; id_photo_url: string; status: string; unit_price: number; pin: string; pin_updated_at: string | null; has_license: boolean; company_position: string; email_verified: boolean; email_token: string; id_doc_url: string; id_doc_name: string; id_doc_url_back: string; id_doc_name_back: string; license_number: string; oiri_bonus: number; night_start_time: string; night_end_time: string; night_unit_price: number; has_invoice: boolean; invoice_number: string; invoice_photo_url: string; has_withholding: boolean; override_is_manager: boolean | null; override_can_tax_portal: boolean | null; override_can_cash_dashboard: boolean | null; advance_preset_amount: number | null; real_name: string | null; entry_date: string | null };
 type Store = { id: number; name: string; invoice_number: string; company_name: string; company_address: string; company_phone: string; license_unit_price: number };
@@ -31,10 +32,10 @@ function StaffPageInner() {
   // URL ?tab=advances 等で初期タブを指定可能
   const initialTab = (() => {
     const t = searchParams?.get("tab");
-    if (t === "advances" || t === "permissions" || t === "schedule" || t === "oiri" || t === "license") return t;
+    if (t === "advances" || t === "permissions" || t === "schedule" || t === "oiri" || t === "license" || t === "events") return t;
     return "staff";
   })();
-  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "permissions" | "advances">(initialTab);
+  const [tab, setTab] = useState<"staff" | "schedule" | "oiri" | "license" | "permissions" | "advances" | "events">(initialTab);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
 
@@ -709,9 +710,9 @@ const openPaymentStatement = (sch: Schedule) => {
 
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(["staff", "permissions", "advances", "schedule", "oiri", "license"] as const).map(t => (
+          {(["staff", "permissions", "advances", "schedule", "oiri", "license", "events"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className="px-4 py-2 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: tab === t ? "#c3a78222" : T.cardAlt, color: tab === t ? "#c3a782" : T.textMuted, border: `1px solid ${tab === t ? "#c3a782" : T.border}`, fontWeight: tab === t ? 700 : 400 }}>
-              {t === "staff" ? "👥 スタッフ管理" : t === "permissions" ? "🔐 権限マトリクス" : t === "advances" ? "💸 前借り" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : "🚗 免許資格単価設定"}
+              {t === "staff" ? "👥 スタッフ管理" : t === "permissions" ? "🔐 権限マトリクス" : t === "advances" ? "💸 前借り" : t === "schedule" ? "📅 業務稼働予定" : t === "oiri" ? "🎉 大入り設定" : t === "license" ? "🚗 免許資格単価設定" : "🎁 イベント管理"}
             </button>
           ))}
         </div>
@@ -1426,6 +1427,11 @@ const openPaymentStatement = (sch: Schedule) => {
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>免許資格単価（全スタッフ共通）</label><div className="flex items-center gap-2"><input type="text" inputMode="numeric" value={licenseUnitPrice} onChange={(e) => setLicenseUnitPrice(e.target.value.replace(/[^0-9]/g, ""))} className="w-24 px-3 py-2.5 rounded-xl text-[12px] outline-none text-center" style={inputStyle} /><span className="text-[11px]" style={{ color: T.textMuted }}>円/ユニット（免許所持スタッフに加算）</span></div><p className="text-[9px] mt-1" style={{ color: T.textFaint }}>デフォルト: ¥50/u</p></div>
             <button onClick={async () => { if (!storeInfo) return; await supabase.from("stores").update({ license_unit_price: parseInt(licenseUnitPrice) || 50 }).eq("id", storeInfo.id); toast.show("免許資格単価を更新しました", "success"); fetchData(); }} className="px-6 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">保存する</button>
           </div>
+        )}
+
+        {/* ========== Tab: Events 🎁 ========== */}
+        {tab === "events" && (
+          <EventsPanel staffName={activeStaff?.name} />
         )}
 
       </div>

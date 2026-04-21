@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { SITE, MARBLE } from "../../lib/site-theme";
+import EventCarousel from "../../components/site/EventCarousel";
+import { useCustomerAuth, displayName } from "../../lib/customer-auth-context";
 
 /**
  * ═══════════════════════════════════════════════════════════
@@ -388,6 +390,16 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+
+      {/* ═══════════════════════════════════════════════
+          ①-b EVENTS カルーセル（ヒーロー直下・最優先）
+          ═══════════════════════════════════════════════ */}
+      <EventCarousel />
+
+      {/* ═══════════════════════════════════════════════
+          ①-c 会員登録CTA（未ログイン時のみ表示）
+          ═══════════════════════════════════════════════ */}
+      <MemberCtaBanner />
 
       {/* ═══════════════════════════════════════════════
           ② CONCEPT
@@ -843,6 +855,161 @@ export default function HomePage() {
 // ═══════════════════════════════════════════════════════════
 // サブコンポーネント
 // ═══════════════════════════════════════════════════════════
+
+/**
+ * 会員登録促進バナー
+ * 未ログイン時のみ表示。ヒーロー直下に配置される。
+ */
+function MemberCtaBanner() {
+  const { isLoggedIn, loading, customer } = useCustomerAuth();
+
+  if (loading) return null;
+
+  // ログイン済み：さりげなく「マイページへ」導線
+  if (isLoggedIn) {
+    return (
+      <section
+        style={{
+          background: SITE.color.bg,
+          padding: `${SITE.sp.xl} ${SITE.sp.lg}`,
+          borderBottom: `1px solid ${SITE.color.borderSoft}`,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: SITE.layout.maxWidth,
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <p
+              style={{
+                fontFamily: SITE.font.display,
+                fontSize: "10px",
+                letterSpacing: SITE.ls.wide,
+                color: SITE.color.pink,
+                marginBottom: 4,
+              }}
+            >
+              WELCOME BACK
+            </p>
+            <p
+              style={{
+                fontFamily: SITE.font.serif,
+                fontSize: "15px",
+                letterSpacing: SITE.ls.loose,
+                color: SITE.color.text,
+                margin: 0,
+              }}
+            >
+              {displayName(customer)}さま、いつもありがとうございます。
+            </p>
+          </div>
+          <Link
+            href="/customer-mypage"
+            style={{
+              padding: "12px 24px",
+              border: `1px solid ${SITE.color.pink}`,
+              color: SITE.color.pink,
+              textDecoration: "none",
+              fontFamily: SITE.font.serif,
+              fontSize: "12px",
+              letterSpacing: SITE.ls.loose,
+              transition: SITE.transition.fast,
+            }}
+            className="site-mypage-link"
+          >
+            会員ページへ →
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  // 未ログイン：会員登録CTA
+  return (
+    <section
+      style={{
+        background: SITE.color.pinkSoft,
+        padding: `${SITE.sp.xl} ${SITE.sp.lg}`,
+        borderBottom: `1px solid ${SITE.color.borderPink}`,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: SITE.layout.maxWidth,
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 20,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ flex: "1 1 260px" }}>
+          <p
+            style={{
+              fontFamily: SITE.font.display,
+              fontSize: "11px",
+              letterSpacing: SITE.ls.wide,
+              color: SITE.color.pinkDeep,
+              marginBottom: 6,
+            }}
+          >
+            JOIN MEMBER
+          </p>
+          <p
+            style={{
+              fontFamily: SITE.font.serif,
+              fontSize: "16px",
+              fontWeight: 500,
+              letterSpacing: SITE.ls.loose,
+              color: SITE.color.text,
+              margin: 0,
+              marginBottom: 6,
+            }}
+          >
+            今なら新規会員登録で <span style={{ color: SITE.color.pinkDeep, fontFamily: SITE.font.display, fontSize: "20px", fontWeight: 500 }}>500</span> ポイントプレゼント
+          </p>
+          <p
+            style={{
+              fontFamily: SITE.font.serif,
+              fontSize: "12px",
+              color: SITE.color.textSub,
+              letterSpacing: SITE.ls.loose,
+              margin: 0,
+            }}
+          >
+            次回のご予約時にすぐご利用いただけます。登録は 1 分で完了します。
+          </p>
+        </div>
+        <Link
+          href="/customer-mypage?register=1"
+          style={{
+            padding: "14px 28px",
+            background: SITE.color.pink,
+            color: "#ffffff",
+            textDecoration: "none",
+            fontFamily: SITE.font.serif,
+            fontSize: "13px",
+            letterSpacing: SITE.ls.loose,
+            fontWeight: 500,
+            transition: SITE.transition.fast,
+            whiteSpace: "nowrap",
+          }}
+          className="site-cta-primary"
+        >
+          会員登録する →
+        </Link>
+      </div>
+    </section>
+  );
+}
 
 function SectionBlock({
   label,

@@ -3,6 +3,7 @@ import { Noto_Serif_JP, Cormorant_Garamond } from "next/font/google";
 import { SITE } from "../../lib/site-theme";
 import SiteHeader from "../../components/site/SiteHeader";
 import SiteFooter from "../../components/site/SiteFooter";
+import { CustomerAuthProvider } from "../../lib/customer-auth-context";
 
 /**
  * Ange Spa 公式HP 共通レイアウト
@@ -48,25 +49,27 @@ export const metadata: Metadata = {
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className={`${serifJP.variable} ${cormorant.variable}`}
-      style={{
-        minHeight: "100vh",
-        backgroundColor: SITE.color.bg,
-        color: SITE.color.text,
-        fontFamily: SITE.font.serif,
-        fontSize: SITE.fs.body,
-        lineHeight: SITE.lh.body,
-        fontWeight: 400,
-        WebkitFontSmoothing: "antialiased",
-        MozOsxFontSmoothing: "grayscale",
-      }}
-    >
-      <SiteHeader />
+    <CustomerAuthProvider>
+      <div
+        className={`${serifJP.variable} ${cormorant.variable}`}
+        style={{
+          minHeight: "100vh",
+          backgroundColor: SITE.color.bg,
+          color: SITE.color.text,
+          fontFamily: SITE.font.serif,
+          fontSize: SITE.fs.body,
+          lineHeight: SITE.lh.body,
+          fontWeight: 400,
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+        }}
+      >
+        <SiteHeader />
 
-      <main style={{ paddingTop: SITE.layout.headerHeightSp }}>{children}</main>
+        <main style={{ paddingTop: SITE.layout.headerHeightSp }}>{children}</main>
 
-      <SiteFooter />
-    </div>
+        <SiteFooter />
+      </div>
+    </CustomerAuthProvider>
   );
 }
