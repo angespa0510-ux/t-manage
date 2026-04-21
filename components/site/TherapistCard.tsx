@@ -8,6 +8,10 @@ import { SITE } from "../../lib/site-theme";
  *
  * HOME / 一覧 / スケジュール等から使う共通カード。
  * 仕様 ■19/20 準拠（絵文字なし、明朝、細い罫線、影なし）
+ *
+ * インタラクション:
+ *  - NEWバッジはハート型(SVG)で、ふわふわ上下アニメ
+ *  - カードにマウスオーバーで、カード浮上 + 画像ズーム + 「VIEW PROFILE」オーバーレイ
  */
 export type TherapistCardData = {
   id: number;
@@ -86,7 +90,6 @@ export default function TherapistCard({
           aspectRatio: "3 / 4",
           position: "relative",
           backgroundColor: SITE.color.surfaceAlt,
-          transition: SITE.transition.base,
           overflow: "hidden",
         }}
       >
@@ -96,12 +99,13 @@ export default function TherapistCard({
           <img
             src={t.photo_url}
             alt={t.name}
+            className="site-therapist-photo"
             style={{
               width: "100%",
               height: "100%",
               objectFit: "cover",
               display: "block",
-              transition: SITE.transition.base,
+              transition: "transform 0.5s ease",
             }}
             loading="lazy"
           />
@@ -123,8 +127,126 @@ export default function TherapistCard({
           </div>
         )}
 
-        {/* バッジ */}
-        {(newBadge || pickup || statusLabel) && (
+        {/* ホバー時の「VIEW PROFILE」オーバーレイ */}
+        <div
+          className="site-card-overlay"
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(232, 132, 154, 0.78)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: 0,
+            transition: "opacity 0.35s ease",
+            pointerEvents: "none",
+            zIndex: 2,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              color: "#ffffff",
+              fontFamily: SITE.font.display,
+              letterSpacing: SITE.ls.wide,
+            }}
+          >
+            <span style={{ fontSize: "13px", fontWeight: 500 }}>VIEW PROFILE</span>
+            <span
+              style={{
+                marginTop: 8,
+                width: 28,
+                height: 1,
+                backgroundColor: "#ffffff",
+              }}
+            />
+            <span
+              style={{
+                marginTop: 8,
+                fontFamily: SITE.font.serif,
+                fontSize: "10px",
+                letterSpacing: SITE.ls.loose,
+              }}
+            >
+              プロフィールを見る
+            </span>
+          </div>
+        </div>
+
+        {/* NEW バッジ（ハート型、ふわふわ浮遊） */}
+        {newBadge && (
+          <div
+            className="site-new-badge"
+            style={{
+              position: "absolute",
+              top: t.catchphrase ? 32 : 8,
+              left: 8,
+              width: 56,
+              height: 54,
+              zIndex: 3,
+              pointerEvents: "none",
+            }}
+            aria-label="新人セラピスト"
+          >
+            {/* ハート形のSVG背景 */}
+            <svg
+              viewBox="0 0 56 54"
+              xmlns="http://www.w3.org/2000/svg"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                filter: "drop-shadow(0 3px 6px rgba(232, 132, 154, 0.35))",
+              }}
+            >
+              <path
+                fill={SITE.color.pink}
+                d="M28 49 C28 49 4 34 4 18 C4 10 10 4 17 4 C21 4 25 6 28 10 C31 6 35 4 39 4 C46 4 52 10 52 18 C52 34 28 49 28 49 Z"
+              />
+            </svg>
+            {/* 中央のテキスト */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffffff",
+                fontFamily: SITE.font.display,
+                paddingTop: 4,
+                lineHeight: 1.05,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                }}
+              >
+                NEW
+              </span>
+              <span
+                style={{
+                  fontSize: "7px",
+                  fontWeight: 500,
+                  letterSpacing: "0.06em",
+                  marginTop: 1,
+                }}
+              >
+                THERAPIST
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* その他のバッジ (PICK UP / statusLabel) */}
+        {(pickup || statusLabel) && (
           <div
             style={{
               position: "absolute",
@@ -133,23 +255,9 @@ export default function TherapistCard({
               display: "flex",
               gap: 4,
               flexWrap: "wrap",
+              zIndex: 3,
             }}
           >
-            {newBadge && (
-              <span
-                style={{
-                  padding: "3px 10px",
-                  backgroundColor: SITE.color.pink,
-                  color: "#ffffff",
-                  fontFamily: SITE.font.display,
-                  fontSize: "10px",
-                  letterSpacing: SITE.ls.wide,
-                  fontWeight: 500,
-                }}
-              >
-                NEW
-              </span>
-            )}
             {pickup && (
               <span
                 style={{
@@ -242,6 +350,54 @@ export default function TherapistCard({
           </div>
         )}
       </div>
+
+      {/* ホバー&アニメーション用CSS（グローバル） */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        @keyframes siteNewBadgeFloat {
+          0%, 100% { transform: translateY(0) rotate(-8deg); }
+          50% { transform: translateY(-5px) rotate(-8deg); }
+        }
+        @keyframes siteNewBadgeHeartbeat {
+          0%, 28%, 100% { transform: translateY(0) rotate(-8deg) scale(1); }
+          14% { transform: translateY(0) rotate(-8deg) scale(1.08); }
+          42% { transform: translateY(0) rotate(-8deg) scale(1.04); }
+        }
+        .site-new-badge {
+          animation: siteNewBadgeFloat 2.8s ease-in-out infinite;
+          transform-origin: center center;
+        }
+        .site-therapist-card {
+          transition: transform 0.35s ease, box-shadow 0.35s ease;
+        }
+        .site-therapist-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 14px 32px rgba(43, 43, 43, 0.08);
+        }
+        .site-therapist-card:hover .site-therapist-photo {
+          transform: scale(1.06);
+        }
+        .site-therapist-card:hover .site-card-overlay {
+          opacity: 1;
+        }
+        .site-therapist-card:hover .site-new-badge {
+          animation: siteNewBadgeHeartbeat 1.2s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .site-new-badge,
+          .site-therapist-card:hover .site-new-badge {
+            animation: none !important;
+          }
+          .site-therapist-card,
+          .site-therapist-photo,
+          .site-card-overlay {
+            transition: none !important;
+          }
+        }
+      `,
+        }}
+      />
     </Link>
   );
 }
