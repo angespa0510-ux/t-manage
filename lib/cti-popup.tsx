@@ -46,9 +46,28 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   const [minimized, setMinimized] = useState<Record<number, boolean>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // CTIを表示しないパス（セラピスト/お客様/法人サイト等）
+  // CTIを表示しないパス（セラピスト/お客様/法人サイト/公開HP等）
   const ctiDisabled = (() => {
     if (!pathname) return true; // 判定不能なら安全側で無効
+
+    // 公開HP（2026/04 Phase 1 で追加された HP × T-MANAGE 統合ページ群）
+    // /therapist（単数・公開一覧） と /therapists（複数・管理画面）が
+    // startsWith で衝突するため、完全一致 + "/" 付きプレフィックスで判定する。
+    const publicSitePaths = [
+      "/",            // HOME
+      "/system",      // 料金・コース
+      "/therapist",   // セラピスト一覧（/therapist/[id] 含む）
+      "/schedule",    // 出勤スケジュール
+      "/access",      // 店舗・アクセス
+      "/recruit",     // 求人
+      "/contact",     // お問い合わせ
+      "/staff-login", // スタッフログイン
+    ];
+    for (const p of publicSitePaths) {
+      if (pathname === p) return true;
+      if (p !== "/" && pathname.startsWith(p + "/")) return true;
+    }
+
     const noCtiPaths = [
       "/corporate",
       "/customer-mypage",
