@@ -22,7 +22,20 @@ type Therapist = {
   has_withholding: boolean;
   real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string; mynumber: string; mynumber_photo_url: string; mynumber_photo_url_back: string;
   deleted_at?: string | null;
+  // ─── 公開HP (Ange Spa ange-spa.com) 掲載用 ───
+  is_public?: boolean; bio?: string; catchphrase?: string; specialty?: string; message?: string;
+  tags?: string[]; body_type?: string; hair_style?: string; hair_color?: string;
+  sub_photo_urls?: string[]; blog_url?: string; twitter_url?: string; instagram_url?: string;
+  public_sort_order?: number; is_pickup?: boolean; is_newcomer?: boolean;
 };
+
+// ─── 公開HPで使うタイプタグ選択肢（現行HP準拠） ───
+const TYPE_TAGS = ["カワイイ系", "キレイ系", "ロリ系", "ギャル系", "セクシー系", "人妻系"];
+const PERSONALITY_TAGS = ["明るい", "おっとり", "癒し系", "甘えん坊", "天然", "恥ずかしがりや", "人懐っこい", "オタク", "上品", "小悪魔", "ツンデレ", "知的"];
+const FEATURE_TAGS = ["現役学生", "OL", "マッサージ上手", "外部講習済", "素人", "経験豊富", "色白", "喫煙しない", "PICK UP", "鼠径部", "サービス精神抜群"];
+const BODY_TYPES = ["", "モデル", "スレンダー", "標準", "グラマー", "ぽっちゃり"];
+const HAIR_STYLES = ["", "ショート", "ミディアム", "ロング"];
+const HAIR_COLORS = ["", "黒髪", "茶髪", "金髪", "派手髪"];
 
 export default function TherapistManagement() {
   const router = useRouter();
@@ -68,12 +81,30 @@ const [addLoginPassword, setAddLoginPassword] = useState("");
   const [editWelfareOrdersAmount, setEditWelfareOrdersAmount] = useState("0");
   const [editWelfarePayThreshold, setEditWelfarePayThreshold] = useState("0");
   const [editWelfarePayAmount, setEditWelfarePayAmount] = useState("0");
-  const [editTab, setEditTab] = useState<"basic" | "personal">("basic");
+  const [editTab, setEditTab] = useState<"basic" | "personal" | "public">("basic");
   const [editPinInput, setEditPinInput] = useState("");
   const [editPinAuthed, setEditPinAuthed] = useState(false);
   const [editPinError, setEditPinError] = useState("");
   // personal タブ表示中で未認証のとき、PIN入力をキーボード対応
   usePinKeyboard(!editPinAuthed && editTab === "personal");
+  // ─── 公開HP (Ange Spa) 用 state ───
+  const [editIsPublic, setEditIsPublic] = useState(false);
+  const [editBio, setEditBio] = useState("");
+  const [editCatchphrase, setEditCatchphrase] = useState("");
+  const [editSpecialty, setEditSpecialty] = useState("");
+  const [editPublicMessage, setEditPublicMessage] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editBodyType, setEditBodyType] = useState("");
+  const [editHairStyle, setEditHairStyle] = useState("");
+  const [editHairColor, setEditHairColor] = useState("");
+  const [editSubPhotoUrls, setEditSubPhotoUrls] = useState<string[]>([]);
+  const [editBlogUrl, setEditBlogUrl] = useState("");
+  const [editTwitterUrl, setEditTwitterUrl] = useState("");
+  const [editInstagramUrl, setEditInstagramUrl] = useState("");
+  const [editPublicSortOrder, setEditPublicSortOrder] = useState("0");
+  const [editIsPickup, setEditIsPickup] = useState(false);
+  const [editIsNewcomer, setEditIsNewcomer] = useState(false);
+  const [editSubPhotoFiles, setEditSubPhotoFiles] = useState<File[]>([]);
   const [editRealName, setEditRealName] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editHasInvoice, setEditHasInvoice] = useState(false);
@@ -440,6 +471,24 @@ const generatePassword = () => {
     setEditWelfareOrdersAmount(String((t as any).welfare_fee_orders_amount || 0));
     setEditWelfarePayThreshold(String((t as any).welfare_fee_pay_threshold || 0));
     setEditWelfarePayAmount(String((t as any).welfare_fee_pay_amount || 0));
+    // ─── 公開HP (Ange Spa) 用フィールド初期化 ───
+    setEditIsPublic(t.is_public || false);
+    setEditBio(t.bio || "");
+    setEditCatchphrase(t.catchphrase || "");
+    setEditSpecialty(t.specialty || "");
+    setEditPublicMessage(t.message || "");
+    setEditTags(Array.isArray(t.tags) ? t.tags : []);
+    setEditBodyType(t.body_type || "");
+    setEditHairStyle(t.hair_style || "");
+    setEditHairColor(t.hair_color || "");
+    setEditSubPhotoUrls(Array.isArray(t.sub_photo_urls) ? t.sub_photo_urls : []);
+    setEditBlogUrl(t.blog_url || "");
+    setEditTwitterUrl(t.twitter_url || "");
+    setEditInstagramUrl(t.instagram_url || "");
+    setEditPublicSortOrder(String(t.public_sort_order ?? 0));
+    setEditIsPickup(t.is_pickup || false);
+    setEditIsNewcomer(t.is_newcomer || false);
+    setEditSubPhotoFiles([]);
   };
 
   const handleUpdate = async () => {
@@ -447,6 +496,21 @@ const generatePassword = () => {
     setEditSaving(true); setEditMsg("");
     let photoUrl = editTarget.photo_url || "";
     if (editPhotoFile) { const url = await uploadPhoto(editPhotoFile, editTarget.id); if (url) photoUrl = url; }
+    // サブ写真アップロード（追加分のみ）
+    let finalSubPhotoUrls = [...editSubPhotoUrls];
+    if (editSubPhotoFiles.length > 0) {
+      const stamp = new Date().getTime();
+      for (let i = 0; i < editSubPhotoFiles.length; i++) {
+        const f = editSubPhotoFiles[i];
+        const ext = f.name.split(".").pop() || "jpg";
+        const fn = `therapist_sub_${editTarget.id}_${stamp}_${i}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("therapist-photos").upload(fn, f, { upsert: true });
+        if (!upErr) {
+          const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
+          if (u?.publicUrl) finalSubPhotoUrls.push(u.publicUrl);
+        }
+      }
+    }
     const { error } = await supabase.from("therapists").update({
       name: editName.trim(), phone: editPhone.trim(), status: editStatus,
       salary_type: editSalaryType, salary_amount: parseInt(editSalaryAmount) || 0,
@@ -464,6 +528,23 @@ const generatePassword = () => {
       welfare_fee_orders_amount: parseInt(editWelfareOrdersAmount) || 0,
       welfare_fee_pay_threshold: parseInt(editWelfarePayThreshold) || 0,
       welfare_fee_pay_amount: parseInt(editWelfarePayAmount) || 0,
+      // ─── 公開HP (Ange Spa) 用 ───
+      is_public: editIsPublic,
+      bio: editBio.trim(),
+      catchphrase: editCatchphrase.trim(),
+      specialty: editSpecialty.trim(),
+      message: editPublicMessage.trim(),
+      tags: editTags,
+      body_type: editBodyType,
+      hair_style: editHairStyle,
+      hair_color: editHairColor,
+      sub_photo_urls: finalSubPhotoUrls,
+      blog_url: editBlogUrl.trim(),
+      twitter_url: editTwitterUrl.trim(),
+      instagram_url: editInstagramUrl.trim(),
+      public_sort_order: parseInt(editPublicSortOrder) || 0,
+      is_pickup: editIsPickup,
+      is_newcomer: editIsNewcomer,
       ...(editEmail.trim() !== (editTarget.email || "") ? { email_verified: false, email_token: crypto.randomUUID() } : {}),
     }).eq("id", editTarget.id);
     setEditSaving(false);
@@ -852,6 +933,7 @@ const generatePassword = () => {
             <div className="flex gap-2 mb-5">
               <button onClick={() => setEditTab("basic")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editTab === "basic" ? "#c3a78222" : T.cardAlt, color: editTab === "basic" ? "#c3a782" : T.textMuted, border: `1px solid ${editTab === "basic" ? "#c3a78244" : T.border}`, fontWeight: editTab === "basic" ? 700 : 400 }}>① 基本情報</button>
               <button onClick={() => setEditTab("personal")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editTab === "personal" ? "#85a8c422" : T.cardAlt, color: editTab === "personal" ? "#85a8c4" : T.textMuted, border: `1px solid ${editTab === "personal" ? "#85a8c444" : T.border}`, fontWeight: editTab === "personal" ? 700 : 400 }}>② 個人情報 🔒</button>
+              <button onClick={() => setEditTab("public")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editTab === "public" ? "#e8849a22" : T.cardAlt, color: editTab === "public" ? "#e8849a" : T.textMuted, border: `1px solid ${editTab === "public" ? "#e8849a66" : T.border}`, fontWeight: editTab === "public" ? 700 : 400 }}>③ 公開HP 🌸</button>
             </div>
 
             {editTab === "basic" && (
@@ -1080,6 +1162,193 @@ const generatePassword = () => {
                       {editTarget?.license_photo_url_back && <a href={editTarget.license_photo_url_back} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mb-1.5 px-2 py-1 rounded-lg" style={{ backgroundColor: "#85a8c412", border: "1px solid #85a8c433" }}><img src={editTarget.license_photo_url_back} alt="免許証裏面" className="rounded" style={{ width: 60, height: 38, objectFit: "cover" }} /><span className="text-[9px]" style={{ color: "#85a8c4" }}>📄 裏面を表示</span></a>}
                       <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 裏面を選択<input type="file" accept="image/*" onChange={(e) => setEditLicensePhotoBack(e.target.files?.[0] || null)} className="hidden" /></label>
                       {editLicensePhotoBack && <div className="flex items-center gap-2 mt-1"><span className="text-[9px]" style={{ color: "#22c55e" }}>✅ {editLicensePhotoBack.name}</span><button onClick={async () => { if (!editTarget || !editLicensePhotoBack) return; const ext = editLicensePhotoBack.name.split(".").pop(); const now = new Date(); const ds = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`; const fn = `therapist_license_back_${editTarget.id}_${ds}.${ext}`; await supabase.storage.from("therapist-photos").upload(fn, editLicensePhotoBack, { upsert: true }); const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn); await supabase.from("therapists").update({ license_photo_url_back: u.publicUrl }).eq("id", editTarget.id); setEditLicensePhotoBack(null); fetchTherapists(); toast.show("免許証（裏面）を保存しました", "success"); }} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 保存</button></div>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {editTab === "public" && (
+              <div className="space-y-4">
+                {/* 公開/非公開トグル（最重要） */}
+                <div className="rounded-xl p-4" style={{ backgroundColor: editIsPublic ? "#e8849a15" : T.cardAlt, border: `1px solid ${editIsPublic ? "#e8849a55" : T.border}` }}>
+                  <button type="button" onClick={() => setEditIsPublic(!editIsPublic)} className="w-full flex items-center justify-between cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[22px]">{editIsPublic ? "🌸" : "🔒"}</span>
+                      <div className="text-left">
+                        <div className="text-[13px] font-medium" style={{ color: editIsPublic ? "#e8849a" : T.text }}>
+                          {editIsPublic ? "公式HPに掲載中" : "公式HPに非掲載"}
+                        </div>
+                        <div className="text-[10px]" style={{ color: T.textMuted }}>
+                          {editIsPublic ? "Ange Spa 公式サイトで表示されています" : "タップして公開"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-11 h-6 rounded-full relative" style={{ backgroundColor: editIsPublic ? "#e8849a" : T.border }}>
+                      <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all" style={{ left: editIsPublic ? "22px" : "2px" }} />
+                    </div>
+                  </button>
+                </div>
+
+                {/* キャッチコピー */}
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🏷 キャッチコピー <span className="text-[9px]" style={{ color: T.textMuted }}>（一覧カードの上に帯で表示）</span></label>
+                  <input type="text" value={editCatchphrase} onChange={(e) => setEditCatchphrase(e.target.value)} placeholder="♡ 高リピート率 ♡" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>例: 「▷確変中◁正直やり過ぎました割適応！」「☆ 指名数上昇中 ☆」</p>
+                </div>
+
+                {/* 自己紹介 */}
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💬 自己紹介文</label>
+                  <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} rows={5} placeholder="はじめまして✨ &#13;&#10;皆さまの日頃の疲れを癒す、お手伝いが出来たら嬉しいです♪" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} />
+                  <p className="text-[9px] mt-1 text-right" style={{ color: T.textMuted }}>{editBio.length} 文字</p>
+                </div>
+
+                {/* 得意な施術 */}
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💆 得意な施術・コース</label>
+                  <input type="text" value={editSpecialty} onChange={(e) => setEditSpecialty(e.target.value)} placeholder="アロマ / リンパ / ディープティシュー 等" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                </div>
+
+                {/* お客様メッセージ */}
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💌 お客様へのメッセージ</label>
+                  <textarea value={editPublicMessage} onChange={(e) => setEditPublicMessage(e.target.value)} rows={3} placeholder="会いに来てくださったら嬉しいです♡" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} />
+                </div>
+
+                {/* タイプタグ */}
+                <div>
+                  <label className="block text-[11px] mb-2" style={{ color: T.textSub }}>🎀 タイプ <span className="text-[9px]" style={{ color: T.textMuted }}>（複数選択可）</span></label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TYPE_TAGS.map((tag) => {
+                      const on = editTags.includes(tag);
+                      return (
+                        <button key={tag} type="button" onClick={() => setEditTags(on ? editTags.filter((t) => t !== tag) : [...editTags, tag])} className="px-3 py-1.5 rounded-full text-[11px] cursor-pointer transition-all" style={{ backgroundColor: on ? "#e8849a22" : T.cardAlt, color: on ? "#e8849a" : T.textMuted, border: `1px solid ${on ? "#e8849a66" : T.border}` }}>
+                          {on ? "✓ " : ""}{tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 性格タグ */}
+                <div>
+                  <label className="block text-[11px] mb-2" style={{ color: T.textSub }}>💗 性格</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PERSONALITY_TAGS.map((tag) => {
+                      const on = editTags.includes(tag);
+                      return (
+                        <button key={tag} type="button" onClick={() => setEditTags(on ? editTags.filter((t) => t !== tag) : [...editTags, tag])} className="px-3 py-1.5 rounded-full text-[11px] cursor-pointer transition-all" style={{ backgroundColor: on ? "#c3a78222" : T.cardAlt, color: on ? "#c3a782" : T.textMuted, border: `1px solid ${on ? "#c3a78266" : T.border}` }}>
+                          {on ? "✓ " : ""}{tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 特徴タグ */}
+                <div>
+                  <label className="block text-[11px] mb-2" style={{ color: T.textSub }}>✨ 特徴・PR</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {FEATURE_TAGS.map((tag) => {
+                      const on = editTags.includes(tag);
+                      return (
+                        <button key={tag} type="button" onClick={() => setEditTags(on ? editTags.filter((t) => t !== tag) : [...editTags, tag])} className="px-3 py-1.5 rounded-full text-[11px] cursor-pointer transition-all" style={{ backgroundColor: on ? "#85a8c422" : T.cardAlt, color: on ? "#85a8c4" : T.textMuted, border: `1px solid ${on ? "#85a8c466" : T.border}` }}>
+                          {on ? "✓ " : ""}{tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 体型・髪型・髪色 */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>👗 体型</label>
+                    <select value={editBodyType} onChange={(e) => setEditBodyType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                      {BODY_TYPES.map((v) => <option key={v} value={v}>{v || "（未設定）"}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💇 髪型</label>
+                    <select value={editHairStyle} onChange={(e) => setEditHairStyle(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                      {HAIR_STYLES.map((v) => <option key={v} value={v}>{v || "（未設定）"}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🎨 髪色</label>
+                    <select value={editHairColor} onChange={(e) => setEditHairColor(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>
+                      {HAIR_COLORS.map((v) => <option key={v} value={v}>{v || "（未設定）"}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* サブ写真ギャラリー */}
+                <div>
+                  <label className="block text-[11px] mb-2" style={{ color: T.textSub }}>📸 サブ写真 <span className="text-[9px]" style={{ color: T.textMuted }}>（詳細ページでギャラリー表示）</span></label>
+                  <div className="grid grid-cols-4 gap-2 mb-2">
+                    {editSubPhotoUrls.map((url, i) => (
+                      <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden border" style={{ borderColor: T.border }}>
+                        <img src={url} alt={`sub-${i}`} className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => setEditSubPhotoUrls(editSubPhotoUrls.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
+                      </div>
+                    ))}
+                    {editSubPhotoFiles.map((f, i) => (
+                      <div key={`new-${i}`} className="relative aspect-[3/4] rounded-lg overflow-hidden border" style={{ borderColor: "#e8849a66", backgroundColor: "#e8849a08" }}>
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-1">
+                          <span className="text-[16px]">📸</span>
+                          <span className="text-[8px] text-center leading-tight truncate w-full" style={{ color: "#e8849a" }}>{f.name}</span>
+                        </div>
+                        <button type="button" onClick={() => setEditSubPhotoFiles(editSubPhotoFiles.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
+                      </div>
+                    ))}
+                    <label className="aspect-[3/4] rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-all hover:bg-white/5" style={{ borderColor: T.border }}>
+                      <span className="text-[20px]">＋</span>
+                      <span className="text-[9px]" style={{ color: T.textMuted }}>追加</span>
+                      <input type="file" accept="image/*" multiple onChange={(e) => { const files = Array.from(e.target.files || []); setEditSubPhotoFiles([...editSubPhotoFiles, ...files]); }} className="hidden" />
+                    </label>
+                  </div>
+                  {editSubPhotoFiles.length > 0 && <p className="text-[9px]" style={{ color: "#e8849a" }}>📸 {editSubPhotoFiles.length}件が「更新する」押下時にアップロードされます</p>}
+                </div>
+
+                {/* SNS・ブログリンク */}
+                <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <label className="block text-[11px] mb-2 font-medium" style={{ color: T.textSub }}>🔗 外部リンク</label>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>📝 写メ日記 URL</label>
+                      <input type="url" value={editBlogUrl} onChange={(e) => setEditBlogUrl(e.target.value)} placeholder="https://ranking-deli.jp/..." className="w-full px-3 py-2 rounded-lg text-[11px] outline-none" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>🐦 Twitter / X URL</label>
+                      <input type="url" value={editTwitterUrl} onChange={(e) => setEditTwitterUrl(e.target.value)} placeholder="https://twitter.com/..." className="w-full px-3 py-2 rounded-lg text-[11px] outline-none" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] mb-0.5" style={{ color: T.textMuted }}>📷 Instagram URL</label>
+                      <input type="url" value={editInstagramUrl} onChange={(e) => setEditInstagramUrl(e.target.value)} placeholder="https://instagram.com/..." className="w-full px-3 py-2 rounded-lg text-[11px] outline-none" style={inputStyle} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 公開設定（ソート順・PICK UP・新人） */}
+                <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <label className="block text-[11px] mb-2 font-medium" style={{ color: T.textSub }}>⚙️ 公開設定</label>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px]" style={{ color: T.text }}>🏆 PICK UP（TOP掲載）</label>
+                      <button type="button" onClick={() => setEditIsPickup(!editIsPickup)} className="w-10 h-5 rounded-full relative cursor-pointer" style={{ backgroundColor: editIsPickup ? "#e8849a" : T.border }}>
+                        <div className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all" style={{ left: editIsPickup ? "22px" : "2px" }} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px]" style={{ color: T.text }}>🌟 NEW バッジ強制表示</label>
+                      <button type="button" onClick={() => setEditIsNewcomer(!editIsNewcomer)} className="w-10 h-5 rounded-full relative cursor-pointer" style={{ backgroundColor: editIsNewcomer ? "#e8849a" : T.border }}>
+                        <div className="w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all" style={{ left: editIsNewcomer ? "22px" : "2px" }} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-[11px] flex-1" style={{ color: T.text }}>📊 表示順<span className="text-[9px] ml-1" style={{ color: T.textMuted }}>（小さい順に表示）</span></label>
+                      <input type="number" value={editPublicSortOrder} onChange={(e) => setEditPublicSortOrder(e.target.value)} className="w-20 px-2 py-1.5 rounded-lg text-[11px] outline-none text-right" style={inputStyle} />
                     </div>
                   </div>
                 </div>
