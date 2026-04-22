@@ -74,14 +74,13 @@ export default function PushToggle({ userType, userId, className = "" }: Props) 
   if (!supported) {
     return (
       <div
-        className={`rounded-xl p-3 ${className}`}
-        style={{ backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}
+        className={className}
+        style={{ padding: "12px 14px", backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}
       >
-        <p className="text-[11px] mb-2">⚠️ このブラウザは通知に対応していません</p>
+        <p style={{ margin: "0 0 8px", fontSize: 11, letterSpacing: "0.02em", lineHeight: 1.7 }}>⚠️ このブラウザは通知に対応していません</p>
         <Link
           href="/install-guide"
-          className="block text-center rounded-lg px-3 py-2 text-[11px] font-medium cursor-pointer"
-          style={{ backgroundColor: "#c3a782", color: "#ffffff", textDecoration: "none" }}
+          style={{ display: "block", textAlign: "center", padding: "8px 12px", fontSize: 11, fontWeight: 500, cursor: "pointer", backgroundColor: "#c96b83", color: "#ffffff", textDecoration: "none", letterSpacing: "0.08em" }}
         >
           📱 ホーム画面に追加してアプリとして使う →
         </Link>
@@ -93,10 +92,10 @@ export default function PushToggle({ userType, userId, className = "" }: Props) 
   if (isIos && !standalone) {
     return (
       <div
-        className={`rounded-xl p-3 ${className}`}
-        style={{ backgroundColor: "rgba(133,168,196,0.08)", color: T.text, border: `1px solid #85a8c4` }}
+        className={className}
+        style={{ padding: "12px 14px", backgroundColor: "rgba(107,139,168,0.08)", color: T.text, border: `1px solid #6b8ba8` }}
       >
-        <p className="text-[11px] mb-2">
+        <p style={{ margin: "0 0 10px", fontSize: 11, letterSpacing: "0.02em", lineHeight: 1.8 }}>
           📱 iPhoneで通知を受け取るには、<br />
           ① 下部の「共有」ボタンをタップ<br />
           ② 「ホーム画面に追加」を選択<br />
@@ -104,8 +103,7 @@ export default function PushToggle({ userType, userId, className = "" }: Props) 
         </p>
         <Link
           href="/install-guide"
-          className="block text-center rounded-lg px-3 py-2 text-[11px] font-medium cursor-pointer"
-          style={{ backgroundColor: "#85a8c4", color: "#ffffff", textDecoration: "none" }}
+          style={{ display: "block", textAlign: "center", padding: "8px 12px", fontSize: 11, fontWeight: 500, cursor: "pointer", backgroundColor: "#6b8ba8", color: "#ffffff", textDecoration: "none", letterSpacing: "0.08em" }}
         >
           📖 詳しい手順を見る →
         </Link>
@@ -117,8 +115,8 @@ export default function PushToggle({ userType, userId, className = "" }: Props) 
   if (permission === "denied") {
     return (
       <div
-        className={`rounded-xl p-3 text-[11px] ${className}`}
-        style={{ backgroundColor: "rgba(196,85,85,0.08)", color: "#c45555", border: `1px solid #c45555` }}
+        className={className}
+        style={{ padding: "12px 14px", fontSize: 11, backgroundColor: "rgba(201,107,131,0.08)", color: "#c96b83", border: `1px solid #c96b83`, letterSpacing: "0.02em", lineHeight: 1.8 }}
       >
         🔕 通知がブロックされています。<br />
         ブラウザ設定から「通知を許可」に変更してください
@@ -130,16 +128,18 @@ export default function PushToggle({ userType, userId, className = "" }: Props) 
     <button
       onClick={handleToggle}
       disabled={loading}
-      className={`rounded-xl px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-all ${className}`}
+      className={className}
       style={{
+        padding: "10px 16px", fontSize: 12, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.2s",
         backgroundColor: subscribed ? T.accent : T.card,
         color: subscribed ? "#ffffff" : T.text,
         border: `1px solid ${subscribed ? T.accent : T.border}`,
         opacity: loading ? 0.5 : 1,
+        letterSpacing: "0.08em",
       }}
     >
       {loading
-        ? "⏳ 処理中..."
+        ? "⏳ 処理中…"
         : subscribed
         ? "🔔 通知オン（タップで無効化）"
         : "🔕 通知をオンにする"}

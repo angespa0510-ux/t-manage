@@ -74,39 +74,46 @@ export default function InstallPrompt({ dismissKey }: Props) {
 
   if (!show) return null;
 
+  const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+  const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)", animation: "fadeIn 0.3s" }}
+      style={{ backgroundColor: "rgba(43,43,43,0.55)", animation: "fadeIn 0.3s", fontFamily: FONT_SERIF }}
       onClick={() => dismiss(false)}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-[440px] rounded-3xl p-6 animate-[slideUp_0.3s]"
-        style={{ backgroundColor: "#ffffff", boxShadow: "0 -8px 32px rgba(0,0,0,0.2)" }}
+        className="w-full max-w-[420px] animate-[slideUp_0.3s]"
+        style={{ backgroundColor: "#ffffff", border: "1px solid #e5ded6", padding: "28px 24px", color: "#2b2b2b" }}
       >
         {/* ヘッダー */}
-        <div className="text-center mb-5">
-          <div className="text-[40px] mb-2">📱</div>
-          <p className="text-[16px] font-medium" style={{ color: "#2c2c2a" }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ width: 1, height: 24, backgroundColor: "#e8849a", margin: "0 auto 12px" }} />
+          <div style={{ fontSize: 36, marginBottom: 8 }}>📱</div>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: "#c96b83", fontWeight: 500 }}>INSTALL</p>
+          <p style={{ margin: "6px 0 4px", fontSize: 15, fontWeight: 500, color: "#2b2b2b", letterSpacing: "0.1em" }}>
             T-MANAGE をアプリとして使う
           </p>
-          <p className="text-[11px] mt-1" style={{ color: "#888780" }}>
+          <div style={{ width: 24, height: 1, backgroundColor: "#e8849a", margin: "0 auto 8px" }} />
+          <p style={{ margin: 0, fontSize: 11, color: "#8a8a8a", letterSpacing: "0.08em" }}>
             ホーム画面に追加すると便利です
           </p>
         </div>
 
         {/* メリット */}
-        <div className="rounded-2xl p-4 mb-4" style={{ backgroundColor: "#f8f6f3" }}>
-          <div className="space-y-2">
+        <div style={{ padding: "14px 16px", marginBottom: 14, backgroundColor: "#faf6f1", border: "1px solid #e5ded6" }}>
+          <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>BENEFITS</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {[
               { icon: "🔔", text: "プッシュ通知でお知らせを受信" },
               { icon: "⚡", text: "アプリのように素早く起動" },
               { icon: "🏠", text: "毎回ログインしなくてOK" },
             ].map((b, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="text-[16px]">{b.icon}</span>
-                <p className="text-[12px]" style={{ color: "#2c2c2a" }}>{b.text}</p>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 15 }}>{b.icon}</span>
+                <p style={{ margin: 0, fontSize: 12, color: "#2b2b2b", letterSpacing: "0.03em" }}>{b.text}</p>
               </div>
             ))}
           </div>
@@ -114,11 +121,10 @@ export default function InstallPrompt({ dismissKey }: Props) {
 
         {/* プラットフォーム別の簡潔なガイド */}
         {platform === "ios" && (
-          <div className="rounded-xl p-3 mb-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78244" }}>
-            <p className="text-[11px] mb-2 font-medium" style={{ color: "#c3a782" }}>
-              📱 iPhone での手順（Safari で）
-            </p>
-            <ol className="text-[11px] space-y-1 pl-4 list-decimal" style={{ color: "#555" }}>
+          <div style={{ padding: "12px 14px", marginBottom: 14, backgroundColor: "transparent", border: "1px solid #e8849a" }}>
+            <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>iOS</p>
+            <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 500, color: "#2b2b2b", letterSpacing: "0.03em" }}>📱 iPhone（Safari で）</p>
+            <ol style={{ fontSize: 11, display: "flex", flexDirection: "column", gap: 3, paddingLeft: 18, margin: 0, color: "#555555", letterSpacing: "0.02em", lineHeight: 1.7 }}>
               <li>画面下部の共有ボタンをタップ</li>
               <li>「ホーム画面に追加」を選択</li>
               <li>「追加」をタップ</li>
@@ -128,11 +134,10 @@ export default function InstallPrompt({ dismissKey }: Props) {
         )}
 
         {platform === "android" && (
-          <div className="rounded-xl p-3 mb-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78244" }}>
-            <p className="text-[11px] mb-2 font-medium" style={{ color: "#c3a782" }}>
-              🤖 Android での手順（Chrome で）
-            </p>
-            <ol className="text-[11px] space-y-1 pl-4 list-decimal" style={{ color: "#555" }}>
+          <div style={{ padding: "12px 14px", marginBottom: 14, backgroundColor: "transparent", border: "1px solid #e8849a" }}>
+            <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>ANDROID</p>
+            <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 500, color: "#2b2b2b", letterSpacing: "0.03em" }}>🤖 Android（Chrome で）</p>
+            <ol style={{ fontSize: 11, display: "flex", flexDirection: "column", gap: 3, paddingLeft: 18, margin: 0, color: "#555555", letterSpacing: "0.02em", lineHeight: 1.7 }}>
               <li>画面右上の「⋮」メニューをタップ</li>
               <li>「ホーム画面に追加」を選択</li>
               <li>「追加」をタップ</li>
@@ -142,25 +147,22 @@ export default function InstallPrompt({ dismissKey }: Props) {
         )}
 
         {/* アクションボタン */}
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <a
             href="/install-guide"
-            className="block w-full py-3 rounded-xl text-[12px] font-medium text-center text-white cursor-pointer"
-            style={{ background: "linear-gradient(135deg, #c3a782, #b09672)" }}
+            style={{ display: "block", width: "100%", padding: "12px 0", fontSize: 12, fontWeight: 500, letterSpacing: "0.2em", textAlign: "center", color: "#ffffff", cursor: "pointer", backgroundColor: "#c96b83", textDecoration: "none", fontFamily: FONT_SERIF }}
           >
             📖 詳しい手順を見る
           </a>
           <button
             onClick={() => dismiss(false)}
-            className="w-full py-2.5 rounded-xl text-[11px] cursor-pointer"
-            style={{ color: "#888780", backgroundColor: "transparent", border: "1px solid #e8e4df" }}
+            style={{ width: "100%", padding: "10px 0", fontSize: 11, cursor: "pointer", color: "#8a8a8a", backgroundColor: "transparent", border: "1px solid #e5ded6", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}
           >
             あとで
           </button>
           <button
             onClick={() => dismiss(true)}
-            className="w-full py-1 text-[10px] cursor-pointer"
-            style={{ color: "#b4b2a9", background: "transparent", border: "none" }}
+            style={{ width: "100%", padding: "6px 0", fontSize: 10, cursor: "pointer", color: "#b5b5b5", backgroundColor: "transparent", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}
           >
             今後表示しない
           </button>
@@ -171,6 +173,10 @@ export default function InstallPrompt({ dismissKey }: Props) {
         @keyframes slideUp {
           from { opacity: 0; transform: translateY(40px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
       `}</style>
     </div>
