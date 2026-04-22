@@ -35,6 +35,7 @@ const T = {
   textFaint:  SITE.color.textFaint,  // #b5b5b5
   accent:     SITE.color.pink,       // #e8849a
   accentBg:   SITE.color.pinkSoft,   // #f7e3e7
+  accentDeep: SITE.color.pinkDeep,   // #c96b83
 } as const;
 
 // メインタブ（ボトムナビ4つ） / サブセグメント
@@ -2087,86 +2088,93 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
         const dateLabel = `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日（${days[dt.getDay()]}）`;
 
         return (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setCalDetailDate(null)}>
-            <div className="rounded-2xl border p-5 w-full max-w-md max-h-[85vh] overflow-y-auto" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[15px] font-medium">📅 {dateLabel}</h3>
-                <button onClick={() => setCalDetailDate(null)} className="text-[14px] cursor-pointer p-1" style={{ color: T.textSub, background: "none", border: "none" }}>✕</button>
+          <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setCalDetailDate(null)}>
+            <div style={{ width: "100%", maxWidth: 460, maxHeight: "85vh", overflowY: "auto", padding: 22, backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
+              {/* ヘッダー */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+                <div>
+                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>DAILY DETAIL</p>
+                  <h3 style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>📅 {dateLabel}</h3>
+                </div>
+                <button onClick={() => setCalDetailDate(null)} style={{ width: 28, height: 28, fontSize: 13, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
               </div>
 
               {/* 出勤情報 */}
               {dShift ? (
-                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#e091a810", border: "1px solid #e091a830" }}>
-                  <p className="text-[10px] font-medium mb-1" style={{ color: "#e091a8" }}>⏰ 出勤</p>
-                  <p className="text-[14px] font-medium">{dShift.start_time?.slice(0,5)} 〜 {dShift.end_time?.slice(0,5)}</p>
-                  {dShift.store_id > 0 && <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>{getStoreName(dShift.store_id)}</p>}
+                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.accentBg, border: `1px solid ${T.accent}44` }}>
+                  <p style={{ margin: "0 0 4px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>⏰ SHIFT</p>
+                  <p style={{ margin: 0, fontFamily: FONT_SANS, fontSize: 16, fontWeight: 500, color: T.text }}>{dShift.start_time?.slice(0,5)} — {dShift.end_time?.slice(0,5)}</p>
+                  {dShift.store_id > 0 && <p style={{ margin: "3px 0 0", fontSize: 11, color: T.textMuted, letterSpacing: "0.03em" }}>{getStoreName(dShift.store_id)}</p>}
                 </div>
               ) : (
-                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[11px]" style={{ color: T.textFaint }}>出勤予定なし</p>
+                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <p style={{ margin: 0, fontSize: 11, color: T.textFaint, letterSpacing: "0.05em" }}>出勤予定なし</p>
                 </div>
               )}
 
               {/* 給料明細 */}
               {dSettlement ? (
-                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#e8849a10", border: "1px solid #e8849a30" }}>
-                  <p className="text-[10px] font-medium mb-2" style={{ color: "#e8849a" }}>💰 清算明細</p>
-                  <div className="space-y-1 text-[11px]">
-                    <div className="flex justify-between"><span>接客数</span><span className="font-medium">{dSettlement.order_count}件</span></div>
-                    <div className="flex justify-between"><span>売上合計</span><span>{fmt(dSettlement.total_sales)}</span></div>
-                    <div className="flex justify-between"><span>バック合計</span><span>{fmt(dSettlement.total_back)}</span></div>
-                    {dSettlement.adjustment !== 0 && <div className="flex justify-between" style={{ color: dSettlement.adjustment > 0 ? "#22c55e" : "#c45555" }}><span>調整金{dSettlement.adjustment_note ? `（${dSettlement.adjustment_note}）` : ""}</span><span>{dSettlement.adjustment > 0 ? "+" : ""}{fmt(dSettlement.adjustment)}</span></div>}
-                    {dSettlement.invoice_deduction > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>インボイス控除</span><span>-{fmt(dSettlement.invoice_deduction)}</span></div>}
-                    {dSettlement.withholding_tax > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>源泉徴収</span><span>-{fmt(dSettlement.withholding_tax)}</span></div>}
-                    {dSettlement.welfare_fee > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>備品・リネン代</span><span>-{fmt(dSettlement.welfare_fee)}</span></div>}
-                    {dSettlement.transport_fee > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>交通費（実費精算）</span><span>+{fmt(dSettlement.transport_fee)}</span></div>}
-                    <div className="flex justify-between pt-1.5 font-bold text-[13px]" style={{ borderTop: `1px solid #e8849a30`, color: "#e8849a" }}><span>支給額</span><span>{fmt(dSettlement.final_payment)}</span></div>
-                    <div className="flex items-center gap-3 pt-1 text-[9px]" style={{ color: T.textMuted }}>
-                      <span>💴現金 {fmt(dSettlement.total_cash)}</span>
-                      {dSettlement.total_card > 0 && <span>💳カード {fmt(dSettlement.total_card)}</span>}
-                      {dSettlement.total_paypay > 0 && <span>📱PayPay {fmt(dSettlement.total_paypay)}</span>}
+                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.card, border: `1px solid ${T.accent}44` }}>
+                  <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>💰 SETTLEMENT</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>接客数</span><span style={{ fontFamily: FONT_SANS, fontWeight: 500 }}>{dSettlement.order_count} 件</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>売上合計</span><span style={{ fontFamily: FONT_SANS }}>{fmt(dSettlement.total_sales)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>バック合計</span><span style={{ fontFamily: FONT_SANS }}>{fmt(dSettlement.total_back)}</span></div>
+                    {dSettlement.adjustment !== 0 && <div style={{ display: "flex", justifyContent: "space-between", color: dSettlement.adjustment > 0 ? "#6b9b7e" : "#c96b83", letterSpacing: "0.02em" }}><span>調整金{dSettlement.adjustment_note ? `（${dSettlement.adjustment_note}）` : ""}</span><span style={{ fontFamily: FONT_SANS }}>{dSettlement.adjustment > 0 ? "+" : ""}{fmt(dSettlement.adjustment)}</span></div>}
+                    {dSettlement.invoice_deduction > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", letterSpacing: "0.02em" }}><span>インボイス控除</span><span style={{ fontFamily: FONT_SANS }}>−{fmt(dSettlement.invoice_deduction)}</span></div>}
+                    {dSettlement.withholding_tax > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", letterSpacing: "0.02em" }}><span>源泉徴収</span><span style={{ fontFamily: FONT_SANS }}>−{fmt(dSettlement.withholding_tax)}</span></div>}
+                    {dSettlement.welfare_fee > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", letterSpacing: "0.02em" }}><span>備品・リネン代</span><span style={{ fontFamily: FONT_SANS }}>−{fmt(dSettlement.welfare_fee)}</span></div>}
+                    {dSettlement.transport_fee > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#6b9b7e", letterSpacing: "0.02em" }}><span>交通費（実費精算）</span><span style={{ fontFamily: FONT_SANS }}>+{fmt(dSettlement.transport_fee)}</span></div>}
+                    <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, marginTop: 4, borderTop: `1px solid ${T.accent}44`, color: T.accent }}>
+                      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", fontWeight: 500, alignSelf: "center" }}>PAYMENT</span>
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 18, fontWeight: 500 }}>{fmt(dSettlement.final_payment)}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 4, fontSize: 9, color: T.textMuted, letterSpacing: "0.02em", fontFamily: FONT_SANS }}>
+                      <span>💴 現金 {fmt(dSettlement.total_cash)}</span>
+                      {dSettlement.total_card > 0 && <span>💳 カード {fmt(dSettlement.total_card)}</span>}
+                      {dSettlement.total_paypay > 0 && <span>📱 PayPay {fmt(dSettlement.total_paypay)}</span>}
                     </div>
                   </div>
                 </div>
               ) : dShift && calDetailDate < today ? (
-                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "#f59e0b10", border: "1px solid #f59e0b30" }}>
-                  <p className="text-[11px] font-medium" style={{ color: "#f59e0b" }}>⚠ 未清算</p>
+                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: "rgba(179,132,25,0.06)", border: `1px solid #b3841944` }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: "#b38419", letterSpacing: "0.05em" }}>⚠ 未清算</p>
                 </div>
               ) : null}
 
               {/* お客様情報 */}
               {dRes.length > 0 ? (
-                <div className="rounded-xl border overflow-hidden mb-3" style={{ borderColor: T.border }}>
-                  <div className="px-3 py-2" style={{ backgroundColor: T.cardAlt }}>
-                    <p className="text-[10px] font-medium" style={{ color: "#22c55e" }}>👤 接客情報（{dRes.length}件）</p>
+                <div style={{ border: `1px solid ${T.border}`, overflow: "hidden", marginBottom: 12 }}>
+                  <div style={{ padding: "8px 14px", backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
+                    <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#6b9b7e", fontWeight: 500 }}>👤 CUSTOMERS <span style={{ fontFamily: FONT_SANS, letterSpacing: 0, marginLeft: 4 }}>{dRes.length} 件</span></p>
                   </div>
                   {dRes.map((r, i) => {
                     const note = customerNotes.find(n => n.reservation_id === r.id) || customerNotes.find(n => n.customer_name === r.customer_name && !n.reservation_id);
                     const isNg = customerNotes.some(n => n.customer_name === r.customer_name && n.is_ng);
                     return (
-                      <div key={r.id} className="px-3 py-2.5" style={{ borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[12px] font-medium">{r.customer_name}</span>
-                            {isNg && <span className="text-[8px] px-1 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫NG</span>}
-                            {note && note.rating > 0 && <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(note.rating)}{"☆".repeat(5 - note.rating)}</span>}
+                      <div key={r.id} style={{ padding: "10px 14px", borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.03em" }}>{r.customer_name}</span>
+                            {isNg && <span style={{ fontSize: 8, padding: "1px 6px", color: "#c96b83", border: `1px solid #c96b8344`, letterSpacing: "0.03em" }}>🚫 NG</span>}
+                            {note && note.rating > 0 && <span style={{ fontSize: 9, color: "#b38419" }}>{"★".repeat(note.rating)}{"☆".repeat(5 - note.rating)}</span>}
                           </div>
-                          <span className="text-[11px] font-medium" style={{ color: "#e8849a" }}>{fmt(r.total_price)}</span>
+                          <span style={{ fontFamily: FONT_SANS, fontSize: 12, fontWeight: 500, color: T.accent }}>{fmt(r.total_price)}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] flex-wrap" style={{ color: T.textSub }}>
-                          <span>🕐 {r.start_time?.slice(0,5)}〜{r.end_time?.slice(0,5)}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 10, color: T.textSub, letterSpacing: "0.02em" }}>
+                          <span style={{ fontFamily: FONT_SANS }}>🕐 {r.start_time?.slice(0,5)} — {r.end_time?.slice(0,5)}</span>
                           <span>📋 {r.course}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[9px] flex-wrap mt-0.5" style={{ color: T.textMuted }}>
-                          {r.nomination && <span style={{ color: "#e8849a" }}>指名: {r.nomination}（{fmt(r.nomination_fee)}）</span>}
-                          {r.options_text && <span style={{ color: "#e091a8" }}>OP: {r.options_text}</span>}
-                          {r.extension_name && <span style={{ color: "#a855f7" }}>延長: {r.extension_name}</span>}
-                          {(r as any).discount_name && <span style={{ color: "#c45555" }}>割引: {(r as any).discount_name}</span>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 9, color: T.textMuted, marginTop: 2, letterSpacing: "0.02em" }}>
+                          {r.nomination && <span style={{ color: T.accent }}>指名: {r.nomination}（{fmt(r.nomination_fee)}）</span>}
+                          {r.options_text && <span style={{ color: T.accentDeep }}>OP: {r.options_text}</span>}
+                          {r.extension_name && <span style={{ color: "#8b6cb7" }}>延長: {r.extension_name}</span>}
+                          {(r as any).discount_name && <span style={{ color: "#c96b83" }}>割引: {(r as any).discount_name}</span>}
                         </div>
-                        <div className="flex items-center gap-2 text-[9px] flex-wrap mt-0.5" style={{ color: T.textMuted }}>
-                          {(r as any).card_billing > 0 && <span style={{ color: "#e091a8" }}>💳{fmt((r as any).card_billing)}</span>}
-                          {(r as any).paypay_amount > 0 && <span style={{ color: "#22c55e" }}>📱{fmt((r as any).paypay_amount)}</span>}
-                          {(r as any).cash_amount > 0 && <span>💴{fmt((r as any).cash_amount)}</span>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 9, color: T.textMuted, marginTop: 2, letterSpacing: "0.02em", fontFamily: FONT_SANS }}>
+                          {(r as any).card_billing > 0 && <span style={{ color: T.accentDeep }}>💳 {fmt((r as any).card_billing)}</span>}
+                          {(r as any).paypay_amount > 0 && <span style={{ color: "#6b9b7e" }}>📱 {fmt((r as any).paypay_amount)}</span>}
+                          {(r as any).cash_amount > 0 && <span>💴 {fmt((r as any).cash_amount)}</span>}
                         </div>
                         {(() => {
                           const courseBack = coursesMaster.find(c => c.name === r.course)?.therapist_back || 0;
@@ -2176,44 +2184,48 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                           const extBack = r.extension_name ? (extsMaster.find(e => e.name === r.extension_name)?.therapist_back || 0) : 0;
                           const totalBack = courseBack + nomBack + optBack + extBack;
                           return (
-                          <div className="text-[9px] mt-1 px-2 py-1.5 rounded space-y-0.5" style={{ backgroundColor: "#7ab88f10", border: "1px solid #7ab88f20" }}>
-                            <div className="flex items-center justify-between"><span style={{ color: "#7ab88f" }}>💵 バック詳細</span><span className="font-medium" style={{ color: "#7ab88f" }}>合計 {fmt(totalBack)}</span></div>
-                            <div className="flex justify-between"><span>コースバック（{r.course}）</span><span style={{ color: "#7ab88f" }}>{fmt(courseBack)}</span></div>
-                            {r.nomination && <div className="flex justify-between"><span>指名バック（{r.nomination}）</span><span style={{ color: "#e8849a" }}>+{fmt(nomBack)}</span></div>}
-                            {optNames.length > 0 && optNames.map((n, oi) => { const ob = optsMaster.find(o => o.name === n)?.therapist_back || 0; return <div key={oi} className="flex justify-between"><span>OPバック（{n}）</span><span style={{ color: "#e091a8" }}>+{fmt(ob)}</span></div>; })}
-                            {r.extension_name && <div className="flex justify-between"><span>延長バック（{r.extension_name}）</span><span style={{ color: "#a855f7" }}>+{fmt(extBack)}</span></div>}
-                          </div>
-                        ); })()}
+                            <div style={{ fontSize: 9, marginTop: 6, padding: "6px 10px", display: "flex", flexDirection: "column", gap: 2, backgroundColor: "rgba(107,155,126,0.06)", border: `1px solid #6b9b7e33` }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: "#6b9b7e", fontWeight: 500 }}>💵 BACK DETAIL</span>
+                                <span style={{ fontFamily: FONT_SANS, fontWeight: 500, color: "#6b9b7e" }}>合計 {fmt(totalBack)}</span>
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>コース（{r.course}）</span><span style={{ fontFamily: FONT_SANS, color: "#6b9b7e" }}>{fmt(courseBack)}</span></div>
+                              {r.nomination && <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>指名（{r.nomination}）</span><span style={{ fontFamily: FONT_SANS, color: T.accent }}>+{fmt(nomBack)}</span></div>}
+                              {optNames.length > 0 && optNames.map((n, oi) => { const ob = optsMaster.find(o => o.name === n)?.therapist_back || 0; return <div key={oi} style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>OP（{n}）</span><span style={{ fontFamily: FONT_SANS, color: T.accentDeep }}>+{fmt(ob)}</span></div>; })}
+                              {r.extension_name && <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>延長（{r.extension_name}）</span><span style={{ fontFamily: FONT_SANS, color: "#8b6cb7" }}>+{fmt(extBack)}</span></div>}
+                            </div>
+                          );
+                        })()}
                         {note && note.note && (
-                          <div className="mt-1 px-2 py-1 rounded text-[9px]" style={{ backgroundColor: "#e8849a10", color: "#e8849a" }}>
+                          <div style={{ marginTop: 5, padding: "5px 10px", fontSize: 9, backgroundColor: T.accentBg, color: T.accentDeep, letterSpacing: "0.02em", lineHeight: 1.7 }}>
                             📝 {note.note}
                           </div>
                         )}
                         {note?.is_ng && note.ng_reason && (
-                          <div className="mt-0.5 px-2 py-1 rounded text-[9px]" style={{ backgroundColor: "#c4555510", color: "#c45555" }}>
+                          <div style={{ marginTop: 3, padding: "5px 10px", fontSize: 9, backgroundColor: "rgba(201,107,131,0.08)", color: "#c96b83", letterSpacing: "0.02em" }}>
                             🚫 NG理由: {note.ng_reason}
                           </div>
                         )}
-                        <div className="flex gap-1 mt-1.5">
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                           <button onClick={(e) => { e.stopPropagation(); if (note) { setNoteForm({ customer_name: note.customer_name, note: note.note, is_ng: note.is_ng, ng_reason: note.ng_reason, rating: note.rating || 0, reservation_id: note.reservation_id || r.id }); } else { setNoteForm({ customer_name: r.customer_name, note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: r.id }); } setCalDetailDate(null); setShowAddNote(true); }}
-                            className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ backgroundColor: "#e8849a18", color: "#e8849a" }}>
+                            style={{ padding: "3px 9px", fontSize: 9, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}`, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>
                             {note ? "✏️ メモ編集" : "📝 メモ追加"}
                           </button>
                           {note && <button onClick={(e) => { e.stopPropagation(); deleteCustomerNote(note.id); }}
-                            className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🗑 削除</button>}
+                            style={{ padding: "3px 9px", fontSize: 9, cursor: "pointer", backgroundColor: "transparent", color: "#c96b83", border: `1px solid #c96b83`, fontFamily: FONT_SERIF }}>🗑 削除</button>}
                         </div>
                       </div>
                     );
                   })}
                 </div>
               ) : dShift ? (
-                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: T.cardAlt }}>
-                  <p className="text-[11px]" style={{ color: T.textFaint }}>接客情報なし</p>
+                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <p style={{ margin: 0, fontSize: 11, color: T.textFaint, letterSpacing: "0.05em" }}>接客情報なし</p>
                 </div>
               ) : null}
 
               <button onClick={() => setCalDetailDate(null)}
-                className="w-full py-2.5 text-[11px] rounded-xl cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
+                style={{ width: "100%", padding: 11, fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>閉じる</button>
             </div>
           </div>
         );
