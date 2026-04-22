@@ -9,8 +9,8 @@ import { useTheme } from "./theme";
 const normPhone = (p: string) => p.replace(/[-\s\u3000()（）\u2010-\u2015\uff0d]/g, "");
 
 const RANKS: Record<string, { label: string; color: string; bg: string }> = {
-  banned: { label: "出禁", color: "#c45555", bg: "#c4555518" },
-  caution: { label: "要注意", color: "#f59e0b", bg: "#f59e0b18" },
+  banned: { label: "出禁", color: "#c96b83", bg: "#c96b8318" },
+  caution: { label: "要注意", color: "#b38419", bg: "#b3841918" },
   normal: { label: "普通", color: "#888780", bg: "#88878018" },
   good: { label: "善良", color: "#4a7c59", bg: "#4a7c5918" },
 };
@@ -242,7 +242,7 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
             // 最小化時
             if (isMin) return (
               <div key={p.call.id} onClick={() => toggleMinimize(p.call.id)}
-                style={{ background: isBanned ? "#c45555" : isCaution ? "#f59e0b" : "#c3a782", borderRadius: 12, padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.25)", minWidth: 200 }}>
+                style={{ background: isBanned ? "#c96b83" : isCaution ? "#b38419" : "#c3a782", borderRadius: 12, padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.25)", minWidth: 200 }}>
                 <span style={{ fontSize: 16 }}>📞</span>
                 <span style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>
                   {p.customer ? p.customer.name : p.therapist ? `🏥 ${p.therapist.name}` : p.call.phone}
@@ -253,13 +253,13 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
             // フル表示
             return (
               <div key={p.call.id} style={{
-                background: T.card, border: `1.5px solid ${isBanned ? "#c45555" : isCaution ? "#f59e0b" : T.border}`,
+                background: T.card, border: `1.5px solid ${isBanned ? "#c96b83" : isCaution ? "#b38419" : T.border}`,
                 borderRadius: 16, width: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
                 animation: "ctiSlideIn 0.4s ease-out"
               }}>
                 {/* ヘッダー */}
                 <div style={{
-                  background: isBanned ? "#c4555515" : isCaution ? "#f59e0b15" : "rgba(195,167,130,0.08)",
+                  background: isBanned ? "#c96b8315" : isCaution ? "#b3841915" : "rgba(195,167,130,0.08)",
                   borderRadius: "16px 16px 0 0", padding: "12px 16px",
                   display: "flex", alignItems: "center", justifyContent: "space-between"
                 }}>
@@ -286,13 +286,13 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                         <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{p.customer.name}</span>
                         <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 20, background: rank.bg, color: rank.color, fontWeight: 600 }}>{rank.label}</span>
                         {p.customer.login_email && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: "#3b82f615", color: "#3b82f6" }}>📱会員</span>}
-                        {isNg && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: "#c4555515", color: "#c45555", fontWeight: 600 }}>NG有</span>}
+                        {isNg && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: "#c96b8315", color: "#c96b83", fontWeight: 600 }}>NG有</span>}
                       </div>
 
                       {/* 出禁・要注意アラート */}
                       {(isBanned || isCaution) && (
-                        <div style={{ background: isBanned ? "#c4555512" : "#f59e0b12", border: `1px solid ${isBanned ? "#c4555530" : "#f59e0b30"}`, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: isBanned ? "#c45555" : "#f59e0b" }}>
+                        <div style={{ background: isBanned ? "#c96b8312" : "#b3841912", border: `1px solid ${isBanned ? "#c96b8330" : "#b3841930"}`, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: isBanned ? "#c96b83" : "#b38419" }}>
                             {isBanned ? "🚫 このお客様は出禁です" : "⚠️ 要注意のお客様です"}
                           </span>
                         </div>
@@ -319,16 +319,16 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                         <div style={{ marginBottom: 12 }}>
                           <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>セラピストメモ</div>
                           {p.notes.slice(0, 3).map(n => (
-                            <div key={n.id} style={{ background: n.is_ng ? "#c4555508" : T.cardAlt, borderRadius: 8, padding: "6px 10px", marginBottom: 4, borderLeft: n.is_ng ? "3px solid #c45555" : "3px solid transparent" }}>
+                            <div key={n.id} style={{ background: n.is_ng ? "#c96b8308" : T.cardAlt, borderRadius: 8, padding: "6px 10px", marginBottom: 4, borderLeft: n.is_ng ? "3px solid #c96b83" : "3px solid transparent" }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>{p.therapistMap[n.therapist_id] || "?"}</span>
                                 <span style={{ fontSize: 10, color: T.textMuted }}>
                                   {n.rating > 0 && "★".repeat(n.rating)}
-                                  {n.is_ng && <span style={{ color: "#c45555", marginLeft: 4 }}>NG</span>}
+                                  {n.is_ng && <span style={{ color: "#c96b83", marginLeft: 4 }}>NG</span>}
                                 </span>
                               </div>
                               {n.note && <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>{n.note.slice(0, 60)}{n.note.length > 60 ? "…" : ""}</div>}
-                              {n.is_ng && n.ng_reason && <div style={{ fontSize: 10, color: "#c45555", marginTop: 2 }}>理由: {n.ng_reason.slice(0, 40)}</div>}
+                              {n.is_ng && n.ng_reason && <div style={{ fontSize: 10, color: "#c96b83", marginTop: 2 }}>理由: {n.ng_reason.slice(0, 40)}</div>}
                             </div>
                           ))}
                         </div>
@@ -352,7 +352,7 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => { window.open(`/timechart?cti_customer=${encodeURIComponent(p.customer!.name)}`, "_blank"); dismissPopup(p.call.id); }} style={{
                           flex: 1, padding: "8px 0", borderRadius: 10, border: "none",
-                          background: "linear-gradient(135deg, #c3a782, #b09672)", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
+                          background: "#c96b83", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
                         }}>📋 オーダー登録</button>
                         <button onClick={() => { window.open("/dashboard", "_blank"); }} style={{
                           flex: 1, padding: "8px 0", borderRadius: 10, border: `1px solid ${T.border}`,
@@ -377,7 +377,7 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                       <div style={{ fontSize: 12, color: T.textSub, marginBottom: 12 }}>この電話番号は未登録です</div>
                       <button onClick={() => { window.open(`/timechart?cti_phone=${encodeURIComponent(p.call.phone)}`, "_blank"); dismissPopup(p.call.id); }} style={{
                         padding: "8px 20px", borderRadius: 10, border: "none",
-                        background: "linear-gradient(135deg, #c3a782, #b09672)", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
+                        background: "#c96b83", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
                       }}>📋 オーダー登録（新規顧客）</button>
                     </div>
                   )}
