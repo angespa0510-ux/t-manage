@@ -149,7 +149,7 @@ function CustomerDetailInner() {
                 <div className="flex items-center gap-2 mt-0.5">
                   {customerInfo?.rank && <span className="px-2 py-0.5 rounded-full text-[9px] font-medium" style={{ backgroundColor: (RANK_COLORS[customerInfo.rank] || "#888") + "18", color: RANK_COLORS[customerInfo.rank] || "#888" }}>{RANK_LABELS[customerInfo.rank] || customerInfo.rank}</span>}
                   {customerInfo?.login_email && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#3b82f612", color: "#3b82f6" }}>マイページ会員</span>}
-                  {note?.is_ng && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}
+                  {note?.is_ng && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c96b8318", color: "#c96b83" }}>🚫 NG</span>}
                 </div>
               </div>
             </div>
@@ -167,7 +167,7 @@ function CustomerDetailInner() {
               </div>
               <div className="rounded-xl p-3 text-center" style={{ backgroundColor: T.cardAlt }}>
                 <p className="text-[9px]" style={{ color: T.textMuted }}>評価</p>
-                <p className="text-[16px]" style={{ color: "#f59e0b" }}>{note?.rating ? "★".repeat(note.rating) + "☆".repeat(5 - note.rating) : "—"}</p>
+                <p className="text-[16px]" style={{ color: "#b38419" }}>{note?.rating ? "★".repeat(note.rating) + "☆".repeat(5 - note.rating) : "—"}</p>
               </div>
             </div>
 
@@ -195,13 +195,13 @@ function CustomerDetailInner() {
                 <div>
                   <label className="block text-[10px] mb-1" style={{ color: T.textMuted }}>評価</label>
                   <div className="flex gap-1">{[1,2,3,4,5].map(s => (
-                    <button key={s} onClick={() => setNoteRating(noteRating === s ? 0 : s)} className="text-[20px] cursor-pointer" style={{ color: s <= noteRating ? "#f59e0b" : T.textFaint, background: "none", border: "none" }}>{s <= noteRating ? "★" : "☆"}</button>
+                    <button key={s} onClick={() => setNoteRating(noteRating === s ? 0 : s)} className="text-[20px] cursor-pointer" style={{ color: s <= noteRating ? "#b38419" : T.textFaint, background: "none", border: "none" }}>{s <= noteRating ? "★" : "☆"}</button>
                   ))}</div>
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={noteNg} onChange={e => setNoteNg(e.target.checked)} className="cursor-pointer" />
-                    <span className="text-[11px]" style={{ color: "#c45555" }}>🚫 NG登録</span>
+                    <span className="text-[11px]" style={{ color: "#c96b83" }}>🚫 NG登録</span>
                   </label>
                   {noteNg && <input type="text" value={noteNgReason} onChange={e => setNoteNgReason(e.target.value)} placeholder="NG理由" className="flex-1 px-3 py-1.5 rounded-lg text-[11px] outline-none" style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />}
                 </div>
@@ -212,7 +212,7 @@ function CustomerDetailInner() {
                 {note ? (
                   <div className="space-y-2">
                     {note.note && <p className="text-[12px] whitespace-pre-wrap leading-relaxed rounded-xl p-3" style={{ backgroundColor: T.cardAlt, color: T.textSub }}>{note.note}</p>}
-                    {note.is_ng && <div className="rounded-xl p-3" style={{ backgroundColor: "#c4555510", border: "1px solid #c4555530" }}><p className="text-[11px]" style={{ color: "#c45555" }}>🚫 NG: {note.ng_reason || "理由未記入"}</p></div>}
+                    {note.is_ng && <div className="rounded-xl p-3" style={{ backgroundColor: "#c96b8310", border: "1px solid #c96b8330" }}><p className="text-[11px]" style={{ color: "#c96b83" }}>🚫 NG: {note.ng_reason || "理由未記入"}</p></div>}
                     {!note.note && !note.is_ng && <p className="text-[11px]" style={{ color: T.textFaint }}>メモなし（編集ボタンで追加）</p>}
                   </div>
                 ) : (
@@ -243,7 +243,7 @@ function CustomerDetailInner() {
                   <div className="flex items-center gap-2 text-[9px] flex-wrap" style={{ color: T.textSub }}>
                     <span>📋 {r.course}</span>
                     {r.nomination && r.nomination !== "フリー" && <span style={{ color: "#e8849a" }}>指名:{r.nomination}</span>}
-                    {r.options_text && <span style={{ color: "#a855f7" }}>OP:{r.options_text}</span>}
+                    {r.options_text && <span style={{ color: "#8b6cb7" }}>OP:{r.options_text}</span>}
                     {r.extension_name && <span style={{ color: "#8b5cf6" }}>延長:{r.extension_name}</span>}
                   </div>
                 </div>
