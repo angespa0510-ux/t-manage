@@ -9,6 +9,7 @@ import {
   IconHome, IconCalendar, IconHeart, IconBell, IconSettings,
   IconUser, IconPhone, IconClock, IconMapPin, IconCheck, IconClose,
   IconEdit, IconWarning, IconLogout, IconArrowRight, IconSparkle,
+  IconCard,
   StarRating, BellWithBadge,
 } from "../../components/mypage/Icon";
 
@@ -39,6 +40,7 @@ const C = {
   card:       "#ffffff",   // カード白
   cardAlt:    "#faf6f1",   // サブカード（ごく淡いクリーム）
   border:     "#e5ded6",   // HP罫線と同じ
+  borderPink: "#ead3da",   // ピンク寄りの罫線
   accent:     "#e8849a",   // ブランドピンク（HPと同じ）
   accentDark: "#c96b83",   // 濃ピンク
   accentBg:   "#f7e3e7",   // 淡ピンク（HPのpinkSoft）
@@ -628,7 +630,7 @@ export default function CustomerMypage() {
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "20px 16px" }}>
 
       {/* ═══ ホーム ═══ */}
-      {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }} className="animate-[fadeIn_0.3s]">
+      {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="animate-[fadeIn_0.3s]">
         {unreadCount > 0 && (
           <button onClick={() => setTab("notifications")} style={{
             width: "100%",
@@ -649,34 +651,81 @@ export default function CustomerMypage() {
           </button>
         )}
 
+        {/* ═══ ヒーロー ═══ */}
+        <div style={{
+          position: "relative",
+          width: "calc(100% + 32px)",
+          marginLeft: -16,
+          marginRight: -16,
+          height: 200,
+          overflow: "hidden",
+          backgroundColor: C.accentBg,
+        }}>
+          <img
+            src="/mypage/hero-home.jpg"
+            alt=""
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 50%" }}
+          />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.9) 100%)" }} />
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 20 }}>
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: C.accent, textTransform: "uppercase" }}>Welcome back</p>
+            <h1 style={{ margin: "10px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.08em", color: C.text }}>{customer.self_name || customer.name} 様</h1>
+            <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto 0" }} />
+          </div>
+        </div>
 
-        {/* 開催中のイベント */}
+        {/* ═══ 予約ボタン（大CTA） ═══ */}
+        <button
+          onClick={() => { setTab("schedule"); setSchedView("day"); setSchedDate(today); }}
+          style={{
+            width: "100%",
+            padding: "16px 24px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            backgroundColor: C.accent,
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontFamily: FONT_SERIF,
+            fontSize: 13,
+            letterSpacing: "0.2em",
+            fontWeight: 400,
+          }}
+        >
+          <IconCalendar size={16} color="#fff" />
+          ご予約する
+        </button>
+
+        {/* ═══ 開催中のイベント ═══ */}
         {customerEvents.length > 0 && (
           <div>
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h2 className="text-[13px] font-medium" style={{ color: C.textSub }}>🎁 開催中のイベント</h2>
-              <span className="text-[10px]" style={{ color: C.textMuted }}>{customerEvents.length}件</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+              <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Events</span>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4" style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+            <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8, margin: "0 -16px", padding: "0 16px 8px", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
               {customerEvents.map(ev => {
                 const hasLink = !!ev.cta_url;
                 const accent = ev.accent_color || C.accent;
                 const period = formatEventPeriod(ev);
                 const inner = (
-                  <div key={ev.id} className="flex-shrink-0 rounded-2xl border overflow-hidden" style={{ width: "280px", scrollSnapAlign: "start", backgroundColor: C.card, borderColor: C.border }}>
-                    <div className="relative w-full" style={{ aspectRatio: "16 / 10", backgroundColor: ev.image_url ? C.cardAlt : accent + "20", backgroundImage: ev.image_url ? `url(${ev.image_url})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
-                      {!ev.image_url && <div className="absolute inset-0 flex items-center justify-center text-[28px]" style={{ color: accent }}>🎉</div>}
-                      {ev.badge_label && <span className="absolute top-2 left-2 px-2 py-0.5 text-[9px] font-medium text-white rounded" style={{ backgroundColor: accent }}>{ev.badge_label}</span>}
-                      {period && <span className="absolute bottom-2 right-2 px-2 py-0.5 text-[9px] rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.92)", color: C.text }}>{period}</span>}
+                  <div key={ev.id} style={{ flexShrink: 0, width: 280, scrollSnapAlign: "start", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6, overflow: "hidden" }}>
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "16/10", backgroundColor: ev.image_url ? C.cardAlt : accent + "20", backgroundImage: ev.image_url ? `url(${ev.image_url})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
+                      {ev.badge_label && <span style={{ position: "absolute", top: 8, left: 8, padding: "3px 10px", fontSize: 9, color: "#fff", backgroundColor: accent, borderRadius: 2, letterSpacing: "0.1em", fontFamily: FONT_SERIF }}>{ev.badge_label}</span>}
+                      {period && <span style={{ position: "absolute", bottom: 8, right: 8, padding: "3px 10px", fontSize: 9, backgroundColor: "rgba(255,255,255,0.92)", color: C.text, borderRadius: 999, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{period}</span>}
                     </div>
-                    <div className="p-3">
-                      {ev.subtitle && <p className="text-[10px] mb-1" style={{ color: accent, fontWeight: 500 }}>{ev.subtitle}</p>}
-                      <h3 className="text-[13px] font-medium mb-1" style={{ color: C.text }}>{ev.title}</h3>
-                      {ev.description && <p className="text-[10px] line-clamp-2" style={{ color: C.textSub, lineHeight: 1.6 }}>{ev.description}</p>}
+                    <div style={{ padding: 14 }}>
+                      {ev.subtitle && <p style={{ margin: 0, fontSize: 10, color: accent, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: FONT_DISPLAY }}>{ev.subtitle}</p>}
+                      <h3 style={{ margin: "6px 0 0", fontSize: 14, fontFamily: FONT_DISPLAY, fontWeight: 400, color: C.text, letterSpacing: "0.05em" }}>{ev.title}</h3>
+                      {ev.description && <p style={{ margin: "6px 0 0", fontSize: 11, color: C.textSub, lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{ev.description}</p>}
                       {ev.cta_label && hasLink && (
-                        <div className="mt-2 pt-2 flex items-center justify-between border-t" style={{ borderColor: C.border }}>
-                          <span className="text-[10px] font-medium" style={{ color: accent }}>{ev.cta_label}</span>
-                          <span className="text-[12px]" style={{ color: accent }}>→</span>
+                        <div style={{ marginTop: 10, paddingTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${C.border}` }}>
+                          <span style={{ fontSize: 11, color: accent, letterSpacing: "0.05em" }}>{ev.cta_label}</span>
+                          <IconArrowRight size={12} color={accent} />
                         </div>
                       )}
                     </div>
@@ -693,10 +742,132 @@ export default function CustomerMypage() {
           </div>
         )}
 
-        <button onClick={() => { setTab("schedule"); setSchedView("day"); setSchedDate(today); }} className="w-full py-4 rounded-2xl text-[15px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>📅 予約する</button>
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><h2 className="text-[13px] font-medium mb-3" style={{ color: C.textSub }}>📅 次回のご予約</h2>{upcomingRes.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>現在予約はありません</p>) : (<div className="space-y-3">{upcomingRes.slice(0, 3).map(r => (<div key={r.id} className="rounded-xl p-4" style={{ backgroundColor: C.accentBg, border: `1px solid ${C.accent}30` }}><div className="flex items-center justify-between mb-1"><span className="text-[15px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color }}>{getStatusBadge(r.status).label}</span></div><p className="text-[13px]">{r.start_time}〜{r.end_time}</p><div className="flex flex-wrap gap-x-4 mt-1 text-[11px]" style={{ color: C.textSub }}>{r.course && <span>💆 {r.course}</span>}{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}</div>{r.total_price > 0 && <p className="text-[12px] mt-1 font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</p>}{r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f20" }}><p className="text-[9px] mb-1" style={{ color: "#3d6b9f" }}>💳 カード決済額: <strong>{fmt(Math.round(r.total_price * 1.1))}</strong>（税10%込）</p><button onClick={(e) => { e.stopPropagation(); window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank"); }} className="w-full py-1.5 rounded-lg text-[10px] font-medium cursor-pointer text-white flex items-center justify-center gap-1" style={{ background: "linear-gradient(135deg, #3d6b9f, #2d5a8e)" }}>💳 クレジットカードで支払う</button></div>}{/* キャンセルボタン */}<div className="mt-2"><button onClick={() => handleCancelClick(r)} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer" style={{ backgroundColor: canCancelDirectly(r) ? "#c4555510" : "#88878010", color: canCancelDirectly(r) ? C.red : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? "#c4555525" : "#88878020"}` }}>{canCancelDirectly(r) ? "✕ この予約をキャンセル" : "📞 キャンセル・変更について"}</button></div></div>))}</div>)}{/* キャンセルポリシー */}<div className="mt-3 rounded-lg p-3" style={{ backgroundColor: "#c4555506", border: `1px solid #c4555515` }}><p className="text-[10px] font-medium mb-1" style={{ color: C.red }}>📌 キャンセル・変更について</p><p className="text-[9px] m-0" style={{ color: C.textMuted, lineHeight: 1.7 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。<br />当日のキャンセルにつきましては、<strong style={{ color: C.red }}>100％キャンセル料</strong>を頂戴いたします。</p><a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-medium no-underline" style={{ color: C.accent }}>📞 {cancelPhone}</a></div></div>
-        <div className="grid grid-cols-3 gap-3">{[{ label: "累計来店", value: String(totalVisits), unit: "回", color: C.accent }, { label: "今月利用", value: fmt(monthTotal), unit: "", color: C.green }, { label: "ポイント", value: pointBalance.toLocaleString(), unit: "pt", color: C.blue }].map((s, i) => (<div key={i} className="rounded-xl border p-3 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[9px] mb-1" style={{ color: C.textMuted }}>{s.label}</p><p className="text-[16px] font-bold" style={{ color: s.color }}>{s.value}<span className="text-[10px] font-normal">{s.unit}</span></p></div>))}</div>
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><h2 className="text-[13px] font-medium mb-3" style={{ color: C.textSub }}>🕐 直近のご利用</h2>{pastRes.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>利用履歴がありません</p>) : (<div className="space-y-2">{pastRes.slice(0, 5).map(r => { const bName = (() => { if (r.free_building_id) { const b = buildings.find(bl => bl.id === r.free_building_id); return b?.name || ""; } return ""; })(); const ptEarned = getReservationPointsEarned(r); const payInfo = getPaymentInfo(r); const memo = getMemo(r.id); return (<div key={r.id} className="rounded-xl p-3 border" style={{ borderColor: C.border, backgroundColor: C.cardAlt }}><div className="flex items-center justify-between"><div><span className="text-[12px] font-medium">{dateFmt(r.date)}</span><span className="text-[11px] ml-2" style={{ color: C.textSub }}>{r.course}</span></div>{r.total_price > 0 && <span className="text-[12px] font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</span>}</div><div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}{r.options_text && <span>✨ {r.options_text}</span>}{bName && <span>🏠 {bName}</span>}</div>{(payInfo || ptEarned > 0) && <div className="flex flex-wrap gap-x-3 mt-1 text-[9px]" style={{ color: C.textMuted }}>{payInfo && <span>{payInfo}</span>}{ptEarned > 0 && <span>🎁 +{ptEarned}pt付与</span>}</div>}{memo ? (<div className="mt-2 rounded-lg px-3 py-1.5" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78225" }}><div className="flex items-center justify-between"><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span><button onClick={() => openMemoEdit(r.id, r.therapist_id)} className="text-[9px] cursor-pointer" style={{ color: C.accent }}>✏️</button></div>{memo.memo && <p className="text-[9px] mt-0.5" style={{ color: C.textSub }}>{memo.memo}</p>}</div>) : (<button onClick={() => openMemoEdit(r.id, r.therapist_id)} className="mt-2 w-full py-1.5 rounded-lg text-[9px] cursor-pointer" style={{ color: C.textMuted, backgroundColor: "#c3a78208", border: `1px solid ${C.border}` }}>📝 ひとことメモ</button>)}</div>); })}{pastRes.length > 5 && <button onClick={() => { setTab("schedule"); setSchedView("history"); }} className="w-full py-2 text-[11px] rounded-lg cursor-pointer" style={{ color: C.accent }}>すべて見る →</button>}</div>)}</div>
+        {/* ═══ 次回のご予約 ═══ */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Next Reservation</span>
+          </div>
+          {upcomingRes.length === 0 ? (
+            <div style={{ padding: "32px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <img src="/mypage/empty-reservation.jpg" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", maxWidth: 240, aspectRatio: "4/3", objectFit: "cover", borderRadius: 4, marginBottom: 20, opacity: 0.9 }} />
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: "0.08em", color: C.text }}>現在ご予約はありません</p>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: C.textMuted }}>次のご来店を心よりお待ちしております</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {upcomingRes.slice(0, 3).map(r => (
+                <div key={r.id} style={{ padding: 18, backgroundColor: C.accentBg, border: `1px solid ${C.accent}30`, borderRadius: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: "0.05em", color: C.accentDark }}>{dateFmt(r.date)}</span>
+                    <span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 999, backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color, letterSpacing: "0.05em" }}>{getStatusBadge(r.status).label}</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 14, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em", color: C.text }}>{r.start_time}〜{r.end_time}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, fontSize: 11, color: C.textSub }}>
+                    {r.course && <span>{r.course}</span>}
+                    {r.therapist_id > 0 && <span>{getTherapistName(r.therapist_id)}</span>}
+                  </div>
+                  {r.total_price > 0 && <p style={{ margin: "10px 0 0", fontSize: 13, fontFamily: FONT_DISPLAY, color: C.accentDark, letterSpacing: "0.05em" }}>{fmt(r.total_price)}</p>}
+                  {r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && (
+                    <div style={{ marginTop: 12, padding: 12, backgroundColor: "#ffffff", border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                      <p style={{ margin: "0 0 6px", fontSize: 10, color: C.textSub, letterSpacing: "0.05em" }}>カード決済額（税10%込）: <strong style={{ color: C.text, fontFamily: FONT_DISPLAY }}>{fmt(Math.round(r.total_price * 1.1))}</strong></p>
+                      <button onClick={(e) => { e.stopPropagation(); window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank"); }} style={{ width: "100%", padding: "8px 0", fontSize: 11, color: "#fff", backgroundColor: C.text, border: "none", borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.12em" }}>クレジットカードで支払う</button>
+                    </div>
+                  )}
+                  {/* キャンセルボタン */}
+                  <button onClick={() => handleCancelClick(r)} style={{ width: "100%", marginTop: 10, padding: "8px 0", fontSize: 10, backgroundColor: "transparent", color: canCancelDirectly(r) ? C.accentDark : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? C.accent + "40" : C.border}`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
+                    {canCancelDirectly(r) ? "この予約をキャンセル" : "キャンセル・変更について"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* キャンセルポリシー */}
+          <div style={{ marginTop: 12, padding: "12px 14px", backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 4 }}>
+            <p style={{ margin: "0 0 4px", fontSize: 10, letterSpacing: "0.08em", color: C.textSub, fontFamily: FONT_DISPLAY }}>CANCELLATION POLICY</p>
+            <p style={{ margin: 0, fontSize: 10, color: C.textMuted, lineHeight: 1.8 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。当日のキャンセルは<strong style={{ color: C.accentDark }}>100％キャンセル料</strong>を頂戴いたします。</p>
+            <a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 11, color: C.accent, textDecoration: "none", letterSpacing: "0.05em" }}>
+              <IconPhone size={12} color={C.accent} />
+              {cancelPhone}
+            </a>
+          </div>
+        </div>
+
+        {/* ═══ 統計（3カラム） ═══ */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          {[
+            { label: "Visits", value: String(totalVisits), unit: "回" },
+            { label: "This Month", value: fmt(monthTotal), unit: "" },
+            { label: "Points", value: pointBalance.toLocaleString(), unit: "pt" },
+          ].map((s, i) => (
+            <div key={i} style={{ padding: 16, textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+              <p style={{ margin: 0, fontSize: 9, fontFamily: FONT_DISPLAY, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>{s.label}</p>
+              <p style={{ margin: "10px 0 0", fontSize: 20, fontFamily: FONT_DISPLAY, fontWeight: 400, color: C.text, letterSpacing: "0.02em" }}>
+                {s.value}
+                <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 2, letterSpacing: 0 }}>{s.unit}</span>
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* ═══ 直近のご利用 ═══ */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Recent Visits</span>
+          </div>
+          {pastRes.length === 0 ? (
+            <div style={{ padding: "28px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>ご利用履歴はまだありません</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pastRes.slice(0, 5).map(r => {
+                const ptEarned = getReservationPointsEarned(r);
+                const payInfo = getPaymentInfo(r);
+                const memo = getMemo(r.id);
+                return (
+                  <div key={r.id} style={{ padding: 14, border: `1px solid ${C.border}`, backgroundColor: C.card, borderRadius: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                        <span style={{ fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: "0.05em", color: C.text }}>{dateFmt(r.date)}</span>
+                        <span style={{ fontSize: 11, color: C.textSub }}>{r.course}</span>
+                      </div>
+                      {r.total_price > 0 && <span style={{ fontSize: 12, fontFamily: FONT_DISPLAY, color: C.accentDark, letterSpacing: "0.03em" }}>{fmt(r.total_price)}</span>}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 6, fontSize: 10, color: C.textMuted }}>
+                      {r.therapist_id > 0 && <span>{getTherapistName(r.therapist_id)}</span>}
+                      {r.nomination && <span>{r.nomination}</span>}
+                      {r.options_text && <span>{r.options_text}</span>}
+                    </div>
+                    {(payInfo || ptEarned > 0) && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 4, fontSize: 9, color: C.textFaint }}>
+                        {payInfo && <span>{payInfo}</span>}
+                        {ptEarned > 0 && <span>+{ptEarned}pt 付与</span>}
+                      </div>
+                    )}
+                    {memo ? (
+                      <div style={{ marginTop: 10, padding: "8px 12px", backgroundColor: C.accentBg, borderRadius: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <StarRating rating={memo.rating} size={10} filledColor={C.accent} emptyColor={C.border} />
+                          <button onClick={() => openMemoEdit(r.id, r.therapist_id)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", padding: 2, display: "inline-flex", alignItems: "center" }}>
+                            <IconEdit size={12} color={C.accent} />
+                          </button>
+                        </div>
+                        {memo.memo && <p style={{ margin: "4px 0 0", fontSize: 10, color: C.textSub, lineHeight: 1.7 }}>{memo.memo}</p>}
+                      </div>
+                    ) : (
+                      <button onClick={() => openMemoEdit(r.id, r.therapist_id)} style={{ width: "100%", marginTop: 10, padding: "7px 0", fontSize: 10, color: C.textMuted, backgroundColor: "transparent", border: `1px dashed ${C.border}`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>ひとことメモを残す</button>
+                    )}
+                  </div>
+                );
+              })}
+              {pastRes.length > 5 && (
+                <button onClick={() => { setTab("schedule"); setSchedView("history"); }} style={{ width: "100%", padding: "10px 0", fontSize: 11, color: C.accent, backgroundColor: "transparent", border: "none", cursor: "pointer", fontFamily: FONT_DISPLAY, letterSpacing: "0.15em" }}>VIEW ALL →</button>
+              )}
+            </div>
+          )}
+        </div>
       </div>)}
 
       {/* ═══ スケジュール / 予約 ═══ */}
@@ -937,34 +1108,284 @@ export default function CustomerMypage() {
       </div>)}
 
       {/* ═══ お気に入り ═══ */}
-      {tab === "favorites" && (<div className="animate-[fadeIn_0.3s]"><h2 className="text-[16px] font-medium mb-4">お気に入り</h2><h3 className="text-[12px] font-medium mb-3 px-1" style={{ color: C.textSub }}>💆 セラピスト</h3><div className="grid grid-cols-2 gap-3 mb-6">{therapists.filter(t => isFav("therapist", t.id)).map(t => { const memos = getMemosForTherapist(t.id); const latestMemo = memos.length > 0 ? memos[0] : null; return (<div key={t.id} className="rounded-xl border p-3 relative" style={{ backgroundColor: C.card, borderColor: C.accent + "66" }}><button onClick={() => toggleFav("therapist", t.id)} className="absolute top-2 right-2 text-[16px] cursor-pointer" style={{ color: "#e74c3c" }}>❤️</button><div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center text-[16px] text-white font-medium" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div><p className="text-[13px] font-medium text-center">{t.name}</p><div className="flex justify-center gap-2 mt-1 text-[10px]" style={{ color: C.textMuted }}>{t.age > 0 && <span>{t.age}歳</span>}{t.height_cm > 0 && <span>{t.height_cm}cm</span>}{t.cup && <span>{t.cup}カップ</span>}</div>{latestMemo && <div className="mt-2 rounded-md px-2 py-1.5" style={{ backgroundColor: "#c3a78210" }}><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(latestMemo.rating)}{"☆".repeat(5 - latestMemo.rating)}</span>{latestMemo.memo && <p className="text-[9px] mt-0.5 truncate" style={{ color: C.textSub }}>{latestMemo.memo}</p>}{memos.length > 1 && <p className="text-[8px] mt-0.5" style={{ color: C.textMuted }}>{"📝 " + memos.length + "件のメモ"}</p>}</div>}<button onClick={() => { setTab("schedule"); setSchedView("weekly"); setWeeklyTid(t.id); setSchedDate(today); fetchWeekSchedule(t.id, today); }} className="w-full mt-2 py-1.5 rounded-lg text-[9px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>📅 スケジュールを見る</button></div>); })}{therapists.filter(t => isFav("therapist", t.id)).length === 0 && <p className="text-[12px] text-center py-4 col-span-2" style={{ color: C.textFaint }}>お気に入りセラピストがいません。予約タブの♡ボタンから追加できます。</p>}</div><h3 className="text-[12px] font-medium mb-3 px-1" style={{ color: C.textSub }}>📝 ひとことメモ</h3><div className="space-y-2">{customerMemos.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>まだメモがありません。予約履歴からメモを残せます。</p>) : customerMemos.sort((a, b) => b.id - a.id).map(m => { const r = reservations.find(res => res.id === m.reservation_id); const tName = m.therapist_id > 0 ? getTherapistName(m.therapist_id) : "フリー"; return (<div key={m.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between mb-1"><div className="flex items-center gap-2"><span className="text-[11px] font-medium">{tName}</span><span className="text-[10px]" style={{ color: C.accent }}>{"★".repeat(m.rating)}{"☆".repeat(5 - m.rating)}</span></div><button onClick={() => openMemoEdit(m.reservation_id, m.therapist_id)} className="text-[9px] cursor-pointer" style={{ color: C.accent }}>✏️ 編集</button></div>{m.memo && <p className="text-[11px]" style={{ color: C.textSub }}>{m.memo}</p>}{r && <p className="text-[9px] mt-1.5" style={{ color: C.textMuted }}>{dateFmt(r.date)} {r.start_time}〜 {r.course}</p>}</div>); })}</div></div>)}
+      {tab === "favorites" && (<div className="animate-[fadeIn_0.3s]">
+        {/* 見出し */}
+        <div style={{ textAlign: "center", marginBottom: 28, paddingTop: 8 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, textTransform: "uppercase" }}>Favorites</p>
+          <h2 style={{ margin: "8px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.1em", color: C.text }}>お気に入り</h2>
+          <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+        </div>
+
+        {/* セラピストセクション */}
+        <div style={{ marginBottom: 36 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Therapists</span>
+          </div>
+
+          {therapists.filter(t => isFav("therapist", t.id)).length === 0 ? (
+            <div style={{ padding: "40px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <img src="/mypage/empty-favorite.jpg" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", maxWidth: 160, aspectRatio: "1/1", objectFit: "cover", borderRadius: 4, marginBottom: 20, opacity: 0.9 }} />
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 16, letterSpacing: "0.08em", color: C.text }}>お気に入りはまだありません</p>
+              <p style={{ margin: "10px 0 0", fontSize: 11, color: C.textMuted, lineHeight: 1.8 }}>公式サイトで気になるセラピストを<br />見つけてください</p>
+              <a href="/therapist" target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "10px 24px", fontSize: 11, color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 2, textDecoration: "none", letterSpacing: "0.12em", fontFamily: FONT_SERIF }}>セラピスト一覧を見る</a>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {therapists.filter(t => isFav("therapist", t.id)).map(t => {
+                const memos = getMemosForTherapist(t.id);
+                const latestMemo = memos.length > 0 ? memos[0] : null;
+                return (
+                  <div key={t.id} style={{ backgroundColor: C.card, border: `1px solid ${C.borderPink || C.border}`, borderRadius: 6, overflow: "hidden", position: "relative" }}>
+                    <button onClick={() => toggleFav("therapist", t.id)} style={{ position: "absolute", top: 8, right: 8, zIndex: 1, width: 30, height: 30, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.85)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)" }}>
+                      <IconHeart size={15} color={C.accent} fill={C.accent} />
+                    </button>
+                    {t.photo_url ? (
+                      <img src={t.photo_url} alt={t.name} style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "100%", aspectRatio: "3/4", backgroundColor: C.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontSize: 48, color: C.accent }}>{t.name.charAt(0)}</div>
+                    )}
+                    <div style={{ padding: 12 }}>
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: "0.05em", color: C.text }}>{t.name}{t.age > 0 && <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 6 }}>({t.age})</span>}</p>
+                      {(t.height_cm > 0 || t.bust > 0) && <p style={{ margin: "2px 0 0", fontSize: 10, color: C.textMuted, letterSpacing: "0.03em" }}>T{t.height_cm} B{t.bust}({t.cup}) W{t.waist}</p>}
+                      {latestMemo && (
+                        <div style={{ marginTop: 8, padding: "6px 8px", backgroundColor: C.accentBg, borderRadius: 4 }}>
+                          <StarRating rating={latestMemo.rating} size={9} filledColor={C.accent} emptyColor={C.border} />
+                          {latestMemo.memo && <p style={{ margin: "2px 0 0", fontSize: 10, color: C.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{latestMemo.memo}</p>}
+                          {memos.length > 1 && <p style={{ margin: "2px 0 0", fontSize: 9, color: C.textMuted }}>他 {memos.length - 1} 件</p>}
+                        </div>
+                      )}
+                      <button onClick={() => { setTab("schedule"); setSchedView("weekly"); setWeeklyTid(t.id); setSchedDate(today); fetchWeekSchedule(t.id, today); }} style={{ width: "100%", marginTop: 10, padding: "8px 0", fontSize: 10, color: "#fff", backgroundColor: C.accent, border: "none", borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>スケジュールを見る</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* メモセクション */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Memories</span>
+          </div>
+          {customerMemos.length === 0 ? (
+            <div style={{ padding: "32px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: "0.05em", color: C.textSub }}>まだメモがありません</p>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: C.textMuted }}>ご来店後、予約履歴から感想を残せます</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {customerMemos.sort((a, b) => b.id - a.id).map(m => {
+                const r = reservations.find(res => res.id === m.reservation_id);
+                const tName = m.therapist_id > 0 ? getTherapistName(m.therapist_id) : "フリー";
+                return (
+                  <div key={m.id} style={{ padding: 16, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 12, fontFamily: FONT_DISPLAY, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>{tName}</span>
+                        <StarRating rating={m.rating} size={10} filledColor={C.accent} emptyColor={C.border} />
+                      </div>
+                      <button onClick={() => openMemoEdit(m.reservation_id, m.therapist_id)} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: C.accent, background: "none", border: "none", cursor: "pointer", fontFamily: FONT_SERIF }}>
+                        <IconEdit size={11} color={C.accent} />編集
+                      </button>
+                    </div>
+                    {m.memo && <p style={{ margin: 0, fontSize: 12, color: C.textSub, lineHeight: 1.8 }}>{m.memo}</p>}
+                    {r && <p style={{ margin: "8px 0 0", fontSize: 10, color: C.textMuted, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{dateFmt(r.date)} {r.start_time}〜 {r.course}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>)}
 
       {/* ═══ お知らせ ═══ */}
-      {tab === "notifications" && (<div className="animate-[fadeIn_0.3s]"><div className="flex items-center justify-between mb-4"><h2 className="text-[16px] font-medium">お知らせ</h2>{unreadCount > 0 && <button onClick={markAllRead} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>すべて既読にする</button>}</div>{notifications.length === 0 ? (<div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[32px] mb-2">🔔</p><p className="text-[12px]" style={{ color: C.textFaint }}>お知らせはありません</p></div>) : (<div className="space-y-2">{notifications.map(n => { const isRead = readNotifIds.includes(n.id); return (<div key={n.id} onClick={() => markRead(n.id)} className="rounded-xl border p-4 cursor-pointer" style={{ backgroundColor: isRead ? C.card : "#c3a78208", borderColor: isRead ? C.border : C.accent + "44" }}><div className="flex items-start gap-3"><span className="text-[20px]">{NOTI_ICONS[n.type] || "📢"}</span><div className="flex-1"><div className="flex items-center gap-2 mb-1"><span className="text-[13px] font-medium" style={{ color: isRead ? C.text : C.accent }}>{n.title}</span>{!isRead && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: C.red }} />}</div>{n.body && <p className="text-[11px] whitespace-pre-wrap" style={{ color: C.textSub }}>{linkify(n.body)}</p>}<div className="flex items-center gap-2 mt-1.5"><span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.cardAlt, color: C.textMuted }}>{NOTI_LABELS[n.type] || n.type}</span><span className="text-[9px]" style={{ color: C.textFaint }}>{timeAgo(n.created_at)}</span></div></div></div></div>); })}</div>)}</div>)}
+      {tab === "notifications" && (<div className="animate-[fadeIn_0.3s]">
+        {/* 見出し（HP風） */}
+        <div style={{ textAlign: "center", marginBottom: 28, paddingTop: 8 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, textTransform: "uppercase" }}>Notifications</p>
+          <h2 style={{ margin: "8px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.1em", color: C.text }}>お知らせ</h2>
+          <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+          {unreadCount > 0 && (
+            <button onClick={markAllRead} style={{
+              fontSize: 11,
+              color: C.accent,
+              background: "none",
+              border: `1px solid ${C.accent}40`,
+              borderRadius: 2,
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: FONT_SERIF,
+              letterSpacing: "0.08em",
+              marginTop: 4,
+            }}>すべて既読にする</button>
+          )}
+        </div>
+
+        {notifications.length === 0 ? (
+          <div style={{ padding: "48px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+            <img src="/mypage/empty-notification.jpg" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", maxWidth: 180, aspectRatio: "1/1", objectFit: "cover", borderRadius: 4, marginBottom: 24, opacity: 0.9 }} />
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: "0.08em", color: C.text }}>新しいお知らせはありません</p>
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: C.textMuted, lineHeight: 1.8 }}>キャンペーンや新人紹介などの<br />お知らせがここに表示されます</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {notifications.map(n => {
+              const isRead = readNotifIds.includes(n.id);
+              return (
+                <div key={n.id} onClick={() => markRead(n.id)} style={{
+                  padding: 16,
+                  backgroundColor: isRead ? C.card : C.accentBg,
+                  border: `1px solid ${isRead ? C.border : C.accent + "50"}`,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        {!isRead && <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: C.accent, flexShrink: 0 }} />}
+                        <span style={{ fontSize: 14, fontFamily: FONT_DISPLAY, fontWeight: 400, letterSpacing: "0.05em", color: isRead ? C.text : C.accentDark }}>{n.title}</span>
+                      </div>
+                      {n.body && <p style={{ margin: 0, fontSize: 12, lineHeight: 1.8, color: C.textSub, whiteSpace: "pre-wrap" }}>{linkify(n.body)}</p>}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                        <span style={{ fontSize: 9, letterSpacing: "0.1em", padding: "2px 8px", borderRadius: 999, backgroundColor: "transparent", border: `1px solid ${C.border}`, color: C.textMuted }}>{NOTI_LABELS[n.type] || n.type}</span>
+                        <span style={{ fontSize: 10, color: C.textFaint, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{timeAgo(n.created_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>)}
 
       {/* ═══ 設定 ═══ */}
-      {tab === "settings" && (<div className="animate-[fadeIn_0.3s] space-y-4"><h2 className="text-[16px] font-medium">会員情報設定</h2>
-        <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: C.card, borderColor: C.border }}><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>お名前</label><input type="text" value={setSelfN} onChange={e => setSetSelfN(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div><div className="pb-4" style={{ borderBottom: `1px solid ${C.border}` }}><p className="text-[11px] mb-1" style={{ color: C.textMuted }}>電話番号</p><p className="text-[14px]">{customer.phone || "—"}</p></div><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>メールアドレス</label><input type="email" value={setEmail} onChange={e => setSetEmail(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>🎂 誕生日</label><input type="date" value={setBday} onChange={e => setSetBday(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /><p className="text-[10px] mt-1" style={{ color: C.textFaint }}>誕生月にボーナスポイントが付与されます</p></div><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>新しいパスワード</label><input type="password" value={setPw} onChange={e => setSetPw(e.target.value)} placeholder="変更する場合のみ入力" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div>{setPw && <div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>パスワード確認</label><input type="password" value={setPwConfirm} onChange={e => setSetPwConfirm(e.target.value)} placeholder="もう一度入力" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div>}{settingMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: settingMsg.includes("保存しました") ? "#4a7c5912" : "#c4555512", color: settingMsg.includes("保存しました") ? C.green : C.red }}>{settingMsg}</div>}<button onClick={saveSettings} disabled={settingSaving} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{settingSaving ? "保存中..." : "変更を保存"}</button></div>
+      {tab === "settings" && (<div className="animate-[fadeIn_0.3s]" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* 見出し */}
+        <div style={{ textAlign: "center", marginBottom: 8, paddingTop: 8 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, textTransform: "uppercase" }}>Account</p>
+          <h2 style={{ margin: "8px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.1em", color: C.text }}>会員情報</h2>
+          <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+        </div>
 
-        {/* 🔔 プッシュ通知設定 */}
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}>
-          <h3 className="text-[13px] font-medium mb-2">🔔 プッシュ通知設定</h3>
-          <p className="text-[11px] mb-3" style={{ color: C.textMuted }}>予約前日のリマインダーやお得なキャンペーン情報を受け取れます。</p>
+        {/* ═══ 会員情報フォーム ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>お名前</label>
+            <input type="text" value={setSelfN} onChange={e => setSetSelfN(e.target.value)} style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+          </div>
+          <div style={{ paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
+            <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.12em", color: C.textMuted, marginBottom: 4 }}>電話番号</p>
+            <p style={{ margin: 0, fontSize: 14, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em", color: C.text }}>{customer.phone || "—"}</p>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>メールアドレス</label>
+            <input type="email" value={setEmail} onChange={e => setSetEmail(e.target.value)} style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>お誕生日</label>
+            <input type="date" value={setBday} onChange={e => setSetBday(e.target.value)} style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+            <p style={{ margin: "6px 0 0", fontSize: 10, color: C.textFaint, letterSpacing: "0.03em" }}>誕生月にボーナスポイントをプレゼント</p>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>新しいパスワード</label>
+            <input type="password" value={setPw} onChange={e => setSetPw(e.target.value)} placeholder="変更する場合のみ入力" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+          </div>
+          {setPw && (
+            <div>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>パスワード確認</label>
+              <input type="password" value={setPwConfirm} onChange={e => setSetPwConfirm(e.target.value)} placeholder="もう一度入力" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+            </div>
+          )}
+          {settingMsg && (
+            <div style={{ padding: "12px 14px", backgroundColor: settingMsg.includes("保存しました") ? "#edf3ee" : C.accentBg, color: settingMsg.includes("保存しました") ? C.green : C.accentDark, fontSize: 12, borderRadius: 4, border: `1px solid ${settingMsg.includes("保存しました") ? "#cadbcf" : C.accent + "30"}` }}>
+              {settingMsg}
+            </div>
+          )}
+          <button onClick={saveSettings} disabled={settingSaving} style={{ width: "100%", padding: "14px", fontSize: 13, color: "#fff", backgroundColor: C.accent, border: "none", borderRadius: 4, cursor: settingSaving ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.15em", opacity: settingSaving ? 0.5 : 1 }}>
+            {settingSaving ? "保存中..." : "変更を保存"}
+          </button>
+        </div>
+
+        {/* ═══ プッシュ通知 ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Notifications</p>
+          <h3 style={{ margin: "6px 0 4px", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>プッシュ通知</h3>
+          <p style={{ margin: "0 0 14px", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>予約前日のリマインダーやお得なキャンペーン情報を受け取れます。</p>
           <PushToggle userType="customer" userId={customer.id} className="w-full" />
         </div>
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between mb-3"><h3 className="text-[13px] font-medium">💳 決済カード</h3><button onClick={() => setShowAddCard(true)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>+ 追加</button></div>{cards.length === 0 ? (<p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>カードが登録されていません</p>) : (<div className="space-y-2">{cards.map(c => (<div key={c.id} className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: C.cardAlt, border: c.is_default ? `1px solid ${C.accent}44` : `1px solid ${C.border}` }}><div className="flex items-center gap-3"><span className="text-[20px]">💳</span><div><div className="flex items-center gap-2"><span className="text-[12px] font-medium">{c.brand.toUpperCase()} •••• {c.last4}</span>{c.is_default && <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: C.accentBg, color: C.accent }}>メイン</span>}</div><span className="text-[10px]" style={{ color: C.textMuted }}>{c.exp_month}/{c.exp_year}</span></div></div><div className="flex items-center gap-1.5">{!c.is_default && <button onClick={() => setDefaultCard(c.id)} className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>メインに</button>}<button onClick={() => removeCard(c.id)} className="px-2 py-1 text-[9px] rounded cursor-pointer" style={{ color: C.red, backgroundColor: "#c4555512" }}>削除</button></div></div>))}</div>)}</div>
-        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}>
-              <p className="text-[11px] font-medium mb-3" style={{ color: C.textSub }}>💳 クレジットカード決済</p>
-              <p className="text-[10px] mb-1" style={{ color: C.textMuted }}>クレジットカードでのお支払いはこちらから。事前決済で当日のお支払いがスムーズになります。</p>
-              <div className="rounded-lg p-2.5 mb-3" style={{ backgroundColor: "#f59e0b08", border: "1px solid #f59e0b30" }}>
-                <p className="text-[10px]" style={{ color: "#b45309" }}>⚠ 料金には10%のタックスが加算されます。</p>
-                <p className="text-[10px] mt-0.5" style={{ color: "#b45309" }}>⚠ ご予約が確定してからカード決済をお願いいたします。</p>
-              </div>
-              <button onClick={() => window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank")} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #3d6b9f, #2d5a8e)" }}>💳 クレジットカードで支払う</button>
-              <p className="text-[9px] mt-2 text-center" style={{ color: C.textFaint }}>※ 別サイト（Star Pay）に移動します</p>
-            </div>
 
-            <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between"><div><p className="text-[11px]" style={{ color: C.textMuted }}>ポイント残高</p><p className="text-[24px] font-bold" style={{ color: C.accent }}>{pointBalance.toLocaleString()}<span className="text-[12px] font-normal ml-1">pt</span></p></div><button onClick={() => setShowPoints(true)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>履歴を見る</button></div></div>
+        {/* ═══ カード情報登録（API連携待ち・UI非表示） ═══
+            カード会社APIとの連携確認後にONにする。`false` を `true` に変えるだけで復活。
+            関連テーブル: customer_cards（データは保持） */}
+        {false && (
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Saved Cards</p>
+              <h3 style={{ margin: "6px 0 0", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>決済カード</h3>
+            </div>
+            <button onClick={() => setShowAddCard(true)} style={{ padding: "8px 14px", fontSize: 11, color: C.accent, backgroundColor: "transparent", border: `1px solid ${C.accent}60`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>+ 追加</button>
+          </div>
+          {cards.length === 0 ? (
+            <p style={{ margin: 0, padding: "20px 0", textAlign: "center", fontSize: 12, color: C.textMuted }}>カードが登録されていません</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {cards.map(c => (
+                <div key={c.id} style={{ padding: 14, backgroundColor: C.cardAlt, border: c.is_default ? `1px solid ${C.accent}60` : `1px solid ${C.border}`, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <IconCard size={20} color={C.textSub} />
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13, fontFamily: FONT_DISPLAY, letterSpacing: "0.08em", color: C.text }}>{c.brand.toUpperCase()} •••• {c.last4}</span>
+                        {c.is_default && <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 999, backgroundColor: C.accentBg, color: C.accentDark, letterSpacing: "0.08em", fontFamily: FONT_SERIF }}>メイン</span>}
+                      </div>
+                      <span style={{ fontSize: 10, color: C.textMuted, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{c.exp_month}/{c.exp_year}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {!c.is_default && <button onClick={() => setDefaultCard(c.id)} style={{ padding: "4px 10px", fontSize: 9, color: C.accent, backgroundColor: "transparent", border: `1px solid ${C.accent}40`, borderRadius: 2, cursor: "pointer", letterSpacing: "0.08em", fontFamily: FONT_SERIF }}>メインに</button>}
+                    <button onClick={() => removeCard(c.id)} style={{ padding: "4px 10px", fontSize: 9, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 2, cursor: "pointer", letterSpacing: "0.08em", fontFamily: FONT_SERIF }}>削除</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
+
+        {/* ═══ クレジットカード決済（Star Pay外部連携） ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Payment</p>
+          <h3 style={{ margin: "6px 0 4px", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>クレジットカード決済</h3>
+          <p style={{ margin: "0 0 12px", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>事前決済で当日のお支払いがスムーズになります。</p>
+          <div style={{ padding: "10px 12px", backgroundColor: C.accentBg, border: `1px solid ${C.accent}30`, borderRadius: 4, marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 10, color: C.accentDark, lineHeight: 1.7, letterSpacing: "0.03em" }}>料金には 10% のタックスが加算されます。<br />ご予約が確定してからカード決済をお願いいたします。</p>
+          </div>
+          <button onClick={() => window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank")} style={{ width: "100%", padding: "14px", fontSize: 13, color: "#fff", backgroundColor: C.text, border: "none", borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.15em" }}>
+            クレジットカードで支払う
+          </button>
+          <p style={{ margin: "8px 0 0", fontSize: 10, color: C.textFaint, textAlign: "center", letterSpacing: "0.05em" }}>※ 別サイト（Star Pay）に移動します</p>
+        </div>
+
+        {/* ═══ ポイント残高 ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Points</p>
+              <p style={{ margin: "10px 0 0", fontFamily: FONT_DISPLAY, fontSize: 30, fontWeight: 400, color: C.text, letterSpacing: "0.02em" }}>
+                {pointBalance.toLocaleString()}
+                <span style={{ fontSize: 12, marginLeft: 4, color: C.textMuted, letterSpacing: 0 }}>pt</span>
+              </p>
+            </div>
+            <button onClick={() => setShowPoints(true)} style={{ padding: "10px 16px", fontSize: 11, color: C.accent, backgroundColor: "transparent", border: `1px solid ${C.accent}60`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.12em" }}>
+              履歴を見る
+            </button>
+          </div>
+        </div>
         <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}>
               <p className="text-[11px] mb-3" style={{ color: C.textMuted }}>会員ランク</p>
               {(() => {
