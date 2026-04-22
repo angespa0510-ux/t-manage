@@ -67,37 +67,13 @@ export default function StaffLogin() {
       password,
     });
 
-    if (authError || !data.user) {
-      setError("メールアドレスまたはパスワードが正しくありません");
-      setLoading(false);
-      return;
-    }
-
-    // スタッフレコード取得
-    const { data: staff, error: staffError } = await supabase
-      .from("staff")
-      .select("*")
-      .eq("auth_user_id", data.user.id)
-      .maybeSingle();
-
-    if (staffError || !staff) {
-      await supabase.auth.signOut();
-      setError("スタッフとして登録されていません");
-      setLoading(false);
-      return;
-    }
-
-    if (staff.status !== "active") {
-      await supabase.auth.signOut();
-      setError("アカウントが無効化されています");
-      setLoading(false);
-      return;
-    }
-
-    // セッション保存
-    sessionStorage.setItem("t-manage-staff", JSON.stringify(staff));
     setLoading(false);
-    router.push("/dashboard");
+
+    if (authError) {
+      setError("メールアドレスまたはパスワードが正しくありません");
+    } else if (data.user) {
+      router.push("/dashboard");
+    }
   };
 
   return (
