@@ -66,7 +66,7 @@ const timeAgo = (d: string) => { const diff = Date.now() - new Date(d).getTime()
 const linkify = (text: string) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlRegex);
-  return parts.map((part, i) => urlRegex.test(part) ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: "#3d6b9f", textDecoration: "underline" }}>{part}</a> : part);
+  return parts.map((part, i) => urlRegex.test(part) ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: "#6b8ba8", textDecoration: "underline" }}>{part}</a> : part);
 };
 
 export default function CustomerMypage() {
@@ -337,8 +337,8 @@ export default function CustomerMypage() {
   const getStatusBadge = (status: string): { label: string; color: string; bg: string } => {
     switch (status) {
       case "unprocessed": return { label: "🟡 リクエスト中", color: "#b38419", bg: "#b3841918" };
-      case "email_sent": return { label: "🔵 確認メール送信済", color: "#3d6b9f", bg: "#3d6b9f18" };
-      case "customer_confirmed": return { label: "🟢 お客様確定", color: "#4a7c59", bg: "#4a7c5918" };
+      case "email_sent": return { label: "🔵 確認メール送信済", color: "#6b8ba8", bg: "#6b8ba818" };
+      case "customer_confirmed": return { label: "🟢 お客様確定", color: "#6b9b7e", bg: "#6b9b7e18" };
       case "completed": return { label: "✅ 完了", color: "#c3a782", bg: "#c3a78218" };
       case "serving": return { label: "💆 接客中", color: "#6b9b7e", bg: "#6b9b7e18" };
       case "cancelled": return { label: "❌ キャンセル", color: "#c96b83", bg: "#c96b8318" };
@@ -989,7 +989,7 @@ export default function CustomerMypage() {
                           <div key={i} className="flex items-center gap-2 py-1 px-2 rounded-lg">
                             <span className="text-[11px] font-mono w-[40px]" style={{ color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
                             {sl.available ? (
-                              <button onClick={() => openBookForm(date, sl.time, weeklyTid)} className="flex-1 py-1 rounded text-[10px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#4a7c5910", color: C.green, border: `1px solid ${C.green}30` }}>◯ 空き</button>
+                              <button onClick={() => openBookForm(date, sl.time, weeklyTid)} className="flex-1 py-1 rounded text-[10px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#6b9b7e10", color: C.green, border: `1px solid ${C.green}30` }}>◯ 空き</button>
                             ) : (<span className="flex-1 py-1 rounded text-[10px] text-center" style={{ color: C.textFaint }}>✕ 予約済</span>)}
                           </div>
                         ))}
@@ -1101,7 +1101,7 @@ export default function CustomerMypage() {
             <button onClick={() => setSchedView("day")} className="text-[14px] cursor-pointer" style={{ color: C.textMuted }}>← 戻る</button>
             <h2 className="text-[16px] font-medium">予約履歴</h2>
           </div>
-          {upcomingRes.length > 0 && (<div className="mb-4"><h3 className="text-[12px] font-medium mb-2" style={{ color: C.accent }}>📅 今後の予約（{upcomingRes.length}件）</h3><div className="space-y-2">{upcomingRes.map(r => (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.accent + "44" }}><div className="flex items-center justify-between mb-1"><span className="text-[14px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color }}>{getStatusBadge(r.status).label}</span></div><p className="text-[13px]">{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}</div>{r.total_price > 0 && <p className="text-[13px] mt-1 font-bold" style={{ color: C.accent }}>{fmt(r.total_price)}</p>}{r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && <div className="mt-2 rounded-lg p-2.5" style={{ backgroundColor: "#3d6b9f08", border: "1px solid #3d6b9f20" }}><p className="text-[10px] mb-1.5" style={{ color: "#3d6b9f" }}>💳 カード決済額: <strong>{fmt(Math.round(r.total_price * 1.1))}</strong>（税10%込）</p><button onClick={() => window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank")} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer text-white flex items-center justify-center gap-1" style={{ background: "linear-gradient(135deg, #3d6b9f, #2d5a8e)" }}>💳 クレジットカードで支払う</button></div>}{/* キャンセルボタン */}<div className="mt-2"><button onClick={() => handleCancelClick(r)} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer" style={{ backgroundColor: canCancelDirectly(r) ? "#c96b8310" : "#88878010", color: canCancelDirectly(r) ? C.red : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? "#c96b8325" : "#88878020"}` }}>{canCancelDirectly(r) ? "✕ この予約をキャンセル" : "📞 キャンセル・変更について"}</button></div></div>))}</div></div>)}
+          {upcomingRes.length > 0 && (<div className="mb-4"><h3 className="text-[12px] font-medium mb-2" style={{ color: C.accent }}>📅 今後の予約（{upcomingRes.length}件）</h3><div className="space-y-2">{upcomingRes.map(r => (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.accent + "44" }}><div className="flex items-center justify-between mb-1"><span className="text-[14px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color }}>{getStatusBadge(r.status).label}</span></div><p className="text-[13px]">{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}</div>{r.total_price > 0 && <p className="text-[13px] mt-1 font-bold" style={{ color: C.accent }}>{fmt(r.total_price)}</p>}{r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && <div className="mt-2 rounded-lg p-2.5" style={{ backgroundColor: "#6b8ba808", border: "1px solid #6b8ba820" }}><p className="text-[10px] mb-1.5" style={{ color: "#6b8ba8" }}>💳 カード決済額: <strong>{fmt(Math.round(r.total_price * 1.1))}</strong>（税10%込）</p><button onClick={() => window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank")} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer text-white flex items-center justify-center gap-1" style={{ background: "linear-gradient(135deg, #6b8ba8, #5a7897)" }}>💳 クレジットカードで支払う</button></div>}{/* キャンセルボタン */}<div className="mt-2"><button onClick={() => handleCancelClick(r)} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer" style={{ backgroundColor: canCancelDirectly(r) ? "#c96b8310" : "#88878010", color: canCancelDirectly(r) ? C.red : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? "#c96b8325" : "#88878020"}` }}>{canCancelDirectly(r) ? "✕ この予約をキャンセル" : "📞 キャンセル・変更について"}</button></div></div>))}</div></div>)}
           <h3 className="text-[12px] font-medium mb-2" style={{ color: C.textSub }}>🕐 過去のご利用（{pastRes.length}件）</h3>
           {pastRes.length === 0 ? (<p className="text-[12px] text-center py-8" style={{ color: C.textFaint }}>利用履歴がありません</p>) : (<div className="space-y-2">{pastRes.map(r => { const bName = (() => { if (r.free_building_id) { const b = buildings.find(bl => bl.id === r.free_building_id); return b?.name || ""; } return ""; })(); const ptEarned = getReservationPointsEarned(r); const payInfo = getPaymentInfo(r); const memo = getMemo(r.id); return (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between mb-1"><span className="text-[13px] font-medium">{dateFmt(r.date)}</span><span className="text-[12px] font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</span></div><p className="text-[12px]" style={{ color: C.textSub }}>{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}{r.options_text && <span>✨ {r.options_text}</span>}{bName && <span>🏠 {bName}</span>}</div>{(payInfo || ptEarned > 0) && <div className="flex flex-wrap gap-x-3 mt-1 text-[9px]" style={{ color: C.textMuted }}>{payInfo && <span>{payInfo}</span>}{ptEarned > 0 && <span>🎁 +{ptEarned}pt付与</span>}</div>}{memo ? (<div className="mt-2 rounded-lg px-3 py-2" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78225" }}><div className="flex items-center justify-between"><div className="flex items-center gap-1"><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span></div><button onClick={() => openMemoEdit(r.id, r.therapist_id)} className="text-[9px] cursor-pointer" style={{ color: C.accent }}>✏️ 編集</button></div>{memo.memo && <p className="text-[10px] mt-0.5" style={{ color: C.textSub }}>{memo.memo}</p>}</div>) : (<button onClick={() => openMemoEdit(r.id, r.therapist_id)} className="mt-2 w-full py-1.5 rounded-lg text-[9px] cursor-pointer" style={{ color: C.textMuted, backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>📝 ひとことメモ</button>)}</div>); })}</div>)}
         </>)}
@@ -1433,20 +1433,20 @@ export default function CustomerMypage() {
                       <div className="mb-3">
                         <div className="flex justify-between mb-1">
                           <span className="text-[10px]" style={{ color: C.textSub }}>累計来店回数</span>
-                          <span className="text-[10px] font-medium" style={{ color: totalProg >= 100 ? "#4a7c59" : C.text }}>{totalVisits} / {needTotal}回 {totalProg >= 100 ? "✅" : `(あと${totalRemain}回)`}</span>
+                          <span className="text-[10px] font-medium" style={{ color: totalProg >= 100 ? "#6b9b7e" : C.text }}>{totalVisits} / {needTotal}回 {totalProg >= 100 ? "✅" : `(あと${totalRemain}回)`}</span>
                         </div>
                         <div className="w-full h-[6px] rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
-                          <div className="h-full rounded-full transition-all" style={{ width: `${totalProg}%`, background: totalProg >= 100 ? "#4a7c59" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
+                          <div className="h-full rounded-full transition-all" style={{ width: `${totalProg}%`, background: totalProg >= 100 ? "#6b9b7e" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
                         </div>
                       </div>
                       {/* 直近来店プログレス */}
                       <div className="mb-3">
                         <div className="flex justify-between mb-1">
                           <span className="text-[10px]" style={{ color: C.textSub }}>直近{periodMonths}ヶ月の来店</span>
-                          <span className="text-[10px] font-medium" style={{ color: recentProg >= 100 ? "#4a7c59" : C.text }}>{recentVisitCount} / {needRecent}回 {recentProg >= 100 ? "✅" : `(あと${recentRemain}回)`}</span>
+                          <span className="text-[10px] font-medium" style={{ color: recentProg >= 100 ? "#6b9b7e" : C.text }}>{recentVisitCount} / {needRecent}回 {recentProg >= 100 ? "✅" : `(あと${recentRemain}回)`}</span>
                         </div>
                         <div className="w-full h-[6px] rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
-                          <div className="h-full rounded-full transition-all" style={{ width: `${recentProg}%`, background: recentProg >= 100 ? "#4a7c59" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
+                          <div className="h-full rounded-full transition-all" style={{ width: `${recentProg}%`, background: recentProg >= 100 ? "#6b9b7e" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
                         </div>
                       </div>
                       <p className="text-[9px]" style={{ color: C.textMuted }}>🎁 {rankLabel(nextRank)}になるとポイントが<strong style={{ color: rankColor(nextRank) }}>×{nextRule.multiplier}倍</strong>にアップ！</p>
@@ -1602,7 +1602,7 @@ export default function CustomerMypage() {
             </div>
             <div className="px-6 py-4">
               <p className="text-[13px] mb-3" style={{ color: C.textSub, lineHeight: 1.8 }}>ご予約は確定しておりますので、<br /><strong style={{ color: C.text }}>キャンセル・変更はお電話にてお願いいたします。</strong></p>
-              <a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-[15px] font-bold no-underline mb-3" style={{ background: `linear-gradient(135deg, #4a7c59, #3d6b4d)`, color: "#fff" }}>📞 {cancelPhone}</a>
+              <a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-[15px] font-bold no-underline mb-3" style={{ background: `linear-gradient(135deg, #6b9b7e, #5a8a6c)`, color: "#fff" }}>📞 {cancelPhone}</a>
               <div className="rounded-xl p-3 mb-4" style={{ backgroundColor: "#c96b8308", border: "1px solid #c96b8320" }}>
                 <p className="text-[10px] m-0" style={{ color: C.red, lineHeight: 1.7 }}>⚠ 当日のキャンセルにつきましては、<strong>100％キャンセル料</strong>を頂戴いたします。</p>
               </div>
