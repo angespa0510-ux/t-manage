@@ -60,9 +60,9 @@ export default function ConfirmModal({
   if (!open) return null;
 
   const variantStyles: Record<ConfirmVariant, { main: string; bg: string; border: string; defaultIcon: string }> = {
-    danger: { main: "#c45555", bg: "#c4555512", border: "#c4555544", defaultIcon: "⚠️" },
-    warning: { main: "#f59e0b", bg: "#f59e0b12", border: "#f59e0b44", defaultIcon: "⚠️" },
-    info: { main: "#85a8c4", bg: "#85a8c412", border: "#85a8c444", defaultIcon: "ℹ️" },
+    danger: { main: "#c96b83", bg: "rgba(201,107,131,0.08)", border: "#c96b8344", defaultIcon: "⚠️" },
+    warning: { main: "#b38419", bg: "rgba(179,132,25,0.08)", border: "#b3841944", defaultIcon: "⚠️" },
+    info: { main: "#6b8ba8", bg: "rgba(107,139,168,0.08)", border: "#6b8ba844", defaultIcon: "ℹ️" },
   };
   const c = variantStyles[variant];
   const iconToShow = icon ?? c.defaultIcon;
