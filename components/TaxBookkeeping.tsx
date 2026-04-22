@@ -52,11 +52,11 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
   const [isAoiro, setIsAoiro] = useState(()=>{try{const p=localStorage.getItem(`tax_support_profile_${therapistId}`);return p?JSON.parse(p).isAoiro===true:false;}catch{return false;}});
   const [hasInvoice, setHasInvoice] = useState(()=>{try{const p=localStorage.getItem(`tax_support_profile_${therapistId}`);return p?JSON.parse(p).hasInvoice===true:false;}catch{return false;}});
 
-  const pink="#e8849a";const pinkLight="#e8849a20";const pinkBorder="#e8849a44";
-  const green="#22c55e";const red="#ef4444";const orange="#f59e0b";const blue="#3b82f6";
-  const cardBase={backgroundColor:T.card,borderColor:T.border,borderRadius:"16px",border:`1px solid ${T.border}`};
-  const altCard={backgroundColor:T.cardAlt,borderRadius:"12px",padding:"12px"};
-  const btnPink={background:`linear-gradient(135deg,${pink},#d4687e)`,color:"#fff",border:"none",borderRadius:"12px",padding:"10px 20px",fontSize:"12px",cursor:"pointer",fontWeight: 500};
+  const pink="#c96b83";const pinkLight="#f7e3e7";const pinkBorder="#e8849a55";
+  const green="#6b9b7e";const red="#c96b83";const orange="#b38419";const blue="#6b8ba8";
+  const cardBase={backgroundColor:T.card,borderColor:T.border,border:`1px solid ${T.border}`};
+  const altCard={backgroundColor:T.cardAlt,padding:"12px",border:`1px solid ${T.border}`};
+  const btnPink={background:"#c96b83",color:"#fff",border:"none",padding:"11px 22px",fontSize:"12px",cursor:"pointer",fontWeight: 500, letterSpacing: "0.1em"};
   const monthKey=`${year}-${String(month).padStart(2,"0")}`;
   const dim=new Date(year,month,0).getDate();
 

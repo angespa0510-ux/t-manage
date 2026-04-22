@@ -63,24 +63,24 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
   const saveChecklist = useCallback((c: { [key: string]: boolean }) => { setChecklist(c); localStorage.setItem(checklistId, JSON.stringify(c)); }, [checklistId]);
   const toggleCheck = (key: string) => { const c = { ...checklist, [key]: !checklist[key] }; saveChecklist(c); };
 
-  // ── スタイル（他マイページと統一） ──
-  const pink = "#e8849a";
-  const pinkLight = "#e8849a20";
-  const pinkBorder = "#e8849a44";
-  const green = "#22c55e";
-  const orange = "#f59e0b";
-  const red = "#ef4444";
+  // ── スタイル（HPトーンで統一） ──
+  const pink = "#c96b83";
+  const pinkLight = "#f7e3e7";
+  const pinkBorder = "#e8849a55";
+  const green = "#6b9b7e";
+  const orange = "#b38419";
+  const red = "#c96b83";
 
-  // マイページ共通の rounded-2xl (16px) / rounded-xl (12px) に揃える
-  const cardBase = { backgroundColor: T.card, border: `1px solid ${T.border}`, borderRadius: "16px" };
-  const altCard = { backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "14px" };
-  const btnPink = { background: `linear-gradient(135deg, ${pink}, #d4687e)`, color: "#fff", border: "none", borderRadius: "12px", padding: "10px 20px", fontSize: "12px", cursor: "pointer", fontWeight: 500 };
-  const btnOutline = { backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "10px 20px", fontSize: "12px", cursor: "pointer" };
+  // HP と揃える（角丸最小、フラットなボーダー）
+  const cardBase = { backgroundColor: T.card, border: `1px solid ${T.border}` };
+  const altCard = { backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "14px" };
+  const btnPink = { background: pink, color: "#fff", border: "none", padding: "11px 22px", fontSize: "12px", cursor: "pointer", fontWeight: 500, letterSpacing: "0.1em" };
+  const btnOutline = { backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, padding: "11px 22px", fontSize: "12px", cursor: "pointer", letterSpacing: "0.05em" };
   const yesNoBtn = (active: boolean | null, target: boolean) => ({
-    backgroundColor: active === target ? (target ? green + "20" : red + "20") : "transparent",
+    backgroundColor: active === target ? (target ? green + "18" : red + "18") : "transparent",
     color: active === target ? (target ? green : red) : T.textMuted,
     border: `1px solid ${active === target ? (target ? green : red) : T.border}`,
-    borderRadius: "12px", padding: "10px 24px", fontSize: "12px", cursor: "pointer", fontWeight: active === target ? 600 : 400,
+    padding: "11px 26px", fontSize: "12px", cursor: "pointer", fontWeight: active === target ? 500 : 400, letterSpacing: "0.05em",
   });
 
   // ── ステップ定義 ──
