@@ -4,11 +4,47 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import TaxSupportWizard from "../../components/TaxSupportWizard";
 import TaxBookkeeping from "../../components/TaxBookkeeping";
-import { useTheme } from "../../lib/theme";
+import { SITE, MARBLE } from "../../lib/site-theme";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
 import InstallPrompt from "../../components/InstallPrompt";
+
+/* ─────────────────────────────────────────────────────────────
+ * セラピストマイページ デザインシステム (Session 60 Phase 1)
+ *
+ * 方針: HP (/app/(site)) の世界観を踏襲
+ *  - 白基調 + ピンクアクセント + 明朝体
+ *  - 大きな数字はサンセリフ(Inter/Geist系)で可読性重視
+ *  - ダークモード廃止・ライト固定
+ *  - 絵文字は機能識別のため残す（タブ/ステータス/カテゴリ）
+ * ───────────────────────────────────────────────────────────── */
+const FONT_SERIF   = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
+const FONT_SANS    = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Geist', system-ui, sans-serif";
+
+// HP風のカラーパレット (既存コードの T.* 互換 shape)
+const T = {
+  bg:         SITE.color.bg,         // #ffffff
+  card:       SITE.color.surface,    // #ffffff
+  cardAlt:    SITE.color.surfaceAlt, // #faf6f1
+  border:     SITE.color.border,     // #e5ded6
+  text:       SITE.color.text,       // #2b2b2b
+  textSub:    SITE.color.textSub,    // #555555
+  textMuted:  SITE.color.textMuted,  // #8a8a8a
+  textFaint:  SITE.color.textFaint,  // #b5b5b5
+  accent:     SITE.color.pink,       // #e8849a
+  accentBg:   SITE.color.pinkSoft,   // #f7e3e7
+} as const;
+
+// メインタブ（ボトムナビ4つ） / サブセグメント
+type MainTab = "home" | "work" | "money" | "learn";
+const MAIN_TABS: { key: MainTab; emoji: string; label: string }[] = [
+  { key: "home",  emoji: "🏠", label: "ホーム" },
+  { key: "work",  emoji: "💼", label: "ワーク" },
+  { key: "money", emoji: "💰", label: "マネー" },
+  { key: "learn", emoji: "📖", label: "ラーン" },
+];
 
 /* ───────── 型定義 ───────── */
 type Therapist = {
@@ -51,14 +87,32 @@ function formatDate(d: string): string {
 }
 
 export default function TherapistMyPage() {
-  const { dark, toggle, T } = useTheme();
   const { confirm, ConfirmModalNode } = useConfirm();
   const [loggedIn, setLoggedIn] = useState(false);
   const [therapist, setTherapist] = useState<Therapist | null>(null);
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert">("home");
+  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert">("home");
+  // ワーク / マネー / ラーン タブ内のサブセグメント
+  const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers">("schedule");
+  const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax">("salary");
+  const [learnSub, setLearnSub] = useState<"notifications" | "manual">("notifications");
+  // ボトムナビ→実タブへのディスパッチ
+  const clickMain = (m: MainTab) => {
+    if (m === "home") setTab("home");
+    else if (m === "work") setTab(workSub);
+    else if (m === "money") setTab(moneySub);
+    else setTab(learnSub);
+  };
+  // 現在の実タブから メインタブを逆引き
+  const getMainTab = (t: string): MainTab => {
+    if (t === "home") return "home";
+    if (t === "shift" || t === "schedule" || t === "customers" || t === "work") return "work";
+    if (t === "salary" || t === "cert" || t === "tax" || t === "money") return "money";
+    return "learn";
+  };
+  const mainTab = getMainTab(tab);
   const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
@@ -497,39 +551,72 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const getStoreShort = (id: number) => stores.find(s => s.id === id)?.name?.replace(/ルーム$/, "") || "";
 
   if (!loggedIn) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#fff0f3" }}>
-      <div className="w-full max-w-[360px]">
-        <div className="text-center mb-8"><div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}><span className="text-white text-2xl font-bold">C</span></div><h1 className="text-xl font-medium" style={{ color: "#d4687e" }}>チョップ</h1><p className="text-xs mt-1" style={{ color: "#c4879a" }}>セラピスト マイページ</p></div>
-        <div className="rounded-2xl p-6 space-y-4" style={{ backgroundColor: "#ffffff", border: "1px solid #f0c6d0", boxShadow: "0 8px 30px rgba(232,132,154,0.12)" }}>
-          {showReset ? (<>
-            <div className="text-center">
-              <p className="text-[14px] font-medium mb-1" style={{ color: "#d4687e" }}>🔑 パスワード再発行</p>
-              <p className="text-[11px]" style={{ color: "#c4879a" }}>ご登録の電話番号を入力してください</p>
-            </div>
-            {!resetDone ? (<>
-              <div>
-                <label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>電話番号</label>
-                <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)} placeholder="090-1234-5678" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} />
-                <p className="text-[9px] mt-1" style={{ color: "#c4879a" }}>セラピスト登録時の電話番号を入力</p>
+    <div style={{ minHeight: "100vh", backgroundColor: T.bg, fontFamily: FONT_SERIF, position: "relative", overflow: "hidden" }}>
+      {/* 大理石pink背景 */}
+      <div style={{ ...MARBLE.pink, position: "absolute", inset: 0, zIndex: 0, opacity: 0.5 }} />
+      <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
+        <div style={{ width: "100%", maxWidth: 400 }}>
+          {/* ヒーロー見出し */}
+          <div style={{ textAlign: "center", marginBottom: 36 }}>
+            <div style={{ width: 1, height: 40, backgroundColor: T.accent, margin: "0 auto 20px" }} />
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>THERAPIST</p>
+            <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 42, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 8, lineHeight: 1.2 }}>Ange Spa</h1>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 11, letterSpacing: "0.4em", color: T.textSub, fontWeight: 400 }}>マイページ</p>
+            <div style={{ width: 40, height: 1, backgroundColor: T.accent, margin: "20px auto 0" }} />
+          </div>
+
+          {/* ログインカード */}
+          <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "36px 28px" }}>
+            {showReset ? (
+              <>
+                <div style={{ textAlign: "center", marginBottom: 28 }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>PASSWORD RESET</p>
+                  <p style={{ fontFamily: FONT_SERIF, fontSize: 13, color: T.text, letterSpacing: "0.05em", fontWeight: 500 }}>パスワード再発行</p>
+                  <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "14px auto 0" }} />
+                </div>
+                {!resetDone ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>電話番号</label>
+                      <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)} placeholder="090-1234-5678" style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
+                      <p style={{ margin: "6px 0 0", fontSize: 10, color: T.textFaint, letterSpacing: "0.05em" }}>セラピスト登録時の電話番号を入力してください</p>
+                    </div>
+                    {resetMsg && <div style={{ padding: "12px 14px", backgroundColor: T.accentBg, color: SITE.color.pinkDeep, fontSize: 12, letterSpacing: "0.05em" }}>{resetMsg}</div>}
+                    <button onClick={handleResetPassword} disabled={loginLoading || !resetPhone.trim()} style={{ width: "100%", padding: "14px", backgroundColor: T.accent, color: "#fff", border: "none", cursor: loginLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.15em", opacity: loginLoading || !resetPhone.trim() ? 0.5 : 1 }}>{loginLoading ? "送信中..." : "パスワードを再発行"}</button>
+                    <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "11px", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.08em" }}>ログインに戻る</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div style={{ padding: 20, backgroundColor: T.accentBg, textAlign: "center" }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: SITE.color.pinkDeep, letterSpacing: "0.05em" }}>{resetMsg}</p>
+                      <p style={{ margin: "10px 0 0", fontSize: 11, color: T.textMuted, lineHeight: 1.7, letterSpacing: "0.03em" }}>メールに記載された新しいパスワードでログインしてください</p>
+                    </div>
+                    <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "14px", backgroundColor: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.15em" }}>ログイン画面に戻る</button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>メールアドレス</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" onKeyDown={(e) => e.key === "Enter" && handleLogin()} style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>パスワード</label>
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" onKeyDown={(e) => e.key === "Enter" && handleLogin()} style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
+                </div>
+                {loginError && <div style={{ padding: "12px 14px", backgroundColor: T.accentBg, color: SITE.color.pinkDeep, fontSize: 12, letterSpacing: "0.05em" }}>{loginError}</div>}
+                <button onClick={handleLogin} disabled={loginLoading} style={{ width: "100%", padding: "14px", backgroundColor: T.accent, color: "#fff", border: "none", cursor: loginLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.15em", opacity: loginLoading ? 0.5 : 1, marginTop: 4 }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
               </div>
-              {resetMsg && <p className="text-[11px] text-center" style={{ color: "#e85d75" }}>{resetMsg}</p>}
-              <button onClick={handleResetPassword} disabled={loginLoading || !resetPhone.trim()} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{loginLoading ? "送信中..." : "パスワードを再発行"}</button>
-              <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="w-full py-2 rounded-xl text-[11px] cursor-pointer" style={{ color: "#c4879a", border: "1px solid #f0c6d0" }}>← ログインに戻る</button>
-            </>) : (<>
-              <div className="px-4 py-4 rounded-xl text-center" style={{ backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-                <p className="text-[12px] font-medium mb-1" style={{ color: "#16a34a" }}>{resetMsg}</p>
-                <p className="text-[10px] mt-2" style={{ color: "#888" }}>メールに記載のパスワードでログインしてください</p>
-              </div>
-              <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>ログイン画面に戻る</button>
-            </>)}
-          </>) : (<>
-            <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>メールアドレス</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
-            <div><label className="block text-[10px] mb-1.5" style={{ color: "#c4879a" }}>パスワード</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={{ backgroundColor: "#fdf2f5", color: "#4a3540", border: "1px solid #f0c6d0" }} onKeyDown={(e) => e.key === "Enter" && handleLogin()} /></div>
-            {loginError && <p className="text-[11px] text-center" style={{ color: "#e85d75" }}>{loginError}</p>}
-            <button onClick={handleLogin} disabled={loginLoading} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
-          </>)}
+            )}
+          </div>
+
+          {!showReset && (
+            <p style={{ textAlign: "center", marginTop: 20 }}>
+              <button onClick={() => { setShowReset(true); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ fontSize: 11, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.08em", borderBottom: `1px solid ${T.accent}`, paddingBottom: 2 }}>パスワードを忘れた方はこちら</button>
+            </p>
+          )}
         </div>
-        {!showReset && <p className="text-center mt-4"><button onClick={() => { setShowReset(true); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="text-[10px] cursor-pointer" style={{ color: "#d4687e", background: "none", border: "none", textDecoration: "underline" }}>パスワードを忘れた方はこちら</button></p>}
       </div>
     </div>
   );
@@ -546,133 +633,140 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
       {ConfirmModalNode}
       <InstallPrompt dismissKey="therapist" />
-      <div className="h-[56px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{therapist?.name?.charAt(0) || "?"}</div><div><p className="text-[13px] font-medium">{therapist?.name}</p><p className="text-[8px]" style={{ color: T.textMuted }}>マイページ</p></div></div>
-        <div className="flex items-center gap-2"><button onClick={() => fetchData()} title="更新" className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>🔄</button><button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button><button onClick={logout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#fce4ec", color: "#d4687e" }}>ログアウト</button></div>
+      {/* ═══ HP風ヘッダー ═══ */}
+      <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0, backgroundColor: T.card, borderBottom: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#fff", fontWeight: 500, backgroundColor: T.accent, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{therapist?.name?.charAt(0) || "?"}</div>
+          <div>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{therapist?.name}</p>
+            <p style={{ margin: 0, fontSize: 9, color: T.textMuted, fontFamily: FONT_DISPLAY, letterSpacing: "0.25em", marginTop: 1 }}>THERAPIST</p>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => fetchData()} title="更新" style={{ padding: "6px 10px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>🔄</button>
+          <button onClick={logout} style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.accent}`, backgroundColor: "transparent", color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>ログアウト</button>
+        </div>
       </div>
-      <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b overflow-x-auto" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        {(() => {
-          const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
-          const notifUnread = notifications.filter(n => !notifReadIds.includes(n.id)).length;
-          return [{ key: "home" as const, label: "🏠 ホーム" }, { key: "notifications" as const, label: notifUnread > 0 ? `🔔 お知らせ(${notifUnread})` : "🔔 お知らせ" }, { key: "shift" as const, label: "📝 シフト希望" }, { key: "schedule" as const, label: "📅 出勤予定" }, { key: "salary" as const, label: "💰 給料明細" }, { key: "customers" as const, label: "👤 お客様" }, { key: "manual" as const, label: manualUnread > 0 ? `📖 マニュアル(${manualUnread})` : "📖 マニュアル" }, { key: "cert" as const, label: "📄 証明書" }, { key: "tax" as const, label: "📊 確定申告" }].map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border whitespace-nowrap" style={chipStyle(tab === t.key, "#e8849a")}>{t.label}</button>
-        ));
-        })()}
-      </div>
-      <div className="flex-1 overflow-y-auto"><div className="max-w-[600px] mx-auto p-4">
+      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: 76 }}><div className="max-w-[600px] mx-auto p-4">
 
-        {tab === "home" && (<div className="space-y-4">
-          {todayShift ? ((() => { const bldName = getBuildingForDate(today); const rmName = getRoomForDate(today); const keyNum = getKeyNumberForDate(today); return (<div className="rounded-2xl p-5 border" style={{ backgroundColor: "#22c55e10", borderColor: "#22c55e33" }}><p className="text-[10px] mb-1" style={{ color: "#22c55e" }}>本日の出勤</p><p className="text-[18px] font-medium">{todayShift.start_time?.slice(0,5)} 〜 {todayShift.end_time?.slice(0,5)}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: T.textMuted }}>{todayShift.store_id > 0 && <span>🏠 {getStoreName(todayShift.store_id)}</span>}{bldName && <span>🏢 {bldName}</span>}{rmName && <span>🚪 {rmName}</span>}{keyNum && <span style={{ color: "#c3a782", fontWeight: 500 }}>🔑 {keyNum}</span>}</div></div>); })()) : (<div className="rounded-2xl p-5 border" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[12px]" style={{ color: T.textMuted }}>本日の出勤予定はありません</p></div>)}
-          <div className="grid grid-cols-3 gap-3">{[{ l: "今月の報酬", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
+        {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: FONT_SERIF }}>
 
-          {/* 🔔 プッシュ通知設定 */}
-          {therapist && (
-            <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[12px] font-medium">🔔 プッシュ通知</p>
-                <p className="text-[9px]" style={{ color: T.textMuted }}>シフト確定・お知らせ</p>
-              </div>
-              <PushToggle userType="therapist" userId={therapist.id} className="w-full" />
-            </div>
-          )}
-
-          {/* 📣 最新のお知らせ (直近5件) */}
-          {notifications.length > 0 && (() => {
-            const latest = notifications.slice(0, 5);
-            const unreadCount = notifications.filter(n => !notifReadIds.includes(n.id)).length;
+          {/* ═══ ブロック1 — 本日のヒーロー ═══ */}
+          {(() => {
+            const bldName = getBuildingForDate(today);
+            const rmName = getRoomForDate(today);
+            const keyNum = getKeyNumberForDate(today);
+            const d = new Date(today + "T00:00:00");
+            const days = ["日", "月", "火", "水", "木", "金", "土"];
+            const dateLabel = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+            const dowLabel = days[d.getDay()];
             return (
-              <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[12px] font-medium">📣 最新のお知らせ</p>
-                  <button onClick={() => setTab("notifications")} className="text-[10px] cursor-pointer" style={{ color: "#e8849a" }}>
-                    {unreadCount > 0 ? `🔴 ${unreadCount}件 未読` : "すべて見る →"}
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {latest.map(n => {
-                    const isRead = notifReadIds.includes(n.id);
-                    const icon = n.type === "schedule" ? "📅" : n.type === "warning" ? "⚠️" : "📢";
-                    return (
-                      <div key={n.id} onClick={() => openNotif(n)} className="rounded-xl p-3 cursor-pointer flex items-start gap-2" style={{ backgroundColor: isRead ? T.cardAlt : "#FBEAF018", border: `1px solid ${isRead ? T.border : "#e8849a44"}` }}>
-                        <span className="text-[14px] leading-none mt-0.5">{icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-[11px] font-medium truncate" style={{ color: isRead ? T.textSub : T.text }}>{n.title}</p>
-                            {!isRead && <span className="text-[8px] px-1.5 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: "#e8849a" }}>NEW</span>}
-                          </div>
-                          <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textMuted }}>{n.body}</p>
-                          <p className="text-[9px] mt-0.5" style={{ color: T.textFaint }}>{new Date(n.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <section style={{ ...MARBLE.pink, padding: "40px 24px 48px", marginLeft: -16, marginRight: -16, marginTop: -16, position: "relative" }}>
+                <div style={{ width: 1, height: 36, backgroundColor: T.accent, marginBottom: 18 }} />
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TODAY</p>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 4 }}>{dateLabel}</p>
+                <p style={{ fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.15em", color: T.textSub, marginBottom: 24 }}>{dowLabel}曜日</p>
+                {todayShift ? (
+                  <>
+                    <p style={{ fontFamily: FONT_SANS, fontSize: 32, letterSpacing: "0.02em", color: T.text, fontWeight: 300, marginBottom: 16, lineHeight: 1.1 }}>
+                      {todayShift.start_time?.slice(0,5)}<span style={{ fontSize: 16, color: T.textMuted, margin: "0 8px" }}>—</span>{todayShift.end_time?.slice(0,5)}
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px", fontSize: 12, color: T.textSub, letterSpacing: "0.05em" }}>
+                      {todayShift.store_id > 0 && <span>🏠 {getStoreName(todayShift.store_id)}</span>}
+                      {bldName && <span>🏢 {bldName}</span>}
+                      {rmName && <span>🚪 {rmName}</span>}
+                      {keyNum && <span style={{ color: T.accent, fontWeight: 500 }}>🔑 {keyNum}</span>}
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ fontFamily: FONT_SERIF, fontSize: 13, color: T.textMuted, letterSpacing: "0.05em" }}>本日の出勤予定はありません</p>
+                )}
+              </section>
             );
           })()}
 
-          {/* マニュアル未読通知 */}
-          {(() => {
-            const unreadArticles = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id));
-            const recentUpdates = manualUpdates.slice(0, 2);
-            if (unreadArticles.length === 0 && recentUpdates.length === 0) return null;
-            return (<div className="rounded-2xl border p-4 cursor-pointer" style={{ backgroundColor: "#FBEAF020", borderColor: "#e8849a44" }} onClick={() => setTab("manual")}>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[12px] font-medium" style={{ color: "#e8849a" }}>📖 マニュアル</p>
-                {unreadArticles.length > 0 && <span className="manual-new-badge text-[9px] px-2 py-0.5 rounded-full text-white" style={{ background: "#e8849a" }}>{unreadArticles.length}件 未読</span>}
-              </div>
-              {recentUpdates.map(u => {
-                const art = manualArticles.find(a => a.id === u.article_id);
-                return <p key={u.id} className="text-[10px] truncate" style={{ color: T.textSub }}>✏️ {art?.title}: {u.summary}</p>;
-              })}
-              <p className="text-[9px] mt-1" style={{ color: "#e8849a" }}>タップして確認 →</p>
-            </div>);
-          })()}
+          {/* ═══ ブロック2 — 今月のサマリー ═══ */}
+          <section>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>THIS MONTH</p>
+              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>今月の実績</p>
+              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {[
+                { l: "REWARD",   subL: "報酬",     v: monthTotal.toLocaleString(),   unit: "¥", primary: true },
+                { l: "ORDERS",   subL: "接客数",   v: String(monthOrders),            unit: "件", primary: false },
+                { l: "DAYS",     subL: "出勤日数", v: String(monthDays),              unit: "日", primary: false },
+              ].map(s => (
+                <div key={s.l} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 12px", textAlign: "center" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.textMuted, marginBottom: 4, fontWeight: 500 }}>{s.l}</p>
+                  <p style={{ fontFamily: FONT_SANS, fontSize: s.primary ? 20 : 22, color: s.primary ? T.accent : T.text, fontWeight: s.primary ? 500 : 300, letterSpacing: "0em", lineHeight: 1.1, marginBottom: 2 }}>
+                    {s.unit === "¥" && <span style={{ fontSize: 13, marginRight: 1 }}>¥</span>}{s.v}{s.unit !== "¥" && <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 2, fontWeight: 400 }}>{s.unit}</span>}
+                  </p>
+                  <p style={{ fontFamily: FONT_SERIF, fontSize: 10, color: T.textMuted, letterSpacing: "0.08em" }}>{s.subL}</p>
+                </div>
+              ))}
+            </div>
+          </section>
 
-          {/* 本日のオーダー */}
-          <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <p className="text-[11px] font-medium mb-2" style={{ color: T.textSub }}>📋 本日のオーダー（{todayOrders.length}件）</p>
-            {/* 説明テキスト */}
-            <div className="rounded-lg p-3 mb-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-              <p className="text-[10px] m-0" style={{ color: T.textMuted, lineHeight: 1.7 }}>
-                🔔 お客様が<strong style={{ color: T.text }}>来店されたら「入室」ボタン</strong>を押してください。<br />
-                🚪 お客様が<strong style={{ color: T.text }}>退室されたら「退室」ボタン</strong>を押してください。<br />
-                <span style={{ color: T.textFaint }}>※ 間違えた場合は「取り消し」で元に戻せます。</span>
+          {/* ═══ ブロック3 — 本日のオーダー ═══ */}
+          <section>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>TODAY&apos;S ORDERS</p>
+              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12, display: "inline-flex", gap: 12, alignItems: "center" }}>
+                本日のオーダー
+                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 11, color: T.accent, padding: "2px 12px", border: `1px solid ${T.accent}44`, fontWeight: 400 }}>{todayOrders.length}件</span>
+              </p>
+              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+            </div>
+
+            <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "12px 14px", marginBottom: 14 }}>
+              <p style={{ margin: 0, fontSize: 10, color: T.textMuted, lineHeight: 1.8, letterSpacing: "0.03em" }}>
+                🔔 お客様が来店されたら <strong style={{ color: T.text }}>「入室」</strong>ボタンを<br />
+                🚪 お客様が退室されたら <strong style={{ color: T.text }}>「退室」</strong>ボタンを<br />
+                <span style={{ color: T.textFaint }}>※ 間違えた場合は「取消」で元に戻せます。</span>
               </p>
             </div>
+
             {todayOrders.length === 0 ? (
-              <p className="text-[11px] text-center py-4" style={{ color: T.textFaint }}>本日のオーダーはありません</p>
+              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "32px 16px", textAlign: "center" }}>
+                <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>本日のオーダーはありません</p>
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {todayOrders.map(r => {
                   const custSt = (r as any).customer_status || "unsent";
                   const isServing = custSt === "serving";
                   const isCompleted = custSt === "completed" || (r as any).status === "completed";
-                  const statusLabel = isCompleted ? "✅ 終了" : isServing ? "💆 接客中" : "⏳ 予約済";
-                  const statusColor = isCompleted ? "#22c55e" : isServing ? "#e8849a" : T.textMuted;
+                  const statusLabel = isCompleted ? "終了" : isServing ? "接客中" : "予約済";
+                  const statusIcon = isCompleted ? "✅" : isServing ? "💆" : "⏳";
+                  const statusColor = isCompleted ? SITE.color.text : isServing ? T.accent : T.textMuted;
+                  const accentBorder = isServing ? T.accent : isCompleted ? "#6b9b7e" : T.border;
                   return (
-                    <div key={r.id} className="rounded-xl p-4 border" style={{ borderColor: isServing ? "#e8849a44" : isCompleted ? "#22c55e33" : T.border, backgroundColor: isServing ? "#e8849a08" : isCompleted ? "#22c55e08" : T.cardAlt }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="text-[14px] font-medium">{r.start_time?.slice(0,5)} 〜 {r.end_time?.slice(0,5)}</p>
-                          <p className="text-[11px] mt-0.5" style={{ color: T.textSub }}>👤 {r.customer_name}</p>
-                          <div className="flex flex-wrap gap-x-3 mt-1 text-[10px]" style={{ color: T.textMuted }}>
+                    <div key={r.id} style={{ backgroundColor: T.card, border: `1px solid ${accentBorder}`, padding: "14px 16px", position: "relative" }}>
+                      {isServing && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, backgroundColor: T.accent }} />}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontFamily: FONT_SANS, fontSize: 16, fontWeight: 400, letterSpacing: "0.02em", color: T.text, margin: 0 }}>
+                            {r.start_time?.slice(0,5)} <span style={{ color: T.textMuted, margin: "0 4px" }}>—</span> {r.end_time?.slice(0,5)}
+                          </p>
+                          <p style={{ margin: "6px 0 0", fontSize: 12, color: T.textSub, letterSpacing: "0.03em" }}>👤 {r.customer_name}</p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 4, fontSize: 10, color: T.textMuted }}>
                             <span>📋 {r.course}</span>
                             {(r as any).nomination && (r as any).nomination !== "フリー" && <span>⭐ {(r as any).nomination}</span>}
                             {(r as any).extension_name && <span>⏱ +{(r as any).extension_name}</span>}
                             {(r as any).options_text && <span>🎁 {(r as any).options_text}</span>}
                           </div>
-                          {r.notes && <p className="text-[9px] mt-1" style={{ color: "#f59e0b" }}>📝 {r.notes.split("\n")[0]}</p>}
+                          {r.notes && <p style={{ margin: "6px 0 0", fontSize: 10, color: "#b38419", letterSpacing: "0.03em" }}>📝 {r.notes.split("\n")[0]}</p>}
                         </div>
-                        <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: statusColor + "18", color: statusColor }}>{statusLabel}</span>
+                        <span style={{ fontFamily: FONT_SERIF, fontSize: 10, padding: "4px 10px", color: statusColor, border: `1px solid ${statusColor}33`, backgroundColor: statusColor + "10", letterSpacing: "0.08em", whiteSpace: "nowrap", marginLeft: 8 }}>{statusIcon} {statusLabel}</span>
                       </div>
-                      {/* ボタンエリア */}
-                      <div className="flex gap-2 mt-2">
+                      <div style={{ display: "flex", gap: 8 }}>
                         {!isServing && !isCompleted && (
                           <button onClick={async () => {
                             await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving" }).eq("id", r.id);
                             setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving" } as any : o));
-                          }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4708a)" }}>
+                          }} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
                             🔔 入室（接客開始）
                           </button>
                         )}
@@ -681,13 +775,13 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                             await supabase.from("reservations").update({ customer_status: "completed", therapist_status: "completed", status: "completed" }).eq("id", r.id);
                             setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "completed", therapist_status: "completed", status: "completed" } as any : o));
                             fetchData();
-                          }} className="flex-1 py-2.5 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}>
+                          }} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: "#6b9b7e", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
                             🚪 退室（接客終了）
                           </button>
                           <button onClick={async () => {
                             await supabase.from("reservations").update({ customer_status: "detail_read", therapist_status: "detail_sent" }).eq("id", r.id);
                             setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "detail_read", therapist_status: "detail_sent" } as any : o));
-                          }} className="px-3 py-2.5 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}>
+                          }} style={{ padding: "11px 14px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
                             ↩ 取消
                           </button>
                         </>)}
@@ -696,7 +790,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                             await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving", status: "unprocessed" }).eq("id", r.id);
                             setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving", status: "unprocessed" } as any : o));
                             fetchData();
-                          }} className="px-4 py-2 rounded-xl text-[10px] cursor-pointer" style={{ backgroundColor: T.cardAlt, color: T.textMuted, border: `1px solid ${T.border}` }}>
+                          }} style={{ padding: "9px 14px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
                             ↩ 退室を取り消す
                           </button>
                         )}
@@ -706,9 +800,67 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                 })}
               </div>
             )}
-          </div>
+          </section>
 
-          {/* カレンダー */}
+          {/* ═══ ブロック4 — アラートセンター (お知らせ・マニュアル未読) ═══ */}
+          {(() => {
+            const unreadNotifs = notifications.filter(n => !notifReadIds.includes(n.id));
+            const unreadArticles = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id));
+            const recentUpdates = manualUpdates.slice(0, 2);
+            if (unreadNotifs.length === 0 && unreadArticles.length === 0 && recentUpdates.length === 0) return null;
+            return (
+              <section style={{ ...MARBLE.beige, padding: "36px 20px", marginLeft: -16, marginRight: -16 }}>
+                <div style={{ textAlign: "center", marginBottom: 20 }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>NOTICE</p>
+                  <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>未確認のお知らせ</p>
+                  <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+                </div>
+
+                {unreadNotifs.length > 0 && (
+                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", color: T.text }}>📣 お知らせ <span style={{ fontFamily: FONT_DISPLAY, color: T.accent, marginLeft: 4 }}>{unreadNotifs.length}</span></p>
+                      <button onClick={() => { setLearnSub("notifications"); setTab("notifications"); }} style={{ fontSize: 10, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>すべて見る →</button>
+                    </div>
+                    <div>
+                      {unreadNotifs.slice(0, 3).map(n => {
+                        const icon = n.type === "schedule" ? "📅" : n.type === "warning" ? "⚠️" : "📢";
+                        return (
+                          <div key={n.id} onClick={() => openNotif(n)} style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                            <span style={{ fontSize: 14 }}>{icon}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</p>
+                              <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.body}</p>
+                            </div>
+                            <span style={{ fontSize: 9, color: T.textFaint, whiteSpace: "nowrap" }}>{new Date(n.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {(unreadArticles.length > 0 || recentUpdates.length > 0) && (
+                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, cursor: "pointer" }} onClick={() => { setLearnSub("manual"); setTab("manual"); }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", color: T.text }}>📖 マニュアル {unreadArticles.length > 0 && <span style={{ fontFamily: FONT_DISPLAY, color: T.accent, marginLeft: 4 }}>{unreadArticles.length}件未読</span>}</p>
+                      <span style={{ fontSize: 10, color: T.accent, letterSpacing: "0.08em" }}>開く →</span>
+                    </div>
+                    {recentUpdates.length > 0 && (
+                      <div style={{ padding: "10px 16px" }}>
+                        {recentUpdates.map(u => {
+                          const art = manualArticles.find(a => a.id === u.article_id);
+                          return <p key={u.id} style={{ margin: "2px 0", fontSize: 10, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✏️ {art?.title}: {u.summary}</p>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
+          {/* ═══ ブロック5 — カレンダー ═══ */}
           {(() => {
             const [cy, cm] = calMonth.split("-").map(Number);
             const calDim = new Date(cy, cm, 0).getDate();
@@ -722,82 +874,186 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             const calDays = calSettlements.length;
 
             return (
-              <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <div className="flex items-center justify-between mb-3">
-                  <button onClick={() => { const d = new Date(cy, cm - 2, 1); setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }}
-                    className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button>
-                  <div className="text-center">
-                    <span className="text-[13px] font-medium">{cy}年{cm}月</span>
-                    <div className="flex items-center gap-3 justify-center mt-0.5">
-                      <span className="text-[9px]" style={{ color: "#e8849a" }}>{fmt(calTotal)}</span>
-                      <span className="text-[9px]" style={{ color: T.textMuted }}>{calOrders}件</span>
-                      <span className="text-[9px]" style={{ color: T.textMuted }}>{calDays}日出勤</span>
-                    </div>
-                  </div>
-                  <button onClick={() => { const d = new Date(cy, cm, 1); setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }}
-                    className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button>
+              <section>
+                <div style={{ textAlign: "center", marginBottom: 16 }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>CALENDAR</p>
+                  <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>月別カレンダー</p>
+                  <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
                 </div>
 
-                <div className="grid grid-cols-7 gap-0.5">
-                  {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
-                    <div key={d} className="text-center text-[9px] py-1 font-medium" style={{ color: i === 0 ? "#c45555" : i === 6 ? "#3d6b9f" : T.textMuted }}>{d}</div>
-                  ))}
-                  {cells.map((date, i) => {
-                    if (!date) return <div key={`e-${i}`} className="p-0.5" />;
-                    const dt = new Date(date + "T00:00:00");
-                    const dayNum = dt.getDate();
-                    const dow = dt.getDay();
-                    const isToday2 = date === today;
-                    const shift = calShifts.find(s => s.date === date);
-                    const settlement = calSettlements.find(s => s.date === date);
-                    const dayRes = calReservations.filter(r => r.date === date);
-                    const hasWork = !!shift;
-                    const hasSettled = !!settlement;
-                    const custCount = dayRes.length;
-                    const uniqueCust = new Set(dayRes.map(r => r.customer_name)).size;
-
-                    return (
-                      <div key={date} onClick={() => setCalDetailDate(date)} className="rounded-lg p-1 text-center min-h-[58px] flex flex-col cursor-pointer hover:opacity-80"
-                        style={{
-                          backgroundColor: isToday2 ? "#e8849a15" : hasSettled ? "#22c55e08" : hasWork ? "#e091a808" : "transparent",
-                          border: isToday2 ? "1.5px solid #e8849a" : hasWork ? `1px solid ${T.border}` : "1px solid transparent",
-                        }}>
-                        <span className="text-[11px] font-medium" style={{ color: dow === 0 ? "#c45555" : dow === 6 ? "#3d6b9f" : T.text }}>{dayNum}</span>
-                        {hasWork && (
-                          <span className="text-[7px] mt-0.5" style={{ color: "#e091a8" }}>
-                            {shift.start_time?.slice(0,5)}〜
-                          </span>
-                        )}
-                        {hasSettled && (
-                          <span className="text-[7px] font-medium" style={{ color: "#e8849a" }}>
-                            {fmt(settlement.final_payment)}
-                          </span>
-                        )}
-                        {custCount > 0 && (
-                          <span className="text-[7px]" style={{ color: "#22c55e" }}>
-                            👤{uniqueCust}名{custCount > uniqueCust ? `(${custCount})` : ""}
-                          </span>
-                        )}
-                        {hasWork && !hasSettled && date < today && (
-                          <span className="text-[6px]" style={{ color: "#f59e0b" }}>未清算</span>
-                        )}
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                    <button onClick={() => { const d = new Date(cy, cm - 2, 1); setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }}
+                      style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
+                    <div style={{ textAlign: "center" }}>
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 20, color: T.text, letterSpacing: "0.05em" }}>{cy}.{String(cm).padStart(2, "0")}</p>
+                      <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 4, fontSize: 9, letterSpacing: "0.05em" }}>
+                        <span style={{ color: T.accent, fontFamily: FONT_SANS }}>{fmt(calTotal)}</span>
+                        <span style={{ color: T.textMuted }}>{calOrders}件</span>
+                        <span style={{ color: T.textMuted }}>{calDays}日出勤</span>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                    <button onClick={() => { const d = new Date(cy, cm, 1); setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }}
+                      style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
+                  </div>
 
-                <div className="flex items-center gap-4 mt-3 pt-2 justify-center flex-wrap" style={{ borderTop: `1px solid ${T.border}` }}>
-                  <span className="flex items-center gap-1 text-[8px]" style={{ color: T.textMuted }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#e091a820", border: "1px solid #e091a8" }} /> 出勤予定</span>
-                  <span className="flex items-center gap-1 text-[8px]" style={{ color: T.textMuted }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#22c55e15" }} /> 清算済み</span>
-                  <span className="flex items-center gap-1 text-[8px]" style={{ color: "#e8849a" }}><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "#e8849a20", border: "1.5px solid #e8849a" }} /> 今日</span>
-                  <span className="flex items-center gap-1 text-[8px]" style={{ color: "#f59e0b" }}>⚠ 未清算</span>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+                    {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
+                      <div key={d} style={{ textAlign: "center", fontSize: 9, padding: "6px 0", fontFamily: FONT_SERIF, letterSpacing: "0.05em", color: i === 0 ? "#c96b83" : i === 6 ? "#6b8ba8" : T.textMuted }}>{d}</div>
+                    ))}
+                    {cells.map((date, i) => {
+                      if (!date) return <div key={`e-${i}`} style={{ padding: 2 }} />;
+                      const dt = new Date(date + "T00:00:00");
+                      const dayNum = dt.getDate();
+                      const dow = dt.getDay();
+                      const isToday2 = date === today;
+                      const shift = calShifts.find(s => s.date === date);
+                      const settlement = calSettlements.find(s => s.date === date);
+                      const dayRes = calReservations.filter(r => r.date === date);
+                      const hasWork = !!shift;
+                      const hasSettled = !!settlement;
+                      const custCount = dayRes.length;
+                      const uniqueCust = new Set(dayRes.map(r => r.customer_name)).size;
+
+                      return (
+                        <div key={date} onClick={() => setCalDetailDate(date)} style={{
+                          padding: 3, textAlign: "center", minHeight: 58, display: "flex", flexDirection: "column", cursor: "pointer",
+                          backgroundColor: isToday2 ? T.accentBg : hasSettled ? "rgba(107,155,126,0.06)" : hasWork ? "rgba(232,132,154,0.04)" : "transparent",
+                          border: isToday2 ? `1.5px solid ${T.accent}` : hasWork ? `1px solid ${T.border}` : "1px solid transparent",
+                        }}>
+                          <span style={{ fontFamily: FONT_SANS, fontSize: 12, fontWeight: 500, color: dow === 0 ? "#c96b83" : dow === 6 ? "#6b8ba8" : T.text }}>{dayNum}</span>
+                          {hasWork && <span style={{ fontSize: 7, marginTop: 1, color: T.accent, fontFamily: FONT_SANS, letterSpacing: "0.02em" }}>{shift.start_time?.slice(0,5)}〜</span>}
+                          {hasSettled && <span style={{ fontSize: 7, fontWeight: 500, color: T.accent, fontFamily: FONT_SANS }}>{fmt(settlement.final_payment)}</span>}
+                          {custCount > 0 && <span style={{ fontSize: 7, color: "#6b9b7e", fontFamily: FONT_SANS }}>👤{uniqueCust}名{custCount > uniqueCust ? `(${custCount})` : ""}</span>}
+                          {hasWork && !hasSettled && date < today && <span style={{ fontSize: 6, color: "#b38419", letterSpacing: "0.05em" }}>未清算</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 14, marginTop: 12, paddingTop: 10, justifyContent: "center", flexWrap: "wrap", borderTop: `1px solid ${T.border}`, fontSize: 9, letterSpacing: "0.03em" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.textMuted }}><span style={{ width: 8, height: 8, backgroundColor: "rgba(232,132,154,0.15)", border: `1px solid ${T.accent}` }} />出勤</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.textMuted }}><span style={{ width: 8, height: 8, backgroundColor: "rgba(107,155,126,0.15)" }} />清算済</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.accent }}><span style={{ width: 8, height: 8, backgroundColor: T.accentBg, border: `1.5px solid ${T.accent}` }} />今日</span>
+                    <span style={{ color: "#b38419" }}>⚠ 未清算</span>
+                  </div>
                 </div>
-              </div>
+              </section>
             );
           })()}
 
-          {upcomingShifts.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[11px] font-medium mb-3">直近の出勤予定</p><div className="space-y-1.5">{upcomingShifts.map(s => (<div key={s.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg" style={{ backgroundColor: T.cardAlt }}><span className="text-[11px]">{formatDate(s.date)}</span><div className="flex items-center gap-2">{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f8bbd018", color: "#e091a8" }}>{getStoreShort(s.store_id)}</span>}<span className="text-[11px] font-medium">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div></div>))}</div></div>)}
+          {/* ═══ ブロック6 — 直近の出勤予定 ═══ */}
+          {upcomingShifts.length > 0 && (
+            <section>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>UPCOMING</p>
+                <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>直近の出勤予定</p>
+                <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+              </div>
+              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                {upcomingShifts.map((s, idx) => (
+                  <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: idx < upcomingShifts.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                    <span style={{ fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.05em", color: T.text }}>{formatDate(s.date)}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {s.store_id > 0 && <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${T.border}`, color: T.textSub, letterSpacing: "0.03em" }}>{getStoreShort(s.store_id)}</span>}
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 13, fontWeight: 400, letterSpacing: "0.02em", color: T.text }}>{s.start_time?.slice(0,5)} — {s.end_time?.slice(0,5)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ═══ ブロック7 — プッシュ通知設定 ═══ */}
+          {therapist && (
+            <section style={{ ...MARBLE.soft, padding: "28px 20px", marginLeft: -16, marginRight: -16 }}>
+              <div style={{ textAlign: "center", marginBottom: 14 }}>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 6, fontWeight: 500 }}>NOTIFICATION</p>
+                <p style={{ fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", color: T.text, fontWeight: 500 }}>🔔 プッシュ通知設定</p>
+              </div>
+              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
+                <p style={{ margin: "0 0 10px", fontSize: 10, color: T.textMuted, textAlign: "center", letterSpacing: "0.03em" }}>シフト確定・お知らせをリアルタイムで受け取れます</p>
+                <PushToggle userType="therapist" userId={therapist.id} className="w-full" />
+              </div>
+            </section>
+          )}
+
         </div>)}
+
+        {/* ═══ サブセグメント（ワーク/マネー/ラーン） ═══ */}
+        {(mainTab === "work" || mainTab === "money" || mainTab === "learn") && (() => {
+          type SubItem = { key: typeof tab; emoji: string; label: string; badge?: number };
+          let items: SubItem[] = [];
+          const notifUnread = notifications.filter(n => !notifReadIds.includes(n.id)).length;
+          const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
+          if (mainTab === "work") {
+            items = [
+              { key: "schedule",  emoji: "📅", label: "出勤予定" },
+              { key: "shift",     emoji: "📝", label: "シフト希望" },
+              { key: "customers", emoji: "👤", label: "お客様" },
+            ];
+          } else if (mainTab === "money") {
+            items = [
+              { key: "salary", emoji: "💰", label: "給料明細" },
+              { key: "cert",   emoji: "📄", label: "証明書" },
+              { key: "tax",    emoji: "📊", label: "確定申告" },
+            ];
+          } else {
+            items = [
+              { key: "notifications", emoji: "🔔", label: "お知らせ",   badge: notifUnread },
+              { key: "manual",        emoji: "📖", label: "マニュアル", badge: manualUnread },
+            ];
+          }
+          const clickSub = (k: typeof tab) => {
+            setTab(k);
+            if (k === "shift" || k === "schedule" || k === "customers") setWorkSub(k);
+            else if (k === "salary" || k === "cert" || k === "tax") setMoneySub(k);
+            else if (k === "notifications" || k === "manual") setLearnSub(k);
+          };
+          const sectionLabel = mainTab === "work" ? "WORK" : mainTab === "money" ? "MONEY" : "LEARN";
+          const sectionTitle = mainTab === "work" ? "仕事" : mainTab === "money" ? "報酬・税務" : "情報・お知らせ";
+          return (
+            <div style={{ marginBottom: 20, fontFamily: FONT_SERIF }}>
+              <div style={{ textAlign: "center", marginBottom: 18 }}>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>{sectionLabel}</p>
+                <p style={{ fontFamily: FONT_SERIF, fontSize: 14, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>{sectionTitle}</p>
+                <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 0, border: `1px solid ${T.border}`, backgroundColor: T.card }}>
+                {items.map((it, idx) => {
+                  const active = tab === it.key;
+                  return (
+                    <button key={it.key} onClick={() => clickSub(it.key)}
+                      style={{
+                        padding: "10px 4px",
+                        fontSize: 11,
+                        fontFamily: FONT_SERIF,
+                        letterSpacing: "0.05em",
+                        cursor: "pointer",
+                        border: "none",
+                        borderLeft: idx > 0 ? `1px solid ${T.border}` : "none",
+                        backgroundColor: active ? T.accent : "transparent",
+                        color: active ? "#fff" : T.textSub,
+                        fontWeight: active ? 500 : 400,
+                        transition: "all 0.2s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                      }}>
+                      <span style={{ fontSize: 12 }}>{it.emoji}</span>
+                      <span>{it.label}</span>
+                      {it.badge !== undefined && it.badge > 0 && (
+                        <span style={{ fontFamily: FONT_SANS, fontSize: 9, padding: "1px 5px", backgroundColor: active ? "#fff" : T.accent, color: active ? T.accent : "#fff", borderRadius: 999, marginLeft: 2, fontWeight: 500, letterSpacing: 0 }}>{it.badge}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
 
         {/* 🔔 お知らせタブ (セッション㊸) */}
         {tab === "notifications" && (
@@ -1071,7 +1327,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               <h2 className="text-[18px] font-semibold mb-2">{manualViewArticle.title}</h2>
               <div className="flex items-center gap-2 flex-wrap mb-3">
                 {cat && <span className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: cat.color, color: "#333" }}>{cat.icon} {cat.name}</span>}
-                {manualViewArticle.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: dark ? "#3a3a42" : "#f0eee8", color: T.textSub }}>{t}</span>)}
+                {manualViewArticle.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: "#f0eee8", color: T.textSub }}>{t}</span>)}
               </div>
               {latestUpd && <div className="rounded-xl p-3 mb-3" style={{ background: "#FAEEDA", border: "1px solid #f59e0b33" }}><span className="text-[11px]" style={{ color: "#854F0B" }}>✏️ {new Date(latestUpd.created_at).toLocaleDateString("ja")} 更新: {latestUpd.summary}</span></div>}
               {/* 本文レンダリング */}
@@ -1096,7 +1352,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 <h3 className="text-[13px] font-semibold mb-3" style={{ color: "#e8849a" }}>❓ よくある質問（{manualViewQAs.length}件）</h3>
                 {manualViewQAs.map((qa, i) => (
                   <div key={i} className="rounded-xl border mb-2" style={{ borderColor: T.border, overflow: "hidden" }}>
-                    <button className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-[12px] font-medium cursor-pointer" style={{ background: manualOpenQA === i ? (dark ? "#3a3a42" : "#fef9f0") : "transparent" }} onClick={() => setManualOpenQA(manualOpenQA === i ? null : i)}>
+                    <button className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-[12px] font-medium cursor-pointer" style={{ background: manualOpenQA === i ? ("#fef9f0") : "transparent" }} onClick={() => setManualOpenQA(manualOpenQA === i ? null : i)}>
                       <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#e8849a20", color: "#e8849a" }}>Q</span>
                       <span style={{ flex: 1, color: T.text }}>{qa.question}</span>
                       <span style={{ color: T.textMuted, fontSize: 10, transition: "transform 0.2s", transform: manualOpenQA === i ? "rotate(90deg)" : "none" }}>▶</span>
@@ -1130,7 +1386,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               <div className="flex gap-1 flex-wrap">
                 <span className="text-[9px] leading-[22px]" style={{ color: T.textMuted }}>🏷️</span>
                 {manualFilterTag && <button onClick={() => setManualFilterTag("")} className="text-[9px] px-2 py-0.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>× クリア</button>}
-                {allT.map(t => <button key={t} onClick={() => setManualFilterTag(manualFilterTag === t ? "" : t)} className="text-[9px] px-2 py-0.5 rounded-lg cursor-pointer" style={{ background: manualFilterTag === t ? "#e8849a" : (dark ? "#3a3a42" : "#f0eee8"), color: manualFilterTag === t ? "#fff" : T.textSub, border: "none", opacity: manualFilterTag && manualFilterTag !== t ? 0.4 : 1 }}>{t}</button>)}
+                {allT.map(t => <button key={t} onClick={() => setManualFilterTag(manualFilterTag === t ? "" : t)} className="text-[9px] px-2 py-0.5 rounded-lg cursor-pointer" style={{ background: manualFilterTag === t ? "#e8849a" : ("#f0eee8"), color: manualFilterTag === t ? "#fff" : T.textSub, border: "none", opacity: manualFilterTag && manualFilterTag !== t ? 0.4 : 1 }}>{t}</button>)}
               </div>
             ) : null; })()}
             {/* 記事一覧 */}
@@ -1160,7 +1416,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                         {isRead && <span className="text-[8px]" style={{ color: "#4a7c59" }}>✅</span>}
                       </div>
                       <h4 className="text-[13px] font-semibold truncate" style={{ color: T.text }}>{a.title}</h4>
-                      {a.tags.length > 0 && <div className="flex gap-1 flex-wrap mt-1">{a.tags.slice(0, 3).map(t => <span key={t} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: dark ? "#3a3a42" : "#f0eee8", color: T.textSub }}>{t}</span>)}</div>}
+                      {a.tags.length > 0 && <div className="flex gap-1 flex-wrap mt-1">{a.tags.slice(0, 3).map(t => <span key={t} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#f0eee8", color: T.textSub }}>{t}</span>)}</div>}
                     </div>
                   </div>
                 </div>);
@@ -1221,7 +1477,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                         {m.role === "ai" && <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5" style={{ background: "#e8849a20", fontSize: 12 }}>🤖</div>}
                         <div style={{ maxWidth: "80%" }}>
                           <div className="rounded-2xl px-3.5 py-2.5 text-[12px] leading-[1.7]" style={{
-                            background: m.role === "user" ? "linear-gradient(135deg, #e8849a, #d4687e)" : (dark ? "#2a2a32" : "#f8f6f3"),
+                            background: m.role === "user" ? "linear-gradient(135deg, #e8849a, #d4687e)" : ("#f8f6f3"),
                             color: m.role === "user" ? "#fff" : T.text,
                             borderBottomRightRadius: m.role === "user" ? 4 : 16,
                             borderBottomLeftRadius: m.role === "ai" ? 4 : 16,
@@ -1262,7 +1518,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     {aiChatLoading && (
                       <div className="flex justify-start mb-3">
                         <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5" style={{ background: "#e8849a20", fontSize: 12 }}>🤖</div>
-                        <div className="rounded-2xl px-3.5 py-2.5 text-[12px] flex items-center gap-2" style={{ background: dark ? "#2a2a32" : "#f8f6f3", color: T.textMuted, borderBottomLeftRadius: 4 }}>
+                        <div className="rounded-2xl px-3.5 py-2.5 text-[12px] flex items-center gap-2" style={{ background: "#f8f6f3", color: T.textMuted, borderBottomLeftRadius: 4 }}>
                           <span className="inline-block" style={{ animation: "pulse 1.5s ease-in-out infinite" }}>💭</span>
                           考え中...
                           <style>{`@keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
@@ -1271,7 +1527,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     )}
                   </div>
                   {/* 入力エリア */}
-                  <div className="flex gap-2 p-3 border-t items-center" style={{ borderColor: T.border, background: dark ? "#1a1a22" : "#faf9f7" }}>
+                  <div className="flex gap-2 p-3 border-t items-center" style={{ borderColor: T.border, background: "#faf9f7" }}>
                     <input type="text" value={aiChatInput} onChange={e => setAiChatInput(e.target.value)}
                       onKeyDown={async (e) => {
                         if (e.key === "Enter" && aiChatInput.trim() && !aiChatLoading) {
@@ -1365,6 +1621,73 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
         </div>)}
 
       </div></div>
+
+      {/* ═══ ボトムナビ（4タブ・絵文字のみ・画面下部固定） ═══ */}
+      <nav style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 64,
+        backgroundColor: T.card,
+        borderTop: `1px solid ${T.border}`,
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        zIndex: 30,
+        fontFamily: FONT_SERIF,
+        boxShadow: "0 -1px 8px rgba(0,0,0,0.03)",
+      }}>
+        {(() => {
+          const notifUnread = notifications.filter(n => !notifReadIds.includes(n.id)).length;
+          const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
+          const learnUnread = notifUnread + manualUnread;
+          return MAIN_TABS.map((m) => {
+            const active = mainTab === m.key;
+            const showBadge = m.key === "learn" && learnUnread > 0;
+            return (
+              <button key={m.key} onClick={() => clickMain(m.key)}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  border: "none",
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  padding: "6px 4px",
+                  position: "relative",
+                  color: active ? T.accent : T.textMuted,
+                  transition: "color 0.2s ease",
+                }}>
+                <span style={{ fontSize: 20, lineHeight: 1 }}>{m.emoji}</span>
+                <span style={{ fontSize: 9, letterSpacing: "0.15em", fontFamily: FONT_DISPLAY, fontWeight: 500, textTransform: "uppercase" }}>{m.key}</span>
+                {active && <span style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2, backgroundColor: T.accent }} />}
+                {showBadge && (
+                  <span style={{
+                    position: "absolute",
+                    top: 6,
+                    right: "28%",
+                    fontFamily: FONT_SANS,
+                    fontSize: 9,
+                    fontWeight: 600,
+                    minWidth: 16,
+                    height: 16,
+                    padding: "0 4px",
+                    borderRadius: 999,
+                    backgroundColor: T.accent,
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    letterSpacing: 0,
+                  }}>{learnUnread > 99 ? "99+" : learnUnread}</span>
+                )}
+              </button>
+            );
+          });
+        })()}
+      </nav>
 
 {/* カレンダー日付詳細モーダル */}
       {calDetailDate && (() => {
