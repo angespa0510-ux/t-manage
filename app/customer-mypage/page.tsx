@@ -5,6 +5,12 @@ import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
 import InstallPrompt from "../../components/InstallPrompt";
 import { fetchActiveEvents, formatEventPeriod, type Event as EventItem } from "../../lib/events";
+import {
+  IconHome, IconCalendar, IconHeart, IconBell, IconSettings,
+  IconUser, IconPhone, IconClock, IconMapPin, IconCheck, IconClose,
+  IconEdit, IconWarning, IconLogout, IconArrowRight, IconSparkle,
+  StarRating, BellWithBadge,
+} from "../../components/mypage/Icon";
 
 type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number; point_used?: number };
@@ -26,7 +32,26 @@ type CustomerTherapistMemo = { id: number; customer_id: number; therapist_id: nu
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 const normPhone = (p: string) => p.replace(/[-\s\u3000()（）\u2010-\u2015\uff0d]/g, "");
-const C = { bg: "#faf8f5", card: "#ffffff", cardAlt: "#f5f2ed", border: "#e8e3db", accent: "#c3a782", accentDark: "#b09672", accentBg: "#c3a78218", text: "#2d2a24", textSub: "#6b6860", textMuted: "#9e9a91", textFaint: "#c4c0b8", green: "#4a7c59", red: "#c45555", blue: "#3d6b9f" };
+// HP（site-theme）と統一感を持たせたカラーパレット
+// ピンク基調 + ホワイト背景 + 明朝見出し
+const C = {
+  bg:         "#ffffff",   // ベース白
+  card:       "#ffffff",   // カード白
+  cardAlt:    "#faf6f1",   // サブカード（ごく淡いクリーム）
+  border:     "#e5ded6",   // HP罫線と同じ
+  accent:     "#e8849a",   // ブランドピンク（HPと同じ）
+  accentDark: "#c96b83",   // 濃ピンク
+  accentBg:   "#f7e3e7",   // 淡ピンク（HPのpinkSoft）
+  text:       "#2b2b2b",   // HPのtext
+  textSub:    "#555555",
+  textMuted:  "#8a8a8a",
+  textFaint:  "#b5b5b5",
+  green:      "#6b9b7e",   // 成功（少し落ち着いた緑）
+  red:        "#c96b83",   // 警告もピンク系に寄せる
+  blue:       "#6b8ba8",   // 補助情報
+};
+const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
 const NOTI_ICONS: Record<string, string> = { news: "📢", new_therapist: "🌟", campaign: "🎉" };
 const NOTI_LABELS: Record<string, string> = { news: "お知らせ", new_therapist: "新人紹介", campaign: "キャンペーン" };
 const timeToMin = (t: string) => { const [h, m] = t.split(":").map(Number); return (h < 9 ? h + 24 : h) * 60 + m; };
@@ -347,64 +372,283 @@ export default function CustomerMypage() {
   };
 
   // ログイン画面
-  if (!customer) { return (<div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: C.bg }}><div className="w-full max-w-[400px]"><div className="text-center mb-8"><div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center text-[24px] font-bold text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>C</div><h1 className="text-[28px] font-light tracking-[2px]" style={{ color: C.text }}>チョップ</h1><p className="text-[13px] mt-1" style={{ color: C.textMuted }}>お客様マイページ</p></div><div className="rounded-2xl border p-6" style={{ backgroundColor: C.card, borderColor: C.border }}>
-
-      {authMode === "reset" ? (<>
-        <div className="text-center mb-5">
-          <p className="text-[16px] font-medium mb-1" style={{ color: C.text }}>🔑 パスワード再発行</p>
-          <p className="text-[12px]" style={{ color: C.textMuted }}>ご登録の電話番号を入力してください</p>
+  if (!customer) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: C.bg, position: "relative", fontFamily: FONT_SERIF }}>
+        {/* ヒーロー画像（/public/mypage/hero-login.jpg） */}
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "45vh",
+          overflow: "hidden",
+          backgroundColor: C.accentBg,
+        }}>
+          <img
+            src="/mypage/hero-login.jpg"
+            alt=""
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center left",
+              transform: "scale(1.08)",
+              transformOrigin: "center left",
+            }}
+          />
+          {/* 白いフェード */}
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.7) 70%, rgba(255,255,255,1) 100%)",
+          }} />
         </div>
-        {!resetDone ? (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>電話番号 <span style={{ color: C.red }}>*</span></label>
-              <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)} placeholder="090-1234-5678" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} />
-              <p className="text-[10px] mt-1" style={{ color: C.textFaint }}>マイページに紐づいた電話番号を入力してください</p>
-            </div>
-            {resetMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: "#c4555512", color: C.red }}>{resetMsg}</div>}
-            <button onClick={handleResetPassword} disabled={authLoading || !resetPhone.trim()} className="w-full py-3.5 rounded-xl text-[14px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{authLoading ? "送信中..." : "パスワードを再発行"}</button>
-            <button onClick={() => { setAuthMode("login"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: C.textMuted, border: `1px solid ${C.border}` }}>← ログインに戻る</button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="px-4 py-4 rounded-xl text-center" style={{ backgroundColor: "#4a7c5912", border: "1px solid #4a7c5930" }}>
-              <p className="text-[13px] font-medium mb-1" style={{ color: "#4a7c59" }}>{resetMsg}</p>
-              <p className="text-[11px] mt-2" style={{ color: C.textMuted }}>メールに記載された新しいパスワードでログインしてください。ログイン後、設定画面からパスワードを変更できます。</p>
-            </div>
-            <button onClick={() => { setAuthMode("login"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="w-full py-3.5 rounded-xl text-[14px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>ログイン画面に戻る</button>
-          </div>
-        )}
-      </>) : (<>
 
-      <div className="grid grid-cols-2 gap-2 mb-6"><button onClick={() => { setAuthMode("login"); setAuthError(""); }} className="py-2.5 rounded-xl text-[13px] cursor-pointer" style={{ backgroundColor: authMode === "login" ? C.accentBg : "transparent", color: authMode === "login" ? C.accent : C.textMuted, fontWeight: authMode === "login" ? 600 : 400, border: authMode === "login" ? `1px solid ${C.accent}44` : "1px solid transparent" }}>ログイン</button><button onClick={() => { setAuthMode("register"); setAuthError(""); }} className="py-2.5 rounded-xl text-[13px] cursor-pointer" style={{ backgroundColor: authMode === "register" ? C.accentBg : "transparent", color: authMode === "register" ? C.accent : C.textMuted, fontWeight: authMode === "register" ? 600 : 400, border: authMode === "register" ? `1px solid ${C.accent}44` : "1px solid transparent" }}>新規会員登録</button></div><div className="space-y-4">{authMode === "register" && (<><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>お名前 <span style={{ color: C.red }}>*</span></label><input type="text" value={authName} onChange={e => setAuthName(e.target.value)} placeholder="山田 太郎" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>電話番号（既存データと紐付け）</label><input type="tel" value={authPhone} onChange={e => setAuthPhone(e.target.value)} placeholder="090-1234-5678" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div></>)}<div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>メールアドレス <span style={{ color: C.red }}>*</span></label><input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="example@email.com" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>パスワード <span style={{ color: C.red }}>*</span></label><div className="relative"><input type={showPw ? "text" : "password"} value={authPw} onChange={e => setAuthPw(e.target.value)} placeholder="6文字以上" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border pr-12" style={inputStyle} /><button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] cursor-pointer" style={{ color: C.textMuted }}>{showPw ? "🙈" : "👁"}</button></div></div>{authError && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: "#c4555512", color: C.red }}>{authError}</div>}<button onClick={authMode === "login" ? handleLogin : handleRegister} disabled={authLoading} className="w-full py-3.5 rounded-xl text-[14px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{authLoading ? "処理中..." : authMode === "login" ? "ログイン" : "会員登録"}</button></div>
+        {/* コンテンツ */}
+        <div style={{
+          position: "relative",
+          zIndex: 1,
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px 20px 48px",
+        }}>
+          <div style={{ width: "100%", maxWidth: 420, marginTop: "20vh" }}>
+            {/* ブランドヘッダー */}
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <p style={{
+                margin: 0,
+                fontFamily: FONT_DISPLAY,
+                fontSize: 11,
+                letterSpacing: "0.3em",
+                color: C.accent,
+                textTransform: "uppercase",
+              }}>Member Page</p>
+              <h1 style={{
+                margin: "10px 0 6px",
+                fontFamily: FONT_DISPLAY,
+                fontSize: 32,
+                fontWeight: 400,
+                letterSpacing: "0.15em",
+                color: C.text,
+              }}>Ange Spa</h1>
+              <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+              <p style={{
+                margin: 0,
+                fontSize: 12,
+                letterSpacing: "0.08em",
+                color: C.textSub,
+              }}>会員の皆さまへ</p>
+            </div>
 
-      </>)}
+            {/* カード */}
+            <div style={{
+              backgroundColor: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: 28,
+              boxShadow: "0 2px 20px rgba(0,0,0,0.04)",
+            }}>
+              {authMode === "reset" ? (
+                <>
+                  <div style={{ textAlign: "center", marginBottom: 24 }}>
+                    <p style={{
+                      margin: 0,
+                      fontFamily: FONT_DISPLAY,
+                      fontSize: 18,
+                      letterSpacing: "0.08em",
+                      color: C.text,
+                    }}>パスワード再発行</p>
+                    <p style={{ margin: "8px 0 0", fontSize: 11, color: C.textMuted, letterSpacing: "0.05em" }}>ご登録の電話番号を入力してください</p>
+                  </div>
+                  {!resetDone ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>電話番号</label>
+                        <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)} placeholder="090-1234-5678" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        <p style={{ margin: "6px 0 0", fontSize: 10, color: C.textFaint }}>マイページに紐づいた電話番号を入力してください</p>
+                      </div>
+                      {resetMsg && <div style={{ padding: "12px 14px", backgroundColor: C.accentBg, color: C.accentDark, fontSize: 12, borderRadius: 4 }}>{resetMsg}</div>}
+                      <button onClick={handleResetPassword} disabled={authLoading || !resetPhone.trim()} style={{ width: "100%", padding: "14px", backgroundColor: C.accent, color: "#fff", border: "none", borderRadius: 4, cursor: authLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.1em", opacity: authLoading || !resetPhone.trim() ? 0.5 : 1 }}>{authLoading ? "送信中..." : "パスワードを再発行"}</button>
+                      <button onClick={() => { setAuthMode("login"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "10px", backgroundColor: "transparent", color: C.textMuted, border: `1px solid ${C.border}`, borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 12 }}>ログインに戻る</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div style={{ padding: 20, backgroundColor: C.accentBg, border: `1px solid ${C.accent}30`, borderRadius: 6, textAlign: "center" }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: C.accentDark }}>{resetMsg}</p>
+                        <p style={{ margin: "10px 0 0", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>メールに記載された新しいパスワードでログインしてください。ログイン後、設定画面からパスワードを変更できます。</p>
+                      </div>
+                      <button onClick={() => { setAuthMode("login"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "14px", backgroundColor: C.accent, color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.1em" }}>ログイン画面に戻る</button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* タブ */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
+                    <button onClick={() => { setAuthMode("login"); setAuthError(""); }} style={{ padding: "12px 0", backgroundColor: "transparent", color: authMode === "login" ? C.accent : C.textMuted, border: "none", borderBottom: authMode === "login" ? `2px solid ${C.accent}` : "2px solid transparent", cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", fontWeight: authMode === "login" ? 500 : 400 }}>ログイン</button>
+                    <button onClick={() => { setAuthMode("register"); setAuthError(""); }} style={{ padding: "12px 0", backgroundColor: "transparent", color: authMode === "register" ? C.accent : C.textMuted, border: "none", borderBottom: authMode === "register" ? `2px solid ${C.accent}` : "2px solid transparent", cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", fontWeight: authMode === "register" ? 500 : 400 }}>新規会員登録</button>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {authMode === "register" && (
+                      <>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>お名前</label>
+                          <input type="text" value={authName} onChange={e => setAuthName(e.target.value)} placeholder="山田 太郎" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>電話番号 <span style={{ fontSize: 9, color: C.textMuted, marginLeft: 4 }}>（既存データと紐付け）</span></label>
+                          <input type="tel" value={authPhone} onChange={e => setAuthPhone(e.target.value)} placeholder="090-1234-5678" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        </div>
+                      </>
+                    )}
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>メールアドレス</label>
+                      <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="example@email.com" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>パスワード</label>
+                      <div style={{ position: "relative" }}>
+                        <input type={showPw ? "text" : "password"} value={authPw} onChange={e => setAuthPw(e.target.value)} placeholder="6文字以上" style={{ width: "100%", padding: "12px 44px 12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 11 }}>{showPw ? "非表示" : "表示"}</button>
+                      </div>
+                    </div>
+                    {authError && <div style={{ padding: "12px 14px", backgroundColor: C.accentBg, color: C.accentDark, fontSize: 12, borderRadius: 4 }}>{authError}</div>}
+                    <button onClick={authMode === "login" ? handleLogin : handleRegister} disabled={authLoading} style={{ width: "100%", padding: "14px", backgroundColor: C.accent, color: "#fff", border: "none", borderRadius: 4, cursor: authLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.1em", opacity: authLoading ? 0.5 : 1, marginTop: 4 }}>{authLoading ? "処理中..." : authMode === "login" ? "ログイン" : "会員登録"}</button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {authMode !== "reset" && (
+              <p style={{ textAlign: "center", marginTop: 20, fontSize: 11 }}>
+                <button onClick={() => { setAuthMode("reset"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ color: C.accent, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>パスワードを忘れた方はこちら</button>
+              </p>
+            )}
+
+            {/* フッター：HPに戻る */}
+            <div style={{ textAlign: "center", marginTop: 32 }}>
+              <a href="/" style={{ fontSize: 10, color: C.textFaint, letterSpacing: "0.15em", textDecoration: "none", fontFamily: FONT_DISPLAY, textTransform: "uppercase" }}>← Back to Home</a>
+            </div>
+          </div>
+        </div>
       </div>
-      {authMode !== "reset" && <p className="text-center text-[11px] mt-6"><button onClick={() => { setAuthMode("reset"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} className="cursor-pointer" style={{ color: C.accent, background: "none", border: "none", textDecoration: "underline" }}>パスワードを忘れた方はこちら</button></p>}
-      </div></div>); }
+    );
+  }
 
-  const tabs: { key: typeof tab; label: string; icon: string }[] = [{ key: "home", label: "ホーム", icon: "🏠" }, { key: "schedule", label: "予約", icon: "📅" }, { key: "favorites", label: "お気に入り", icon: "❤️" }, { key: "notifications", label: "お知らせ", icon: "🔔" }, { key: "settings", label: "設定", icon: "⚙️" }];
+  const tabs: { key: typeof tab; label: string; Icon: React.ComponentType<{ size?: number; color?: string }> }[] = [
+    { key: "home", label: "ホーム", Icon: IconHome },
+    { key: "schedule", label: "予約", Icon: IconCalendar },
+    { key: "favorites", label: "お気に入り", Icon: IconHeart },
+    { key: "notifications", label: "お知らせ", Icon: IconBell },
+    { key: "settings", label: "設定", Icon: IconSettings },
+  ];
 
-  return (<div className="min-h-screen pb-20" style={{ backgroundColor: C.bg, color: C.text }}>
+  return (<div className="min-h-screen pb-24" style={{ backgroundColor: C.bg, color: C.text, fontFamily: FONT_SERIF }}>
     {ConfirmModalNode}
     <InstallPrompt dismissKey="customer" />
-    {/* Header */}
-    <div className="sticky top-0 z-30 border-b backdrop-blur-xl" style={{ backgroundColor: C.card + "ee", borderColor: C.border }}><div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] text-white font-medium" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{(customer.self_name || customer.name)?.charAt(0)}</div><div><p className="text-[14px] font-medium">{customer.self_name || customer.name} 様</p><p className="text-[10px]" style={{ color: C.textMuted }}>{(() => { const r = customer.rank || "normal"; const icon = r === "platinum" ? "💎" : r === "gold" ? "🥇" : r === "silver" ? "🥈" : ""; const label = r === "platinum" ? "プラチナ" : r === "gold" ? "ゴールド" : r === "silver" ? "シルバー" : ""; return icon ? <span style={{ color: r === "platinum" ? "#9b59b6" : r === "gold" ? "#f1c40f" : "#95a5a6", fontWeight: 600 }}>{icon}{label} </span> : null; })()}ポイント: <span style={{ color: C.accent, fontWeight: 600 }}>{pointBalance.toLocaleString()}pt</span></p></div></div><div className="flex items-center gap-2"><button onClick={() => fetchData()} title="更新" className="p-2 cursor-pointer text-[14px]" style={{ color: C.textSub }}>🔄</button><button onClick={() => setTab("notifications")} className="relative p-2 cursor-pointer"><span className="text-[18px]">🔔</span>{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: C.red }}>{unreadCount}</span>}</button><button onClick={handleLogout} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: C.border, color: C.textMuted }}>ログアウト</button></div></div></div>
+
+    {/* ═══ ヘッダー（HP風・明朝ブランド） ═══ */}
+    <div style={{
+      position: "sticky",
+      top: 0,
+      zIndex: 30,
+      backgroundColor: "rgba(255,255,255,0.95)",
+      backdropFilter: "blur(12px)",
+      borderBottom: `1px solid ${C.border}`,
+    }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        {/* 左：ブランドロゴ＋会員情報 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+          <a href="/" style={{ textDecoration: "none" }}>
+            <span style={{
+              fontFamily: FONT_DISPLAY,
+              fontSize: 18,
+              letterSpacing: "0.1em",
+              color: C.text,
+              fontWeight: 400,
+            }}>Ange Spa</span>
+          </a>
+          <div style={{ height: 20, width: 1, backgroundColor: C.border }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 12, color: C.text, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {customer.self_name || customer.name} 様
+            </p>
+            <p style={{ margin: "1px 0 0", fontSize: 10, color: C.textMuted, letterSpacing: "0.05em" }}>
+              {(() => {
+                const r = customer.rank || "normal";
+                const label = r === "platinum" ? "PLATINUM" : r === "gold" ? "GOLD" : r === "silver" ? "SILVER" : null;
+                return (
+                  <>
+                    {label && <span style={{ fontFamily: FONT_DISPLAY, color: r === "platinum" ? "#9b7cb6" : r === "gold" ? "#b8945a" : "#888", letterSpacing: "0.15em", marginRight: 8 }}>{label}</span>}
+                    <span style={{ color: C.accent, fontWeight: 500 }}>{pointBalance.toLocaleString()}</span>
+                    <span style={{ marginLeft: 2, color: C.textMuted }}>pt</span>
+                  </>
+                );
+              })()}
+            </p>
+          </div>
+        </div>
+
+        {/* 右：ベル + ログアウト */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button
+            onClick={() => setTab("notifications")}
+            aria-label="お知らせ"
+            style={{ padding: 8, background: "none", border: "none", cursor: "pointer", color: C.textSub }}
+          >
+            <BellWithBadge count={unreadCount} size={18} color={C.textSub} badgeColor={C.accent} />
+          </button>
+          <button
+            onClick={handleLogout}
+            aria-label="ログアウト"
+            title="ログアウト"
+            style={{ padding: 8, background: "none", border: "none", cursor: "pointer", color: C.textMuted }}
+          >
+            <IconLogout size={16} color={C.textMuted} />
+          </button>
+        </div>
+      </div>
+    </div>
 
     {/* 予約速報テロップ */}
     {tickerMsgs.length > 0 && (
-      <div className="overflow-hidden border-b" style={{ backgroundColor: C.accent + "08", borderColor: C.accent + "20", height: 32 }}>
-        <div className="ticker-scroll flex items-center gap-16 whitespace-nowrap h-full text-[11px]" style={{ color: C.accent }}>
-          {tickerMsgs.map((m, i) => <span key={i} className="inline-block px-4">{m}</span>)}
-          {tickerMsgs.map((m, i) => <span key={`dup-${i}`} className="inline-block px-4">{m}</span>)}
+      <div style={{ overflow: "hidden", borderBottom: `1px solid ${C.border}`, backgroundColor: C.accentBg, height: 30 }}>
+        <div className="ticker-scroll" style={{ display: "flex", alignItems: "center", gap: 64, whiteSpace: "nowrap", height: "100%", fontSize: 11, color: C.accentDark, letterSpacing: "0.05em" }}>
+          {tickerMsgs.map((m, i) => <span key={i} style={{ display: "inline-block", padding: "0 16px" }}>{m}</span>)}
+          {tickerMsgs.map((m, i) => <span key={`dup-${i}`} style={{ display: "inline-block", padding: "0 16px" }}>{m}</span>)}
         </div>
       </div>
     )}
-    <div className="max-w-lg mx-auto px-4 py-4">
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "20px 16px" }}>
 
       {/* ═══ ホーム ═══ */}
-      {tab === "home" && (<div className="space-y-4 animate-[fadeIn_0.3s]">
-        {unreadCount > 0 && (<button onClick={() => setTab("notifications")} className="w-full rounded-xl border p-3 flex items-center gap-3 cursor-pointer" style={{ backgroundColor: "#f59e0b08", borderColor: "#f59e0b44" }}><span className="text-[20px]">🔔</span><span className="text-[12px] font-medium" style={{ color: "#b45309" }}>未読のお知らせが{unreadCount}件あります</span><span className="ml-auto text-[11px]" style={{ color: C.textMuted }}>→</span></button>)}
+      {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 20 }} className="animate-[fadeIn_0.3s]">
+        {unreadCount > 0 && (
+          <button onClick={() => setTab("notifications")} style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 16px",
+            backgroundColor: C.accentBg,
+            border: `1px solid ${C.accent}40`,
+            borderRadius: 6,
+            cursor: "pointer",
+            fontFamily: FONT_SERIF,
+            textAlign: "left",
+          }}>
+            <IconBell size={18} color={C.accentDark} />
+            <span style={{ flex: 1, fontSize: 12, color: C.accentDark, letterSpacing: "0.03em" }}>未読のお知らせが {unreadCount} 件あります</span>
+            <IconArrowRight size={14} color={C.accentDark} />
+          </button>
+        )}
+
 
         {/* 開催中のイベント */}
         {customerEvents.length > 0 && (
@@ -817,7 +1061,52 @@ export default function CustomerMypage() {
     </div>
 
     {/* Bottom Nav */}
-    <div className="fixed bottom-0 left-0 right-0 z-30 border-t" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="max-w-lg mx-auto flex">{tabs.map(t => (<button key={t.key} onClick={() => { setTab(t.key); if (t.key === "schedule") setSchedView("day"); }} className="flex-1 py-2.5 flex flex-col items-center gap-0.5 cursor-pointer relative" style={{ color: tab === t.key ? C.accent : C.textMuted }}><span className="text-[18px]">{t.icon}</span><span className="text-[9px]" style={{ fontWeight: tab === t.key ? 600 : 400 }}>{t.label}</span>{t.key === "notifications" && unreadCount > 0 && <span className="absolute top-1 right-1/4 min-w-[14px] h-[14px] rounded-full text-[8px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: C.red }}>{unreadCount}</span>}</button>))}</div></div>
+    <div style={{
+      position: "fixed",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 30,
+      backgroundColor: "rgba(255,255,255,0.97)",
+      backdropFilter: "blur(12px)",
+      borderTop: `1px solid ${C.border}`,
+    }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", display: "flex" }}>
+        {tabs.map(t => {
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => { setTab(t.key); if (t.key === "schedule") setSchedView("day"); }}
+              style={{
+                flex: 1,
+                padding: "10px 0 14px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                cursor: "pointer",
+                position: "relative",
+                background: "none",
+                border: "none",
+                fontFamily: FONT_SERIF,
+                color: active ? C.accent : C.textMuted,
+                borderTop: active ? `2px solid ${C.accent}` : "2px solid transparent",
+                transition: "color .15s ease",
+              }}
+            >
+              {t.key === "notifications" ? (
+                <BellWithBadge count={unreadCount} size={20} color={active ? C.accent : C.textMuted} badgeColor={C.accent} />
+              ) : (
+                <t.Icon size={20} color={active ? C.accent : C.textMuted} />
+              )}
+              <span style={{ fontSize: 9, letterSpacing: "0.08em", fontWeight: active ? 500 : 400 }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
 
     {/* カード追加モーダル */}
     {showAddCard && (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50" onClick={() => setShowAddCard(false)}><div className="rounded-t-2xl sm:rounded-2xl border w-full max-w-md animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}><div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}><h3 className="text-[16px] font-medium">💳 カード追加</h3><button onClick={() => setShowAddCard(false)} className="text-[14px] cursor-pointer p-1" style={{ color: C.textMuted }}>✕</button></div><div className="px-6 py-4 space-y-4">
