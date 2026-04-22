@@ -123,16 +123,25 @@ function ReservationConfirmInner() {
     const parts = text.split(urlRegex);
     return parts.map((part, i) => {
       if (urlRegex.test(part)) {
-        // Notion等のURLは「場所を確認」ボタンとして表示
         const isLocationUrl = part.includes("notion.site") || part.includes("google.com/maps");
         return (
           <a key={i} href={part} target="_blank" rel="noopener noreferrer"
             style={{
-              color: "#c3a782", textDecoration: "underline", wordBreak: "break-all",
+              color: "#c96b83",
+              textDecoration: "underline",
+              wordBreak: "break-all",
+              letterSpacing: "0.02em",
               ...(isLocationUrl ? {
-                display: "inline-block", marginTop: 4, padding: "8px 16px",
-                backgroundColor: "#c3a78218", borderRadius: 8, textDecoration: "none",
-                border: "1px solid #c3a78244", fontSize: 13,
+                display: "inline-block",
+                marginTop: 8,
+                padding: "10px 20px",
+                backgroundColor: "transparent",
+                textDecoration: "none",
+                border: "1px solid #c96b83",
+                fontSize: 12,
+                fontFamily: "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif",
+                letterSpacing: "0.1em",
+                fontWeight: 500,
               } : {})
             }}>
             {isLocationUrl ? "📍 場所・アクセスを確認する" : part}
@@ -143,45 +152,70 @@ function ReservationConfirmInner() {
     });
   };
 
+  const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+  const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
+  const marbleBg = {
+    background: `
+      radial-gradient(at 20% 15%, rgba(232,132,154,0.10) 0, transparent 50%),
+      radial-gradient(at 85% 20%, rgba(196,162,138,0.08) 0, transparent 50%),
+      radial-gradient(at 40% 85%, rgba(247,227,231,0.6) 0, transparent 50%),
+      linear-gradient(180deg, #fbf7f3 0%, #f8f2ec 100%)
+    `,
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ maxWidth: 440, width: "100%", background: "#1e1e30", borderRadius: 20, padding: 32, color: "#e0e0e0" }}>
+    <div style={{ minHeight: "100vh", ...marbleBg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT_SERIF, color: "#2b2b2b" }}>
+      <div style={{ maxWidth: 440, width: "100%", backgroundColor: "#ffffff", border: "1px solid #e5ded6", padding: "40px 32px" }}>
         {status === "loading" && (
-          <div style={{ textAlign: "center", padding: 40 }}>
-            <p style={{ fontSize: 32, marginBottom: 12 }}>⏳</p>
-            <p style={{ fontSize: 14, color: "#999" }}>確認中...</p>
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <p style={{ fontSize: 28, margin: "0 0 12px" }}>⏳</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#8a8a8a", letterSpacing: "0.1em" }}>確認中…</p>
           </div>
         )}
         {status === "error" && (
-          <div style={{ textAlign: "center", padding: 40 }}>
-            <p style={{ fontSize: 32, marginBottom: 12 }}>⚠️</p>
-            <p style={{ fontSize: 14, color: "#c45555" }}>リンクが無効か、予約が見つかりません</p>
-            <p style={{ fontSize: 12, color: "#888", marginTop: 8 }}>お手数ですがお店にお問い合わせください</p>
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <p style={{ fontSize: 28, margin: "0 0 12px" }}>⚠️</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#c96b83", letterSpacing: "0.05em" }}>リンクが無効か、予約が見つかりません</p>
+            <p style={{ margin: "8px 0 0", fontSize: 11, color: "#8a8a8a", letterSpacing: "0.03em" }}>お手数ですがお店にお問い合わせください</p>
           </div>
         )}
         {status === "success" && (
           <>
-            <div style={{ textAlign: "center", marginBottom: 24 }}>
-              <p style={{ fontSize: 36, marginBottom: 8 }}>✅</p>
-              <h1 style={{ fontSize: 18, fontWeight: 600, color: "#c3a782", margin: 0 }}>ご予約内容の確認</h1>
-              <p style={{ fontSize: 12, color: "#999", marginTop: 4 }}>ご確認ありがとうございます</p>
+            {/* ヘッダー */}
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              {/* 装飾細線 */}
+              <div style={{ width: 1, height: 32, backgroundColor: "#e8849a", margin: "0 auto 18px" }} />
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.3em", color: "#c96b83", fontWeight: 500 }}>RESERVATION</p>
+              <h1 style={{ margin: "6px 0 10px", fontFamily: FONT_SERIF, fontSize: 18, fontWeight: 500, letterSpacing: "0.12em", color: "#2b2b2b" }}>ご予約内容の確認</h1>
+              {/* ピンク細罫線 */}
+              <div style={{ width: 36, height: 1, backgroundColor: "#e8849a", margin: "0 auto 10px" }} />
+              <p style={{ margin: 0, fontSize: 11, color: "#8a8a8a", letterSpacing: "0.08em" }}>ご確認ありがとうございます</p>
             </div>
-            <div style={{ background: "#2a2a40", borderRadius: 14, padding: 20, marginBottom: 16, fontSize: 13, color: "#ddd", lineHeight: 2, whiteSpace: "pre-wrap" }}>
+
+            {/* 予約内容カード */}
+            <div style={{ backgroundColor: "#faf6f1", border: "1px solid #e5ded6", padding: "22px 22px", marginBottom: 18, fontSize: 13, color: "#2b2b2b", lineHeight: 2.1, whiteSpace: "pre-wrap", letterSpacing: "0.03em" }}>
               {renderWithLinks(renderedText)}
             </div>
+
             {mapEmbedUrl && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ marginBottom: 18 }}>
+                <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: "#c96b83", fontWeight: 500, textAlign: "center" }}>MAP — 地図</p>
+                <div style={{ overflow: "hidden", border: "1px solid #e5ded6" }}>
                   <iframe
                     src={mapEmbedUrl}
-                    width="100%" height="220" style={{ border: 0 }} loading="lazy"
+                    width="100%" height="220" style={{ border: 0, display: "block" }} loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade" allowFullScreen />
                 </div>
               </div>
             )}
-            <p style={{ textAlign: "center", fontSize: 11, color: "#666", marginTop: 16 }}>
-              当日のご来店を心よりお待ちしております
-            </p>
+
+            {/* フッター */}
+            <div style={{ textAlign: "center", marginTop: 20, paddingTop: 20, borderTop: "1px solid #e5ded6" }}>
+              <p style={{ margin: 0, fontSize: 11, color: "#8a8a8a", letterSpacing: "0.1em", lineHeight: 1.9 }}>
+                当日のご来店を<br />心よりお待ちしております
+              </p>
+              <div style={{ width: 24, height: 1, backgroundColor: "#e8849a", margin: "14px auto 0" }} />
+            </div>
           </>
         )}
       </div>
@@ -190,10 +224,18 @@ function ReservationConfirmInner() {
 }
 
 export default function ReservationConfirm() {
+  const loadingBg = {
+    background: `
+      radial-gradient(at 20% 15%, rgba(232,132,154,0.10) 0, transparent 50%),
+      radial-gradient(at 85% 20%, rgba(196,162,138,0.08) 0, transparent 50%),
+      radial-gradient(at 40% 85%, rgba(247,227,231,0.6) 0, transparent 50%),
+      linear-gradient(180deg, #fbf7f3 0%, #f8f2ec 100%)
+    `,
+  };
   return (
     <Suspense fallback={
-      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "#999", fontSize: 14 }}>読み込み中...</div>
+      <div style={{ minHeight: "100vh", ...loadingBg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif" }}>
+        <div style={{ color: "#8a8a8a", fontSize: 13, letterSpacing: "0.15em" }}>読み込み中…</div>
       </div>
     }>
       <ReservationConfirmInner />
