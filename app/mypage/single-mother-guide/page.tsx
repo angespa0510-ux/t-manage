@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
-import { useTheme } from "../../../lib/theme";
+import GuidePageHero, { GuideSectionHeading, GUIDE_T as T, GUIDE_FONT_SERIF as FONT_SERIF, GUIDE_FONT_DISPLAY as FONT_DISPLAY, GUIDE_FONT_SANS as FONT_SANS } from "../../../components/mypage/GuidePageHero";
 import {
   AICHI_CITIES,
   findCityByAddress,
@@ -14,17 +14,17 @@ import {
 /* ───────── 型 ───────── */
 type TherapistLite = { id: number; name: string; address?: string | null };
 
-/* ───────── アクセント色 ───────── */
-const PINK = "#e8849a";
-const PINK_DARK = "#d4687e";
-const PINK_BG = "#fce4ec";
-const GREEN = "#4a7c59";
-const BLUE = "#5a84a8";
-const AMBER = "#d97706";
-const RED = "#c45555";
-const ORANGE = "#ea8a2e";
+/* ───────── アクセント色（HP準拠） ───────── */
+const PINK = T.accent;
+const PINK_DARK = T.accentDeep;
+const PINK_BG = T.accentBg;
+const GREEN = "#6b9b7e";
+const BLUE = "#6b8ba8";
+const AMBER = "#b38419";
+const RED = "#c96b83";
+const ORANGE = "#c48a4a";
 const PURPLE = "#8b6cb7";
-const TEAL = "#0d9488";
+const TEAL = "#5a9b94";
 
 /* ───────── シミュレーション型 ───────── */
 type SimResult = {
@@ -41,8 +41,6 @@ type SimResult = {
 
 /* ───────── コンポーネント ───────── */
 export default function SingleMotherGuidePage() {
-  const { dark, toggle, T } = useTheme();
-
   const [therapist, setTherapist] = useState<TherapistLite | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [openSection, setOpenSection] = useState<number | null>(0);
@@ -371,43 +369,15 @@ export default function SingleMotherGuidePage() {
   ];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: T.bg, color: T.text }}>
-      {/* ── ヘッダー ── */}
-      <header
-        className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3"
-        style={{ backgroundColor: T.card, borderBottom: `1px solid ${T.border}` }}
-      >
-        <Link href="/mypage" className="text-[18px] cursor-pointer" style={{ textDecoration: "none" }}>←</Link>
-        <div className="flex-1">
-          <h1 className="text-[14px] font-bold" style={{ color: TEAL }}>
-            🌸 シングルマザー 完全サポートガイド
-          </h1>
-          <p className="text-[9px]" style={{ color: T.textMuted }}>
-            ひとり親のための手当・控除・支援制度まとめ
-          </p>
-        </div>
-        <button onClick={toggle} className="text-[14px] cursor-pointer" style={{ background: "none", border: "none" }}>
-          {dark ? "☀️" : "🌙"}
-        </button>
-      </header>
+    <div className="min-h-screen" style={{ backgroundColor: T.bg, color: T.text, fontFamily: FONT_SERIF }}>
+      <GuidePageHero
+        label="SINGLE MOTHER"
+        title="🌸 シングルマザー 完全サポートガイド"
+        subtitle="お一人で子育てをしながらお仕事されていること、本当にすごいことです。国や愛知県、お住まいの市町村には、知らないと損する支援制度がたくさんあります。このガイドで使える制度をチェックして、少しでもお力になれれば嬉しいです。"
+        marble="soft"
+      />
 
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-20">
-        {/* ── 応援メッセージ ── */}
-        <div
-          className="rounded-2xl p-4"
-          style={{ background: `linear-gradient(135deg, ${TEAL}15, ${PINK}10)`, border: `1px solid ${TEAL}33` }}
-        >
-          <p className="text-[12px] font-bold mb-1" style={{ color: TEAL }}>
-            🌸 シングルマザーのセラピストさんへ
-          </p>
-          <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>
-            お一人で子育てをしながらお仕事されていること、本当にすごいことです。
-            <br />
-            国や愛知県、お住まいの市町村には、<b style={{ color: TEAL }}>知らないと損する支援制度</b>がたくさんあります。
-            <br />
-            このガイドで使える制度をチェックして、少しでもお力になれれば嬉しいです。
-          </p>
-        </div>
+      <main style={{ maxWidth: 640, margin: "0 auto", padding: "32px 16px 80px", display: "flex", flexDirection: "column", gap: 16 }}>
 
         {/* ── セクション目次 ── */}
         <div style={card}>

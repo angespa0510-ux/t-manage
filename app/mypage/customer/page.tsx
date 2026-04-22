@@ -2,14 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../../lib/supabase";
-import { useTheme } from "../../../lib/theme";
+import GuidePageHero, { GUIDE_T as T, GUIDE_FONT_SERIF as FONT_SERIF, GUIDE_FONT_DISPLAY as FONT_DISPLAY, GUIDE_FONT_SANS as FONT_SANS } from "../../../components/mypage/GuidePageHero";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
 function CustomerDetailInner() {
-  const { dark, toggle, T } = useTheme();
   const searchParams = useSearchParams();
   const custName = searchParams.get("name") || "";
 
@@ -126,27 +125,20 @@ function CustomerDetailInner() {
   const myNomVisits = allTherapistRes.filter(r => r.nomination === "本指名").length;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: T.bg, color: T.text }}>
-      {/* Header */}
-      <div className="sticky top-0 z-10 px-4 py-3 border-b flex items-center justify-between" style={{ backgroundColor: T.card, borderColor: T.border }}>
-        <div className="flex items-center gap-3">
-          <a href="/mypage" className="p-1.5 rounded-lg" style={{ color: T.textSub }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6"/></svg>
-          </a>
-          <div>
-            <h1 className="text-[14px] font-medium">👤 {cleanDisplayName} 様</h1>
-            <p className="text-[10px]" style={{ color: T.textMuted }}>{therapistName}のメモ・履歴</p>
-          </div>
-        </div>
-        <button onClick={toggle} className="px-2 py-1 text-[9px] rounded-lg border" style={{ borderColor: T.border, color: T.textSub }}>{dark ? "☀️" : "🌙"}</button>
-      </div>
+    <div className="min-h-screen" style={{ backgroundColor: T.bg, color: T.text, fontFamily: FONT_SERIF }}>
+      <GuidePageHero
+        label="CUSTOMER"
+        title={`👤 ${cleanDisplayName} 様`}
+        subtitle={`${therapistName} のメモ・履歴`}
+        marble="soft"
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <p className="text-[12px]" style={{ color: T.textMuted }}>読み込み中...</p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0" }}>
+          <p style={{ fontSize: 12, color: T.textMuted, letterSpacing: "0.05em" }}>読み込み中...</p>
         </div>
       ) : (
-        <div className="max-w-lg mx-auto p-4 space-y-4">
+        <div style={{ maxWidth: 520, margin: "0 auto", padding: "24px 16px 60px", display: "flex", flexDirection: "column", gap: 16 }}>
 
           {/* サマリーカード */}
           <div className="rounded-2xl border p-5" style={{ backgroundColor: T.card, borderColor: T.border }}>

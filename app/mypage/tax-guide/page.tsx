@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
-import { useTheme } from "../../../lib/theme";
+import GuidePageHero, { GuideSectionHeading, GUIDE_T as T, GUIDE_FONT_SERIF as FONT_SERIF, GUIDE_FONT_DISPLAY as FONT_DISPLAY, GUIDE_FONT_SANS as FONT_SANS } from "../../../components/mypage/GuidePageHero";
 import {
   AICHI_CITIES,
   findCityByAddress,
@@ -14,17 +14,16 @@ import {
 /* ───────── 型 ───────── */
 type TherapistLite = { id: number; name: string; address?: string | null };
 
-/* ───────── アクセント色 ───────── */
-const PINK = "#e8849a";
-const PINK_DARK = "#d4687e";
-const PINK_BG = "#fce4ec";
-const GREEN = "#4a7c59";
-const AMBER = "#d97706";
-const RED = "#c45555";
+/* ───────── アクセント色（HP準拠） ───────── */
+const PINK = T.accent;
+const PINK_DARK = T.accentDeep;
+const PINK_BG = T.accentBg;
+const GREEN = "#6b9b7e";
+const AMBER = "#b38419";
+const RED = "#c96b83";
 
 /* ───────── コンポーネント ───────── */
 export default function TaxGuidePage() {
-  const { dark, toggle, T } = useTheme();
 
   const [therapist, setTherapist] = useState<TherapistLite | null>(null);
   const [cityManual, setCityManual] = useState<CityTaxInfo | null>(null); // 手動選択
@@ -91,58 +90,19 @@ export default function TaxGuidePage() {
 
   /* ───────── レンダリング ───────── */
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: T.bg, color: T.text }}>
-      {/* ヘッダー */}
-      <header
-        className="sticky top-0 z-10 px-4 py-3 border-b flex items-center justify-between"
-        style={{ backgroundColor: T.card, borderColor: T.border }}
-      >
-        <Link
-          href="/mypage"
-          className="text-[12px] flex items-center gap-1 cursor-pointer"
-          style={{ color: T.textSub }}
-        >
-          <span style={{ fontSize: 14 }}>◀</span> マイページに戻る
-        </Link>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggle}
-            className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border"
-            style={{ borderColor: T.border, color: T.textSub }}
-          >
-            {dark ? "☀️" : "🌙"}
-          </button>
-        </div>
-      </header>
+    <div style={{ minHeight: "100vh", backgroundColor: T.bg, color: T.text, fontFamily: FONT_SERIF }}>
+      <GuidePageHero
+        label="TAX GUIDE"
+        title="🔒 副業がバレない 完全ガイド"
+        subtitle={
+          therapist
+            ? `${therapist.name} さん${activeCity ? `（${activeCity.city}）` : ""} ／ 本業がある方にとって最大の関心事、「副業バレ」。このページの手順どおりにやれば、会社にバレる心配はありません。`
+            : "本業がある方にとって最大の関心事、「副業バレ」。このページの手順どおりにやれば、会社にバレる心配はありません。"
+        }
+        marble="pink"
+      />
 
-      <main className="max-w-[720px] mx-auto p-4 space-y-5 pb-20">
-        {/* ─── ヒーロー ─── */}
-        <section
-          className="rounded-2xl p-5 border"
-          style={{
-            background: dark
-              ? "linear-gradient(135deg, #3a2a30, #2a2028)"
-              : "linear-gradient(135deg, #fce4ec, #fff5f7)",
-            borderColor: PINK + "44",
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span style={{ fontSize: 24 }}>🔒</span>
-            <h1 className="text-[18px] font-bold" style={{ color: PINK_DARK }}>
-              副業がバレない 完全ガイド
-            </h1>
-          </div>
-          <p className="text-[12px] leading-relaxed" style={{ color: T.textSub }}>
-            本業がある方にとって最大の関心事、「副業バレ」。
-            <br />
-            このページの手順どおりにやれば、<strong style={{ color: PINK_DARK }}>会社にバレる心配はありません。</strong>
-          </p>
-          {therapist && (
-            <p className="text-[10px] mt-3" style={{ color: T.textMuted }}>
-              👤 {therapist.name} さん{activeCity && `（${activeCity.city}）`}
-            </p>
-          )}
-        </section>
+      <main style={{ maxWidth: 720, margin: "0 auto", padding: "32px 16px 80px", display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* ─── 3つの結論 ─── */}
         <section
@@ -790,7 +750,7 @@ export default function TaxGuidePage() {
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-[11.5px] font-medium cursor-pointer"
                   style={{
-                    background: openFaq === i ? (dark ? "#3a3a42" : "#fef9f0") : "transparent",
+                    background: openFaq === i ? ("#fef9f0") : "transparent",
                   }}
                 >
                   <span

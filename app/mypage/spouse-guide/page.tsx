@@ -3,25 +3,24 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
-import { useTheme } from "../../../lib/theme";
+import GuidePageHero, { GuideSectionHeading, GUIDE_T as T, GUIDE_FONT_SERIF as FONT_SERIF, GUIDE_FONT_DISPLAY as FONT_DISPLAY, GUIDE_FONT_SANS as FONT_SANS } from "../../../components/mypage/GuidePageHero";
 
 /* ───────── 型 ───────── */
 type TherapistLite = { id: number; name: string; address?: string | null };
 
-/* ───────── アクセント色 ───────── */
-const PINK = "#e8849a";
-const PINK_DARK = "#d4687e";
-const PINK_BG = "#fce4ec";
-const GREEN = "#4a7c59";
-const BLUE = "#5a84a8";
-const AMBER = "#d97706";
-const RED = "#c45555";
+/* ───────── アクセント色（HP準拠） ───────── */
+const PINK = T.accent;
+const PINK_DARK = T.accentDeep;
+const PINK_BG = T.accentBg;
+const GREEN = "#6b9b7e";
+const BLUE = "#6b8ba8";
+const AMBER = "#b38419";
+const RED = "#c96b83";
 const PURPLE = "#8b6cb7";
 
 type HubanType = "shakai" | "kokuho" | "unknown" | null;
 
 export default function SpouseGuidePage() {
-  const { dark, toggle, T } = useTheme();
   const [therapist, setTherapist] = useState<TherapistLite | null>(null);
   const [hubanType, setHubanType] = useState<HubanType>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -134,64 +133,19 @@ export default function SpouseGuidePage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: T.bg, color: T.text }}>
-      {/* ヘッダー */}
-      <header
-        className="sticky top-0 z-10 px-4 py-3 border-b flex items-center justify-between"
-        style={{ backgroundColor: T.card, borderColor: T.border }}
-      >
-        <Link
-          href="/mypage"
-          className="text-[12px] flex items-center gap-1 cursor-pointer"
-          style={{ color: T.textSub }}
-        >
-          <span style={{ fontSize: 14 }}>◀</span> マイページに戻る
-        </Link>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggle}
-            className="px-2 py-1 text-[9px] rounded-lg cursor-pointer border"
-            style={{ borderColor: T.border, color: T.textSub }}
-          >
-            {dark ? "☀️" : "🌙"}
-          </button>
-        </div>
-      </header>
+    <div style={{ minHeight: "100vh", backgroundColor: T.bg, color: T.text, fontFamily: FONT_SERIF }}>
+      <GuidePageHero
+        label="SPOUSE GUIDE"
+        title="💑 配偶者控除・扶養 完全ガイド"
+        subtitle={
+          therapist
+            ? `${therapist.name} さん／ 旦那さんの扶養に入りながらお仕事する方向け。2026年（令和8年）最新制度に対応。「いくらまで働いていいの？」を解決します。`
+            : "旦那さんの扶養に入りながらお仕事する方向け。2026年（令和8年）最新制度に対応。「いくらまで働いていいの？」を解決します。"
+        }
+        marble="warm"
+      />
 
-      <main className="max-w-[720px] mx-auto p-4 space-y-5 pb-20">
-        {/* ─── ヒーロー ─── */}
-        <section
-          className="rounded-2xl p-5 border"
-          style={{
-            background: dark
-              ? "linear-gradient(135deg, #3a2a36, #2a2028)"
-              : "linear-gradient(135deg, #f3e8ff, #fff0f7)",
-            borderColor: PURPLE + "44",
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span style={{ fontSize: 24 }}>💑</span>
-            <h1 className="text-[18px] font-bold" style={{ color: PURPLE }}>
-              配偶者控除・扶養 完全ガイド
-            </h1>
-          </div>
-          <p
-            className="text-[11.5px] leading-relaxed"
-            style={{ color: T.textSub }}
-          >
-            旦那さんの扶養に入りながらお仕事する方向け。
-            <br />
-            <strong style={{ color: PURPLE }}>
-              2026年（令和8年）最新制度に対応
-            </strong>
-            。「いくらまで働いていいの？」を解決します。
-          </p>
-          {therapist && (
-            <p className="text-[10px] mt-3" style={{ color: T.textMuted }}>
-              👤 {therapist.name} さん
-            </p>
-          )}
-        </section>
+      <main style={{ maxWidth: 720, margin: "0 auto", padding: "32px 16px 80px", display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* ─── 2026年の重要変更 ─── */}
         <section
@@ -960,7 +914,7 @@ export default function SpouseGuidePage() {
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-[11.5px] font-medium cursor-pointer"
                   style={{
-                    background: openFaq === i ? (dark ? "#3a3a42" : "#fef9f0") : "transparent",
+                    background: openFaq === i ? ("#fef9f0") : "transparent",
                   }}
                 >
                   <span
