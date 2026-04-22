@@ -4,6 +4,19 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 
+const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
+const FONT_SANS = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
+
+const MARBLE_BG = {
+  background: `
+    radial-gradient(at 20% 15%, rgba(232,132,154,0.10) 0, transparent 50%),
+    radial-gradient(at 85% 20%, rgba(196,162,138,0.08) 0, transparent 50%),
+    radial-gradient(at 40% 85%, rgba(247,227,231,0.6) 0, transparent 50%),
+    linear-gradient(180deg, #fbf7f3 0%, #f8f2ec 100%)
+  `,
+};
+
 export default function StaffLogin() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -13,11 +26,9 @@ export default function StaffLogin() {
   const [error, setError] = useState("");
 
   // PWA 起動時の自動リダイレクト
-  // ホーム画面アイコンから開いた時、以前ログイン中だったマイページへ自動遷移
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // スタンドアロン PWA として起動されたかチェック
     type IosWindow = Window & { navigator: Navigator & { standalone?: boolean } };
     const isStandalone =
       (window as IosWindow).navigator.standalone === true ||
@@ -25,28 +36,24 @@ export default function StaffLogin() {
 
     if (!isStandalone) return;
 
-    // 優先順位: セラピスト > お客様 > スタッフ (該当するものへ遷移)
     try {
-      // セラピストセッション
       const therapistSession = localStorage.getItem("therapist_session");
       if (therapistSession) {
         router.replace("/mypage");
         return;
       }
-      // お客様セッション
       const customerId = localStorage.getItem("customer_mypage_id");
       if (customerId) {
         router.replace("/customer-mypage");
         return;
       }
-      // スタッフセッション (tab閉じで消えるが、稀にあるかも)
       const staffSession = sessionStorage.getItem("t-manage-staff");
       if (staffSession) {
         router.replace("/dashboard");
         return;
       }
     } catch {
-      // localStorage/sessionStorage アクセス失敗時は何もしない
+      // ignore
     }
   }, [router]);
 
@@ -60,107 +67,113 @@ export default function StaffLogin() {
       password,
     });
 
-    setLoading(false);
-
-    if (authError) {
+    if (authError || !data.user) {
       setError("メールアドレスまたはパスワードが正しくありません");
-    } else if (data.user) {
-      router.push("/dashboard");
+      setLoading(false);
+      return;
     }
+
+    // スタッフレコード取得
+    const { data: staff, error: staffError } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("auth_user_id", data.user.id)
+      .maybeSingle();
+
+    if (staffError || !staff) {
+      await supabase.auth.signOut();
+      setError("スタッフとして登録されていません");
+      setLoading(false);
+      return;
+    }
+
+    if (staff.status !== "active") {
+      await supabase.auth.signOut();
+      setError("アカウントが無効化されています");
+      setLoading(false);
+      return;
+    }
+
+    // セッション保存
+    sessionStorage.setItem("t-manage-staff", JSON.stringify(staff));
+    setLoading(false);
+    router.push("/dashboard");
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0b0f] flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute top-[-200px] right-[-100px] w-[600px] h-[600px] rounded-full bg-[#c3a782]/[0.06] blur-3xl animate-pulse" />
-      <div className="absolute bottom-[-150px] left-[-100px] w-[500px] h-[500px] rounded-full bg-[#c3a782]/[0.04] blur-3xl animate-pulse delay-1000" />
-
-      <div className="relative z-10 w-full max-w-[420px]">
+    <div style={{ minHeight: "100vh", ...MARBLE_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 16px", fontFamily: FONT_SERIF, color: "#2b2b2b" }}>
+      <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 420 }}>
         {/* Brand */}
-        <div className="text-center mb-12">
-          <div className="w-12 h-12 mx-auto mb-5 border border-[#c3a782]/30 rounded-xl flex items-center justify-center bg-[#c3a782]/[0.08]">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#c3a782"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          {/* 装飾細線 */}
+          <div style={{ width: 1, height: 32, backgroundColor: "#e8849a", margin: "0 auto 18px" }} />
+
+          {/* ブランドアイコン（円 + 笑顔） */}
+          <div style={{ width: 48, height: 48, margin: "0 auto 14px", border: "1px solid #e8849a", backgroundColor: "rgba(232,132,154,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#c96b83" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="9.5" />
               <path d="M8 14s1.5 2 4 2 4-2 4-2" />
               <path d="M7.5 8.5C8.5 7 10 6 12 6s3.5 1 4.5 2.5" />
             </svg>
           </div>
-          <p className="text-[11px] tracking-[4px] uppercase text-[#f0ece4]/30 mb-2 font-light">
-            Chop
-          </p>
-          <h1 className="text-[32px] text-[#f0ece4] tracking-[2px] font-light">
-            チョップ
-          </h1>
-          <p className="text-[12px] text-[#f0ece4]/50 mt-1.5 tracking-[3px] font-light">
-            サロン管理システム
-          </p>
+
+          {/* 英文ロゴ */}
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: "0.4em", color: "#c96b83", fontWeight: 500 }}>ANGE SPA</p>
+          {/* 和文 */}
+          <h1 style={{ margin: "10px 0 8px", fontFamily: FONT_SERIF, fontSize: 26, letterSpacing: "0.2em", color: "#2b2b2b", fontWeight: 500 }}>チョップ</h1>
+          {/* ピンク細罫線 */}
+          <div style={{ width: 32, height: 1, backgroundColor: "#e8849a", margin: "0 auto 10px" }} />
+          <p style={{ margin: 0, fontSize: 11, color: "#8a8a8a", letterSpacing: "0.25em" }}>サロン管理システム</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-8 backdrop-blur-xl">
-          {/* マイページへの直接アクセス（セラピスト/お客様用） */}
-          <div className="mb-6 grid grid-cols-2 gap-2">
+        <div style={{ backgroundColor: "#ffffff", border: "1px solid #e5ded6", padding: 32 }}>
+          {/* マイページへの直接アクセス */}
+          <div style={{ marginBottom: 22, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <a
               href="/mypage"
-              className="block rounded-lg border border-[#c3a782]/20 bg-[#c3a782]/[0.04] px-3 py-2.5 text-center transition-all hover:bg-[#c3a782]/[0.1] hover:border-[#c3a782]/40"
+              style={{ display: "block", border: "1px solid #c3a78255", backgroundColor: "rgba(195,167,130,0.04)", padding: "11px 10px", textAlign: "center", textDecoration: "none", fontFamily: FONT_SERIF }}
             >
-              <div className="text-[10px] text-[#f0ece4]/40 mb-0.5 tracking-wider">THERAPIST</div>
-              <div className="text-[12px] text-[#c3a782] font-medium">セラピスト</div>
+              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 10, color: "#8a8a8a", marginBottom: 3, letterSpacing: "0.2em", fontWeight: 500 }}>THERAPIST</div>
+              <div style={{ fontSize: 12, color: "#c3a782", fontWeight: 500, letterSpacing: "0.05em" }}>セラピスト</div>
             </a>
             <a
               href="/customer-mypage"
-              className="block rounded-lg border border-[#e8849a]/20 bg-[#e8849a]/[0.04] px-3 py-2.5 text-center transition-all hover:bg-[#e8849a]/[0.1] hover:border-[#e8849a]/40"
+              style={{ display: "block", border: "1px solid #e8849a55", backgroundColor: "rgba(232,132,154,0.04)", padding: "11px 10px", textAlign: "center", textDecoration: "none", fontFamily: FONT_SERIF }}
             >
-              <div className="text-[10px] text-[#f0ece4]/40 mb-0.5 tracking-wider">CUSTOMER</div>
-              <div className="text-[12px] text-[#e8849a] font-medium">お客様</div>
+              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 10, color: "#8a8a8a", marginBottom: 3, letterSpacing: "0.2em", fontWeight: 500 }}>CUSTOMER</div>
+              <div style={{ fontSize: 12, color: "#c96b83", fontWeight: 500, letterSpacing: "0.05em" }}>お客様</div>
             </a>
           </div>
 
           {/* Divider */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1 h-px bg-white/[0.06]" />
-            <span className="text-[10px] tracking-[2px] uppercase text-[#f0ece4]/30">
-              スタッフログイン
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+            <div style={{ flex: 1, height: 1, backgroundColor: "#e5ded6" }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", textTransform: "uppercase", color: "#8a8a8a", fontWeight: 500 }}>
+              STAFF LOGIN
             </span>
-            <div className="flex-1 h-px bg-white/[0.06]" />
+            <div style={{ flex: 1, height: 1, backgroundColor: "#e5ded6" }} />
           </div>
 
           {/* Form */}
           <form onSubmit={handleLogin}>
             {/* Email */}
-            <div className="mb-5">
-              <label className="block text-[11px] tracking-[1.5px] uppercase text-[#f0ece4]/50 mb-2">
-                メールアドレス
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: "block", marginBottom: 6 }}>
+                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>EMAIL</span>
               </label>
-              <div className="relative">
+              <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555555", letterSpacing: "0.03em" }}>メールアドレス</p>
+              <div style={{ position: "relative" }}>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="メールアドレスを入力"
+                  placeholder="staff@example.com"
                   required
-                  className="w-full h-12 pl-11 pr-4 bg-white/[0.04] border border-white/[0.06] rounded-[10px] text-[#f0ece4] text-[14px] placeholder-[#f0ece4]/20 outline-none transition-all duration-300 focus:border-[#c3a782]/40 focus:bg-white/[0.05] focus:ring-2 focus:ring-[#c3a782]/15"
+                  style={{ width: "100%", height: 46, paddingLeft: 42, paddingRight: 14, backgroundColor: "#faf6f1", border: "1px solid #e5ded6", color: "#2b2b2b", fontSize: 14, outline: "none", fontFamily: FONT_SERIF, boxSizing: "border-box", letterSpacing: "0.03em" }}
                 />
-                <svg
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#f0ece4]/20"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#b5b5b5" }}
+                  width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="4" width="20" height="16" rx="2" />
                   <path d="M22 7l-10 6L2 7" />
                 </svg>
@@ -168,49 +181,31 @@ export default function StaffLogin() {
             </div>
 
             {/* Password */}
-            <div className="mb-6">
-              <label className="block text-[11px] tracking-[1.5px] uppercase text-[#f0ece4]/50 mb-2">
-                パスワード
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", marginBottom: 6 }}>
+                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>PASSWORD</span>
               </label>
-              <div className="relative">
+              <p style={{ margin: "0 0 6px", fontSize: 11, color: "#555555", letterSpacing: "0.03em" }}>パスワード</p>
+              <div style={{ position: "relative" }}>
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="パスワードを入力"
+                  placeholder="••••••••"
                   required
-                  className="w-full h-12 pl-11 pr-11 bg-white/[0.04] border border-white/[0.06] rounded-[10px] text-[#f0ece4] text-[14px] placeholder-[#f0ece4]/20 outline-none transition-all duration-300 focus:border-[#c3a782]/40 focus:bg-white/[0.05] focus:ring-2 focus:ring-[#c3a782]/15"
+                  style={{ width: "100%", height: 46, paddingLeft: 42, paddingRight: 42, backgroundColor: "#faf6f1", border: "1px solid #e5ded6", color: "#2b2b2b", fontSize: 14, outline: "none", fontFamily: FONT_SERIF, boxSizing: "border-box", letterSpacing: "0.03em" }}
                 />
-                <svg
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#f0ece4]/20"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#b5b5b5" }}
+                  width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 cursor-pointer"
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", padding: 4, cursor: "pointer", backgroundColor: "transparent", border: "none" }}
                 >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#f0ece4"
-                    strokeOpacity="0.2"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#b5b5b5" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     {showPassword ? (
                       <>
                         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
@@ -231,28 +226,19 @@ export default function StaffLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-[50px] rounded-[10px] bg-gradient-to-br from-[#c3a782] to-[#a8895e] text-[#0c0b0f] text-[14px] font-medium tracking-[2px] cursor-pointer transition-all duration-400 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(195,167,130,0.2)] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              style={{ width: "100%", height: 50, backgroundColor: loading ? "#d5d0ca" : "#c96b83", color: "#ffffff", fontSize: 13, fontFamily: FONT_SERIF, fontWeight: 500, letterSpacing: "0.25em", cursor: loading ? "not-allowed" : "pointer", border: "none", opacity: loading ? 0.7 : 1, transition: "all 0.2s" }}
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-[#0c0b0f]/20 border-t-[#0c0b0f] rounded-full animate-spin mx-auto" />
+                <div style={{ width: 18, height: 18, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#ffffff", borderRadius: "50%", margin: "0 auto", animation: "spin 0.7s linear infinite" }} />
               ) : (
-                "ログイン"
+                "LOGIN"
               )}
             </button>
 
             {/* Error Message */}
             {error && (
-              <div className="mt-4 px-4 py-3 bg-[#d4736c]/[0.08] border border-[#d4736c]/15 rounded-lg text-[13px] text-[#d4736c] flex items-center gap-2 animate-pulse">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+              <div style={{ marginTop: 14, padding: "10px 14px", backgroundColor: "rgba(201,107,131,0.08)", border: "1px solid #c96b83", fontSize: 12, color: "#c96b83", display: "flex", alignItems: "center", gap: 8, letterSpacing: "0.03em", fontFamily: FONT_SERIF }}>
+                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="15" y1="9" x2="9" y2="15" />
                   <line x1="9" y1="9" x2="15" y2="15" />
@@ -264,14 +250,17 @@ export default function StaffLogin() {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8">
-          <a href="/install-guide" className="inline-block mb-3 text-[11px] cursor-pointer" style={{ color: "#c3a782", textDecoration: "underline", textUnderlineOffset: 4 }}>
+        <div style={{ textAlign: "center", marginTop: 28 }}>
+          <a href="/install-guide" style={{ display: "inline-block", marginBottom: 10, fontSize: 11, cursor: "pointer", color: "#c96b83", textDecoration: "underline", textUnderlineOffset: 4, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
             📱 アプリとして使う方法
           </a>
-          <p className="text-[11px] text-[#f0ece4]/20 font-light tracking-[0.5px]">
-            &copy; 2026 チョップ. All rights reserved.
+          <div style={{ width: 20, height: 1, backgroundColor: "#e5ded6", margin: "10px auto 10px" }} />
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, color: "#b5b5b5", letterSpacing: "0.15em" }}>
+            &copy; 2026 ANGE SPA · ALL RIGHTS RESERVED
           </p>
         </div>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   );
