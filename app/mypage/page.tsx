@@ -1597,56 +1597,101 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           {manualViewArticle ? (() => {
             const cat = manualCats.find(c => c.id === manualViewArticle.category_id);
             const latestUpd = manualUpdates.find(u => u.article_id === manualViewArticle.id);
-            return (<div>
-              <div className="flex gap-2 mb-3">
-                <button onClick={goBackManual} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>
-                  {manualHistory.length > 0 ? `← ${manualHistory[manualHistory.length - 1].title.slice(0, 12)}${manualHistory[manualHistory.length - 1].title.length > 12 ? '...' : ''} に戻る` : '← 一覧に戻る'}
-                </button>
-                {manualHistory.length > 0 && (
-                  <button onClick={() => { setManualViewArticle(null); setManualHistory([]); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textMuted }}>
-                    📋 一覧へ
+            return (
+              <div style={{ fontFamily: FONT_SERIF }}>
+                {/* 戻るボタン */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+                  <button onClick={goBackManual} style={{ padding: "8px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
+                    {manualHistory.length > 0 ? `← ${manualHistory[manualHistory.length - 1].title.slice(0, 12)}${manualHistory[manualHistory.length - 1].title.length > 12 ? '...' : ''} に戻る` : '← 一覧に戻る'}
                   </button>
+                  {manualHistory.length > 0 && (
+                    <button onClick={() => { setManualViewArticle(null); setManualHistory([]); }} style={{ padding: "8px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textMuted, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
+                      📋 一覧へ
+                    </button>
+                  )}
+                </div>
+
+                {/* カバー画像 */}
+                {manualViewArticle.cover_image && (
+                  <div style={{ overflow: "hidden", marginBottom: 18, maxHeight: 220 }}>
+                    <img src={manualViewArticle.cover_image} alt="" style={{ width: "100%", objectFit: "cover" }} />
+                  </div>
+                )}
+
+                {/* カテゴリ英文ラベル */}
+                {cat && (
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: T.accent, fontWeight: 500, marginBottom: 6 }}>
+                    ARTICLE
+                  </p>
+                )}
+
+                {/* タイトル */}
+                <h2 style={{ fontFamily: FONT_SERIF, fontSize: 20, fontWeight: 500, letterSpacing: "0.05em", color: T.text, lineHeight: 1.5, marginBottom: 10 }}>
+                  {manualViewArticle.title}
+                </h2>
+
+                {/* ピンク細罫線 */}
+                <div style={{ width: 30, height: 1, backgroundColor: T.accent, marginBottom: 14 }} />
+
+                {/* カテゴリ・タグ */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+                  {cat && <span style={{ fontSize: 10, padding: "3px 10px", backgroundColor: cat.color, color: "#333", letterSpacing: "0.03em" }}>{cat.icon} {cat.name}</span>}
+                  {manualViewArticle.tags.map(t => <span key={t} style={{ fontSize: 10, padding: "3px 10px", backgroundColor: T.cardAlt, color: T.textSub, letterSpacing: "0.03em" }}>{t}</span>)}
+                </div>
+
+                {/* 更新通知 */}
+                {latestUpd && (
+                  <div style={{ padding: "10px 14px", marginBottom: 16, backgroundColor: "rgba(179,132,25,0.06)", border: `1px solid #b3841944`, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>✏️</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: "#b38419", fontWeight: 500 }}>UPDATED {new Date(latestUpd.created_at).toLocaleDateString("ja")}</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 11, color: "#b38419", letterSpacing: "0.02em" }}>{latestUpd.summary}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 本文 */}
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 20px", marginBottom: 16 }}>
+                  {manualViewArticle.content.split("\n").map((line, i) => {
+                    if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 15, fontWeight: 500, marginTop: 16, marginBottom: 8, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>{renderInlineLinks(line.slice(3))}</h3>;
+                    if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 13, fontWeight: 500, marginTop: 12, marginBottom: 6, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{renderInlineLinks(line.slice(4))}</h4>;
+                    if (line.startsWith("- ")) return <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, lineHeight: 1.9, marginLeft: 6, letterSpacing: "0.02em" }}><span style={{ color: T.accent }}>●</span><span>{renderInlineContent(line.slice(2))}</span></div>;
+                    if (line.match(/^\d+\.\s/)) return <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, lineHeight: 1.9, marginLeft: 6, letterSpacing: "0.02em" }}><span style={{ color: T.accent, fontWeight: 600, minWidth: 18, fontFamily: FONT_SANS }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{renderInlineContent(line.replace(/^\d+\.\s/, ""))}</span></div>;
+                    if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: `2px solid ${T.accent}`, paddingLeft: 14, margin: "8px 0", fontSize: 12, color: T.textSub, fontStyle: "italic", letterSpacing: "0.02em", lineHeight: 1.9 }}>{renderInlineContent(line.slice(2))}</div>;
+                    if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "14px 0" }} />;
+                    if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" style={{ margin: "10px 0", maxWidth: "100%" }} />; }
+                    if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "10px 0", overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
+                    if (line.match(/^\[gdrive:([\w-]+)(:.*)?\]$/)) { const gm = line.match(/^\[gdrive:([\w-]+)(?::(.+))?\]$/); const fid = gm?.[1]; const gdesc = gm?.[2] || ""; return <div key={i} style={{ margin: "14px 0" }}><div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>{gdesc && <p style={{ fontSize: 11, fontWeight: 500, marginTop: 6, textAlign: "center", color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>🎬 {gdesc}</p>}</div>; }
+                    if (line.match(/\*\*(.*?)\*\*/)) { return <p key={i} style={{ fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", margin: "4px 0" }}>{renderInlineContent(line)}</p>; }
+                    if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
+                    return <p key={i} style={{ fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", margin: "4px 0" }}>{renderInlineContent(line)}</p>;
+                  })}
+                </div>
+
+                {/* Q&A */}
+                {manualViewQAs.length > 0 && (
+                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 20px" }}>
+                    <p style={{ margin: "0 0 4px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>FAQ</p>
+                    <h3 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>❓ よくある質問 <span style={{ fontFamily: FONT_DISPLAY, color: T.accent, marginLeft: 4 }}>{manualViewQAs.length}</span></h3>
+                    {manualViewQAs.map((qa, i) => (
+                      <div key={i} style={{ border: `1px solid ${T.border}`, marginBottom: 6, overflow: "hidden" }}>
+                        <button style={{ width: "100%", textAlign: "left", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 12, fontWeight: 500, cursor: "pointer", backgroundColor: manualOpenQA === i ? T.accentBg : "transparent", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.03em" }} onClick={() => setManualOpenQA(manualOpenQA === i ? null : i)}>
+                          <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, padding: "2px 8px", backgroundColor: T.accent, color: "#fff", letterSpacing: "0.1em", fontWeight: 500 }}>Q</span>
+                          <span style={{ flex: 1, color: T.text }}>{qa.question}</span>
+                          <span style={{ color: T.textMuted, fontSize: 10, transition: "transform 0.2s", transform: manualOpenQA === i ? "rotate(90deg)" : "none" }}>▶</span>
+                        </button>
+                        {manualOpenQA === i && (
+                          <div style={{ padding: "10px 14px 14px", fontSize: 12, lineHeight: 1.9, color: T.textSub, borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, alignItems: "flex-start", letterSpacing: "0.02em" }}>
+                            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, padding: "2px 8px", backgroundColor: "#6b9b7e", color: "#fff", letterSpacing: "0.1em", fontWeight: 500, flexShrink: 0, marginTop: 2 }}>A</span>
+                            <span>{qa.answer}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-              {manualViewArticle.cover_image && <div className="rounded-xl overflow-hidden mb-3" style={{ maxHeight: 200 }}><img src={manualViewArticle.cover_image} alt="" style={{ width: "100%", objectFit: "cover" }} /></div>}
-              <h2 className="text-[18px] font-semibold mb-2">{manualViewArticle.title}</h2>
-              <div className="flex items-center gap-2 flex-wrap mb-3">
-                {cat && <span className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: cat.color, color: "#333" }}>{cat.icon} {cat.name}</span>}
-                {manualViewArticle.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: "#f0eee8", color: T.textSub }}>{t}</span>)}
-              </div>
-              {latestUpd && <div className="rounded-xl p-3 mb-3" style={{ background: "#FAEEDA", border: "1px solid #f59e0b33" }}><span className="text-[11px]" style={{ color: "#854F0B" }}>✏️ {new Date(latestUpd.created_at).toLocaleDateString("ja")} 更新: {latestUpd.summary}</span></div>}
-              {/* 本文レンダリング */}
-              <div className="rounded-2xl border p-4 mb-3" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                {manualViewArticle.content.split("\n").map((line, i) => {
-                  if (line.startsWith("## ")) return <h3 key={i} className="text-[15px] font-semibold mt-3 mb-1" style={{ color: "#e8849a" }}>{renderInlineLinks(line.slice(3))}</h3>;
-                  if (line.startsWith("### ")) return <h4 key={i} className="text-[13px] font-medium mt-2 mb-1" style={{ color: T.accent }}>{renderInlineLinks(line.slice(4))}</h4>;
-                  if (line.startsWith("- ")) return <div key={i} className="flex gap-2 text-[13px] leading-relaxed ml-2"><span style={{ color: "#e8849a" }}>●</span><span>{renderInlineContent(line.slice(2))}</span></div>;
-                  if (line.match(/^\d+\.\s/)) return <div key={i} className="flex gap-2 text-[13px] leading-relaxed ml-2"><span style={{ color: "#e8849a", fontWeight: 600, minWidth: 18 }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{renderInlineContent(line.replace(/^\d+\.\s/, ""))}</span></div>;
-                  if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: "3px solid #e8849a", paddingLeft: 12, margin: "6px 0", fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{renderInlineContent(line.slice(2))}</div>;
-                  if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "12px 0" }} />;
-                  if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" className="rounded-xl my-2" style={{ maxWidth: "100%" }} />; }
-                  if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "8px 0", borderRadius: 12, overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
-                  if (line.match(/^\[gdrive:([\w-]+)(:.*)?\]$/)) { const gm = line.match(/^\[gdrive:([\w-]+)(?::(.+))?\]$/); const fid = gm?.[1]; const gdesc = gm?.[2] || ""; return <div key={i} style={{ margin: "12px 0" }}><div style={{ position: "relative", paddingBottom: "56.25%", height: 0, borderRadius: 12, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>{gdesc && <p className="text-[11px] font-medium mt-1 text-center" style={{ color: "#e8849a" }}>🎬 {gdesc}</p>}</div>; }
-                  if (line.match(/\*\*(.*?)\*\*/)) { return <p key={i} className="text-[13px] leading-relaxed">{renderInlineContent(line)}</p>; }
-                  if (line.trim() === "") return <div key={i} className="h-2" />;
-                  return <p key={i} className="text-[13px] leading-relaxed">{renderInlineContent(line)}</p>;
-                })}
-              </div>
-              {/* Q&A */}
-              {manualViewQAs.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <h3 className="text-[13px] font-semibold mb-3" style={{ color: "#e8849a" }}>❓ よくある質問（{manualViewQAs.length}件）</h3>
-                {manualViewQAs.map((qa, i) => (
-                  <div key={i} className="rounded-xl border mb-2" style={{ borderColor: T.border, overflow: "hidden" }}>
-                    <button className="w-full text-left px-3 py-2.5 flex items-center gap-2 text-[12px] font-medium cursor-pointer" style={{ background: manualOpenQA === i ? ("#fef9f0") : "transparent" }} onClick={() => setManualOpenQA(manualOpenQA === i ? null : i)}>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#e8849a20", color: "#e8849a" }}>Q</span>
-                      <span style={{ flex: 1, color: T.text }}>{qa.question}</span>
-                      <span style={{ color: T.textMuted, fontSize: 10, transition: "transform 0.2s", transform: manualOpenQA === i ? "rotate(90deg)" : "none" }}>▶</span>
-                    </button>
-                    {manualOpenQA === i && <div className="px-3 pb-3 pt-1 text-[12px] leading-relaxed" style={{ color: T.textSub, borderTop: `1px solid ${T.border}` }}><span className="text-[10px] px-1.5 py-0.5 rounded mr-1" style={{ background: "#4a7c5920", color: "#4a7c59" }}>A</span>{qa.answer}</div>}
-                  </div>
-                ))}
-              </div>)}
-            </div>);
+            );
           })() : (<div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: FONT_SERIF }}>
             {/* セクション見出し */}
             <div style={{ textAlign: "center" }}>
@@ -1779,80 +1824,73 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
             <div>
               {!aiChatOpen ? (
                 <button onClick={() => setAiChatOpen(true)}
-                  className="w-full py-3.5 rounded-2xl text-[13px] font-medium cursor-pointer border flex items-center justify-center gap-2"
-                  style={{ background: "linear-gradient(135deg, #e8849a18, #d4687e08)", borderColor: "#e8849a44", color: "#e8849a" }}>
-                  <span style={{ fontSize: 18 }}>🤖</span>
+                  style={{ width: "100%", padding: "14px", fontSize: 12, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}`, fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🤖</span>
                   <span>マニュアルAIに質問する</span>
                 </button>
               ) : (
-                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: "#e8849a44", boxShadow: "0 2px 12px rgba(232,132,154,0.08)" }}>
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.accent}`, overflow: "hidden", fontFamily: FONT_SERIF }}>
                   {/* ヘッダー */}
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: T.border, background: "linear-gradient(135deg, #e8849a18, #d4687e08)" }}>
-                    <div className="flex items-center gap-2">
-                      <span style={{ fontSize: 16 }}>🤖</span>
-                      <span className="text-[12px] font-semibold" style={{ color: "#e8849a" }}>マニュアルAI</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "#4ade8033", color: "#22c55e" }}>● online</span>
-                      {aiSessionCount > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: aiSessionCount >= 4 ? "#ef444420" : "#f59e0b20", color: aiSessionCount >= 4 ? "#ef4444" : "#f59e0b" }}>{aiSessionCount >= 4 ? "質問上限" : `残り${4 - aiSessionCount}回`}</span>}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: `1px solid ${T.border}`, backgroundColor: T.accentBg }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 15 }}>🤖</span>
+                      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>MANUAL AI</span>
+                      <span style={{ fontSize: 9, padding: "2px 7px", color: "#6b9b7e", border: `1px solid #6b9b7e44`, letterSpacing: "0.05em", fontFamily: FONT_SERIF }}>● online</span>
+                      {aiSessionCount > 0 && <span style={{ fontSize: 9, padding: "2px 7px", color: aiSessionCount >= 4 ? "#c96b83" : "#b38419", border: `1px solid ${aiSessionCount >= 4 ? "#c96b83" : "#b38419"}44`, letterSpacing: "0.03em", fontFamily: FONT_SERIF }}>{aiSessionCount >= 4 ? "質問上限" : `残り${4 - aiSessionCount}回`}</span>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       {aiChatMessages.length > 0 && (
-                        <button onClick={() => { setAiChatMessages([]); setAiSessionCount(0); }} className="text-[9px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: `1px solid ${T.border}` }}>🗑️ クリア</button>
+                        <button onClick={() => { setAiChatMessages([]); setAiSessionCount(0); }} style={{ fontSize: 9, padding: "2px 7px", cursor: "pointer", color: T.textMuted, backgroundColor: "transparent", border: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>🗑️ クリア</button>
                       )}
-                      <button onClick={() => setAiChatOpen(false)} className="text-[10px] px-2 py-0.5 rounded cursor-pointer" style={{ color: T.textMuted, background: "none", border: "none" }}>✕ 閉じる</button>
+                      <button onClick={() => setAiChatOpen(false)} style={{ fontSize: 10, padding: "2px 7px", cursor: "pointer", color: T.textMuted, backgroundColor: "transparent", border: "none", fontFamily: FONT_SERIF }}>✕ 閉じる</button>
                     </div>
                   </div>
                   {/* メッセージエリア */}
-                  <div style={{ maxHeight: 350, overflowY: "auto", padding: 12 }}>
+                  <div style={{ maxHeight: 350, overflowY: "auto", padding: 14 }}>
                     {aiChatMessages.length === 0 && (
-                      <div className="text-center py-6">
-                        <div style={{ fontSize: 36, marginBottom: 8 }}>🤖</div>
-                        <p className="text-[12px] font-medium" style={{ color: T.text }}>マニュアルAIアシスタント</p>
-                        <p className="text-[10px] mt-1" style={{ color: T.textMuted }}>マニュアルの内容について何でも聞いてね！</p>
-                        <div className="flex flex-wrap gap-1.5 justify-center mt-4">
+                      <div style={{ textAlign: "center", padding: "24px 0" }}>
+                        <div style={{ fontSize: 32, marginBottom: 10 }}>🤖</div>
+                        <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.05em" }}>マニュアルAIアシスタント</p>
+                        <p style={{ margin: 0, fontSize: 10, color: T.textMuted, letterSpacing: "0.03em" }}>マニュアルの内容について何でも聞いてね！</p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, justifyContent: "center", marginTop: 16 }}>
                           {["掃除の手順を教えて", "精算方法は？", "シフトの出し方", "LAST勤務とは？", "お給料について"].map(q => (
                             <button key={q} onClick={() => { setAiChatInput(q); }}
-                              className="text-[10px] px-3 py-1.5 rounded-full cursor-pointer border transition-all"
-                              style={{ borderColor: "#e8849a33", color: "#e8849a", background: "transparent" }}>{q}</button>
+                              style={{ fontSize: 10, padding: "5px 11px", cursor: "pointer", border: `1px solid ${T.accent}44`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{q}</button>
                           ))}
                         </div>
                       </div>
                     )}
                     {aiChatMessages.map((m, i) => (
-                      <div key={i} className={`flex mb-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                        {m.role === "ai" && <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5" style={{ background: "#e8849a20", fontSize: 12 }}>🤖</div>}
+                      <div key={i} style={{ display: "flex", marginBottom: 12, justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                        {m.role === "ai" && <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 8, marginTop: 2, backgroundColor: T.accentBg, fontSize: 11 }}>🤖</div>}
                         <div style={{ maxWidth: "80%" }}>
-                          <div className="rounded-2xl px-3.5 py-2.5 text-[12px] leading-[1.7]" style={{
-                            background: m.role === "user" ? "linear-gradient(135deg, #e8849a, #d4687e)" : ("#f8f6f3"),
+                          <div style={{
+                            padding: "10px 14px",
+                            fontSize: 12,
+                            lineHeight: 1.8,
+                            letterSpacing: "0.02em",
+                            backgroundColor: m.role === "user" ? T.accent : T.cardAlt,
                             color: m.role === "user" ? "#fff" : T.text,
-                            borderBottomRightRadius: m.role === "user" ? 4 : 16,
-                            borderBottomLeftRadius: m.role === "ai" ? 4 : 16,
+                            fontFamily: FONT_SERIF,
                           }}>
                             {m.role === "ai" ? renderInlineContent(m.content) : m.content}
                           </div>
                           {m.role === "ai" && m.logId && (
-                            <div className="flex gap-1.5 mt-1 ml-1">
+                            <div style={{ display: "flex", gap: 6, marginTop: 5, marginLeft: 3 }}>
                               <button onClick={async () => {
                                 if (m.rating) return;
                                 try {
                                   await fetch("/api/manual-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rate", logId: m.logId, rating: 1 }) });
                                   setAiChatMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, rating: 1 } : msg));
                                 } catch {}
-                              }} className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer transition-all" style={{
-                                background: m.rating === 1 ? "#4ade8030" : "transparent",
-                                border: `1px solid ${m.rating === 1 ? "#4ade80" : T.border}`,
-                                color: m.rating === 1 ? "#22c55e" : T.textMuted,
-                                opacity: m.rating && m.rating !== 1 ? 0.3 : 1,
-                              }}>👍</button>
+                              }} style={{ fontSize: 11, padding: "2px 9px", cursor: "pointer", backgroundColor: m.rating === 1 ? "rgba(107,155,126,0.15)" : "transparent", border: `1px solid ${m.rating === 1 ? "#6b9b7e" : T.border}`, color: m.rating === 1 ? "#6b9b7e" : T.textMuted, opacity: m.rating && m.rating !== 1 ? 0.3 : 1, fontFamily: FONT_SERIF }}>👍</button>
                               <button onClick={async () => {
                                 if (m.rating) return;
                                 try {
                                   await fetch("/api/manual-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rate", logId: m.logId, rating: -1 }) });
                                   setAiChatMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, rating: -1 } : msg));
                                 } catch {}
-                              }} className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer transition-all" style={{
-                                background: m.rating === -1 ? "#ef444430" : "transparent",
-                                border: `1px solid ${m.rating === -1 ? "#ef4444" : T.border}`,
-                                color: m.rating === -1 ? "#ef4444" : T.textMuted,
+                              }} style={{ fontSize: 11, padding: "2px 9px", cursor: "pointer", backgroundColor: m.rating === -1 ? "rgba(201,107,131,0.15)" : "transparent", border: `1px solid ${m.rating === -1 ? "#c96b83" : T.border}`, color: m.rating === -1 ? "#c96b83" : T.textMuted,
                                 opacity: m.rating && m.rating !== -1 ? 0.3 : 1,
                               }}>👎</button>
                             </div>
@@ -1861,10 +1899,10 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                       </div>
                     ))}
                     {aiChatLoading && (
-                      <div className="flex justify-start mb-3">
-                        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5" style={{ background: "#e8849a20", fontSize: 12 }}>🤖</div>
-                        <div className="rounded-2xl px-3.5 py-2.5 text-[12px] flex items-center gap-2" style={{ background: "#f8f6f3", color: T.textMuted, borderBottomLeftRadius: 4 }}>
-                          <span className="inline-block" style={{ animation: "pulse 1.5s ease-in-out infinite" }}>💭</span>
+                      <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
+                        <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 8, marginTop: 2, backgroundColor: T.accentBg, fontSize: 11 }}>🤖</div>
+                        <div style={{ padding: "10px 14px", fontSize: 12, display: "flex", alignItems: "center", gap: 8, backgroundColor: T.cardAlt, color: T.textMuted, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
+                          <span style={{ display: "inline-block", animation: "pulse 1.5s ease-in-out infinite" }}>💭</span>
                           考え中...
                           <style>{`@keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
                         </div>
@@ -1872,7 +1910,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     )}
                   </div>
                   {/* 入力エリア */}
-                  <div className="flex gap-2 p-3 border-t items-center" style={{ borderColor: T.border, background: "#faf9f7" }}>
+                  <div style={{ display: "flex", gap: 6, padding: 12, borderTop: `1px solid ${T.border}`, alignItems: "center", backgroundColor: T.cardAlt }}>
                     <input type="text" value={aiChatInput} onChange={e => setAiChatInput(e.target.value)}
                       onKeyDown={async (e) => {
                         if (e.key === "Enter" && aiChatInput.trim() && !aiChatLoading) {
@@ -1899,8 +1937,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                         }
                       }}
                       placeholder={aiListening ? "🎤 話してください..." : "質問を入力..."}
-                      className="flex-1 px-3.5 py-2.5 rounded-xl text-[12px] outline-none"
-                      style={{ backgroundColor: T.cardAlt, color: T.text, border: aiListening ? "1px solid #e8849a" : `1px solid ${T.border}` }} />
+                      style={{ flex: 1, padding: "10px 14px", fontSize: 12, outline: "none", backgroundColor: T.card, color: T.text, border: `1px solid ${aiListening ? T.accent : T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.02em" }} />
                     <button
                       onClick={() => {
                         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -1920,12 +1957,18 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                         recognition.onend = () => setAiListening(false);
                         recognition.start();
                       }}
-                      className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
                       style={{
-                        background: aiListening ? "#e8849a" : "transparent",
-                        border: aiListening ? "none" : `1px solid ${T.border}`,
-                        color: aiListening ? "#fff" : "#e8849a",
-                        fontSize: 16,
+                        width: 36,
+                        height: 36,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        backgroundColor: aiListening ? T.accent : "transparent",
+                        border: `1px solid ${aiListening ? T.accent : T.border}`,
+                        color: aiListening ? "#fff" : T.accent,
+                        fontSize: 15,
                         animation: aiListening ? "pulse 1s ease-in-out infinite" : "none",
                       }}
                       title="音声入力">
@@ -1955,8 +1998,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                         } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
                         setAiChatLoading(false);
                       }}
-                      className="px-4 py-2.5 rounded-xl text-[11px] text-white cursor-pointer disabled:opacity-40 font-medium"
-                      style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", border: "none", boxShadow: "0 2px 6px rgba(232,132,154,0.25)" }}>送信</button>
+                      style={{ padding: "10px 18px", fontSize: 11, color: "#fff", cursor: "pointer", backgroundColor: T.accent, border: "none", opacity: !aiChatInput.trim() || aiChatLoading ? 0.4 : 1, fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>送信</button>
                   </div>
                 </div>
               )}
