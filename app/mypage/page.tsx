@@ -2585,63 +2585,70 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
             onTouchMove={e => { const t = e.touches[0]; handleDragMove(t.clientX, t.clientY); }}
             onTouchEnd={handleDragEnd}>
             <button onClick={() => { if (!chatDragRef.current.dragging || (Math.abs(chatDragRef.current.startX - chatBtnPos.x) < 5)) setAiChatOpenG(!aiChatOpenG); }}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-full cursor-pointer"
-              style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", boxShadow: "0 4px 20px rgba(232,132,154,0.5)", border: "none", color: "#fff" }}>
-              <span className="text-[16px]">{aiChatOpenG ? "✕" : "🤖"}</span>
-              <span className="text-[11px] font-bold">{aiChatOpenG ? "閉じる" : "AI Chat"}</span>
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", cursor: "pointer", backgroundColor: T.accent, boxShadow: "0 4px 18px rgba(201,107,131,0.35)", border: "none", color: "#fff", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
+              <span style={{ fontSize: 15 }}>{aiChatOpenG ? "✕" : "🤖"}</span>
+              <span style={{ fontSize: 11 }}>{aiChatOpenG ? "閉じる" : "AI Chat"}</span>
             </button>
           </div>
 
           {/* チャットウィンドウ */}
           {aiChatOpenG && (
-            <div className="fixed bottom-4 right-4 w-[calc(100%-32px)] max-w-sm rounded-2xl overflow-hidden z-40 flex flex-col"
-              style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, boxShadow: "0 8px 30px rgba(0,0,0,0.25)", maxHeight: "65vh" }}>
-              <div className="px-4 py-3 flex items-center justify-between" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>
+            <div style={{ position: "fixed", bottom: 16, right: 16, width: "calc(100% - 32px)", maxWidth: 380, overflow: "hidden", zIndex: 40, display: "flex", flexDirection: "column", backgroundColor: T.card, border: `1px solid ${T.accent}`, boxShadow: "0 12px 40px rgba(0,0,0,0.18)", maxHeight: "65vh", fontFamily: FONT_SERIF }}>
+              {/* ヘッダー */}
+              <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: T.accentBg, borderBottom: `1px solid ${T.border}` }}>
                 <div>
-                  <p className="text-[12px] font-bold text-white">🤖 {chatTitle}</p>
-                  <p className="text-[8px] text-white/70">{chatHint}なんでも聞いてね</p>
+                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: T.accent, fontWeight: 500 }}>AI ASSISTANT</p>
+                  <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.05em" }}>🤖 {chatTitle}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 9, color: T.textMuted, letterSpacing: "0.03em" }}>{chatHint}なんでも聞いてね</p>
                 </div>
-                <button onClick={() => setAiChatOpenG(false)} className="text-white text-[16px] cursor-pointer" style={{ background: "none", border: "none" }}>✕</button>
+                <button onClick={() => setAiChatOpenG(false)} style={{ width: 28, height: 28, fontSize: 14, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}`, fontFamily: FONT_SERIF }}>✕</button>
               </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{ minHeight: "200px", maxHeight: "45vh" }}>
+
+              {/* メッセージエリア */}
+              <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8, minHeight: 200, maxHeight: "45vh" }}>
                 {aiChatMsgsG.length === 0 && (
-                  <div className="text-center py-4">
-                    <p className="text-[20px] mb-2">🌸</p>
-                    <p className="text-[11px]" style={{ color: T.textSub }}>{chatHint}なんでも聞いてください！</p>
-                    <div className="mt-3 space-y-1">
+                  <div style={{ textAlign: "center", padding: "12px 0" }}>
+                    <p style={{ fontSize: 24, margin: "0 0 8px" }}>🌸</p>
+                    <p style={{ margin: 0, fontSize: 11, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>{chatHint}<br />なんでも聞いてください！</p>
+                    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 5 }}>
                       {suggestions.map((q, i) => (
-                        <button key={i} onClick={() => setAiChatInputG(q)} className="block w-full text-left px-3 py-2 rounded-xl text-[10px] cursor-pointer"
-                          style={{ backgroundColor: T.cardAlt, color: "#e8849a", border: "1px solid #e8849a33" }}>{q}</button>
+                        <button key={i} onClick={() => setAiChatInputG(q)}
+                          style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}44`, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{q}</button>
                       ))}
                     </div>
                   </div>
                 )}
                 {aiChatMsgsG.map((m, i) => (
-                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div className="max-w-[85%] rounded-2xl px-3 py-2" style={{
-                      backgroundColor: m.role === "user" ? "#e8849a" : T.cardAlt,
+                  <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+                    <div style={{
+                      maxWidth: "85%",
+                      padding: "9px 13px",
+                      backgroundColor: m.role === "user" ? T.accent : T.cardAlt,
                       color: m.role === "user" ? "#fff" : T.text,
-                      borderBottomRightRadius: m.role === "user" ? "4px" : "16px",
-                      borderBottomLeftRadius: m.role === "user" ? "16px" : "4px",
+                      fontFamily: FONT_SERIF,
                     }}>
-                      <p className="text-[10px] whitespace-pre-wrap leading-relaxed">{m.text}</p>
-                      {m.cached && <p className="text-[7px] mt-0.5" style={{ color: m.role === "user" ? "#fff8" : T.textFaint }}>⚡ キャッシュ回答</p>}
+                      <p style={{ margin: 0, fontSize: 11, whiteSpace: "pre-wrap", lineHeight: 1.8, letterSpacing: "0.02em" }}>{m.text}</p>
+                      {m.cached && <p style={{ margin: "2px 0 0", fontSize: 8, color: m.role === "user" ? "rgba(255,255,255,0.55)" : T.textFaint, letterSpacing: "0.05em" }}>⚡ キャッシュ回答</p>}
                     </div>
                   </div>
                 ))}
                 {aiChatLoadingG && (
-                  <div className="flex justify-start"><div className="rounded-2xl px-3 py-2" style={{ backgroundColor: T.cardAlt }}>
-                    <p className="text-[10px] animate-pulse" style={{ color: "#e8849a" }}>🤖 考え中...</p>
-                  </div></div>
+                  <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                    <div style={{ padding: "9px 13px", backgroundColor: T.cardAlt }}>
+                      <p style={{ margin: 0, fontSize: 10, color: T.accent, letterSpacing: "0.05em", animation: "pulse 1.5s ease-in-out infinite" }}>🤖 考え中...</p>
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="p-2 flex gap-2" style={{ borderTop: `1px solid ${T.border}` }}>
+
+              {/* 入力エリア */}
+              <div style={{ padding: 10, display: "flex", gap: 6, borderTop: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
                 <input type="text" value={aiChatInputG} onChange={e => setAiChatInputG(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") sendMsg(); }}
-                  placeholder="質問を入力..." className="flex-1 px-3 py-2 rounded-xl text-[11px] outline-none"
-                  style={{ backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}` }} />
-                <button onClick={sendMsg} className="px-3 py-2 rounded-xl text-[11px] cursor-pointer"
-                  style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff", border: "none" }}>送信</button>
+                  placeholder="質問を入力..."
+                  style={{ flex: 1, padding: "9px 13px", fontSize: 11, outline: "none", backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.02em" }} />
+                <button onClick={sendMsg}
+                  style={{ padding: "9px 16px", fontSize: 11, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>送信</button>
               </div>
             </div>
           )}
