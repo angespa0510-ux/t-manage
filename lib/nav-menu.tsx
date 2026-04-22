@@ -110,7 +110,7 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
         {/* ヘッダー */}
         <div style={{ height: 64, display: "flex", alignItems: "center", padding: "0 20px", borderBottom: "1px solid rgba(255,255,255,0.04)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #c3a782, #a8895e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 32, height: 32, backgroundColor: "#c96b83", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <span style={{ color: "white", fontSize: 12, fontWeight: 600 }}>C</span>
             </div>
             <div>
