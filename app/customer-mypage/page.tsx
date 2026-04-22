@@ -64,12 +64,8 @@ export default function CustomerMypage() {
   // スケジュール
   const [schedDate, setSchedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [schedView, setSchedView] = useState<"day" | "weekly" | "form" | "history">("day");
-  const [schedSearch, setSchedSearch] = useState("");
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedSchedTid, setSelectedSchedTid] = useState(0);
   const [schedShifts, setSchedShifts] = useState<Shift[]>([]);
   const [schedRes, setSchedRes] = useState<Reservation[]>([]);
-  const [schedLoading, setSchedLoading] = useState(false);
   // 週間
   const [weeklyTid, setWeeklyTid] = useState(0);
   const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
@@ -102,12 +98,8 @@ export default function CustomerMypage() {
   const [cancelMsg, setCancelMsg] = useState("");
   const [cancelPhone, setCancelPhone] = useState("070-1675-5900");
   const [buildings, setBuildings] = useState<Building[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [freeMode, setFreeMode] = useState(false); // フリー予約モード
   const [bookFreeBuildingId, setBookFreeBuildingId] = useState<number | null>(null);
-  // セラピストから選ぶモード
-  const [schedMode, setSchedMode] = useState<"schedule" | "therapist">("schedule");
-  const [allTherapistSearch, setAllTherapistSearch] = useState("");
   // セラピストメモ（1接客ごと）
   const [customerMemos, setCustomerMemos] = useState<CustomerTherapistMemo[]>([]);
   const [editMemoResId, setEditMemoResId] = useState(0);
@@ -161,7 +153,6 @@ export default function CustomerMypage() {
     const { data: ext } = await supabase.from("extensions").select("id,name,duration,price").order("duration"); if (ext) setExtensions(ext);
     const { data: opts } = await supabase.from("options").select("id,name,price").order("id"); if (opts) setOptionsList(opts);
     const { data: bl } = await supabase.from("buildings").select("*"); if (bl) setBuildings(bl);
-    const { data: rm } = await supabase.from("rooms").select("*"); if (rm) setRooms(rm);
     // NGセラピスト取得（このお客様をNGにしたセラピスト）
     const { data: ngNotes } = await supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", customer.name).eq("is_ng", true);
     if (ngNotes) setNgTherapistIdsForMe(new Set(ngNotes.map(n => n.therapist_id)));
@@ -172,12 +163,10 @@ export default function CustomerMypage() {
 
   // 当日スケジュール取得
   const fetchDaySchedule = useCallback(async (date: string) => {
-    setSchedLoading(true);
     const { data: sh } = await supabase.from("shifts").select("*").eq("date", date).eq("status", "confirmed").order("start_time"); if (sh) setSchedShifts(sh);
     const { data: res } = await supabase.from("reservations").select("*").eq("date", date).not("status", "eq", "cancelled").order("start_time"); if (res) setSchedRes(res);
-    setSchedLoading(false);
   }, []);
-  useEffect(() => { if (customer && tab === "schedule") { fetchDaySchedule(schedDate); setSelectedSchedTid(0); } }, [schedDate, tab, customer, fetchDaySchedule]);
+  useEffect(() => { if (customer && tab === "schedule") { fetchDaySchedule(schedDate); } }, [schedDate, tab, customer, fetchDaySchedule]);
 
   // 週間スケジュール取得
   const fetchWeekSchedule = useCallback(async (tid: number, baseDate: string) => {
@@ -187,68 +176,12 @@ export default function CustomerMypage() {
     const { data: res } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", s).lte("date", e).not("status", "eq", "cancelled").order("start_time"); if (res) setWeekRes(res);
   }, []);
 
-  const openWeekly = (tid: number) => { setWeeklyTid(tid); setSchedView("weekly"); fetchWeekSchedule(tid, schedDate); };
   const openBookForm = (date: string, time: string, tid: number) => {
     const shift = schedShifts.find(s => s.therapist_id === tid && s.date === date) || weekShifts.find(s => s.therapist_id === tid && s.date === date);
     setBookDate(date); setBookTime(time); setBookTherapistId(tid); setBookCourseId(0);
     setBookStoreId(shift?.store_id || (stores.length > 0 ? stores[0].id : 0));
     setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setFreeMode(false); setBookFreeBuildingId(null); setSchedView("form");
   };
-  const openFreeBookForm = (date: string, time: string, storeId: number) => {
-    // フリー予約: storeのbuildingを取得
-    const bl = buildings.find(b => b.store_id === storeId);
-    const freeBId = bl ? bl.id : (buildings.length > 0 ? buildings[0].id : null);
-    setBookDate(date); setBookTime(time); setBookTherapistId(0); setBookCourseId(0);
-    setBookStoreId(storeId);
-    setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setFreeMode(true); setBookFreeBuildingId(freeBId); setSchedView("form");
-  };
-
-  // フリー枠の空き判定: 店舗ごとにセラピストの空きをチェック
-  const getFreeSlots = (storeId: number) => {
-    const storeShifts = schedShifts.filter(sh => sh.store_id === storeId);
-    if (storeShifts.length === 0) return [];
-    const now = new Date();
-    const isToday = schedDate === new Date().toISOString().split("T")[0];
-    const nowPlus30 = isToday ? now.getHours() * 60 + now.getMinutes() + 30 : 0;
-    let minStart = 9999, maxEnd = 0;
-    storeShifts.forEach(sh => {
-      if (ngTherapistIdsForMe.has(sh.therapist_id)) return;
-      const s = timeToMin(sh.start_time); const e = timeToMin(sh.end_time);
-      if (s < minStart) minStart = s;
-      if (e > maxEnd) maxEnd = e;
-    });
-    if (minStart >= maxEnd) return [];
-    const slots: { time: string; available: boolean }[] = [];
-    for (let m = minStart; m < maxEnd; m += 15) {
-      if (isToday && m < nowPlus30) { slots.push({ time: minToTime(m), available: false }); continue; }
-      const onShift = storeShifts.filter(sh => {
-        if (ngTherapistIdsForMe.has(sh.therapist_id)) return false;
-        const ss = timeToMin(sh.start_time); const se = timeToMin(sh.end_time);
-        return m >= ss && m < se;
-      });
-      const busyIds = new Set<number>();
-      // 指名予約で埋まっているセラピスト
-      schedRes.forEach(r => {
-        if (r.status === "cancelled") return;
-        const rs = timeToMin(r.start_time); const re = timeToMin(r.end_time);
-        if (m >= rs && m < re && r.therapist_id > 0) busyIds.add(r.therapist_id);
-      });
-      // 既存のフリー予約数（この店舗のbuildingに紐付くフリー予約）
-      const storeBuildingIds = new Set(buildings.filter(b => b.store_id === storeId).map(b => b.id));
-      let freeResCount = 0;
-      schedRes.forEach(r => {
-        if (r.status === "cancelled") return;
-        const rs = timeToMin(r.start_time); const re = timeToMin(r.end_time);
-        if (m >= rs && m < re && (r.therapist_id === 0 || r.free_building_id) && storeBuildingIds.has(r.free_building_id || 0)) freeResCount++;
-      });
-      const availableCount = onShift.filter(sh => !busyIds.has(sh.therapist_id)).length - freeResCount;
-      slots.push({ time: minToTime(m), available: availableCount > 0 });
-    }
-    return slots;
-  };
-
-  // 出勤中の店舗リスト（フリー枠表示用）
-  const freeStoreIds = [...new Set(schedShifts.map(sh => sh.store_id).filter(sid => sid > 0))];
 
   // 指名判定
   const getNominationType = (tid: number): { name: string; label: string; price: number } => {
@@ -341,12 +274,6 @@ export default function CustomerMypage() {
 
   const getTherapistName = (id: number) => therapists.find(t => t.id === id)?.name || "—";
   const getStoreName = (sid: number) => stores.find(s => s.id === sid)?.name || "";
-  const getBuildingName = (r: Reservation) => {
-    if (r.free_building_id) { const b = buildings.find(bl => bl.id === r.free_building_id); return b?.name || ""; }
-    const shift = schedShifts.find(s => s.therapist_id === r.therapist_id && s.date === r.date);
-    if (shift?.store_id) { const b = buildings.find(bl => bl.store_id === shift.store_id); return b?.name || getStoreName(shift.store_id); }
-    return "";
-  };
   const getReservationPointsEarned = (r: Reservation) => {
     return points.filter(p => p.amount > 0 && p.description && p.description.includes(dateFmt(r.date))).reduce((s, p) => s + p.amount, 0);
   };
@@ -531,267 +458,84 @@ export default function CustomerMypage() {
       {/* ═══ スケジュール / 予約 ═══ */}
       {tab === "schedule" && (<div className="animate-[fadeIn_0.3s]">
 
-        {/* --- モード切替（dayビュー時のみ） --- */}
-        {schedView === "day" && (<div className="grid grid-cols-2 gap-2 mb-4">
-          <button onClick={() => setSchedMode("schedule")} className="py-2.5 rounded-xl text-[12px] cursor-pointer font-medium" style={{ backgroundColor: schedMode === "schedule" ? C.accentBg : "transparent", color: schedMode === "schedule" ? C.accent : C.textMuted, border: schedMode === "schedule" ? `1px solid ${C.accent}44` : `1px solid ${C.border}` }}>📅 スケジュールから選ぶ</button>
-          <button onClick={() => setSchedMode("therapist")} className="py-2.5 rounded-xl text-[12px] cursor-pointer font-medium" style={{ backgroundColor: schedMode === "therapist" ? C.accentBg : "transparent", color: schedMode === "therapist" ? C.accent : C.textMuted, border: schedMode === "therapist" ? `1px solid ${C.accent}44` : `1px solid ${C.border}` }}>👤 セラピストから選ぶ</button>
-        </div>)}
-
-        {/* --- セラピストから選ぶモード --- */}
-        {schedView === "day" && schedMode === "therapist" && (<>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[16px] font-medium">セラピスト一覧</h2>
+        {/* --- DAY: シンプル入口画面 --- */}
+        {schedView === "day" && (<div className="space-y-4">
+          {/* ヘッダー */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-[16px] font-medium">ご予約</h2>
             <button onClick={() => setSchedView("history")} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>📋 予約履歴</button>
           </div>
-          {/* 全セラピスト検索バー */}
-          <div className="relative mb-4">
-            <input type="text" value={allTherapistSearch} onChange={e => setAllTherapistSearch(e.target.value)} placeholder="セラピスト名で検索（全セラピスト対象）" className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: C.cardAlt, borderColor: C.border, color: C.text }} />
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px]">🔍</span>
-            {allTherapistSearch && <button onClick={() => setAllTherapistSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] cursor-pointer" style={{ color: C.textMuted }}>✕</button>}
-          </div>
-          {(() => {
-            const filtered = therapists.filter(t => {
-              if (ngTherapistIdsForMe.has(t.id)) return false;
-              if (allTherapistSearch && !t.name.toLowerCase().includes(allTherapistSearch.toLowerCase())) return false;
-              return true;
-            });
-            return filtered.length === 0 ? (
-              <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[12px]" style={{ color: C.textFaint }}>該当するセラピストがいません</p></div>
-            ) : (
-              <>
-                <p className="text-[11px] mb-2 px-1" style={{ color: C.textMuted }}>全セラピスト — {filtered.length}名</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {filtered.map(t => {
-                    const memos = getMemosForTherapist(t.id);
-                    const latestMemo = memos.length > 0 ? memos[0] : null;
-                    return (
-                      <button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all relative" style={{ backgroundColor: C.card, borderColor: C.border }}>
-                        <button onClick={(e) => { e.stopPropagation(); toggleFav("therapist", t.id); }} className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}><span className="text-[14px]">{isFav("therapist", t.id) ? "❤️" : "🤍"}</span></button>
-                        {t.photo_url ? (
-                          <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover" />
-                        ) : (
-                          <div className="w-full aspect-[3/4] flex items-center justify-center text-[36px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>
-                        )}
-                        <div className="p-2.5">
-                          <p className="text-[13px] font-medium truncate">{t.name}{t.age > 0 && <span className="text-[10px] font-normal" style={{ color: C.textMuted }}>({t.age})</span>}</p>
-                          {(t.height_cm > 0 || t.bust > 0) && <p className="text-[9px] mt-0.5" style={{ color: C.textMuted }}>T{t.height_cm} B{t.bust}({t.cup}) W{t.waist} H{t.hip}</p>}
-                          {latestMemo && <div className="mt-1.5 rounded-md px-2 py-1" style={{ backgroundColor: "#c3a78210" }}><span className="text-[8px]" style={{ color: C.accent }}>{"★".repeat(latestMemo.rating)}{"☆".repeat(5 - latestMemo.rating)}</span>{latestMemo.memo && <p className="text-[8px] truncate mt-0.5" style={{ color: C.textSub }}>{latestMemo.memo}</p>}{memos.length > 1 && <p className="text-[7px] mt-0.5" style={{ color: C.textMuted }}>{"他" + (memos.length - 1) + "件"}</p>}</div>}
-                        </div>
-                      </button>
-                    );
-                  })}
+
+          {/* 次回のご予約（あれば） */}
+          {upcomingRes.length > 0 && (
+            <div className="rounded-2xl border p-4" style={{ backgroundColor: C.accentBg, borderColor: C.accent + "44" }}>
+              <p className="text-[10px] mb-2" style={{ color: C.accent, letterSpacing: "0.1em" }}>NEXT RESERVATION</p>
+              {upcomingRes.slice(0, 1).map(r => (
+                <div key={r.id}>
+                  <p className="text-[16px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)} {r.start_time}〜</p>
+                  <div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: C.textSub }}>
+                    {r.course && <span>💆 {r.course}</span>}
+                    {r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}
+                  </div>
                 </div>
-              </>
-            );
-          })()}
-        </>)}
-
-        {/* --- 当日スケジュール（スケジュールから選ぶモード） --- */}
-        {schedView === "day" && schedMode === "schedule" && (<>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[16px] font-medium">出勤セラピスト</h2>
-            <button onClick={() => setSchedView("history")} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>📋 予約履歴</button>
-          </div>
-
-          {/* 日付ナビ + カレンダー */}
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <button onClick={() => setSchedDate(dateNav(schedDate, -1))} className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border" style={{ borderColor: C.border, color: C.textSub }}>◀</button>
-            <button onClick={() => setSchedDate(today)} className="px-2.5 py-1 text-[10px] rounded-lg cursor-pointer border" style={{ borderColor: C.border, color: C.textMuted }}>今日</button>
-            <span className="text-[15px] font-medium min-w-[110px] text-center" style={{ color: schedDate === today ? C.accent : C.text }}>{dateFmt(schedDate)}</span>
-            <button onClick={() => setSchedDate(dateNav(schedDate, 1))} className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border" style={{ borderColor: C.border, color: C.textSub }}>▶</button>
-            <button onClick={() => setShowCalendar(!showCalendar)} className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border" style={{ borderColor: showCalendar ? C.accent + "44" : C.border, color: showCalendar ? C.accent : C.textSub, backgroundColor: showCalendar ? C.accentBg : "transparent" }}>📅</button>
-          </div>
-          {/* 1週間ボタン */}
-          <div className="flex gap-1.5 mb-2 overflow-x-auto">
-            {Array.from({ length: 7 }, (_, i) => { const d = dateNav(today, i); const dt = new Date(d + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; const isSel = schedDate === d; const isSun = dt.getDay() === 0; const isSat = dt.getDay() === 6; return (
-              <button key={d} onClick={() => setSchedDate(d)} className="flex-1 min-w-[44px] py-2 rounded-xl text-center cursor-pointer transition-all" style={{ backgroundColor: isSel ? C.accentBg : C.card, border: isSel ? `1px solid ${C.accent}44` : `1px solid ${C.border}`, color: isSel ? C.accent : isSun ? C.red : isSat ? C.blue : C.text }}>
-                <span className="block text-[9px]" style={{ color: isSel ? C.accent : isSun ? C.red : isSat ? C.blue : C.textMuted }}>{days[dt.getDay()]}</span>
-                <span className="block text-[14px] font-medium">{dt.getDate()}</span>
-              </button>
-            ); })}
-          </div>
-          {showCalendar && (
-            <div className="mb-3 flex justify-center">
-              <input type="date" value={schedDate} onChange={e => { setSchedDate(e.target.value); setShowCalendar(false); }} className="px-4 py-2.5 rounded-xl text-[13px] outline-none border cursor-pointer" style={{ backgroundColor: C.cardAlt, borderColor: C.border, color: C.text }} />
+              ))}
+              {upcomingRes.length > 1 && (
+                <button onClick={() => setSchedView("history")} className="mt-2 text-[10px] cursor-pointer" style={{ color: C.accent }}>ほか {upcomingRes.length - 1} 件のご予約 →</button>
+              )}
             </div>
           )}
 
-          {/* 検索バー */}
-          <div className="relative mb-4">
-            <input type="text" value={schedSearch} onChange={e => setSchedSearch(e.target.value)} placeholder="セラピスト名で検索" className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: C.cardAlt, borderColor: C.border, color: C.text }} />
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px]">🔍</span>
-            {schedSearch && <button onClick={() => setSchedSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] cursor-pointer" style={{ color: C.textMuted }}>✕</button>}
+          {/* お気に入りセラピストから予約（あれば） */}
+          {therapists.filter(t => isFav("therapist", t.id) && !ngTherapistIdsForMe.has(t.id)).length > 0 && (
+            <div>
+              <p className="text-[12px] font-medium mb-2 px-1" style={{ color: C.textSub }}>❤️ お気に入りから予約</p>
+              <div className="grid grid-cols-3 gap-2">
+                {therapists.filter(t => isFav("therapist", t.id) && !ngTherapistIdsForMe.has(t.id)).slice(0, 6).map(t => (
+                  <button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left" style={{ backgroundColor: C.card, borderColor: C.border }}>
+                    {t.photo_url ? (
+                      <img src={t.photo_url} alt="" className="w-full aspect-square object-cover" />
+                    ) : (
+                      <div className="w-full aspect-square flex items-center justify-center text-[24px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>
+                    )}
+                    <div className="p-1.5">
+                      <p className="text-[11px] font-medium truncate text-center">{t.name}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* HPで見る導線 */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            <div>
+              <p className="text-[13px] font-medium mb-1">📅 セラピスト・スケジュールを見る</p>
+              <p className="text-[10px]" style={{ color: C.textMuted }}>出勤予定・セラピストのプロフィールは公式サイトでご覧いただけます</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <a href="/schedule" target="_blank" rel="noopener noreferrer" className="py-2.5 rounded-xl text-[12px] font-medium text-center cursor-pointer no-underline" style={{ backgroundColor: C.accentBg, color: C.accent, border: `1px solid ${C.accent}30` }}>📅 出勤スケジュール</a>
+              <a href="/therapist" target="_blank" rel="noopener noreferrer" className="py-2.5 rounded-xl text-[12px] font-medium text-center cursor-pointer no-underline" style={{ backgroundColor: C.accentBg, color: C.accent, border: `1px solid ${C.accent}30` }}>💆 セラピスト一覧</a>
+            </div>
           </div>
 
-          {/* セラピスト個別スロット表示（選択時） */}
-          {freeMode && selectedSchedTid === 0 ? (() => {
-            // フリー枠スロット表示
-            const freeSlots = getFreeSlots(bookStoreId);
-            const storeName = getStoreName(bookStoreId);
-            return (
-              <div className="animate-[fadeIn_0.2s]">
-                <button onClick={() => { setFreeMode(false); setSelectedSchedTid(0); }} className="flex items-center gap-1.5 mb-3 text-[13px] cursor-pointer" style={{ color: C.accent }}>← 一覧に戻る</button>
-                <div className="rounded-2xl border overflow-hidden mb-3" style={{ backgroundColor: C.card, borderColor: C.border }}>
-                  <div className="flex items-center gap-4 p-4" style={{ borderBottom: `1px solid ${C.border}`, background: "linear-gradient(135deg, #E6F1FB, #D4E8F9)" }}>
-                    <div className="w-20 h-20 rounded-xl flex items-center justify-center text-[32px] flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2070C0)" }}>🎲</div>
-                    <div>
-                      <p className="text-[16px] font-medium" style={{ color: "#185FA5" }}>おまかせフリー</p>
-                      <p className="text-[11px] mt-1" style={{ color: "#4A90C4" }}>📍 {storeName}</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "#4A90C4" }}>指名料がかからずお得です♪</p>
-                    </div>
-                  </div>
-                  {/* スロット一覧 */}
-                  <div className="px-4 py-2 space-y-1">
-                    <p className="text-[10px] mb-1 font-medium" style={{ color: C.textSub }}>{dateFmt(schedDate)} の空き状況</p>
-                    {freeSlots.length === 0 ? (
-                      <p className="text-[12px] text-center py-4" style={{ color: C.textFaint }}>この日のフリー枠はありません</p>
-                    ) : freeSlots.map((sl, i) => (
-                      <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg" style={{ backgroundColor: sl.available ? "transparent" : "#c4555506" }}>
-                        <span className="text-[12px] font-mono w-[44px] flex-shrink-0" style={{ color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
-                        {sl.available ? (
-                          <button onClick={() => openFreeBookForm(schedDate, sl.time, bookStoreId)} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#378ADD12", color: "#378ADD", border: "1px solid #378ADD30" }}>◯ フリー空き — タップで予約</button>
-                        ) : (
-                          <span className="flex-1 py-1.5 rounded-lg text-[11px] text-center" style={{ color: C.textFaint }}>✕ 満員</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })() : selectedSchedTid > 0 ? (() => {
-            const shift = schedShifts.find(s => s.therapist_id === selectedSchedTid);
-            const t = therapists.find(th => th.id === selectedSchedTid);
-            if (!shift || !t) return null;
-            const tRes = schedRes.filter(r => r.therapist_id === selectedSchedTid);
-            const slots = makeSlots(shift, tRes);
-            return (
-              <div className="animate-[fadeIn_0.2s]">
-                <button onClick={() => setSelectedSchedTid(0)} className="flex items-center gap-1.5 mb-3 text-[13px] cursor-pointer" style={{ color: C.accent }}>← 一覧に戻る</button>
-                <div className="rounded-2xl border overflow-hidden mb-3" style={{ backgroundColor: C.card, borderColor: C.border }}>
-                  <div className="flex items-center gap-4 p-4" style={{ borderBottom: `1px solid ${C.border}` }}>
-                    {t.photo_url ? <img src={t.photo_url} alt="" className="w-20 h-20 rounded-xl object-cover flex-shrink-0" /> : <div className="w-20 h-20 rounded-xl flex items-center justify-center text-[24px] text-white font-bold flex-shrink-0" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>}
-                    <div>
-                      <p className="text-[16px] font-medium">{t.name}{t.age > 0 && <span className="text-[12px] font-normal ml-1" style={{ color: C.textMuted }}>({t.age})</span>}</p>
-                      {shift.store_id > 0 && <span className="inline-block mt-1 text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.accentBg, color: C.accent }}>{getStoreName(shift.store_id)}</span>}
-                      <p className="text-[11px] mt-1" style={{ color: C.textSub }}>出勤 {shift.start_time}〜{shift.end_time}</p>
-                      {(t.height_cm > 0 || t.bust > 0) && <p className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>T{t.height_cm} B{t.bust}({t.cup}) W{t.waist} H{t.hip}</p>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 p-3" style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <button onClick={() => openWeekly(selectedSchedTid)} className="flex-1 py-2 rounded-lg text-[11px] font-medium cursor-pointer" style={{ backgroundColor: C.accentBg, color: C.accent, border: `1px solid ${C.accent}30` }}>📅 週間スケジュール</button>
-                  </div>
-                  {/* メモ履歴 */}
-                  {(() => { const memos = getMemosForTherapist(selectedSchedTid); return memos.length > 0 ? (<div className="px-4 py-2" style={{ borderBottom: `1px solid ${C.border}` }}><p className="text-[9px] font-medium mb-1.5" style={{ color: C.textSub }}>📝 ひとことメモ（{memos.length}件）</p><div className="space-y-1.5">{memos.slice(0, 3).map(m => (<div key={m.id} className="rounded-lg px-3 py-1.5" style={{ backgroundColor: "#c3a78210" }}><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(m.rating)}{"☆".repeat(5 - m.rating)}</span>{m.memo && <p className="text-[9px] mt-0.5" style={{ color: C.textSub }}>{m.memo}</p>}</div>))}</div></div>) : null; })()}
-                  {/* スロット一覧 */}
-                  <div className="px-4 py-2 space-y-1">
-                    <p className="text-[10px] mb-1 font-medium" style={{ color: C.textSub }}>{dateFmt(schedDate)} の空き状況</p>
-                    {slots.map((sl, i) => (
-                      <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg" style={{ backgroundColor: sl.available ? "transparent" : "#c4555506" }}>
-                        <span className="text-[12px] font-mono w-[44px] flex-shrink-0" style={{ color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
-                        {sl.available ? (
-                          <button onClick={() => openBookForm(schedDate, sl.time, selectedSchedTid)} className="flex-1 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#4a7c5910", color: C.green, border: `1px solid ${C.green}30` }}>◯ 空き — タップで予約</button>
-                        ) : (
-                          <span className="flex-1 py-1.5 rounded-lg text-[11px] text-center" style={{ color: C.textFaint }}>✕ 予約済</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })() : (
-            /* セラピストカード一覧（グリッド） */
-            <>
-              {schedLoading ? (<p className="text-center py-8 text-[12px]" style={{ color: C.textMuted }}>読み込み中...</p>) : schedShifts.length === 0 ? (
-                <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[32px] mb-2">😴</p><p className="text-[12px]" style={{ color: C.textFaint }}>この日の出勤はありません</p></div>
-              ) : (() => {
-                const filtered = schedShifts.filter(shift => {
-                  const t = therapists.find(th => th.id === shift.therapist_id);
-                  if (!t) return false;
-                  if (ngTherapistIdsForMe.has(shift.therapist_id)) return false;
-                  if (schedSearch && !t.name.toLowerCase().includes(schedSearch.toLowerCase())) return false;
-                  return true;
-                });
-                return filtered.length === 0 ? (
-                  <div className="rounded-xl border p-8 text-center" style={{ backgroundColor: C.card, borderColor: C.border }}><p className="text-[12px]" style={{ color: C.textFaint }}>{schedSearch ? "この日の出勤にはいません" : "該当するセラピストがいません"}</p>{schedSearch && (() => { const allMatching = therapists.filter(t => !ngTherapistIdsForMe.has(t.id) && t.name.toLowerCase().includes(schedSearch.toLowerCase())); return allMatching.length > 0 ? (<div className="mt-4"><p className="text-[11px] font-medium mb-2" style={{ color: C.accent }}>🔍 全セラピストの検索結果（{allMatching.length}名）</p><div className="grid grid-cols-2 gap-3">{allMatching.map(t => (<button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left" style={{ backgroundColor: C.card, borderColor: C.border }}>{t.photo_url ? <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover" /> : <div className="w-full aspect-[3/4] flex items-center justify-center text-[36px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>}<div className="p-2.5"><p className="text-[13px] font-medium truncate">{t.name}{t.age > 0 && <span className="text-[10px] font-normal" style={{ color: C.textMuted }}>({t.age})</span>}</p><p className="text-[9px] mt-1" style={{ color: C.accent }}>📅 タップで週間スケジュール</p></div></button>))}</div></div>) : null; })()}</div>
-                ) : (
-                  <>
-                    <p className="text-[11px] mb-2 px-1" style={{ color: C.textMuted }}>{dateFmt(schedDate)} の出勤 — {filtered.length}名</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* 🎲 おまかせフリー カード（店舗ごと） */}
-                      {freeStoreIds.map(storeId => {
-                        const storeName = getStoreName(storeId);
-                        const freeSlots = getFreeSlots(storeId);
-                        const freeAvail = freeSlots.filter(s => s.available).length;
-                        return (
-                          <button key={`free-${storeId}`} onClick={() => { setSelectedSchedTid(0); setFreeMode(true); setBookStoreId(storeId); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all col-span-2" style={{ backgroundColor: "#E6F1FB", borderColor: "#378ADD44" }}>
-                            <div className="p-4 flex items-center gap-4">
-                              <div className="w-16 h-16 rounded-xl flex items-center justify-center text-[28px] flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2070C0)" }}>🎲</div>
-                              <div className="flex-1">
-                                <p className="text-[15px] font-medium" style={{ color: "#185FA5" }}>おまかせフリー</p>
-                                <p className="text-[11px] mt-0.5" style={{ color: "#4A90C4" }}>📍 {storeName} ｜ 指名料なし</p>
-                                <div className="mt-1.5">
-                                  <span className="text-[10px] px-2.5 py-0.5 rounded-full" style={{ backgroundColor: freeAvail > 0 ? "#4a7c5918" : "#c4555518", color: freeAvail > 0 ? C.green : C.red }}>{freeAvail > 0 ? `空き${freeAvail}枠` : "空きなし"}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                      {filtered.map(shift => {
-                        const t = therapists.find(th => th.id === shift.therapist_id);
-                        if (!t) return null;
-                        const tRes = schedRes.filter(r => r.therapist_id === shift.therapist_id);
-                        const slots = makeSlots(shift, tRes);
-                        const freeCount = slots.filter(s => s.available).length;
-                        return (
-                          <button key={shift.id} onClick={() => { setSelectedSchedTid(shift.therapist_id); setFreeMode(false); }} className="rounded-xl border overflow-hidden cursor-pointer text-left transition-all relative" style={{ backgroundColor: C.card, borderColor: C.border }}>
-                            <button onClick={(e) => { e.stopPropagation(); toggleFav("therapist", shift.therapist_id); }} className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}><span className="text-[12px]">{isFav("therapist", shift.therapist_id) ? "❤️" : "🤍"}</span></button>
-                            {/* 写真 */}
-                            {t.photo_url ? (
-                              <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover" />
-                            ) : (
-                              <div className="w-full aspect-[3/4] flex items-center justify-center text-[36px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>
-                            )}
-                            {/* 情報 */}
-                            <div className="p-2.5">
-                              <p className="text-[13px] font-medium truncate">{t.name}{t.age > 0 && <span className="text-[10px] font-normal" style={{ color: C.textMuted }}>({t.age})</span>}</p>
-                              {shift.store_id > 0 && <span className="inline-block mt-1 text-[8px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: C.accentBg, color: C.accent }}>{getStoreName(shift.store_id)}</span>}
-                              <p className="text-[10px] mt-1" style={{ color: C.textSub }}>{shift.start_time}〜{shift.end_time}</p>
-                              {(t.height_cm > 0 || t.bust > 0) && <p className="text-[9px] mt-0.5" style={{ color: C.textMuted }}>T{t.height_cm} B{t.bust}({t.cup}) W{t.waist} H{t.hip}</p>}
-                              <div className="mt-1.5">
-                                <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: freeCount > 0 ? "#4a7c5912" : "#c4555512", color: freeCount > 0 ? C.green : C.red }}>{freeCount > 0 ? `空き${freeCount}枠` : "空きなし"}</span>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* 検索時：出勤日以外のセラピストも表示 */}
-                    {schedSearch && (() => {
-                      const onShiftIds = new Set(filtered.map(s => s.therapist_id));
-                      const otherMatching = therapists.filter(t => !onShiftIds.has(t.id) && !ngTherapistIdsForMe.has(t.id) && t.name.toLowerCase().includes(schedSearch.toLowerCase()));
-                      return otherMatching.length > 0 ? (
-                        <div className="mt-4">
-                          <p className="text-[11px] font-medium mb-2 px-1" style={{ color: C.accent }}>🔍 この日以外に出勤のセラピスト（{otherMatching.length}名）</p>
-                          <div className="grid grid-cols-2 gap-3">
-                            {otherMatching.map(t => (
-                              <button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left" style={{ backgroundColor: C.card, borderColor: C.border + "88" }}>
-                                {t.photo_url ? <img src={t.photo_url} alt="" className="w-full aspect-[3/4] object-cover opacity-90" /> : <div className="w-full aspect-[3/4] flex items-center justify-center text-[36px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}cc, ${C.accentDark}cc)` }}>{t.name.charAt(0)}</div>}
-                                <div className="p-2.5"><p className="text-[13px] font-medium truncate">{t.name}</p><p className="text-[9px] mt-1" style={{ color: C.accent }}>📅 タップで週間スケジュール</p></div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
-                  </>
-                );
-              })()}
-            </>
-          )}
-        </>)}
+          {/* 直接予約フォーム（おまかせフリー） */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            <div>
+              <p className="text-[13px] font-medium mb-1">🕐 直接ご予約</p>
+              <p className="text-[10px]" style={{ color: C.textMuted }}>ご希望のセラピストが決まっている場合は、上の「お気に入り」からスケジュールをご確認ください</p>
+            </div>
+            <button onClick={() => { setBookTherapistId(0); setFreeMode(true); setBookDate(schedDate); setBookTime("13:00"); setBookStoreId(stores[0]?.id || 0); setSchedView("form"); }} className="w-full py-3 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>🎲 おまかせフリーで予約リクエスト</button>
+            <p className="text-[9px] text-center" style={{ color: C.textFaint }}>※ セラピストはお店にて手配いたします</p>
+          </div>
+
+          {/* キャンセルポリシー */}
+          <div className="rounded-lg p-3" style={{ backgroundColor: "#c4555506", border: `1px solid #c4555515` }}>
+            <p className="text-[10px] font-medium mb-1" style={{ color: C.red }}>📌 キャンセル・変更について</p>
+            <p className="text-[9px] m-0" style={{ color: C.textMuted, lineHeight: 1.7 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。<br />当日のキャンセルにつきましては、<strong style={{ color: C.red }}>100％キャンセル料</strong>を頂戴いたします。</p>
+            <a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-medium no-underline" style={{ color: C.accent }}>📞 {cancelPhone}</a>
+          </div>
+        </div>)}
+
 
         {/* --- 週間スケジュール --- */}
         {schedView === "weekly" && (() => {

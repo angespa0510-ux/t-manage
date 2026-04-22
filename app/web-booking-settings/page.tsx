@@ -32,7 +32,7 @@ export default function WebBookingSettings() {
     setTimeout(() => setPhoneMsg(""), 2000);
   };
 
-  const publicUrl = `${origin}/public-schedule`;
+  const publicUrl = `${origin}/schedule`;
   const mypageUrl = `${origin}/customer-mypage`;
 
   const copyUrl = (url: string, label: string) => {
@@ -60,14 +60,14 @@ export default function WebBookingSettings() {
           <div className="space-y-4">
             {/* 公開スケジュールURL */}
             <div>
-              <label className="block text-[12px] font-medium mb-2" style={{ color: T.textSub }}>📅 WEB予約ページ（お客様が予約する入口）</label>
+              <label className="block text-[12px] font-medium mb-2" style={{ color: T.textSub }}>📅 公式HP・出勤スケジュール（お客様の予約導線の入口）</label>
               <div className="flex gap-2">
                 <input type="text" readOnly value={publicUrl} className="flex-1 px-3 py-2.5 rounded-lg text-[13px] border outline-none" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
                 <button onClick={() => copyUrl(publicUrl, "schedule")} className="px-4 py-2.5 rounded-lg text-[12px] font-medium cursor-pointer border" style={{ borderColor: T.accent + "44", color: T.accent, backgroundColor: T.accent + "08" }}>
                   {copied === "schedule" ? "✅ コピー済み" : "📋 コピー"}
                 </button>
               </div>
-              <p className="text-[10px] mt-1.5" style={{ color: T.textMuted }}>ログイン不要でスケジュール閲覧可能 → 予約時にログイン/新規登録が必要</p>
+              <p className="text-[10px] mt-1.5" style={{ color: T.textMuted }}>ログイン不要でスケジュール閲覧可能。実際の予約はマイページへ誘導します</p>
             </div>
 
             {/* マイページURL */}
@@ -100,13 +100,12 @@ export default function WebBookingSettings() {
 
           <div className="space-y-3">
             {[
-              { step: "1", icon: "🌐", title: "HPの「WEB予約」をタップ", desc: "ange-spa.com のWEB予約ボタンから公開スケジュールページに移動します" },
-              { step: "2", icon: "📅", title: "日付・セラピストを選ぶ", desc: "本日〜1週間の出勤セラピストが写真付きで一覧表示されます。ログイン不要で閲覧できます" },
-              { step: "3", icon: "🕐", title: "空き時間を選ぶ", desc: "セラピストをタップすると空き時間（◯/✕）が15分刻みで表示されます。週間スケジュールも確認可能です" },
-              { step: "4", icon: "📋", title: "コース・オプションを選ぶ", desc: "コース、延長、オプション、割引を選択し、合計金額を確認します" },
-              { step: "5", icon: "🔑", title: "ログイン/新規登録", desc: "初めてのお客様は名前・メール・パスワードで新規登録。既存のお客様は電話番号で自動照合されます" },
-              { step: "6", icon: "✅", title: "予約リクエスト送信", desc: "予約内容を確認して送信。ダッシュボードの「📱 WEB予約」に通知が届きます" },
-              { step: "7", icon: "📬", title: "お店から確認連絡", desc: "スタッフがタイムチャートで予約を確認・確定し、お客様に確認メールを送信します" },
+              { step: "1", icon: "🌐", title: "HPの「スケジュール」をタップ", desc: "ange-spa.com の /schedule で本日〜7日分の出勤セラピストを閲覧（ログイン不要）" },
+              { step: "2", icon: "👤", title: "気になるセラピストを見つける", desc: "セラピスト一覧・スケジュールから、興味のある方・時間帯を確認できます" },
+              { step: "3", icon: "🔑", title: "「会員ページ」からマイページへ", desc: "予約は会員のマイページで行います。初回は 500pt プレゼント付きで新規登録" },
+              { step: "4", icon: "📅", title: "マイページで日時を選ぶ", desc: "マイページの「予約」タブから、セラピスト・日時・コース・オプション等を選択" },
+              { step: "5", icon: "✅", title: "予約リクエスト送信", desc: "予約内容を確認して送信。ダッシュボードの「📱 WEB予約」に通知が届きます" },
+              { step: "6", icon: "📬", title: "お店から確認連絡", desc: "スタッフがタイムチャートで予約を確認・確定し、お客様に確認メールを送信します" },
             ].map(item => (
               <div key={item.step} className="flex gap-3 items-start">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[14px] flex-shrink-0" style={{ background: `linear-gradient(135deg, ${T.accent}20, ${T.accent}08)`, border: `1px solid ${T.accent}25` }}>

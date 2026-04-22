@@ -72,7 +72,6 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
       "/corporate",
       "/customer-mypage",
       "/mypage",
-      "/public-schedule",
       "/confirm-email",
       "/confirm-staff-email",
       "/reservation-confirm",
