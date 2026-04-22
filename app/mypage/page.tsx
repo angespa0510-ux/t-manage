@@ -1057,43 +1057,57 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
         {/* 🔔 お知らせタブ (セッション㊸) */}
         {tab === "notifications" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[14px] font-medium">🔔 お知らせ</h2>
-              {notifications.filter(n => !notifReadIds.includes(n.id)).length > 0 && (
-                <button onClick={markAllNotifRead} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#e8849a18", color: "#e8849a", border: "1px solid #e8849a44" }}>
-                  ✅ すべて既読にする
-                </button>
-              )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+            {/* セクション見出し */}
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>NOTIFICATIONS</p>
+              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🔔 お知らせ</p>
+              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
             </div>
 
+            {notifications.filter(n => !notifReadIds.includes(n.id)).length > 0 && (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={markAllNotifRead} style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.accent}`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
+                  ✅ すべて既読にする
+                </button>
+              </div>
+            )}
+
             {notifications.length === 0 ? (
-              <div className="rounded-2xl border p-8 text-center" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                <p className="text-[30px] mb-2">📭</p>
-                <p className="text-[12px]" style={{ color: T.textMuted }}>まだお知らせはありません</p>
+              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "48px 16px", textAlign: "center" }}>
+                <p style={{ fontSize: 28, margin: "0 0 12px" }}>📭</p>
+                <p style={{ margin: 0, fontSize: 12, color: T.textMuted, letterSpacing: "0.05em" }}>まだお知らせはありません</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {notifications.map(n => {
+              <div style={{ display: "flex", flexDirection: "column", gap: 0, backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                {notifications.map((n, idx) => {
                   const isRead = notifReadIds.includes(n.id);
                   const icon = n.type === "schedule" ? "📅" : n.type === "warning" ? "⚠️" : "📢";
-                  const borderColor = n.type === "warning" ? "#c4555544" : n.type === "schedule" ? "#85a8c444" : "#e8849a44";
-                  const bgColor = isRead ? T.cardAlt : (n.type === "warning" ? "#c4555508" : n.type === "schedule" ? "#85a8c408" : "#FBEAF015");
+                  const accentColor = n.type === "warning" ? "#c96b83" : n.type === "schedule" ? "#6b8ba8" : T.accent;
                   return (
-                    <div key={n.id} onClick={() => openNotif(n)} className="rounded-xl p-4 cursor-pointer transition-all hover:shadow-md" style={{ backgroundColor: bgColor, border: `1px solid ${isRead ? T.border : borderColor}` }}>
-                      <div className="flex items-start gap-3">
-                        <span className="text-[20px] leading-none flex-shrink-0 mt-0.5">{icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-[13px] font-medium flex-1" style={{ color: isRead ? T.textSub : T.text }}>{n.title}</p>
-                            {!isRead && <span className="text-[9px] px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: "#e8849a" }}>NEW</span>}
-                            {n.target_therapist_id && <span className="text-[9px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ backgroundColor: "#c3a78218", color: "#c3a782" }}>個別</span>}
-                          </div>
-                          <p className="text-[11px] line-clamp-2 mb-1.5" style={{ color: T.textMuted, whiteSpace: "pre-wrap" }}>{n.body}</p>
-                          <p className="text-[9px]" style={{ color: T.textFaint }}>
-                            {new Date(n.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                          </p>
+                    <div key={n.id} onClick={() => openNotif(n)}
+                      style={{
+                        padding: "16px 18px",
+                        cursor: "pointer",
+                        borderBottom: idx < notifications.length - 1 ? `1px solid ${T.border}` : "none",
+                        backgroundColor: isRead ? "transparent" : "rgba(232,132,154,0.03)",
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "flex-start",
+                        position: "relative",
+                      }}>
+                      {!isRead && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, backgroundColor: accentColor }} />}
+                      <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0, marginTop: 2 }}>{icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: isRead ? T.textSub : T.text, flex: 1, minWidth: 0 }}>{n.title}</p>
+                          {!isRead && <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 8px", color: "#fff", backgroundColor: accentColor, letterSpacing: "0.15em", fontWeight: 500, flexShrink: 0 }}>NEW</span>}
+                          {n.target_therapist_id && <span style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${T.border}`, color: T.textMuted, letterSpacing: "0.08em", flexShrink: 0 }}>個別</span>}
                         </div>
+                        <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textMuted, lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-wrap" }}>{n.body}</p>
+                        <p style={{ margin: 0, fontFamily: FONT_SANS, fontSize: 10, color: T.textFaint, letterSpacing: "0.02em" }}>
+                          {new Date(n.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </p>
                       </div>
                     </div>
                   );
@@ -1105,76 +1119,251 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
         {/* 📖 お知らせ詳細モーダル */}
         {notifDetail && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.5)" }} onClick={() => setNotifDetail(null)}>
-            <div onClick={e => e.stopPropagation()} className="w-full max-w-[500px] rounded-2xl p-6 animate-[fadeIn_0.2s]" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-[24px]">{notifDetail.type === "schedule" ? "📅" : notifDetail.type === "warning" ? "⚠️" : "📢"}</span>
+          <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)" }} onClick={() => setNotifDetail(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 500, padding: 32, backgroundColor: T.card, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 26 }}>{notifDetail.type === "schedule" ? "📅" : notifDetail.type === "warning" ? "⚠️" : "📢"}</span>
                   <div>
-                    <p className="text-[10px]" style={{ color: T.textFaint }}>
+                    <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, margin: 0, fontWeight: 500 }}>NOTICE</p>
+                    <p style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textFaint, margin: "2px 0 0", letterSpacing: "0.03em" }}>
                       {new Date(notifDetail.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                 </div>
-                <button onClick={() => setNotifDetail(null)} className="w-8 h-8 rounded-full cursor-pointer flex items-center justify-center text-[16px]" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>✕</button>
+                <button onClick={() => setNotifDetail(null)} style={{ width: 30, height: 30, cursor: "pointer", fontSize: 14, backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
               </div>
-              <h3 className="text-[16px] font-medium mb-3">{notifDetail.title}</h3>
-              <div className="rounded-xl p-4" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: T.text }}>{notifDetail.body}</p>
+              <h3 style={{ fontFamily: FONT_SERIF, fontSize: 17, fontWeight: 500, letterSpacing: "0.05em", color: T.text, margin: "0 0 16px" }}>{notifDetail.title}</h3>
+              <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "16px 18px" }}>
+                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", whiteSpace: "pre-wrap", color: T.text }}>{notifDetail.body}</p>
               </div>
-              <button onClick={() => setNotifDetail(null)} className="w-full mt-4 py-3 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>
+              <button onClick={() => setNotifDetail(null)} style={{ width: "100%", marginTop: 20, padding: 14, fontSize: 13, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>
                 閉じる
               </button>
             </div>
           </div>
         )}
 
-        {tab === "shift" && (<div className="space-y-4">
-          <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">📝 シフト希望提出</h2><div className="flex items-center gap-2"><button onClick={() => setWeekOffset(Math.max(1, weekOffset - 1))} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button><span className="text-[11px] font-medium min-w-[120px] text-center">{formatDate(weekDates[0])} 〜 {formatDate(weekDates[6])}</span><button onClick={() => setWeekOffset(weekOffset + 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button></div></div>
+        {tab === "shift" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>SHIFT REQUEST</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📝 シフト希望提出</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+          </div>
+
+          {/* 週ナビゲーション */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <button onClick={() => setWeekOffset(Math.max(1, weekOffset - 1))} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
+            <div style={{ padding: "6px 16px", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, fontSize: 12, fontFamily: FONT_SANS, letterSpacing: "0.02em", color: T.text, minWidth: 180, textAlign: "center" }}>
+              {formatDate(weekDates[0])} <span style={{ color: T.textMuted, margin: "0 4px" }}>—</span> {formatDate(weekDates[6])}
+            </div>
+            <button onClick={() => setWeekOffset(weekOffset + 1)} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
+          </div>
+
           {/* 説明テキスト */}
-          <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-            <p className="text-[10px] m-0" style={{ color: T.textMuted, lineHeight: 1.8 }}>
+          <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
+            <p style={{ margin: 0, fontSize: 11, color: T.textMuted, lineHeight: 1.9, letterSpacing: "0.03em" }}>
               出勤希望の日にチェックを入れ、時間と店舗を選択してください。<br />
-              希望シフトが決まったら<strong style={{ color: T.text }}>「シフト希望を提出」ボタン</strong>を押してお店に提出してください。<br />
-              提出後、<strong style={{ color: "#e091a8" }}>LINEでお店にもご報告をお願いします</strong>。（📋 LINE用コピーで簡単に送れます）
+              希望シフトが決まったら <strong style={{ color: T.text }}>「シフト希望を提出」</strong> ボタンを押してお店に提出してください。<br />
+              提出後、<strong style={{ color: T.accent }}>LINEでお店にもご報告をお願いします</strong>（📋 LINE用コピーで簡単に送れます）。
             </p>
           </div>
-          <div className="space-y-2">{weekDates.map(d => { const draft = reqDrafts[d]; if (!draft) return null; const dt = new Date(d + "T00:00:00"); const dow = ["日","月","火","水","木","金","土"][dt.getDay()]; const isSun = dt.getDay() === 0; const isSat = dt.getDay() === 6; const existing = shiftRequests.find(r => r.date === d);
-            return (<div key={d} className="rounded-xl border p-3" style={{ backgroundColor: draft.enabled ? "#e8849a10" : T.card, borderColor: draft.enabled ? "#e8849a44" : T.border }}>
-              <div className="flex items-center gap-2 mb-1"><button onClick={() => setReqDrafts({ ...reqDrafts, [d]: { ...draft, enabled: !draft.enabled } })} className="text-[14px] cursor-pointer flex-shrink-0" style={{ background: "none", border: "none" }}>{draft.enabled ? "✅" : "⬜"}</button><span className="text-[13px] font-medium min-w-[70px]" style={{ color: isSun ? "#c45555" : isSat ? "#3d6b9f" : T.text }}>{dt.getDate()}日 ({dow})</span>{existing && <span className="text-[8px] px-1.5 py-0.5 rounded ml-auto" style={{ backgroundColor: existing.status === "approved" ? "#22c55e18" : existing.status === "rejected" ? "#c4555518" : "#f59e0b18", color: existing.status === "approved" ? "#22c55e" : existing.status === "rejected" ? "#c45555" : "#f59e0b" }}>{existing.status === "approved" ? "承認済" : existing.status === "rejected" ? "却下" : "提出済"}</span>}</div>
-              {draft.enabled && (<div className="flex items-center gap-1.5 ml-7 flex-wrap"><select value={draft.store_id} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, store_id: Number(e.target.value) } })} className="px-2 py-1.5 rounded-lg text-[10px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: "#e091a844", color: "#e091a8", fontWeight: 600 }}><option value={0}>店舗未選択</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><select value={draft.start} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, start: e.target.value } })} className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>{TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select><span className="text-[10px]" style={{ color: T.textMuted }}>〜</span><select value={draft.end} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, end: e.target.value } })} className="px-2 py-1.5 rounded-lg text-[11px] outline-none cursor-pointer border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }}>{TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select><input type="text" value={draft.notes} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, notes: e.target.value } })} placeholder="備考" className="flex-1 px-2 py-1.5 rounded-lg text-[10px] outline-none border min-w-[60px]" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} /></div>)}
-            </div>); })}</div>
-          {reqMsg && <p className="text-[11px] text-center" style={{ color: "#22c55e" }}>{reqMsg}</p>}
-          <div className="flex gap-2"><button onClick={submitShiftRequests} disabled={reqSaving} className="flex-1 py-3 rounded-xl text-[12px] font-medium cursor-pointer text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>{reqSaving ? "送信中..." : "シフト希望を提出"}</button><button onClick={copyShiftToClipboard} className="px-4 py-3 rounded-xl text-[11px] font-medium cursor-pointer border" style={{ borderColor: copiedShift ? "#22c55e" : "#e091a844", color: copiedShift ? "#22c55e" : "#e091a8", backgroundColor: copiedShift ? "#22c55e18" : "transparent" }}>{copiedShift ? "✅ コピー済" : "📋 LINE用コピー"}</button></div>
-          {weekDates.some(d => reqDrafts[d]?.enabled) && (<div className="rounded-xl border p-3" style={{ backgroundColor: T.cardAlt, borderColor: T.border }}><p className="text-[9px] font-medium mb-1" style={{ color: T.textMuted }}>📋 コピー内容プレビュー</p><pre className="text-[10px] whitespace-pre-wrap" style={{ color: T.textSub }}>{generateShiftCopyText()}</pre></div>)}
-        </div>)}
 
-        {tab === "schedule" && (<div className="space-y-4">
-          <h2 className="text-[14px] font-medium">📅 確定シフト</h2>
-          {shifts.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>確定シフトがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{shifts.map(s => { const bld = getBuildingForDate(s.date); return (<div key={s.id} className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center gap-3 flex-wrap"><span className="text-[12px] font-medium min-w-[80px]">{formatDate(s.date)}</span>{s.store_id > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#f8bbd018", color: "#e091a8" }}>{getStoreShort(s.store_id)}</span>}{bld && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#85a8c418", color: "#85a8c4" }}>🏢 {bld}</span>}<span className="text-[12px]">{s.start_time?.slice(0,5)} 〜 {s.end_time?.slice(0,5)}</span></div>{s.date === today && <span className="text-[9px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: "#e8849a" }}>今日</span>}</div>); })}</div>)}
-          {shiftRequests.filter(r => r.status === "pending").length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: "#f59e0b10", borderColor: "#f59e0b33" }}><p className="text-[11px] font-medium mb-2" style={{ color: "#f59e0b" }}>⏳ 承認待ちのシフト希望</p>{shiftRequests.filter(r => r.status === "pending").map(r => (<div key={r.id} className="flex items-center justify-between py-1 text-[11px]"><span>{formatDate(r.date)}</span><div className="flex items-center gap-2">{r.store_id > 0 && <span className="text-[9px]" style={{ color: "#e091a8" }}>{getStoreShort(r.store_id)}</span>}<span>{r.start_time} 〜 {r.end_time}</span></div></div>))}</div>)}
-        </div>)}
+          {/* 日付カード */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {weekDates.map(d => {
+              const draft = reqDrafts[d];
+              if (!draft) return null;
+              const dt = new Date(d + "T00:00:00");
+              const dow = ["日","月","火","水","木","金","土"][dt.getDay()];
+              const isSun = dt.getDay() === 0;
+              const isSat = dt.getDay() === 6;
+              const existing = shiftRequests.find(r => r.date === d);
+              return (
+                <div key={d} style={{ backgroundColor: draft.enabled ? T.accentBg : T.card, border: `1px solid ${draft.enabled ? T.accent : T.border}`, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: draft.enabled ? 10 : 0 }}>
+                    <button onClick={() => setReqDrafts({ ...reqDrafts, [d]: { ...draft, enabled: !draft.enabled } })} style={{ fontSize: 16, cursor: "pointer", background: "none", border: "none", padding: 0, lineHeight: 1 }}>{draft.enabled ? "✅" : "⬜"}</button>
+                    <span style={{ fontFamily: FONT_SANS, fontSize: 14, fontWeight: 500, letterSpacing: "0.02em", minWidth: 72, color: isSun ? "#c96b83" : isSat ? "#6b8ba8" : T.text }}>
+                      {dt.getDate()}<span style={{ fontSize: 11, color: T.textMuted, marginLeft: 2 }}>日</span> ({dow})
+                    </span>
+                    {existing && (
+                      <span style={{ marginLeft: "auto", fontSize: 9, padding: "3px 8px", letterSpacing: "0.08em", fontFamily: FONT_SERIF,
+                        color: existing.status === "approved" ? "#6b9b7e" : existing.status === "rejected" ? "#c96b83" : "#b38419",
+                        border: `1px solid ${existing.status === "approved" ? "#6b9b7e" : existing.status === "rejected" ? "#c96b83" : "#b38419"}44`,
+                        backgroundColor: existing.status === "approved" ? "rgba(107,155,126,0.08)" : existing.status === "rejected" ? "rgba(201,107,131,0.08)" : "rgba(179,132,25,0.08)" }}>
+                        {existing.status === "approved" ? "承認済" : existing.status === "rejected" ? "却下" : "提出済"}
+                      </span>
+                    )}
+                  </div>
+                  {draft.enabled && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", paddingLeft: 28 }}>
+                      <select value={draft.store_id} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, store_id: Number(e.target.value) } })} style={{ padding: "6px 10px", fontSize: 10, cursor: "pointer", border: `1px solid ${T.accent}44`, backgroundColor: T.card, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.05em", fontWeight: 500, outline: "none" }}>
+                        <option value={0}>店舗未選択</option>
+                        {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                      <select value={draft.start} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, start: e.target.value } })} style={{ padding: "6px 8px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: T.card, color: T.text, fontFamily: FONT_SANS, outline: "none" }}>
+                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <span style={{ fontSize: 11, color: T.textMuted }}>—</span>
+                      <select value={draft.end} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, end: e.target.value } })} style={{ padding: "6px 8px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: T.card, color: T.text, fontFamily: FONT_SANS, outline: "none" }}>
+                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <input type="text" value={draft.notes} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, notes: e.target.value } })} placeholder="備考" style={{ flex: 1, minWidth: 70, padding: "6px 10px", fontSize: 10, border: `1px solid ${T.border}`, backgroundColor: T.card, color: T.text, fontFamily: FONT_SERIF, outline: "none" }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-        {tab === "salary" && (<div className="space-y-4">
-          {/* モード切替 */}
-          <div className="flex items-center justify-between">
-            <h2 className="text-[14px] font-medium">💰 給料明細</h2>
-            <div className="flex gap-1">
-              {([["monthly","📅 月別"],["annual","📊 年間"]] as const).map(([k,l]) => (
-                <button key={k} onClick={() => setSalaryViewMode(k)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: salaryViewMode === k ? "#e8849a20" : "transparent", color: salaryViewMode === k ? "#e8849a" : T.textMuted, border: `1px solid ${salaryViewMode === k ? "#e8849a44" : T.border}`, fontWeight: salaryViewMode === k ? 600 : 400 }}>{l}</button>
-              ))}
+          {reqMsg && (
+            <div style={{ padding: "10px 14px", backgroundColor: "rgba(107,155,126,0.08)", border: `1px solid #6b9b7e44`, color: "#6b9b7e", fontSize: 12, textAlign: "center", letterSpacing: "0.05em" }}>{reqMsg}</div>
+          )}
+
+          {/* 送信ボタン */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={submitShiftRequests} disabled={reqSaving} style={{ flex: 1, padding: "14px", fontSize: 13, cursor: reqSaving ? "not-allowed" : "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500, opacity: reqSaving ? 0.5 : 1 }}>
+              {reqSaving ? "送信中..." : "シフト希望を提出"}
+            </button>
+            <button onClick={copyShiftToClipboard} style={{ padding: "14px 18px", fontSize: 11, cursor: "pointer", border: `1px solid ${copiedShift ? "#6b9b7e" : T.accent}`, color: copiedShift ? "#6b9b7e" : T.accent, backgroundColor: copiedShift ? "rgba(107,155,126,0.08)" : "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
+              {copiedShift ? "✅ コピー済" : "📋 LINE用コピー"}
+            </button>
+          </div>
+
+          {weekDates.some(d => reqDrafts[d]?.enabled) && (
+            <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "12px 14px" }}>
+              <p style={{ margin: "0 0 6px", fontFamily: FONT_DISPLAY, fontSize: 10, fontWeight: 500, letterSpacing: "0.2em", color: T.textMuted }}>PREVIEW</p>
+              <pre style={{ margin: 0, fontSize: 11, whiteSpace: "pre-wrap", color: T.textSub, fontFamily: FONT_SANS, lineHeight: 1.7 }}>{generateShiftCopyText()}</pre>
             </div>
+          )}
+        </div>)}
+
+        {tab === "schedule" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CONFIRMED SHIFT</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📅 確定シフト</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+          </div>
+
+          {shifts.length === 0 ? (
+            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "40px 16px", textAlign: "center" }}>
+              <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>確定シフトがありません</p>
+            </div>
+          ) : (
+            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+              {shifts.map((s, idx) => {
+                const bld = getBuildingForDate(s.date);
+                const isToday2 = s.date === today;
+                return (
+                  <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: idx < shifts.length - 1 ? `1px solid ${T.border}` : "none", backgroundColor: isToday2 ? T.accentBg : "transparent" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", minWidth: 76, color: T.text }}>{formatDate(s.date)}</span>
+                      {s.store_id > 0 && <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${T.accent}44`, color: T.accent, letterSpacing: "0.03em" }}>{getStoreShort(s.store_id)}</span>}
+                      {bld && <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${T.border}`, color: T.textSub, letterSpacing: "0.03em" }}>🏢 {bld}</span>}
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 13, letterSpacing: "0.02em", color: T.text }}>{s.start_time?.slice(0,5)} — {s.end_time?.slice(0,5)}</span>
+                    </div>
+                    {isToday2 && <span style={{ fontSize: 9, padding: "3px 10px", color: "#fff", backgroundColor: T.accent, letterSpacing: "0.15em", fontFamily: FONT_DISPLAY, fontWeight: 500 }}>TODAY</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {shiftRequests.filter(r => r.status === "pending").length > 0 && (
+            <div>
+              <div style={{ textAlign: "center", marginBottom: 14 }}>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#b38419", marginBottom: 4, fontWeight: 500 }}>PENDING</p>
+                <p style={{ fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.08em", color: T.text, fontWeight: 500 }}>⏳ 承認待ちのシフト希望</p>
+              </div>
+              <div style={{ backgroundColor: "rgba(179,132,25,0.04)", border: `1px solid #b3841944` }}>
+                {shiftRequests.filter(r => r.status === "pending").map((r, idx, arr) => (
+                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: idx < arr.length - 1 ? `1px solid #b3841922` : "none", fontSize: 12 }}>
+                    <span style={{ fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{formatDate(r.date)}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {r.store_id > 0 && <span style={{ fontSize: 10, color: T.accent, letterSpacing: "0.03em" }}>{getStoreShort(r.store_id)}</span>}
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 12 }}>{r.start_time} — {r.end_time}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>)}
+
+        {tab === "salary" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>PAYSLIP</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>💰 給料明細</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+          </div>
+
+          {/* モード切替セグメント */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: `1px solid ${T.border}` }}>
+            {([["monthly","📅","月別"],["annual","📊","年間"]] as const).map(([k, emoji, l], idx) => {
+              const active = salaryViewMode === k;
+              return (
+                <button key={k} onClick={() => setSalaryViewMode(k)}
+                  style={{ padding: "10px", fontSize: 12, cursor: "pointer", border: "none", borderLeft: idx > 0 ? `1px solid ${T.border}` : "none", backgroundColor: active ? T.accent : "transparent", color: active ? "#fff" : T.textSub, fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: active ? 500 : 400, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <span>{emoji}</span><span>{l}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* 月別ビュー */}
           {salaryViewMode === "monthly" && (<>
-            <div className="flex items-center justify-center gap-2">
-              <button onClick={() => { const d = new Date(smY, smM - 2, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button>
-              <span className="text-[12px] font-medium">{smY}年{smM}月</span>
-              <button onClick={() => { const d = new Date(smY, smM, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <button onClick={() => { const d = new Date(smY, smM - 2, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
+              <div style={{ padding: "6px 20px", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, fontFamily: FONT_DISPLAY, fontSize: 16, letterSpacing: "0.05em", color: T.text, minWidth: 120, textAlign: "center" }}>{smY}.{String(smM).padStart(2, "0")}</div>
+              <button onClick={() => { const d = new Date(smY, smM, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
             </div>
-            <div className="grid grid-cols-3 gap-3">{[{ l: "月合計", v: fmt(monthTotal), c: "#e8849a" }, { l: "接客数", v: `${monthOrders}件`, c: T.text }, { l: "出勤日数", v: `${monthDays}日`, c: T.text }].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[18px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}</div>
-            {settlements.length === 0 ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>清算データがありません</p> : (<div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>{settlements.map(stl => (<div key={stl.id} className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{formatDate(stl.date)}</span><span className="text-[14px] font-medium" style={{ color: "#e8849a" }}>{fmt(stl.final_payment)}</span></div><div className="flex items-center gap-3 text-[9px] flex-wrap" style={{ color: T.textMuted }}><span>{stl.order_count}件</span><span>売上{fmt(stl.total_sales)}</span><span>バック{fmt(stl.total_back)}</span>{stl.invoice_deduction > 0 && <span style={{ color: "#c45555" }}>INV-{fmt(stl.invoice_deduction)}</span>}{stl.withholding_tax > 0 && <span style={{ color: "#c45555" }}>源泉-{fmt(stl.withholding_tax)}</span>}{stl.welfare_fee > 0 && <span style={{ color: "#c45555" }}>備品-{fmt(stl.welfare_fee)}</span>}{stl.transport_fee > 0 && <span style={{ color: "#22c55e" }}>交通+{fmt(stl.transport_fee)}</span>}</div></div>))}</div>)}
+
+            {/* 月サマリー3カード */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {[
+                { label: "MONTHLY", jp: "月合計", v: monthTotal.toLocaleString(), unit: "¥", primary: true },
+                { label: "ORDERS",  jp: "接客数", v: String(monthOrders),           unit: "件", primary: false },
+                { label: "DAYS",    jp: "出勤日数", v: String(monthDays),           unit: "日", primary: false },
+              ].map(s => (
+                <div key={s.label} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 10px", textAlign: "center" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.textMuted, marginBottom: 4, fontWeight: 500 }}>{s.label}</p>
+                  <p style={{ fontFamily: FONT_SANS, fontSize: s.primary ? 19 : 22, color: s.primary ? T.accent : T.text, fontWeight: s.primary ? 500 : 300, letterSpacing: "0em", lineHeight: 1.1, marginBottom: 2 }}>
+                    {s.unit === "¥" && <span style={{ fontSize: 13 }}>¥</span>}{s.v}{s.unit !== "¥" && <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 2, fontWeight: 400 }}>{s.unit}</span>}
+                  </p>
+                  <p style={{ fontFamily: FONT_SERIF, fontSize: 10, color: T.textMuted, letterSpacing: "0.08em" }}>{s.jp}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* 日別清算リスト */}
+            {settlements.length === 0 ? (
+              <div style={{ padding: "40px 16px", textAlign: "center", backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>清算データがありません</p>
+              </div>
+            ) : (
+              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                {settlements.map((stl, idx) => (
+                  <div key={stl.id} style={{ padding: "14px 16px", borderBottom: idx < settlements.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: T.text }}>{formatDate(stl.date)}</span>
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 16, fontWeight: 500, color: T.accent, letterSpacing: "0.02em" }}><span style={{ fontSize: 11 }}>¥</span>{(stl.final_payment || 0).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px 12px", fontSize: 10, flexWrap: "wrap", color: T.textMuted, letterSpacing: "0.02em" }}>
+                      <span>{stl.order_count}件</span>
+                      <span>売上 <span style={{ fontFamily: FONT_SANS }}>{fmt(stl.total_sales)}</span></span>
+                      <span>バック <span style={{ fontFamily: FONT_SANS }}>{fmt(stl.total_back)}</span></span>
+                      {stl.invoice_deduction > 0 && <span style={{ color: "#c96b83" }}>INV <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.invoice_deduction)}</span></span>}
+                      {stl.withholding_tax > 0 && <span style={{ color: "#c96b83" }}>源泉 <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.withholding_tax)}</span></span>}
+                      {stl.welfare_fee > 0 && <span style={{ color: "#c96b83" }}>備品 <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.welfare_fee)}</span></span>}
+                      {stl.transport_fee > 0 && <span style={{ color: "#6b9b7e" }}>交通 <span style={{ fontFamily: FONT_SANS }}>+{fmt(stl.transport_fee)}</span></span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </>)}
 
           {/* 年間ビュー */}
@@ -1187,7 +1376,6 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             const aFinal = annualSettlements.reduce((s, r) => s + (r.final_payment || 0), 0);
             const aDays = annualSettlements.length;
             const aOrders = annualSettlements.reduce((s, r) => s + (r.order_count || 0), 0);
-            // 月別集計
             const monthlyData: { month: string; gross: number; final: number; days: number }[] = [];
             for (let m = 1; m <= 12; m++) {
               const key = `${salaryYear}-${String(m).padStart(2, "0")}`;
@@ -1220,90 +1408,187 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               w.document.close();
             };
             return (<>
-              <div className="flex items-center justify-center gap-2">
-                <button onClick={() => setSalaryYear(salaryYear - 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>◀</button>
-                <span className="text-[12px] font-medium">{salaryYear}年</span>
-                <button onClick={() => setSalaryYear(salaryYear + 1)} className="px-2 py-1 text-[11px] cursor-pointer rounded border" style={{ borderColor: T.border, color: T.textSub }}>▶</button>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <button onClick={() => setSalaryYear(salaryYear - 1)} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
+                <div style={{ padding: "6px 24px", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: "0.05em", color: T.text, minWidth: 100, textAlign: "center" }}>{salaryYear}</div>
+                <button onClick={() => setSalaryYear(salaryYear + 1)} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
               </div>
-              {annualLoading ? <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>読み込み中...</p> : (<>
-                {/* 年間サマリーカード */}
-                <div className="grid grid-cols-2 gap-3">
+
+              {annualLoading ? (
+                <p style={{ fontSize: 12, textAlign: "center", padding: "40px 0", color: T.textFaint }}>読み込み中...</p>
+              ) : (<>
+                {/* 年間サマリー2x2 */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {[
-                    { l: "年間報酬（税込）", v: fmt(aGross), c: "#e8849a" },
-                    { l: "差引支払額", v: fmt(aFinal), c: "#c3a782" },
-                    { l: "源泉徴収", v: aTax > 0 ? `-${fmt(aTax)}` : "なし", c: aTax > 0 ? "#c45555" : T.textMuted },
-                    { l: "出勤日数", v: `${aDays}日（${aOrders}件）`, c: T.text },
-                  ].map(s => (<div key={s.l} className="rounded-xl p-4 border text-center" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[9px] mb-1" style={{ color: T.textMuted }}>{s.l}</p><p className="text-[16px] font-light" style={{ color: s.c }}>{s.v}</p></div>))}
+                    { label: "ANNUAL",   jp: "年間報酬（税込）", v: aGross.toLocaleString(), unit: "¥", color: T.accent, primary: true },
+                    { label: "NET",      jp: "差引支払額",       v: aFinal.toLocaleString(), unit: "¥", color: "#b38419", primary: true },
+                    { label: "TAX",      jp: "源泉徴収",         v: aTax > 0 ? `-${aTax.toLocaleString()}` : "0", unit: aTax > 0 ? "¥" : "—", color: aTax > 0 ? "#c96b83" : T.textMuted, primary: false },
+                    { label: "WORKDAYS", jp: "出勤日数",         v: `${aDays}`, unit: `日 / ${aOrders}件`, color: T.text, primary: false },
+                  ].map(s => (
+                    <div key={s.label} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "20px 14px", textAlign: "center" }}>
+                      <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 6, fontWeight: 500 }}>{s.label}</p>
+                      <p style={{ fontFamily: FONT_SANS, fontSize: s.primary ? 22 : 20, color: s.color, fontWeight: s.primary ? 500 : 300, letterSpacing: "0em", lineHeight: 1.1, marginBottom: 4 }}>
+                        {s.unit === "¥" && <span style={{ fontSize: 13 }}>¥</span>}{s.v}{s.unit !== "¥" && <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 3, fontWeight: 400 }}>{s.unit}</span>}
+                      </p>
+                      <p style={{ fontFamily: FONT_SERIF, fontSize: 10, color: T.textMuted, letterSpacing: "0.08em" }}>{s.jp}</p>
+                    </div>
+                  ))}
                 </div>
 
                 {/* 控除内訳 */}
                 {(aInvDed > 0 || aWelfare > 0 || aTransport > 0) && (
-                  <div className="rounded-xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                    <p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>控除・加算の内訳（計算式）</p>
-                    <div className="space-y-1 text-[11px]">
-                      <div className="flex justify-between"><span>報酬額（税込）</span><span className="font-medium">{fmt(aGross)}</span></div>
-                      {aInvDed > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>− インボイス控除（10%）</span><span>-{fmt(aInvDed)}</span></div>}
-                      {aTax > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>− 源泉徴収（10.21%）</span><span>-{fmt(aTax)}</span></div>}
-                      {aWelfare > 0 && <div className="flex justify-between" style={{ color: "#c45555" }}><span>− 備品・リネン代</span><span>-{fmt(aWelfare)}</span></div>}
-                      {aTransport > 0 && <div className="flex justify-between" style={{ color: "#22c55e" }}><span>+ 交通費（実費精算・非課税）</span><span>+{fmt(aTransport)}</span></div>}
-                      <div className="flex justify-between pt-2 font-bold" style={{ borderTop: `1px dashed ${T.border}`, color: "#c3a782" }}><span>差引支払額（お手取り）</span><span>{fmt(aFinal)}</span></div>
+                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 18px" }}>
+                    <p style={{ margin: "0 0 12px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>CALCULATION — 控除・加算の内訳</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>報酬額（税込）</span><span style={{ fontFamily: FONT_SANS, fontWeight: 500 }}>{fmt(aGross)}</span></div>
+                      {aInvDed > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− インボイス控除（10%）</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aInvDed)}</span></div>}
+                      {aTax > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− 源泉徴収（10.21%）</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aTax)}</span></div>}
+                      {aWelfare > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− 備品・リネン代</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aWelfare)}</span></div>}
+                      {aTransport > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#6b9b7e" }}><span>+ 交通費（実費精算・非課税）</span><span style={{ fontFamily: FONT_SANS }}>+{fmt(aTransport)}</span></div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, marginTop: 4, borderTop: `1px dashed ${T.border}`, fontWeight: 600, color: "#b38419" }}>
+                        <span>差引支払額（お手取り）</span>
+                        <span style={{ fontFamily: FONT_SANS, fontSize: 15 }}>{fmt(aFinal)}</span>
+                      </div>
                     </div>
-                    <div className="mt-3 pt-2 text-[9px]" style={{ borderTop: `1px dashed ${T.border}`, color: T.textMuted, lineHeight: 1.6 }}>
-                      <p>💡 <strong>確定申告のヒント</strong>:</p>
-                      <p>・上の「報酬額（税込）」が税務署に報告される<strong>支払金額</strong>です（収入）</p>
-                      {aWelfare > 0 && <p>・<strong>備品・リネン代</strong>（{fmt(aWelfare)}）は必要経費として計上できます（消耗品費など）</p>}
-                      {aTransport > 0 && <p>・<strong>交通費（実費精算分）</strong>（{fmt(aTransport)}）は立替精算なので<span style={{ color: "#c45555" }}>収入にも経費にもなりません</span>（課税対象外）</p>}
-                      {aTax > 0 && <p>・<strong>源泉徴収税額</strong>（{fmt(aTax)}）は確定申告で還付または納税調整の対象になります</p>}
+                    <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px dashed ${T.border}`, fontSize: 10, color: T.textMuted, lineHeight: 1.8, letterSpacing: "0.02em" }}>
+                      <p style={{ margin: "0 0 4px", fontWeight: 500, color: T.textSub }}>💡 確定申告のヒント</p>
+                      <p style={{ margin: 0 }}>・上の「報酬額（税込）」が税務署に報告される<strong>支払金額</strong>です（収入）</p>
+                      {aWelfare > 0 && <p style={{ margin: 0 }}>・<strong>備品・リネン代</strong>（{fmt(aWelfare)}）は必要経費として計上できます（消耗品費など）</p>}
+                      {aTransport > 0 && <p style={{ margin: 0 }}>・<strong>交通費（実費精算分）</strong>（{fmt(aTransport)}）は立替精算なので<span style={{ color: "#c96b83" }}>収入にも経費にもなりません</span>（課税対象外）</p>}
+                      {aTax > 0 && <p style={{ margin: 0 }}>・<strong>源泉徴収税額</strong>（{fmt(aTax)}）は確定申告で還付または納税調整の対象になります</p>}
                     </div>
                   </div>
                 )}
 
-                {/* 支払調書ボタン */}
+                {/* 支払調書・証明書ボタン */}
                 {aDays > 0 && (
-                  <button onClick={openPayslip} className="w-full py-3 rounded-xl text-[12px] font-medium cursor-pointer" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff" }}>📄 {salaryYear}年 支払調書を表示</button>
+                  <button onClick={openPayslip} style={{ width: "100%", padding: 14, fontSize: 13, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>
+                    📄 {salaryYear}年 支払調書を表示
+                  </button>
                 )}
-
-                {/* 証明書発行 → タブへ */}
-                <button onClick={() => { setTab("cert"); window.location.hash = "cert"; }} className="w-full py-3 rounded-xl text-[11px] font-medium cursor-pointer flex items-center justify-center gap-2" style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, color: T.textSub }}>
+                <button onClick={() => { setMoneySub("cert"); setTab("cert"); window.location.hash = "cert"; }} style={{ width: "100%", padding: 13, fontSize: 12, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.accent}`, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.1em", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   📄 証明書を発行する →
                 </button>
 
                 {/* 月別内訳 */}
                 {monthlyData.length > 0 && (
-                  <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                    <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}><p className="text-[11px] font-medium">月別内訳</p></div>
+                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>MONTHLY BREAKDOWN</p>
+                    </div>
                     {monthlyData.map(md => (
-                      <div key={md.month} className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: `1px solid ${T.border}` }}>
-                        <span className="text-[12px] font-medium">{md.month}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[9px]" style={{ color: T.textMuted }}>{md.days}日</span>
-                          <span className="text-[9px]" style={{ color: T.textMuted }}>報酬{fmt(md.gross)}</span>
-                          <span className="text-[13px] font-medium" style={{ color: "#e8849a" }}>{fmt(md.final)}</span>
+                      <div key={md.month} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
+                        <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em" }}>{md.month}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          <span style={{ fontSize: 10, color: T.textMuted, fontFamily: FONT_SANS }}>{md.days}日</span>
+                          <span style={{ fontSize: 10, color: T.textMuted }}>報酬 <span style={{ fontFamily: FONT_SANS }}>{fmt(md.gross)}</span></span>
+                          <span style={{ fontFamily: FONT_SANS, fontSize: 14, fontWeight: 500, color: T.accent }}>{fmt(md.final)}</span>
                         </div>
                       </div>
                     ))}
-                    <div className="flex items-center justify-between px-4 py-3 font-bold" style={{ backgroundColor: T.cardAlt }}>
-                      <span className="text-[12px]">合計</span>
-                      <span className="text-[14px]" style={{ color: "#e8849a" }}>{fmt(aFinal)}</span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", backgroundColor: T.cardAlt }}>
+                      <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 600, letterSpacing: "0.08em" }}>合計</span>
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 16, fontWeight: 600, color: T.accent }}>{fmt(aFinal)}</span>
                     </div>
                   </div>
                 )}
-                {aDays === 0 && <p className="text-[12px] text-center py-8" style={{ color: T.textFaint }}>{salaryYear}年の清算データがありません</p>}
+                {aDays === 0 && (
+                  <div style={{ padding: "40px 16px", textAlign: "center", backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                    <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>{salaryYear}年の清算データがありません</p>
+                  </div>
+                )}
               </>)}
             </>);
           })()}
         </div>)}
 
-        {tab === "customers" && (<div className="space-y-4">
-          <div className="flex items-center justify-between"><h2 className="text-[14px] font-medium">👤 お客様メモ・NG</h2><button onClick={() => { setShowAddNote(true); setNoteForm({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 }); }} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer text-white" style={{ backgroundColor: "#e8849a" }}>+ メモ追加</button></div>
-          <div className="rounded-xl p-3" style={{ backgroundColor: "#85a8c410", border: "1px solid #85a8c430" }}>
-            <p className="text-[11px] font-medium mb-1" style={{ color: "#85a8c4" }}>🛡️ NG登録について</p>
-            <p className="text-[10px] leading-relaxed" style={{ color: T.textSub }}>NGに登録されたお客様がネット予約をする際は、あなたの出勤枠が<span style={{ color: "#c45555", fontWeight: 600 }}>「お休み」として表示</span>されるため、予約が入ることはありません。お電話でのご予約の場合も、受付スタッフが事前に確認しお断りいたしますのでご安心ください。</p>
+
+        {tab === "customers" && (<div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CUSTOMER MEMO</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>👤 お客様メモ・NG</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
           </div>
-          <input type="text" value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="お客様名で検索..." className="w-full px-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
-          {uniqueCustomers.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}><p className="text-[10px] font-medium mb-2" style={{ color: T.textMuted }}>接客したお客様（全{uniqueCustomers.length}名）</p><div className="flex flex-wrap gap-1.5">{uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => { const notes = customerNotes.filter(n => n.customer_name === name); const isNg = notes.some(n => n.is_ng); const hasNote = notes.length > 0; return (<button key={name} onClick={() => setNoteHistoryCustomer(name)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ backgroundColor: isNg ? "#c4555515" : hasNote ? "#e8849a15" : T.cardAlt, borderColor: isNg ? "#c4555544" : hasNote ? "#e8849a44" : T.border, color: isNg ? "#c45555" : T.text }}>{isNg && "🚫"}{name}({info.count}回){notes.length > 0 && (" 📝" + (notes.length > 1 ? notes.length : ""))}</button>); })}</div></div>)}
-          <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}><div className="px-4 py-2.5 border-b" style={{ borderColor: T.border }}><p className="text-[11px] font-medium">登録済みメモ（{customerNotes.length}件）</p><p className="text-[8px]" style={{ color: T.textFaint }}>※ メモの削除はスタッフにお申し付けください</p></div>
-            {customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).length === 0 ? <p className="text-[12px] text-center py-6" style={{ color: T.textFaint }}>メモがありません</p> : customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).map(n => { const res = n.reservation_id ? allReservations.find(r => r.id === n.reservation_id) : null; return (<div key={n.id} className="px-4 py-3 cursor-pointer" style={{ borderBottom: `1px solid ${T.border}` }} onClick={() => setNoteHistoryCustomer(n.customer_name)}><div className="flex items-center gap-2"><span className="text-[12px] font-medium">{n.customer_name}</span>{n.is_ng && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#c4555518", color: "#c45555" }}>🚫 NG</span>}{n.rating > 0 && <span className="text-[9px]" style={{ color: "#f59e0b" }}>{"★".repeat(n.rating)}</span>}{res && <span className="text-[9px]" style={{ color: T.textMuted }}>{formatDate(res.date)}</span>}</div>{n.note && <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textSub }}>{n.note}</p>}</div>); })}
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button onClick={() => { setShowAddNote(true); setNoteForm({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 }); }}
+              style={{ padding: "8px 16px", fontSize: 11, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
+              + メモ追加
+            </button>
+          </div>
+
+          {/* NG案内 */}
+          <div style={{ backgroundColor: "rgba(107,139,168,0.04)", border: `1px solid #6b8ba844`, padding: "14px 16px" }}>
+            <p style={{ margin: "0 0 6px", fontFamily: FONT_SERIF, fontSize: 12, fontWeight: 500, letterSpacing: "0.05em", color: "#6b8ba8" }}>🛡️ NG登録について</p>
+            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.9, color: T.textSub, letterSpacing: "0.03em" }}>
+              NGに登録されたお客様がネット予約をする際は、あなたの出勤枠が<span style={{ color: "#c96b83", fontWeight: 600 }}>「お休み」として表示</span>されるため、予約が入ることはありません。お電話でのご予約の場合も、受付スタッフが事前に確認しお断りいたしますのでご安心ください。
+            </p>
+          </div>
+
+          {/* 検索 */}
+          <input type="text" value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="お客様名で検索..."
+            style={{ width: "100%", padding: "11px 14px", fontSize: 12, outline: "none", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, color: T.text, fontFamily: FONT_SERIF, boxSizing: "border-box" }} />
+
+          {/* お客様チップ一覧 */}
+          {uniqueCustomers.length > 0 && (
+            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
+              <p style={{ margin: "0 0 10px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>
+                接客したお客様 <span style={{ fontFamily: FONT_SANS, color: T.accent, letterSpacing: 0, marginLeft: 4 }}>{uniqueCustomers.length}名</span>
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => {
+                  const notes = customerNotes.filter(n => n.customer_name === name);
+                  const isNg = notes.some(n => n.is_ng);
+                  const hasNote = notes.length > 0;
+                  return (
+                    <button key={name} onClick={() => setNoteHistoryCustomer(name)}
+                      style={{
+                        padding: "6px 11px",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        border: `1px solid ${isNg ? "#c96b83" : hasNote ? T.accent : T.border}`,
+                        backgroundColor: isNg ? "rgba(201,107,131,0.08)" : hasNote ? T.accentBg : T.cardAlt,
+                        color: isNg ? "#c96b83" : T.text,
+                        fontFamily: FONT_SERIF,
+                        letterSpacing: "0.03em",
+                      }}>
+                      {isNg && "🚫 "}{name}
+                      <span style={{ fontFamily: FONT_SANS, marginLeft: 4, color: T.textMuted, fontSize: 10 }}>({info.count})</span>
+                      {notes.length > 0 && <span style={{ marginLeft: 3 }}>📝{notes.length > 1 ? notes.length : ""}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 登録済みメモ */}
+          <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>
+                登録済みメモ <span style={{ fontFamily: FONT_SANS, color: T.accent, marginLeft: 4 }}>{customerNotes.length}件</span>
+              </p>
+              <p style={{ margin: "3px 0 0", fontSize: 9, color: T.textFaint, letterSpacing: "0.03em" }}>※ メモの削除はスタッフにお申し付けください</p>
+            </div>
+            {customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).length === 0 ? (
+              <p style={{ fontSize: 12, textAlign: "center", padding: "32px 0", color: T.textFaint, margin: 0 }}>メモがありません</p>
+            ) : (
+              customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).map((n, idx, arr) => {
+                const res = n.reservation_id ? allReservations.find(r => r.id === n.reservation_id) : null;
+                return (
+                  <div key={n.id} style={{ padding: "12px 16px", cursor: "pointer", borderBottom: idx < arr.length - 1 ? `1px solid ${T.border}` : "none" }} onClick={() => setNoteHistoryCustomer(n.customer_name)}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.03em" }}>{n.customer_name}</span>
+                      {n.is_ng && <span style={{ fontSize: 9, padding: "2px 7px", color: "#c96b83", border: `1px solid #c96b8344`, backgroundColor: "rgba(201,107,131,0.06)", letterSpacing: "0.05em" }}>🚫 NG</span>}
+                      {n.rating > 0 && <span style={{ fontSize: 10, color: "#b38419", letterSpacing: "0.05em" }}>{"★".repeat(n.rating)}</span>}
+                      {res && <span style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>{formatDate(res.date)}</span>}
+                    </div>
+                    {n.note && <p style={{ margin: "4px 0 0", fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "0.02em" }}>{n.note}</p>}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>)}
 
@@ -1362,33 +1647,71 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 ))}
               </div>)}
             </div>);
-          })() : (<div>
-            {/* 更新タイムライン */}
-            {manualUpdates.length > 0 && (<div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-              <h3 className="text-[13px] font-semibold mb-2">📝 最近の更新</h3>
-              {manualUpdates.slice(0, 3).map(u => {
-                const art = manualArticles.find(a => a.id === u.article_id);
-                return (<div key={u.id} className="flex gap-2 py-1.5" style={{ borderBottom: `1px solid ${T.border}` }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#e8849a", marginTop: 5, flexShrink: 0 }} />
-                  <div><span className="text-[12px] font-medium cursor-pointer" style={{ color: "#e8849a" }} onClick={() => { if (art) openManualArticle(art); }}>{art?.title || "?"}</span><span className="text-[10px] ml-1" style={{ color: T.textMuted }}>{u.summary}</span><div className="text-[9px]" style={{ color: T.textFaint }}>{new Date(u.created_at).toLocaleDateString("ja")}</div></div>
-                </div>);
-              })}
-            </div>)}
-            {/* 検索 */}
-            <input type="text" value={manualSearch} onChange={e => setManualSearch(e.target.value)} placeholder="🔍 マニュアルを検索..." className="w-full px-4 py-2.5 rounded-xl text-[12px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
-            {/* カテゴリフィルタ */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
-              <button onClick={() => setManualSelCat(null)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer whitespace-nowrap border" style={chipStyle(manualSelCat === null, "#e8849a")}>すべて</button>
-              {manualCats.map(c => (<button key={c.id} onClick={() => setManualSelCat(c.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer whitespace-nowrap border" style={{ ...chipStyle(manualSelCat === c.id, "#e8849a"), ...(manualSelCat !== c.id ? { borderColor: c.color } : {}) }}>{c.icon} {c.name}</button>))}
+          })() : (<div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: FONT_SERIF }}>
+            {/* セクション見出し */}
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>MANUAL</p>
+              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📖 業務マニュアル</p>
+              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
             </div>
-            {/* タグフィルタ */}
-            {(() => { const allT = Array.from(new Set(manualArticles.flatMap(a => a.tags))).sort(); return allT.length > 0 ? (
-              <div className="flex gap-1 flex-wrap">
-                <span className="text-[9px] leading-[22px]" style={{ color: T.textMuted }}>🏷️</span>
-                {manualFilterTag && <button onClick={() => setManualFilterTag("")} className="text-[9px] px-2 py-0.5 rounded-lg cursor-pointer border" style={{ borderColor: T.border, color: T.textSub }}>× クリア</button>}
-                {allT.map(t => <button key={t} onClick={() => setManualFilterTag(manualFilterTag === t ? "" : t)} className="text-[9px] px-2 py-0.5 rounded-lg cursor-pointer" style={{ background: manualFilterTag === t ? "#e8849a" : ("#f0eee8"), color: manualFilterTag === t ? "#fff" : T.textSub, border: "none", opacity: manualFilterTag && manualFilterTag !== t ? 0.4 : 1 }}>{t}</button>)}
+
+            {/* 更新タイムライン */}
+            {manualUpdates.length > 0 && (
+              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
+                <p style={{ margin: "0 0 10px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>📝 RECENT UPDATES</p>
+                {manualUpdates.slice(0, 3).map((u, idx, arr) => {
+                  const art = manualArticles.find(a => a.id === u.article_id);
+                  return (
+                    <div key={u.id} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: idx < arr.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.accent, marginTop: 6, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 12, fontWeight: 500, cursor: "pointer", color: T.accent, letterSpacing: "0.03em" }} onClick={() => { if (art) openManualArticle(art); }}>{art?.title || "?"}</span>
+                        <span style={{ fontSize: 11, marginLeft: 6, color: T.textMuted }}>{u.summary}</span>
+                        <div style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textFaint, marginTop: 2 }}>{new Date(u.created_at).toLocaleDateString("ja")}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : null; })()}
+            )}
+
+            {/* 検索 */}
+            <input type="text" value={manualSearch} onChange={e => setManualSearch(e.target.value)} placeholder="🔍 マニュアルを検索..."
+              style={{ width: "100%", padding: "11px 14px", fontSize: 12, outline: "none", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, color: T.text, fontFamily: FONT_SERIF, boxSizing: "border-box" }} />
+
+            {/* カテゴリフィルタ */}
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
+              <button onClick={() => setManualSelCat(null)}
+                style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${manualSelCat === null ? T.accent : T.border}`, backgroundColor: manualSelCat === null ? T.accent : "transparent", color: manualSelCat === null ? "#fff" : T.textSub, whiteSpace: "nowrap", fontFamily: FONT_SERIF, letterSpacing: "0.05em", fontWeight: manualSelCat === null ? 500 : 400 }}>
+                すべて
+              </button>
+              {manualCats.map(c => {
+                const active = manualSelCat === c.id;
+                return (
+                  <button key={c.id} onClick={() => setManualSelCat(c.id)}
+                    style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${active ? T.accent : T.border}`, backgroundColor: active ? T.accent : "transparent", color: active ? "#fff" : T.textSub, whiteSpace: "nowrap", fontFamily: FONT_SERIF, letterSpacing: "0.03em", fontWeight: active ? 500 : 400 }}>
+                    {c.icon} {c.name}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* タグフィルタ */}
+            {(() => {
+              const allT = Array.from(new Set(manualArticles.flatMap(a => a.tags))).sort();
+              return allT.length > 0 ? (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: T.textMuted, marginRight: 2, letterSpacing: "0.05em" }}>🏷️</span>
+                  {manualFilterTag && <button onClick={() => setManualFilterTag("")} style={{ fontSize: 10, padding: "3px 8px", cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF }}>× クリア</button>}
+                  {allT.map(t => (
+                    <button key={t} onClick={() => setManualFilterTag(manualFilterTag === t ? "" : t)}
+                      style={{ fontSize: 10, padding: "3px 10px", cursor: "pointer", backgroundColor: manualFilterTag === t ? T.accent : T.cardAlt, color: manualFilterTag === t ? "#fff" : T.textSub, border: `1px solid ${manualFilterTag === t ? T.accent : T.border}`, opacity: manualFilterTag && manualFilterTag !== t ? 0.4 : 1, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              ) : null;
+            })()}
             {/* 記事一覧 */}
             {(() => {
               const filtered = manualArticles.filter(a => {
@@ -1405,27 +1728,49 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 const latestUpd = manualUpdates.find(u => u.article_id === a.id);
                 const isNew = (Date.now() - new Date(a.created_at).getTime()) < 7 * 86400000;
                 const isUpdated = latestUpd && !isRead;
-                return (<div key={a.id} className="rounded-2xl border p-3 cursor-pointer" style={{ backgroundColor: T.card, borderColor: isNew && !isRead ? "#e8849a55" : T.border, transition: "transform 0.15s" }} onClick={() => openManualArticle(a)}>
-                  <div className="flex gap-3">
-                    {a.cover_image ? <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0"><img src={a.cover_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div> : <div className="w-16 h-16 rounded-xl flex-shrink-0 flex items-center justify-center text-[24px]" style={{ background: cat?.color || T.bg }}>{cat?.icon || "📄"}</div>}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                        {a.is_pinned && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#FAEEDA", color: "#854F0B" }}>📌</span>}
-                        {isNew && !isRead && <span className="manual-new-badge text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#e8849a", color: "#fff" }}>🆕 NEW</span>}
-                        {isUpdated && <span className="manual-updated-badge text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#FAEEDA", color: "#854F0B" }}>✏️更新</span>}
-                        {isRead && <span className="text-[8px]" style={{ color: "#4a7c59" }}>✅</span>}
+                return (
+                  <div key={a.id} style={{ backgroundColor: T.card, border: `1px solid ${isNew && !isRead ? T.accent : T.border}`, padding: 12, cursor: "pointer", position: "relative" }} onClick={() => openManualArticle(a)}>
+                    {isNew && !isRead && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, backgroundColor: T.accent }} />}
+                    <div style={{ display: "flex", gap: 12 }}>
+                      {a.cover_image ? (
+                        <div style={{ width: 64, height: 64, overflow: "hidden", flexShrink: 0 }}>
+                          <img src={a.cover_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: 64, height: 64, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, backgroundColor: cat?.color || T.cardAlt }}>
+                          {cat?.icon || "📄"}
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+                          {a.is_pinned && <span style={{ fontSize: 9, padding: "2px 7px", color: "#b38419", border: `1px solid #b3841944`, letterSpacing: "0.05em" }}>📌 ピン</span>}
+                          {isNew && !isRead && <span className="manual-new-badge" style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 8px", backgroundColor: T.accent, color: "#fff", letterSpacing: "0.15em", fontWeight: 500 }}>NEW</span>}
+                          {isUpdated && <span className="manual-updated-badge" style={{ fontSize: 9, padding: "2px 7px", color: "#b38419", border: `1px solid #b3841944`, letterSpacing: "0.05em" }}>✏️ 更新</span>}
+                          {isRead && <span style={{ fontSize: 10, color: "#6b9b7e" }}>✅</span>}
+                        </div>
+                        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</h4>
+                        {a.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                            {a.tags.slice(0, 3).map(t => <span key={t} style={{ fontSize: 9, padding: "1px 6px", backgroundColor: T.cardAlt, color: T.textSub, letterSpacing: "0.03em" }}>{t}</span>)}
+                          </div>
+                        )}
                       </div>
-                      <h4 className="text-[13px] font-semibold truncate" style={{ color: T.text }}>{a.title}</h4>
-                      {a.tags.length > 0 && <div className="flex gap-1 flex-wrap mt-1">{a.tags.slice(0, 3).map(t => <span key={t} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: "#f0eee8", color: T.textSub }}>{t}</span>)}</div>}
                     </div>
                   </div>
-                </div>);
+                );
               };
-              return (<div className="space-y-2">
-                {pinned.map(renderCard)}
-                {unpinned.map(renderCard)}
-                {filtered.length === 0 && <div className="text-center py-8"><div className="text-[32px] mb-2">📖</div><p className="text-[12px]" style={{ color: T.textMuted }}>該当する記事がありません</p></div>}
-              </div>);
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {pinned.map(renderCard)}
+                  {unpinned.map(renderCard)}
+                  {filtered.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 16px", backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>📖</div>
+                      <p style={{ margin: 0, fontSize: 12, color: T.textMuted, letterSpacing: "0.05em" }}>該当する記事がありません</p>
+                    </div>
+                  )}
+                </div>
+              );
             })()}
           </div>)}
 
@@ -1835,35 +2180,42 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
       {/* お客様接客履歴モーダル */}
       {/* ── 証明書発行タブ ── */}
       {tab === "cert" && therapist && (
-        <div className="space-y-4">
-          <h2 className="text-[14px] font-medium">📄 証明書発行</h2>
-          <p className="text-[11px]" style={{ color: T.textMuted }}>お店が公式に発行する証明書です。以下の書類をPDFで即座に発行できます。</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CERTIFICATE</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📄 証明書発行</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+          </div>
+          <p style={{ margin: 0, fontSize: 11, color: T.textMuted, textAlign: "center", lineHeight: 1.9, letterSpacing: "0.03em" }}>お店が公式に発行する証明書です。<br />以下の書類を PDF で即座に発行できます。</p>
 
-          {/* 証明書の種類と用途 */}
+          {/* 証明書カード */}
           {[
-            { icon: "📝", title: "業務委託契約証明書", sub: "在籍証明", color: "#2563eb", type: "contract" as const,
+            { icon: "📝", title: "業務委託契約証明書", sub: "CONTRACT", jpSub: "在籍証明", color: T.accent, type: "contract" as const,
               uses: ["🏠 賃貸マンション・アパートの契約", "👶 保育園・学童の就労証明", "💳 クレジットカードの申込", "📱 携帯電話の分割払い契約"],
               merit: "「どこで働いているか」を証明する書類です。フリーランスは会社員と違って在籍証明が取りにくいですが、この証明書があれば賃貸審査もスムーズに通ります。" },
-            { icon: "💰", title: "報酬支払証明書", sub: "収入証明", color: "#06b6d4", type: "payment" as const,
+            { icon: "💰", title: "報酬支払証明書", sub: "PAYMENT", jpSub: "収入証明", color: "#6b8ba8", type: "payment" as const,
               uses: ["🏦 住宅ローン・カーローンの審査", "💳 クレジットカードの限度額アップ", "🏥 児童手当・医療費助成の申請", "📋 奨学金の保護者収入証明"],
               merit: "「年間いくら稼いでいるか」を月別内訳つきで証明します。収入が安定していることを金融機関に示せるので、ローン審査の通過率が上がります。" },
-            { icon: "📊", title: "取引実績証明書", sub: "実績証明", color: "#7c3aed", type: "transaction" as const,
+            { icon: "📊", title: "取引実績証明書", sub: "TRANSACTION", jpSub: "実績証明", color: "#b38419", type: "transaction" as const,
               uses: ["📑 確定申告の補助資料", "🏦 事業融資・小規模企業共済の申請", "💰 補助金・助成金の申請", "📋 開業届・青色申告の添付資料"],
               merit: "「どれだけ継続的に仕事をしているか」を証明します。月平均取引額や取引月数が記載されるので、安定した事業実績のアピールに使えます。" },
           ].map((cert, i) => (
-            <div key={i} className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
-              <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: `1px solid ${T.border}` }}>
-                <span className="text-[18px]">{cert.icon}</span>
-                <div className="flex-1">
-                  <p className="text-[13px] font-medium">{cert.title}</p>
-                  <p className="text-[10px]" style={{ color: cert.color }}>{cert.sub}</p>
+            <div key={i} style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+              {/* ヘッダー */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ fontSize: 22 }}>{cert.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: cert.color, fontWeight: 500 }}>{cert.sub}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 14, fontWeight: 500, letterSpacing: "0.03em", color: T.text }}>{cert.title}</p>
                 </div>
+                <span style={{ fontSize: 10, padding: "3px 10px", border: `1px solid ${cert.color}44`, color: cert.color, letterSpacing: "0.05em" }}>{cert.jpSub}</span>
               </div>
-              <div className="px-4 py-3">
-                <p className="text-[11px] mb-3" style={{ color: T.textMuted, lineHeight: 1.8 }}>{cert.merit}</p>
-                <p className="text-[10px] font-medium mb-2">こんな時に使えます</p>
-                <div className="grid grid-cols-2 gap-1 mb-3">
-                  {cert.uses.map((u, j) => <p key={j} className="text-[10px]" style={{ color: T.textMuted }}>{u}</p>)}
+              <div style={{ padding: "16px 18px" }}>
+                <p style={{ margin: "0 0 14px", fontSize: 11, color: T.textSub, lineHeight: 1.9, letterSpacing: "0.02em" }}>{cert.merit}</p>
+                <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>USE CASES — こんな時に使えます</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 8px", marginBottom: 14 }}>
+                  {cert.uses.map((u, j) => <p key={j} style={{ margin: 0, fontSize: 10, color: T.textMuted, letterSpacing: "0.02em" }}>{u}</p>)}
                 </div>
                 {certEligible ? (
                   <button onClick={async () => {
@@ -1878,11 +2230,11 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     const payment = { year: yr, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months };
                     if (cert.type === "payment") generatePaymentCertificate(store, th, payment);
                     else generateTransactionCertificate(store, th, payment);
-                  }} className="w-full py-2.5 rounded-xl text-[11px] font-medium cursor-pointer" style={{ backgroundColor: cert.color + "12", color: cert.color, border: `1px solid ${cert.color}30` }}>
+                  }} style={{ width: "100%", padding: 12, fontSize: 12, cursor: "pointer", backgroundColor: cert.color, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
                     {cert.icon} この証明書を発行する
                   </button>
                 ) : (
-                  <div className="w-full py-2.5 rounded-xl text-[11px] text-center" style={{ backgroundColor: "#88878010", color: "#888780", border: "1px solid #88878020" }}>
+                  <div style={{ width: "100%", padding: 12, fontSize: 11, textAlign: "center", color: T.textMuted, border: `1px dashed ${T.border}`, backgroundColor: T.cardAlt, fontFamily: FONT_SERIF, letterSpacing: "0.05em", boxSizing: "border-box" }}>
                     発行条件を満たすと発行できます ↓
                   </div>
                 )}
@@ -1891,27 +2243,28 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           ))}
 
           {/* 発行条件 */}
-          <div className="rounded-2xl border p-4" style={{ backgroundColor: T.card, borderColor: T.border }}>
-            <p className="text-[12px] font-medium mb-3">✅ 発行条件</p>
-            <p className="text-[10px] mb-3" style={{ color: T.textMuted }}>以下の条件をすべて満たすと、証明書を自分で発行できるようになります。</p>
-            <div className="space-y-2">
+          <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 18px" }}>
+            <p style={{ margin: "0 0 4px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>REQUIREMENTS</p>
+            <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>✅ 発行条件</p>
+            <p style={{ margin: "0 0 14px", fontSize: 10, color: T.textMuted, lineHeight: 1.8, letterSpacing: "0.02em" }}>以下の条件をすべて満たすと、証明書を自分で発行できるようになります。</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {certChecks.map((c, i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ backgroundColor: c.ok ? "#22c55e06" : "#c4555506", border: `1px solid ${c.ok ? "#22c55e15" : "#c4555515"}` }}>
-                  <span className="text-[14px]">{c.ok ? "✅" : "⬜"}</span>
-                  <div className="flex-1">
-                    <p className="text-[11px] font-medium" style={{ color: c.ok ? "#22c55e" : T.text }}>{c.label}</p>
-                    {!c.ok && i === 0 && <p className="text-[9px]" style={{ color: "#c45555" }}>身分証はスタッフに提出してください</p>}
-                    {!c.ok && i === 1 && <p className="text-[9px]" style={{ color: "#c45555" }}>契約書のリンクをスタッフからもらってください</p>}
-                    {!c.ok && i === 2 && <p className="text-[9px]" style={{ color: "#c45555" }}>スタッフに本名を伝えてください</p>}
-                    {!c.ok && i === 3 && <p className="text-[9px]" style={{ color: "#c45555" }}>スタッフに住所を伝えてください</p>}
-                    {!c.ok && i === 4 && <p className="text-[9px]" style={{ color: "#c45555" }}>出勤を重ねると条件を達成できます</p>}
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", backgroundColor: c.ok ? "rgba(107,155,126,0.05)" : "rgba(201,107,131,0.04)", border: `1px solid ${c.ok ? "#6b9b7e33" : "#c96b8333"}` }}>
+                  <span style={{ fontSize: 16 }}>{c.ok ? "✅" : "⬜"}</span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 500, letterSpacing: "0.03em", color: c.ok ? "#6b9b7e" : T.text }}>{c.label}</p>
+                    {!c.ok && i === 0 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>身分証はスタッフに提出してください</p>}
+                    {!c.ok && i === 1 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>契約書のリンクをスタッフからもらってください</p>}
+                    {!c.ok && i === 2 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>スタッフに本名を伝えてください</p>}
+                    {!c.ok && i === 3 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>スタッフに住所を伝えてください</p>}
+                    {!c.ok && i === 4 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>出勤を重ねると条件を達成できます</p>}
                   </div>
                 </div>
               ))}
             </div>
             {certEligible && (
-              <div className="mt-3 px-3 py-2 rounded-xl text-center" style={{ backgroundColor: "#22c55e0c", border: "1px solid #22c55e20" }}>
-                <p className="text-[11px] font-medium" style={{ color: "#22c55e" }}>🎉 すべての条件を満たしています！上の証明書を発行できます。</p>
+              <div style={{ marginTop: 14, padding: "12px 14px", textAlign: "center", backgroundColor: "rgba(107,155,126,0.08)", border: `1px solid #6b9b7e44` }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: "#6b9b7e", letterSpacing: "0.05em" }}>🎉 すべての条件を満たしています！上の証明書を発行できます。</p>
               </div>
             )}
           </div>
@@ -1920,18 +2273,26 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
 
       {/* ── 確定申告サポートタブ ── */}
       {tab === "tax" && therapist && (
-        <div className="space-y-4">
-          <h2 className="text-[14px] font-medium">📊 確定申告サポート</h2>
-          <div className="flex gap-2">
-            <button onClick={() => setTaxSubTab("support")} className="flex-1 py-2.5 text-[11px] rounded-xl cursor-pointer border"
-              style={{ backgroundColor: taxSubTab === "support" ? "#e8849a20" : "transparent", color: taxSubTab === "support" ? "#e8849a" : T.textMuted, borderColor: taxSubTab === "support" ? "#e8849a" : T.border, fontWeight: taxSubTab === "support" ? 600 : 400 }}>
-              📊 申告サポート
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TAX FILING</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📊 確定申告サポート</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+          </div>
+
+          {/* 2タブ切替 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: `1px solid ${T.border}` }}>
+            <button onClick={() => setTaxSubTab("support")}
+              style={{ padding: 11, fontSize: 12, cursor: "pointer", backgroundColor: taxSubTab === "support" ? T.accent : "transparent", color: taxSubTab === "support" ? "#fff" : T.textSub, border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: taxSubTab === "support" ? 500 : 400, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <span>📊</span><span>申告サポート</span>
             </button>
-            <button onClick={() => setTaxSubTab("ledger")} className="flex-1 py-2.5 text-[11px] rounded-xl cursor-pointer border"
-              style={{ backgroundColor: taxSubTab === "ledger" ? "#22c55e20" : "transparent", color: taxSubTab === "ledger" ? "#22c55e" : T.textMuted, borderColor: taxSubTab === "ledger" ? "#22c55e" : T.border, fontWeight: taxSubTab === "ledger" ? 600 : 400 }}>
-              📒 帳簿・経費管理
+            <button onClick={() => setTaxSubTab("ledger")}
+              style={{ padding: 11, fontSize: 12, cursor: "pointer", backgroundColor: taxSubTab === "ledger" ? "#6b9b7e" : "transparent", color: taxSubTab === "ledger" ? "#fff" : T.textSub, border: "none", borderLeft: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: taxSubTab === "ledger" ? 500 : 400, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <span>📒</span><span>帳簿・経費管理</span>
             </button>
           </div>
+
           {taxSubTab === "support" && <TaxSupportWizard T={T} therapistId={therapist.id} onGoToLedger={() => setTaxSubTab("ledger")} />}
           {taxSubTab === "ledger" && <TaxBookkeeping T={T} therapistId={therapist.id} />}
         </div>
