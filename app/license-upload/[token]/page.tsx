@@ -4,6 +4,18 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
+const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
+
+const MARBLE_BG = {
+  background: `
+    radial-gradient(at 20% 15%, rgba(232,132,154,0.10) 0, transparent 50%),
+    radial-gradient(at 85% 20%, rgba(196,162,138,0.08) 0, transparent 50%),
+    radial-gradient(at 40% 85%, rgba(247,227,231,0.6) 0, transparent 50%),
+    linear-gradient(180deg, #fbf7f3 0%, #f8f2ec 100%)
+  `,
+};
+
 export default function LicenseUpload() {
   const params = useParams();
   const token = params.token as string;
@@ -69,25 +81,52 @@ export default function LicenseUpload() {
     setSubmitting(false);
   };
 
-  if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7" }}><p style={{ color: "#999", fontSize: 14 }}>読み込み中...</p></div>;
-  if (error) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7", padding: 20 }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div><p style={{ color: "#c45555", fontSize: 14 }}>{error}</p></div></div>;
-  if (done) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7", padding: 20 }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 12 }}>✅</div><h2 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>アップロード完了</h2><p style={{ fontSize: 13, color: "#666" }}>身分証のアップロードが完了しました。</p><p style={{ fontSize: 12, color: "#999", marginTop: 8 }}>このページを閉じてください。</p></div></div>;
+  if (loading) return (
+    <div style={{ minHeight: "100vh", ...MARBLE_BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_SERIF }}>
+      <p style={{ color: "#8a8a8a", fontSize: 12, letterSpacing: "0.15em" }}>読み込み中…</p>
+    </div>
+  );
+  if (error) return (
+    <div style={{ minHeight: "100vh", ...MARBLE_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT_SERIF }}>
+      <div style={{ width: "100%", maxWidth: 400, padding: "40px 32px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", textAlign: "center" }}>
+        <div style={{ fontSize: 36, marginBottom: 14 }}>⚠️</div>
+        <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.3em", color: "#c96b83", fontWeight: 500 }}>ERROR</p>
+        <p style={{ margin: "10px 0 0", fontSize: 13, color: "#555555", letterSpacing: "0.05em", lineHeight: 1.9 }}>{error}</p>
+      </div>
+    </div>
+  );
+  if (done) return (
+    <div style={{ minHeight: "100vh", ...MARBLE_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT_SERIF }}>
+      <div style={{ width: "100%", maxWidth: 400, padding: "40px 32px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", textAlign: "center" }}>
+        <div style={{ width: 1, height: 28, backgroundColor: "#6b9b7e", margin: "0 auto 18px" }} />
+        <div style={{ fontSize: 36, marginBottom: 14 }}>✅</div>
+        <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.3em", color: "#6b9b7e", fontWeight: 500 }}>COMPLETED</p>
+        <h2 style={{ margin: "6px 0 10px", fontSize: 17, fontWeight: 500, letterSpacing: "0.1em", color: "#2b2b2b" }}>アップロード完了</h2>
+        <div style={{ width: 24, height: 1, backgroundColor: "#6b9b7e", margin: "0 auto 10px" }} />
+        <p style={{ margin: 0, fontSize: 12, color: "#555555", letterSpacing: "0.05em", lineHeight: 1.9 }}>身分証のアップロードが<br />完了しました。</p>
+        <p style={{ margin: "14px 0 0", fontSize: 11, color: "#b5b5b5", letterSpacing: "0.08em" }}>このページを閉じてください</p>
+      </div>
+    </div>
+  );
 
   const photoBox = (side: "front" | "back", label: string, preview: string, required: boolean) => (
     <div style={{ marginBottom: 16 }}>
-      <label style={{ fontSize: 12, color: "#333", display: "block", marginBottom: 6, fontWeight: 500 }}>{label}{required && <span style={{ color: "#c45555" }}> *</span>}</label>
-      <div style={{ border: preview ? "2px solid #c3a782" : "2px dashed #ddd", borderRadius: 12, overflow: "hidden", backgroundColor: "#fefefe", position: "relative" }}>
+      <label style={{ display: "block", marginBottom: 8 }}>
+        <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>{side === "front" ? "FRONT" : "BACK"}</span>
+      </label>
+      <p style={{ margin: "0 0 10px", fontSize: 12, color: "#2b2b2b", fontWeight: 500, letterSpacing: "0.05em" }}>{label}{required && <span style={{ color: "#c96b83" }}> *</span>}</p>
+      <div style={{ border: preview ? "1px solid #e8849a" : "1px dashed #d0c8bf", overflow: "hidden", backgroundColor: "#faf6f1", position: "relative" }}>
         {preview ? (
           <div style={{ position: "relative" }}>
-            <img src={preview} alt={label} style={{ width: "100%", maxHeight: 250, objectFit: "contain" }} />
+            <img src={preview} alt={label} style={{ width: "100%", maxHeight: 260, objectFit: "contain", display: "block" }} />
             <button onClick={() => { if (side === "front") { setFrontPreview(""); frontFile.current = null; } else { setBackPreview(""); backFile.current = null; } }}
-              style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.5)", color: "#fff", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", fontSize: 14 }}>✕</button>
+              style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(43,43,43,0.7)", color: "#fff", border: "none", width: 28, height: 28, cursor: "pointer", fontSize: 13, fontFamily: FONT_SERIF }}>✕</button>
           </div>
         ) : (
-          <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "30px 16px", cursor: "pointer" }}>
-            <div style={{ fontSize: 36, marginBottom: 8 }}>📷</div>
-            <p style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>タップして撮影・選択</p>
-            <p style={{ fontSize: 10, color: "#bbb" }}>カメラまたはファイルから選択</p>
+          <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 16px", cursor: "pointer" }}>
+            <div style={{ fontSize: 30, marginBottom: 10 }}>📷</div>
+            <p style={{ margin: 0, fontSize: 12, color: "#555555", letterSpacing: "0.05em" }}>タップして撮影・選択</p>
+            <p style={{ margin: "4px 0 0", fontSize: 10, color: "#b5b5b5", letterSpacing: "0.03em" }}>カメラまたはファイルから選択</p>
             <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f, side); }} />
           </label>
@@ -97,23 +136,25 @@ export default function LicenseUpload() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#faf9f7", paddingBottom: 40 }}>
-      <div style={{ backgroundColor: "#1a1a2e", color: "#fff", padding: "16px 20px", textAlign: "center" }}>
-        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>RELAXATION SALON</p>
-        <h1 style={{ fontSize: 16, fontWeight: 600, margin: "4px 0" }}>🪪 身分証アップロード</h1>
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Ange Spa（アンジュスパ）</p>
+    <div style={{ minHeight: "100vh", ...MARBLE_BG, paddingBottom: 40, fontFamily: FONT_SERIF, color: "#2b2b2b" }}>
+      <div style={{ padding: "36px 20px 24px", textAlign: "center", borderBottom: "1px solid #e5ded6", backgroundColor: "rgba(255,255,255,0.5)", backdropFilter: "blur(6px)" }}>
+        <div style={{ width: 1, height: 24, backgroundColor: "#e8849a", margin: "0 auto 12px" }} />
+        <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: "#c96b83", fontWeight: 500 }}>ID VERIFICATION</p>
+        <h1 style={{ margin: "6px 0 8px", fontFamily: FONT_SERIF, fontSize: 16, fontWeight: 500, letterSpacing: "0.12em" }}>🪪 身分証アップロード</h1>
+        <div style={{ width: 30, height: 1, backgroundColor: "#e8849a", margin: "0 auto 8px" }} />
+        <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: "#8a8a8a" }}>ANGE SPA</p>
       </div>
 
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px" }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 16px" }}>
         {therapistName && (
-          <div style={{ padding: "12px 16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16 }}>
-            <p style={{ fontSize: 11, color: "#999" }}>対象セラピスト</p>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a2e" }}>{therapistName}</p>
+          <div style={{ padding: "14px 18px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", marginBottom: 16 }}>
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#8a8a8a", fontWeight: 500 }}>THERAPIST</p>
+            <p style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, color: "#2b2b2b", letterSpacing: "0.05em" }}>{therapistName}</p>
           </div>
         )}
 
-        <div style={{ padding: "16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16 }}>
-          <p style={{ fontSize: 12, color: "#666", marginBottom: 16, lineHeight: 1.6 }}>
+        <div style={{ padding: "18px 18px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", marginBottom: 18 }}>
+          <p style={{ margin: "0 0 18px", fontSize: 12, color: "#555555", lineHeight: 1.9, letterSpacing: "0.03em" }}>
             本人確認のため、身分証明書（運転免許証など）の表面と裏面を撮影してアップロードしてください。
           </p>
           {photoBox("front", "📄 表面（顔写真側）", frontPreview, true)}
@@ -122,14 +163,15 @@ export default function LicenseUpload() {
 
         <button onClick={handleSubmit} disabled={!frontPreview || submitting}
           style={{
-            width: "100%", padding: "16px", borderRadius: 12, border: "none",
-            background: !frontPreview ? "#ddd" : "linear-gradient(135deg, #c3a782, #a8895e)",
-            color: !frontPreview ? "#999" : "#fff",
-            fontSize: 15, fontWeight: 600, cursor: !frontPreview ? "not-allowed" : "pointer",
+            width: "100%", padding: "14px 22px", border: "none",
+            backgroundColor: !frontPreview ? "#d5d0ca" : "#c96b83",
+            color: !frontPreview ? "#8a8a8a" : "#ffffff",
+            fontSize: 13, fontFamily: FONT_SERIF, fontWeight: 500, letterSpacing: "0.2em",
+            cursor: !frontPreview ? "not-allowed" : "pointer",
           }}>
-          {submitting ? "アップロード中..." : "🪪 アップロードする"}
+          {submitting ? "アップロード中…" : "🪪 アップロードする"}
         </button>
-        {!frontPreview && <p style={{ fontSize: 10, color: "#c45555", textAlign: "center", marginTop: 8 }}>※ 表面の写真は必須です</p>}
+        {!frontPreview && <p style={{ margin: "10px 0 0", fontSize: 10, color: "#c96b83", textAlign: "center", letterSpacing: "0.03em" }}>※ 表面の写真は必須です</p>}
       </div>
     </div>
   );

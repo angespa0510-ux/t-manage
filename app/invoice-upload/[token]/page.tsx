@@ -4,6 +4,19 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
+const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
+const FONT_SANS = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
+
+const MARBLE_BG = {
+  background: `
+    radial-gradient(at 20% 15%, rgba(232,132,154,0.10) 0, transparent 50%),
+    radial-gradient(at 85% 20%, rgba(196,162,138,0.08) 0, transparent 50%),
+    radial-gradient(at 40% 85%, rgba(247,227,231,0.6) 0, transparent 50%),
+    linear-gradient(180deg, #fbf7f3 0%, #f8f2ec 100%)
+  `,
+};
+
 export default function InvoiceUpload() {
   const params = useParams();
   const token = params.token as string;
@@ -60,32 +73,69 @@ export default function InvoiceUpload() {
     setSubmitting(false);
   };
 
-  if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7" }}><p style={{ color: "#999", fontSize: 14 }}>読み込み中...</p></div>;
-  if (error) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7", padding: 20 }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div><p style={{ color: "#c45555", fontSize: 14 }}>{error}</p></div></div>;
-  if (done) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#faf9f7", padding: 20 }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 12 }}>✅</div><h2 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>提出完了</h2><p style={{ fontSize: 13, color: "#666" }}>適格事業者登録通知書の提出が完了しました。</p><p style={{ fontSize: 12, color: "#999", marginTop: 8 }}>このページを閉じてください。</p></div></div>;
+  // ─── Loading / Error / Done 画面 ───
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", ...MARBLE_BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_SERIF }}>
+        <p style={{ color: "#8a8a8a", fontSize: 12, letterSpacing: "0.15em" }}>読み込み中…</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ minHeight: "100vh", ...MARBLE_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT_SERIF }}>
+        <div style={{ width: "100%", maxWidth: 400, padding: "40px 32px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 14 }}>⚠️</div>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.3em", color: "#c96b83", fontWeight: 500 }}>ERROR</p>
+          <p style={{ margin: "10px 0 0", fontSize: 13, color: "#555555", letterSpacing: "0.05em", lineHeight: 1.9 }}>{error}</p>
+        </div>
+      </div>
+    );
+  }
+  if (done) {
+    return (
+      <div style={{ minHeight: "100vh", ...MARBLE_BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT_SERIF }}>
+        <div style={{ width: "100%", maxWidth: 400, padding: "40px 32px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", textAlign: "center" }}>
+          <div style={{ width: 1, height: 28, backgroundColor: "#6b9b7e", margin: "0 auto 18px" }} />
+          <div style={{ fontSize: 36, marginBottom: 14 }}>✅</div>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.3em", color: "#6b9b7e", fontWeight: 500 }}>COMPLETED</p>
+          <h2 style={{ margin: "6px 0 10px", fontSize: 17, fontWeight: 500, letterSpacing: "0.1em", color: "#2b2b2b" }}>提出完了</h2>
+          <div style={{ width: 24, height: 1, backgroundColor: "#6b9b7e", margin: "0 auto 10px" }} />
+          <p style={{ margin: 0, fontSize: 12, color: "#555555", letterSpacing: "0.05em", lineHeight: 1.9 }}>適格事業者登録通知書の提出が<br />完了しました。</p>
+          <p style={{ margin: "14px 0 0", fontSize: 11, color: "#b5b5b5", letterSpacing: "0.08em" }}>このページを閉じてください</p>
+        </div>
+      </div>
+    );
+  }
 
+  // ─── メイン画面 ───
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#faf9f7", paddingBottom: 40 }}>
-      <div style={{ backgroundColor: "#1a1a2e", color: "#fff", padding: "16px 20px", textAlign: "center" }}>
-        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>RELAXATION SALON</p>
-        <h1 style={{ fontSize: 15, fontWeight: 600, margin: "4px 0" }}>📋 適格事業者登録通知書</h1>
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Ange Spa（アンジュスパ）</p>
+    <div style={{ minHeight: "100vh", ...MARBLE_BG, paddingBottom: 40, fontFamily: FONT_SERIF, color: "#2b2b2b" }}>
+      {/* ヘッダー（大理石 + 装飾細線） */}
+      <div style={{ padding: "36px 20px 24px", textAlign: "center", borderBottom: "1px solid #e5ded6", backgroundColor: "rgba(255,255,255,0.5)", backdropFilter: "blur(6px)" }}>
+        <div style={{ width: 1, height: 24, backgroundColor: "#e8849a", margin: "0 auto 12px" }} />
+        <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: "#c96b83", fontWeight: 500 }}>INVOICE REGISTRATION</p>
+        <h1 style={{ margin: "6px 0 8px", fontFamily: FONT_SERIF, fontSize: 16, fontWeight: 500, letterSpacing: "0.12em" }}>📋 適格事業者登録通知書</h1>
+        <div style={{ width: 30, height: 1, backgroundColor: "#e8849a", margin: "0 auto 8px" }} />
+        <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: "#8a8a8a" }}>ANGE SPA</p>
       </div>
 
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 16px" }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 16px" }}>
+        {/* 対象セラピスト */}
         {therapistName && (
-          <div style={{ padding: "12px 16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16 }}>
-            <p style={{ fontSize: 11, color: "#999" }}>対象セラピスト</p>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1a1a2e" }}>{therapistName}</p>
+          <div style={{ padding: "14px 18px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", marginBottom: 16 }}>
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#8a8a8a", fontWeight: 500 }}>THERAPIST</p>
+            <p style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, color: "#2b2b2b", letterSpacing: "0.05em" }}>{therapistName}</p>
           </div>
         )}
 
         {/* 登録番号入力 */}
-        <div style={{ padding: "16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: "#333", display: "block", marginBottom: 6, fontWeight: 500 }}>
-            適格事業者登録番号 <span style={{ color: "#c45555" }}>*</span>
+        <div style={{ padding: "18px 18px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", marginBottom: 16 }}>
+          <label style={{ display: "block", marginBottom: 6 }}>
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>REGISTRATION NO.</span>
           </label>
-          <p style={{ fontSize: 10, color: "#999", marginBottom: 8 }}>Tから始まる13桁の番号を入力してください（例: T1234567890123）</p>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#2b2b2b", fontWeight: 500, letterSpacing: "0.05em" }}>適格事業者登録番号 <span style={{ color: "#c96b83" }}>*</span></p>
+          <p style={{ margin: "0 0 10px", fontSize: 10, color: "#8a8a8a", letterSpacing: "0.03em", lineHeight: 1.7 }}>T から始まる 13 桁の番号を入力してください（例: T1234567890123）</p>
           <input
             type="text"
             value={invoiceNumber}
@@ -97,38 +147,40 @@ export default function InvoiceUpload() {
             }}
             placeholder="T1234567890123"
             style={{
-              width: "100%", padding: "12px 14px", borderRadius: 8, fontSize: 18, fontWeight: 600,
-              fontFamily: "monospace", letterSpacing: 2, textAlign: "center",
-              border: isValidNumber ? "2px solid #22c55e" : "2px solid #e8e4de",
-              outline: "none", color: "#1a1a2e",
+              width: "100%", padding: "12px 14px", fontSize: 18, fontWeight: 500,
+              fontFamily: FONT_SANS, letterSpacing: 2, textAlign: "center",
+              border: isValidNumber ? "1px solid #6b9b7e" : "1px solid #e5ded6",
+              outline: "none", color: "#2b2b2b", backgroundColor: "#faf6f1",
+              boxSizing: "border-box",
             }}
           />
-          <div style={{ textAlign: "center", marginTop: 6 }}>
+          <div style={{ textAlign: "center", marginTop: 8 }}>
             {isValidNumber ? (
-              <span style={{ fontSize: 11, color: "#22c55e" }}>✅ 正しい形式です</span>
+              <span style={{ fontSize: 11, color: "#6b9b7e", letterSpacing: "0.05em" }}>✅ 正しい形式です</span>
             ) : (
-              <span style={{ fontSize: 11, color: "#f59e0b" }}>T + 数字13桁で入力してください（残り{Math.max(0, 13 - (invoiceNumber.length - 1))}桁）</span>
+              <span style={{ fontSize: 11, color: "#b38419", letterSpacing: "0.03em" }}>T + 数字 13 桁で入力してください（残り {Math.max(0, 13 - (invoiceNumber.length - 1))} 桁）</span>
             )}
           </div>
         </div>
 
         {/* 画像アップロード */}
-        <div style={{ padding: "16px", borderRadius: 12, backgroundColor: "#fff", border: "1px solid #e8e4de", marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: "#333", display: "block", marginBottom: 6, fontWeight: 500 }}>
-            📄 通知書の写真 <span style={{ color: "#c45555" }}>*</span>
+        <div style={{ padding: "18px 18px", backgroundColor: "#ffffff", border: "1px solid #e5ded6", marginBottom: 18 }}>
+          <label style={{ display: "block", marginBottom: 6 }}>
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#c96b83", fontWeight: 500 }}>PHOTO</span>
           </label>
-          <p style={{ fontSize: 10, color: "#999", marginBottom: 8 }}>適格事業者登録通知書を撮影またはファイルから選択してください</p>
-          <div style={{ border: preview ? "2px solid #c3a782" : "2px dashed #ddd", borderRadius: 12, overflow: "hidden", backgroundColor: "#fefefe" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#2b2b2b", fontWeight: 500, letterSpacing: "0.05em" }}>📄 通知書の写真 <span style={{ color: "#c96b83" }}>*</span></p>
+          <p style={{ margin: "0 0 10px", fontSize: 10, color: "#8a8a8a", letterSpacing: "0.03em", lineHeight: 1.7 }}>適格事業者登録通知書を撮影またはファイルから選択してください</p>
+          <div style={{ border: preview ? "1px solid #e8849a" : "1px dashed #d0c8bf", overflow: "hidden", backgroundColor: "#faf6f1" }}>
             {preview ? (
               <div style={{ position: "relative" }}>
-                <img src={preview} alt="通知書" style={{ width: "100%", maxHeight: 300, objectFit: "contain" }} />
+                <img src={preview} alt="通知書" style={{ width: "100%", maxHeight: 300, objectFit: "contain", display: "block" }} />
                 <button onClick={() => { setPreview(""); fileRef.current = null; }}
-                  style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.5)", color: "#fff", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", fontSize: 14 }}>✕</button>
+                  style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(43,43,43,0.7)", color: "#fff", border: "none", width: 28, height: 28, cursor: "pointer", fontSize: 13, fontFamily: FONT_SERIF }}>✕</button>
               </div>
             ) : (
-              <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "30px 16px", cursor: "pointer" }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>📷</div>
-                <p style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>タップして撮影・選択</p>
+              <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "36px 16px", cursor: "pointer" }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>📷</div>
+                <p style={{ margin: 0, fontSize: 12, color: "#555555", letterSpacing: "0.05em" }}>タップして撮影・選択</p>
                 <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
               </label>
@@ -138,15 +190,16 @@ export default function InvoiceUpload() {
 
         <button onClick={handleSubmit} disabled={!isValidNumber || !preview || submitting}
           style={{
-            width: "100%", padding: "16px", borderRadius: 12, border: "none",
-            background: (!isValidNumber || !preview) ? "#ddd" : "linear-gradient(135deg, #c3a782, #a8895e)",
-            color: (!isValidNumber || !preview) ? "#999" : "#fff",
-            fontSize: 15, fontWeight: 600, cursor: (!isValidNumber || !preview) ? "not-allowed" : "pointer",
+            width: "100%", padding: "14px 22px", border: "none",
+            backgroundColor: (!isValidNumber || !preview) ? "#d5d0ca" : "#c96b83",
+            color: (!isValidNumber || !preview) ? "#8a8a8a" : "#ffffff",
+            fontSize: 13, fontFamily: FONT_SERIF, fontWeight: 500, letterSpacing: "0.2em",
+            cursor: (!isValidNumber || !preview) ? "not-allowed" : "pointer",
           }}>
-          {submitting ? "送信中..." : "📋 提出する"}
+          {submitting ? "送信中…" : "📋 提出する"}
         </button>
-        {!isValidNumber && <p style={{ fontSize: 10, color: "#c45555", textAlign: "center", marginTop: 8 }}>※ 登録番号を正しく入力してください</p>}
-        {isValidNumber && !preview && <p style={{ fontSize: 10, color: "#c45555", textAlign: "center", marginTop: 8 }}>※ 通知書の写真をアップロードしてください</p>}
+        {!isValidNumber && <p style={{ margin: "10px 0 0", fontSize: 10, color: "#c96b83", textAlign: "center", letterSpacing: "0.03em" }}>※ 登録番号を正しく入力してください</p>}
+        {isValidNumber && !preview && <p style={{ margin: "10px 0 0", fontSize: 10, color: "#c96b83", textAlign: "center", letterSpacing: "0.03em" }}>※ 通知書の写真をアップロードしてください</p>}
       </div>
     </div>
   );
