@@ -229,9 +229,9 @@ export default function SchedulePage() {
                       color: isToday
                         ? SITE.color.pink
                         : isSunday
-                        ? "#c45555"
+                        ? "#c96b83"
                         : isSaturday
-                        ? "#4a7ca0"
+                        ? "#6b8ba8"
                         : SITE.color.textMuted,
                       marginBottom: 4,
                       fontWeight: isToday ? 600 : 400,
