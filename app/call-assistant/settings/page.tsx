@@ -73,6 +73,17 @@ export default function CallAssistantSettingsPage() {
   };
   const [monthlyUsage, setMonthlyUsage] = useState<MonthlyUsage | null>(null);
 
+  // 日次使用量（グラフ用・直近30日）
+  type DailyUsage = {
+    usage_date: string;
+    whisper_cost_usd: number;
+    sonnet_cost_usd: number;
+    opus_cost_usd: number;
+    call_count: number;
+    total_cost_usd: number;
+  };
+  const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>([]);
+
   // アクセス権チェック
   useEffect(() => {
     if (activeStaff === null) return;
@@ -138,12 +149,61 @@ export default function CallAssistantSettingsPage() {
     setMonthlyUsage(sum);
   }, []);
 
+  // 日次使用量読み込み（直近30日、空の日は 0 で埋める）
+  const loadDailyUsage = useCallback(async () => {
+    const now = new Date();
+    const end = new Date(now);
+    const start = new Date(now);
+    start.setDate(start.getDate() - 29); // 30日前から今日まで
+    const startStr = start.toISOString().split("T")[0];
+
+    const { data, error } = await supabase
+      .from("call_usage_logs")
+      .select("*")
+      .gte("usage_date", startStr)
+      .order("usage_date", { ascending: true });
+
+    if (error) {
+      console.error("[settings] daily usage load error:", error);
+      return;
+    }
+
+    // データのある日を Map に
+    const byDate = new Map<string, Record<string, unknown>>();
+    for (const r of (data || []) as Array<Record<string, unknown>>) {
+      byDate.set(String(r.usage_date), r);
+    }
+
+    // 30日分の配列を生成（空の日も 0 で埋める）
+    const result: DailyUsage[] = [];
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      const dateStr = cursor.toISOString().split("T")[0];
+      const row = byDate.get(dateStr);
+      const whisper = Number(row?.whisper_cost_usd || 0);
+      const sonnet = Number(row?.sonnet_cost_usd || 0);
+      const opus = Number(row?.opus_cost_usd || 0);
+      result.push({
+        usage_date: dateStr,
+        whisper_cost_usd: whisper,
+        sonnet_cost_usd: sonnet,
+        opus_cost_usd: opus,
+        call_count: Number(row?.call_count || 0),
+        total_cost_usd: whisper + sonnet + opus,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    setDailyUsage(result);
+  }, []);
+
   useEffect(() => {
     if (canAccessCallAssistant) {
       loadSettings();
       loadMonthlyUsage();
+      loadDailyUsage();
     }
-  }, [canAccessCallAssistant, loadSettings, loadMonthlyUsage]);
+  }, [canAccessCallAssistant, loadSettings, loadMonthlyUsage, loadDailyUsage]);
 
   // 値の更新ヘルパー
   const updateField = <K extends keyof CallAiSettings>(
@@ -551,6 +611,213 @@ export default function CallAssistantSettingsPage() {
                 style={{ color: T.textMuted }}
               >
                 ※ ¥換算は1USD=155円で概算
+              </p>
+            </div>
+          );
+        })()}
+
+        {/* === 日次使用量グラフ === */}
+        {dailyUsage.length > 0 && (() => {
+          const maxCost = Math.max(
+            0.01,
+            ...dailyUsage.map((d) => d.total_cost_usd)
+          );
+          const chartHeight = 140;
+          const today = new Date().toISOString().split("T")[0];
+
+          return (
+            <div
+              className="rounded-2xl p-5 border mb-4"
+              style={{ backgroundColor: T.card, borderColor: T.border }}
+            >
+              <h2
+                className="text-[14px] font-medium mb-4 pb-3 border-b flex items-center justify-between"
+                style={{ color: T.text, borderColor: T.border }}
+              >
+                <span>📈 日次使用量（直近30日）</span>
+                <span className="text-[10px] font-normal" style={{ color: T.textMuted }}>
+                  積み上げ: Whisper + Sonnet + Opus
+                </span>
+              </h2>
+
+              {/* SVG バーチャート */}
+              <div className="overflow-x-auto">
+                <svg
+                  width="100%"
+                  height={chartHeight + 40}
+                  viewBox={`0 0 ${dailyUsage.length * 24} ${chartHeight + 40}`}
+                  preserveAspectRatio="none"
+                  style={{ minWidth: `${dailyUsage.length * 16}px` }}
+                >
+                  {/* Y軸の目盛線（4段階） */}
+                  {[0.25, 0.5, 0.75, 1].map((ratio) => (
+                    <line
+                      key={ratio}
+                      x1={0}
+                      x2={dailyUsage.length * 24}
+                      y1={chartHeight - chartHeight * ratio}
+                      y2={chartHeight - chartHeight * ratio}
+                      stroke={T.border}
+                      strokeDasharray="2,2"
+                      strokeWidth={1}
+                    />
+                  ))}
+
+                  {/* バー */}
+                  {dailyUsage.map((d, i) => {
+                    const totalRatio = d.total_cost_usd / maxCost;
+                    const totalH = totalRatio * chartHeight;
+                    // 積み上げ順: Whisper (下) → Sonnet → Opus (上)
+                    const whisperH = (d.whisper_cost_usd / maxCost) * chartHeight;
+                    const sonnetH = (d.sonnet_cost_usd / maxCost) * chartHeight;
+                    const opusH = (d.opus_cost_usd / maxCost) * chartHeight;
+                    const x = i * 24 + 4;
+                    const barW = 16;
+                    const isToday = d.usage_date === today;
+                    const isWeekend = (() => {
+                      const wd = new Date(d.usage_date).getDay();
+                      return wd === 0 || wd === 6;
+                    })();
+
+                    return (
+                      <g key={d.usage_date}>
+                        {/* 週末はうっすら背景 */}
+                        {isWeekend && (
+                          <rect
+                            x={x - 2}
+                            y={0}
+                            width={barW + 4}
+                            height={chartHeight}
+                            fill={T.cardAlt}
+                            opacity={0.5}
+                          />
+                        )}
+                        {/* Whisper (水色) */}
+                        {whisperH > 0 && (
+                          <rect
+                            x={x}
+                            y={chartHeight - whisperH}
+                            width={barW}
+                            height={whisperH}
+                            fill="#4a7ca0"
+                          >
+                            <title>
+                              {d.usage_date} Whisper: ${d.whisper_cost_usd.toFixed(4)}
+                            </title>
+                          </rect>
+                        )}
+                        {/* Sonnet (ベージュ) */}
+                        {sonnetH > 0 && (
+                          <rect
+                            x={x}
+                            y={chartHeight - whisperH - sonnetH}
+                            width={barW}
+                            height={sonnetH}
+                            fill="#c3a782"
+                          >
+                            <title>
+                              {d.usage_date} Sonnet: ${d.sonnet_cost_usd.toFixed(4)}
+                            </title>
+                          </rect>
+                        )}
+                        {/* Opus (ピンク) */}
+                        {opusH > 0 && (
+                          <rect
+                            x={x}
+                            y={chartHeight - whisperH - sonnetH - opusH}
+                            width={barW}
+                            height={opusH}
+                            fill="#d4687e"
+                          >
+                            <title>
+                              {d.usage_date} Opus: ${d.opus_cost_usd.toFixed(4)}
+                            </title>
+                          </rect>
+                        )}
+                        {/* 今日マーカー */}
+                        {isToday && (
+                          <rect
+                            x={x - 1}
+                            y={chartHeight - totalH - 3}
+                            width={barW + 2}
+                            height={2}
+                            fill={T.accent}
+                          />
+                        )}
+                        {/* 日付ラベル (5日ごと + 今日) */}
+                        {(i % 5 === 0 || isToday) && (
+                          <text
+                            x={x + barW / 2}
+                            y={chartHeight + 14}
+                            textAnchor="middle"
+                            fontSize="9"
+                            fill={isToday ? T.accent : T.textMuted}
+                            fontWeight={isToday ? "bold" : "normal"}
+                          >
+                            {d.usage_date.slice(5)}
+                          </text>
+                        )}
+                        {/* 件数ラベル (バーの上、0以外) */}
+                        {d.call_count > 0 && (
+                          <text
+                            x={x + barW / 2}
+                            y={chartHeight - totalH - 6}
+                            textAnchor="middle"
+                            fontSize="8"
+                            fill={T.textMuted}
+                          >
+                            {d.call_count}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* 凡例 */}
+              <div className="flex items-center gap-4 justify-center mt-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-sm"
+                    style={{ backgroundColor: "#4a7ca0" }}
+                  />
+                  <span className="text-[10px]" style={{ color: T.textSub }}>
+                    Whisper
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-sm"
+                    style={{ backgroundColor: "#c3a782" }}
+                  />
+                  <span className="text-[10px]" style={{ color: T.textSub }}>
+                    Sonnet
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-sm"
+                    style={{ backgroundColor: "#d4687e" }}
+                  />
+                  <span className="text-[10px]" style={{ color: T.textSub }}>
+                    Opus
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="text-[10px]"
+                    style={{ color: T.textMuted }}
+                  >
+                    バー上の数字 = 件数
+                  </span>
+                </div>
+              </div>
+              <p
+                className="text-[9px] mt-2 text-center"
+                style={{ color: T.textMuted }}
+              >
+                💡 バーにホバーすると各カテゴリの詳細コストが表示されます
               </p>
             </div>
           );
