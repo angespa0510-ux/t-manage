@@ -82,6 +82,9 @@ export default function CallTestPage() {
   const [analysisResults, setAnalysisResults] = useState<
     Record<number, AnalysisResult>
   >({});
+  // フィルタ
+  const [intentFilter, setIntentFilter] = useState<string | null>(null);
+  const [sentimentFilter, setSentimentFilter] = useState<string | null>(null);
 
   // アクセス権チェック
   useEffect(() => {
@@ -243,6 +246,13 @@ export default function CallTestPage() {
     ? transcripts.find((t) => t.id === selectedId)
     : null;
 
+  // フィルタ適用後の履歴
+  const filteredTranscripts = transcripts.filter((t) => {
+    if (intentFilter && t.ai_intent !== intentFilter) return false;
+    if (sentimentFilter && t.ai_sentiment !== sentimentFilter) return false;
+    return true;
+  });
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: T.bg }}>
       <div className="max-w-[1200px] mx-auto p-4 md:p-6">
@@ -328,6 +338,66 @@ export default function CallTestPage() {
               </span>
             </h3>
 
+            {/* フィルタチップ */}
+            {transcripts.length > 0 && (
+              <div className="mb-3 space-y-2">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[9px]" style={{ color: T.textMuted }}>
+                    意図:
+                  </span>
+                  {[
+                    { key: null, label: "全て" },
+                    { key: "booking", label: "📅 予約" },
+                    { key: "inquiry", label: "❓ 問合せ" },
+                    { key: "complaint", label: "⚠️ クレーム" },
+                    { key: "cancel", label: "🔄 キャンセル" },
+                    { key: "other", label: "📞 その他" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key || "all"}
+                      onClick={() => setIntentFilter(opt.key)}
+                      className="text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all"
+                      style={{
+                        backgroundColor:
+                          intentFilter === opt.key ? T.accent : T.cardAlt,
+                        color:
+                          intentFilter === opt.key ? "#ffffff" : T.textSub,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[9px]" style={{ color: T.textMuted }}>
+                    感情:
+                  </span>
+                  {[
+                    { key: null, label: "全て" },
+                    { key: "positive", label: "😊 ポジ" },
+                    { key: "neutral", label: "😐 中立" },
+                    { key: "negative", label: "😠 ネガ" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key || "all"}
+                      onClick={() => setSentimentFilter(opt.key)}
+                      className="text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all"
+                      style={{
+                        backgroundColor:
+                          sentimentFilter === opt.key ? T.accent : T.cardAlt,
+                        color:
+                          sentimentFilter === opt.key
+                            ? "#ffffff"
+                            : T.textSub,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {loading && (
               <p className="text-[11px]" style={{ color: T.textSub }}>
                 読み込み中...
@@ -343,8 +413,19 @@ export default function CallTestPage() {
               </p>
             )}
 
+            {!loading &&
+              transcripts.length > 0 &&
+              filteredTranscripts.length === 0 && (
+                <p
+                  className="text-[11px] text-center py-8"
+                  style={{ color: T.textMuted }}
+                >
+                  フィルタ条件に一致する通話がありません
+                </p>
+              )}
+
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {transcripts.map((t) => (
+              {filteredTranscripts.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setSelectedId(t.id === selectedId ? null : t.id)}
@@ -372,12 +453,66 @@ export default function CallTestPage() {
                       {formatDuration(t.duration_sec)}
                     </span>
                   </div>
-                  <p
-                    className="text-[10px] mb-1"
-                    style={{ color: T.textSub }}
-                  >
-                    対応: {t.staff_name || "不明"}
-                  </p>
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <p
+                      className="text-[10px] flex-shrink-0"
+                      style={{ color: T.textSub }}
+                    >
+                      対応: {t.staff_name || "不明"}
+                    </p>
+                    {/* AI分析バッジ */}
+                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                      {t.ai_intent &&
+                        (() => {
+                          const intentMap: Record<string, { icon: string; label: string; color: string }> = {
+                            booking: { icon: "📅", label: "予約", color: "#22c55e" },
+                            inquiry: { icon: "❓", label: "問合せ", color: "#4a7ca0" },
+                            complaint: { icon: "⚠️", label: "クレーム", color: "#c45555" },
+                            cancel: { icon: "🔄", label: "キャンセル", color: "#f59e0b" },
+                            other: { icon: "📞", label: "その他", color: T.textMuted },
+                          };
+                          const info = intentMap[t.ai_intent];
+                          if (!info) return null;
+                          return (
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: `${info.color}20`,
+                                color: info.color,
+                              }}
+                            >
+                              {info.icon} {info.label}
+                            </span>
+                          );
+                        })()}
+                      {t.ai_sentiment &&
+                        (() => {
+                          const sentimentMap: Record<string, { icon: string; color: string }> = {
+                            positive: { icon: "😊", color: "#22c55e" },
+                            neutral: { icon: "😐", color: T.textMuted },
+                            negative: { icon: "😠", color: "#c45555" },
+                          };
+                          const info = sentimentMap[t.ai_sentiment];
+                          if (!info) return null;
+                          return (
+                            <span
+                              className="text-[11px]"
+                              title={t.ai_sentiment}
+                            >
+                              {info.icon}
+                            </span>
+                          );
+                        })()}
+                      {t.escalated_to_opus && (
+                        <span
+                          className="text-[9px]"
+                          title="Opusにエスカレーション済"
+                        >
+                          🚨
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   {t.transcript_full && (
                     <p
                       className="text-[11px] line-clamp-2"
