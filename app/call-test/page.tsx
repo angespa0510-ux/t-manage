@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { useStaffSession } from "../../lib/staff-session";
 import { useTheme } from "../../lib/theme";
+import { NavMenu } from "../../lib/nav-menu";
 import CallRecorder from "../../components/CallRecorder";
 
 type TranscriptChunk = {
@@ -71,7 +72,7 @@ type CallTranscript = {
 export default function CallTestPage() {
   const router = useRouter();
   const { activeStaff, canAccessCallAssistant } = useStaffSession();
-  const { T } = useTheme();
+  const { T, dark } = useTheme();
 
   const [transcripts, setTranscripts] = useState<CallTranscript[]>([]);
   const [loading, setLoading] = useState(true);
@@ -247,16 +248,19 @@ export default function CallTestPage() {
       <div className="max-w-[1200px] mx-auto p-4 md:p-6">
         {/* ヘッダー */}
         <div className="mb-6 flex items-start justify-between gap-3">
-          <div>
-            <h1
-              className="text-[20px] md:text-[24px] font-medium mb-1"
-              style={{ color: T.text }}
-            >
-              🎙 通話AI アシスタント
-            </h1>
-            <p className="text-[12px]" style={{ color: T.textSub }}>
-              Phase 2 — AI分析・顧客特定・予約下書き対応
-            </p>
+          <div className="flex items-start gap-3">
+            <NavMenu T={T} dark={dark} />
+            <div>
+              <h1
+                className="text-[20px] md:text-[24px] font-medium mb-1"
+                style={{ color: T.text }}
+              >
+                🎙 通話AI アシスタント
+              </h1>
+              <p className="text-[12px]" style={{ color: T.textSub }}>
+                Phase 2 — AI分析・顧客特定・予約下書き対応
+              </p>
+            </div>
           </div>
           <button
             onClick={() => router.push("/call-assistant/settings")}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { useStaffSession } from "../../../lib/staff-session";
 import { useTheme } from "../../../lib/theme";
+import { NavMenu } from "../../../lib/nav-menu";
 
 type CallAiSettings = {
   id: number;
@@ -53,7 +54,7 @@ const MODEL_OPTIONS = [
 export default function CallAssistantSettingsPage() {
   const router = useRouter();
   const { activeStaff, canAccessCallAssistant } = useStaffSession();
-  const { T } = useTheme();
+  const { T, dark } = useTheme();
 
   const [settings, setSettings] = useState<CallAiSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -227,16 +228,19 @@ export default function CallAssistantSettingsPage() {
       <div className="max-w-[900px] mx-auto p-4 md:p-6">
         {/* ヘッダー */}
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1
-              className="text-[20px] md:text-[24px] font-medium mb-1"
-              style={{ color: T.text }}
-            >
-              ⚙️ 通話AI 設定
-            </h1>
-            <p className="text-[11px]" style={{ color: T.textSub }}>
-              録音対象・エスカレーション条件・予算などを管理
-            </p>
+          <div className="flex items-center gap-3">
+            <NavMenu T={T} dark={dark} />
+            <div>
+              <h1
+                className="text-[20px] md:text-[24px] font-medium mb-1"
+                style={{ color: T.text }}
+              >
+                ⚙️ 通話AI 設定
+              </h1>
+              <p className="text-[11px]" style={{ color: T.textSub }}>
+                録音対象・エスカレーション条件・予算などを管理
+              </p>
+            </div>
           </div>
           <button
             onClick={() => router.push("/call-test")}
@@ -719,11 +723,35 @@ function ToggleRow({
   T: ThemeColors;
   emphasize?: boolean;
 }) {
+  // emphasize=true (全体ON/OFFなど) は色を明確に分けて視認性を優先
+  const toggleBg = emphasize
+    ? value
+      ? "#22c55e" // ON: 明確な緑
+      : "#b4b2a9" // OFF: 明確なグレー（T.textMutedより濃い）
+    : value
+      ? T.accent // 通常: ベージュ
+      : T.border;
+
+  // emphasize は少し大きめで、ボーダーも付けて目立たせる
+  const toggleSize = emphasize ? "w-14 h-8" : "w-12 h-7";
+  const knobSize = emphasize ? "w-6 h-6" : "w-5 h-5";
+  const knobLeft = emphasize
+    ? value
+      ? "28px"
+      : "4px"
+    : value
+      ? "26px"
+      : "4px";
+
   return (
     <div
       className="flex items-start justify-between gap-3 py-3 px-3 rounded-xl cursor-pointer hover:opacity-80"
       style={{
-        backgroundColor: emphasize && value ? "rgba(34,197,94,0.08)" : "transparent",
+        backgroundColor: emphasize
+          ? value
+            ? "rgba(34,197,94,0.08)"
+            : "rgba(180,178,169,0.12)"
+          : "transparent",
       }}
       onClick={() => onChange(!value)}
     >
@@ -739,18 +767,27 @@ function ToggleRow({
             {description}
           </p>
         )}
+        {emphasize && (
+          <p
+            className="text-[11px] mt-2 font-medium"
+            style={{ color: value ? "#22c55e" : "#888780" }}
+          >
+            現在: {value ? "🟢 有効" : "⚪ 無効"}
+          </p>
+        )}
       </div>
       <button
-        className="relative w-12 h-7 rounded-full transition-colors flex-shrink-0"
+        className={`relative ${toggleSize} rounded-full transition-colors flex-shrink-0 shadow-inner`}
         style={{
-          backgroundColor: value ? T.accent : T.border,
+          backgroundColor: toggleBg,
+          border: emphasize ? "2px solid rgba(0,0,0,0.05)" : "none",
         }}
         type="button"
       >
         <span
-          className="absolute top-1 rounded-full transition-all w-5 h-5"
+          className={`absolute top-1 rounded-full transition-all ${knobSize} shadow-sm`}
           style={{
-            left: value ? "26px" : "4px",
+            left: knobLeft,
             backgroundColor: "#ffffff",
           }}
         />
