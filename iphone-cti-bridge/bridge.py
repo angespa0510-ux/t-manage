@@ -276,6 +276,49 @@ seen_ids: set[int] = set()
 MAX_SEEN_IDS = 1000  # メモリ上限
 
 
+# ─── 名前通知バッファ (二重ポップアップ防止) ─────────────
+# iPhone 連絡先登録済み番号では Phone Link が 2 種類の通知を流す:
+#   ① "アンジュスパ"  (連絡先の表示名、phone=None)
+#   ② "電話"          (電話アプリの詳細、phone=07016755900)
+# ①を即送信すると T-MANAGE に 2 個のポップアップが出てしまうため、
+# ①を NAME_ONLY_WAIT_SEC 秒バッファし、その間に②が来たら①をキャンセル。
+# 新規(未登録)番号は最初から番号付きで来るので影響なし。
+NAME_ONLY_WAIT_SEC = 5.0
+pending_name_tasks: list[asyncio.Task] = []
+
+
+async def handle_incoming(phone: Optional[str], raw_text: str) -> None:
+    """着信通知の統合処理 (二重ポップアップ防止)。"""
+    if phone is not None:
+        # 【番号あり通知】既存の名前通知バッファをすべてキャンセル
+        cancelled = 0
+        for task in pending_name_tasks[:]:
+            if not task.done():
+                task.cancel()
+                cancelled += 1
+        pending_name_tasks.clear()
+        if cancelled > 0:
+            log.info(f"🔗 名前通知 {cancelled} 件を統合→番号版のみ送信")
+        # 番号版を即送信
+        send_to_supabase(phone, raw_text)
+        return
+
+    # 【名前のみ通知】5秒バッファして、番号版が来なければ送信
+    async def delayed_name_send(text: str) -> None:
+        try:
+            await asyncio.sleep(NAME_ONLY_WAIT_SEC)
+            log.info(f"⏰ 名前通知バッファ期限→送信: {text[:40]}")
+            send_to_supabase(None, text)
+        except asyncio.CancelledError:
+            log.debug(f"名前通知キャンセル: {text[:40]}")
+
+    log.info(f"⏳ 名前通知を {NAME_ONLY_WAIT_SEC:.0f} 秒バッファ: {raw_text[:40]}")
+    task = asyncio.create_task(delayed_name_send(raw_text))
+    pending_name_tasks.append(task)
+    # 終了済みタスクを掃除
+    pending_name_tasks[:] = [t for t in pending_name_tasks if not t.done()]
+
+
 async def poll_notifications() -> None:
     """通知を定期的にポーリングして処理。"""
     listener = _get_listener()
@@ -319,7 +362,7 @@ async def poll_notifications() -> None:
 
                 phone = extract_phone(combined)
                 log.info(f"📞 着信検出: title='{title[:40]}' phone={phone}")
-                send_to_supabase(phone, combined)
+                await handle_incoming(phone, combined)
 
         except Exception as e:
             log.error(f"ポーリングエラー: {e}")
