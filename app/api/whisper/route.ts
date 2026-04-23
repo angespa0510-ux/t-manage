@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { recordUsage, calculateWhisperCost } from "../../../lib/call-usage";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "";
 
 /**
  * Whisper 認識精度向上のためのデフォルトプロンプト
@@ -101,6 +108,22 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
+
+    // 使用量ログ記録（失敗してもAPI本体は成功扱い）
+    const durationSec = Math.round(data.duration || 0);
+    if (durationSec > 0 && SUPABASE_URL && SUPABASE_KEY) {
+      try {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+          auth: { persistSession: false },
+        });
+        await recordUsage(supabase, {
+          whisper_seconds: durationSec,
+          whisper_cost_usd: calculateWhisperCost(durationSec),
+        });
+      } catch (e) {
+        console.error("[whisper] usage log failed:", e);
+      }
+    }
 
     return NextResponse.json({
       text: data.text || "",

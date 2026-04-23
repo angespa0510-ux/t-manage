@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  recordUsage,
+  calculateSonnetCost,
+  calculateOpusCost,
+  isOpusModel,
+} from "../../../lib/call-usage";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -513,6 +519,71 @@ export async function POST(req: NextRequest) {
           .eq("id", callId);
       } catch (e) {
         console.error("[call-analyze] db save failed:", e);
+      }
+    }
+
+    // 使用量ログ記録（call_usage_logs に加算）
+    if (supabase) {
+      try {
+        const delta: Parameters<typeof recordUsage>[1] = {
+          call_count: 1,
+          escalation_count: escalated ? 1 : 0,
+        };
+
+        if (escalated) {
+          // first (defaultModel) + second (escalationModel) を分けて記録
+          // finalUsage は first + second の合算
+          const firstInput = first.usage.input_tokens;
+          const firstOutput = first.usage.output_tokens;
+          const secondInput = finalUsage.input_tokens - firstInput;
+          const secondOutput = finalUsage.output_tokens - firstOutput;
+
+          if (isOpusModel(defaultModel)) {
+            delta.opus_input_tokens = firstInput;
+            delta.opus_output_tokens = firstOutput;
+            delta.opus_cost_usd = calculateOpusCost(firstInput, firstOutput);
+          } else {
+            delta.sonnet_input_tokens = firstInput;
+            delta.sonnet_output_tokens = firstOutput;
+            delta.sonnet_cost_usd = calculateSonnetCost(firstInput, firstOutput);
+          }
+
+          if (isOpusModel(escalationModel)) {
+            delta.opus_input_tokens =
+              (delta.opus_input_tokens || 0) + secondInput;
+            delta.opus_output_tokens =
+              (delta.opus_output_tokens || 0) + secondOutput;
+            delta.opus_cost_usd =
+              (delta.opus_cost_usd || 0) +
+              calculateOpusCost(secondInput, secondOutput);
+          } else {
+            delta.sonnet_input_tokens =
+              (delta.sonnet_input_tokens || 0) + secondInput;
+            delta.sonnet_output_tokens =
+              (delta.sonnet_output_tokens || 0) + secondOutput;
+            delta.sonnet_cost_usd =
+              (delta.sonnet_cost_usd || 0) +
+              calculateSonnetCost(secondInput, secondOutput);
+          }
+        } else {
+          // エスカレーションなし: finalUsage がそのまま使ったモデルの値
+          const input = finalUsage.input_tokens;
+          const output = finalUsage.output_tokens;
+
+          if (isOpusModel(finalModel)) {
+            delta.opus_input_tokens = input;
+            delta.opus_output_tokens = output;
+            delta.opus_cost_usd = calculateOpusCost(input, output);
+          } else {
+            delta.sonnet_input_tokens = input;
+            delta.sonnet_output_tokens = output;
+            delta.sonnet_cost_usd = calculateSonnetCost(input, output);
+          }
+        }
+
+        await recordUsage(supabase, delta);
+      } catch (e) {
+        console.error("[call-analyze] usage log failed:", e);
       }
     }
 

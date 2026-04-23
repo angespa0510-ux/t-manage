@@ -61,6 +61,17 @@ export default function CallAssistantSettingsPage() {
   const [dirty, setDirty] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
+  // 今月の使用量サマリー
+  type MonthlyUsage = {
+    total_call_count: number;
+    total_escalation_count: number;
+    total_whisper_seconds: number;
+    total_whisper_cost_usd: number;
+    total_sonnet_cost_usd: number;
+    total_opus_cost_usd: number;
+  };
+  const [monthlyUsage, setMonthlyUsage] = useState<MonthlyUsage | null>(null);
+
   // アクセス権チェック
   useEffect(() => {
     if (activeStaff === null) return;
@@ -88,11 +99,50 @@ export default function CallAssistantSettingsPage() {
     setLoading(false);
   }, []);
 
+  // 今月の使用量読み込み
+  const loadMonthlyUsage = useCallback(async () => {
+    // 今月1日〜今日までの範囲
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const monthStart = `${year}-${month}-01`;
+
+    const { data, error } = await supabase
+      .from("call_usage_logs")
+      .select("*")
+      .gte("usage_date", monthStart);
+
+    if (error) {
+      console.error("[settings] usage load error:", error);
+      return;
+    }
+
+    const rows = (data || []) as Array<Record<string, unknown>>;
+    const sum: MonthlyUsage = {
+      total_call_count: 0,
+      total_escalation_count: 0,
+      total_whisper_seconds: 0,
+      total_whisper_cost_usd: 0,
+      total_sonnet_cost_usd: 0,
+      total_opus_cost_usd: 0,
+    };
+    for (const r of rows) {
+      sum.total_call_count += Number(r.call_count || 0);
+      sum.total_escalation_count += Number(r.escalation_count || 0);
+      sum.total_whisper_seconds += Number(r.whisper_seconds || 0);
+      sum.total_whisper_cost_usd += Number(r.whisper_cost_usd || 0);
+      sum.total_sonnet_cost_usd += Number(r.sonnet_cost_usd || 0);
+      sum.total_opus_cost_usd += Number(r.opus_cost_usd || 0);
+    }
+    setMonthlyUsage(sum);
+  }, []);
+
   useEffect(() => {
     if (canAccessCallAssistant) {
       loadSettings();
+      loadMonthlyUsage();
     }
-  }, [canAccessCallAssistant, loadSettings]);
+  }, [canAccessCallAssistant, loadSettings, loadMonthlyUsage]);
 
   // 値の更新ヘルパー
   const updateField = <K extends keyof CallAiSettings>(
@@ -314,6 +364,193 @@ export default function CallAssistantSettingsPage() {
             T={T}
           />
         </SettingSection>
+
+        {/* === 今月の使用量サマリー === */}
+        {monthlyUsage && (() => {
+          const totalUsd =
+            monthlyUsage.total_whisper_cost_usd +
+            monthlyUsage.total_sonnet_cost_usd +
+            monthlyUsage.total_opus_cost_usd;
+          // 1USD = 155円として概算（相場変動あるが参考値）
+          const totalJpy = Math.round(totalUsd * 155);
+          const budget = settings.monthly_budget_jpy;
+          const percent = budget > 0 ? Math.min(100, (totalJpy / budget) * 100) : 0;
+          const isWarning = percent >= 80;
+          const isDanger = percent >= 100;
+
+          const barColor = isDanger
+            ? "#c45555"
+            : isWarning
+              ? "#f59e0b"
+              : "#22c55e";
+
+          return (
+            <div
+              className="rounded-2xl p-5 border mb-4"
+              style={{ backgroundColor: T.card, borderColor: T.border }}
+            >
+              <h2
+                className="text-[14px] font-medium mb-4 pb-3 border-b"
+                style={{ color: T.text, borderColor: T.border }}
+              >
+                📊 今月の使用量
+              </h2>
+
+              {/* 予算進捗バー */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px]" style={{ color: T.textSub }}>
+                    月間予算の消化
+                  </span>
+                  <span
+                    className="text-[12px] font-medium"
+                    style={{
+                      color: isDanger
+                        ? "#c45555"
+                        : isWarning
+                          ? "#f59e0b"
+                          : T.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    ¥{totalJpy.toLocaleString()} / ¥{budget.toLocaleString()} ({percent.toFixed(1)}%)
+                  </span>
+                </div>
+                <div
+                  className="w-full h-2 rounded-full overflow-hidden"
+                  style={{ backgroundColor: T.cardAlt }}
+                >
+                  <div
+                    className="h-full transition-all"
+                    style={{
+                      width: `${percent}%`,
+                      backgroundColor: barColor,
+                    }}
+                  />
+                </div>
+                {isDanger && (
+                  <p
+                    className="text-[10px] mt-2"
+                    style={{ color: "#c45555" }}
+                  >
+                    ⚠️ 月間予算を超過しています
+                  </p>
+                )}
+                {isWarning && !isDanger && (
+                  <p
+                    className="text-[10px] mt-2"
+                    style={{ color: "#f59e0b" }}
+                  >
+                    ⚠️ 月間予算の80%を超えています
+                  </p>
+                )}
+              </div>
+
+              {/* コスト内訳 */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div
+                  className="p-3 rounded-xl text-center"
+                  style={{ backgroundColor: T.cardAlt }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    Whisper
+                  </p>
+                  <p
+                    className="text-[13px] font-medium mt-1"
+                    style={{
+                      color: T.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    ${monthlyUsage.total_whisper_cost_usd.toFixed(3)}
+                  </p>
+                  <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>
+                    {Math.round(monthlyUsage.total_whisper_seconds / 60)}分
+                  </p>
+                </div>
+                <div
+                  className="p-3 rounded-xl text-center"
+                  style={{ backgroundColor: T.cardAlt }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    Sonnet
+                  </p>
+                  <p
+                    className="text-[13px] font-medium mt-1"
+                    style={{
+                      color: T.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    ${monthlyUsage.total_sonnet_cost_usd.toFixed(3)}
+                  </p>
+                </div>
+                <div
+                  className="p-3 rounded-xl text-center"
+                  style={{ backgroundColor: T.cardAlt }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    Opus
+                  </p>
+                  <p
+                    className="text-[13px] font-medium mt-1"
+                    style={{
+                      color: T.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    ${monthlyUsage.total_opus_cost_usd.toFixed(3)}
+                  </p>
+                </div>
+              </div>
+
+              {/* 件数 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div
+                  className="p-3 rounded-xl text-center"
+                  style={{ backgroundColor: T.cardAlt }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    通話件数
+                  </p>
+                  <p
+                    className="text-[16px] font-medium mt-1"
+                    style={{
+                      color: T.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {monthlyUsage.total_call_count}
+                  </p>
+                </div>
+                <div
+                  className="p-3 rounded-xl text-center"
+                  style={{ backgroundColor: T.cardAlt }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    Opusエスカレ
+                  </p>
+                  <p
+                    className="text-[16px] font-medium mt-1"
+                    style={{
+                      color: T.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {monthlyUsage.total_escalation_count}
+                  </p>
+                </div>
+              </div>
+
+              <p
+                className="text-[9px] mt-3 text-center"
+                style={{ color: T.textMuted }}
+              >
+                ※ ¥換算は1USD=155円で概算
+              </p>
+            </div>
+          );
+        })()}
 
         {/* === 予算・制限 === */}
         <SettingSection title="💰 予算・使用量制限" T={T}>
