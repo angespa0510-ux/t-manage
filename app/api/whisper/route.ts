@@ -3,15 +3,37 @@ import { NextRequest, NextResponse } from "next/server";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
 /**
+ * Whisper 認識精度向上のためのデフォルトプロンプト
+ *
+ * チョップ（アンジュスパ）特有の固有名詞・用語を事前に提示することで、
+ * 音声からの文字起こし時に「アンジュスパ」「本指名」などを正しく認識させる。
+ *
+ * 設計方針:
+ *  - 自然な会話例 + キーワード列挙のハイブリッド
+ *  - 224トークン（≒150-200文字）以内に収める
+ *  - コース名 / 時間 / 指名種別 / 予約用語 を網羅
+ *
+ * 注意:
+ *  - プロンプトを強くしすぎるとハルシネーション（ない単語の当てはめ）が増える
+ *  - 逆に弱いと固有名詞が誤認識される（「チョップ」→「チョコ」など）
+ */
+const DEFAULT_WHISPER_PROMPT =
+  "ありがとうございます、チョップのアンジュスパです。" +
+  "コースはアロマ、リフレ、リンパ、オイル、ボディ、タイ古式がございます。" +
+  "60分、90分、120分、150分のご予約が多いです。" +
+  "本指名、パネル指名、フリー、延長、オプション、指名料、キャンセル、" +
+  "お客様、セラピスト、スタッフ、ご予約、お電話ありがとうございます。";
+
+/**
  * POST /api/whisper
- * 
+ *
  * 音声ファイルを受け取り、OpenAI Whisper API で文字起こしを行う
- * 
+ *
  * リクエスト: multipart/form-data
  *   - audio: Blob（webm/wav/mp3等）
  *   - language: "ja"（省略可、デフォルト日本語）
- *   - prompt: 認識精度向上のためのヒント（省略可）
- * 
+ *   - prompt: 追加ヒント（省略可、DEFAULT_WHISPER_PROMPT に追記される）
+ *
  * レスポンス:
  *   { text: "文字起こし結果", duration: 秒数 }
  */
@@ -27,7 +49,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const audioFile = formData.get("audio") as File | null;
     const language = (formData.get("language") as string) || "ja";
-    const prompt = (formData.get("prompt") as string) || "";
+    const customPrompt = (formData.get("prompt") as string) || "";
 
     if (!audioFile) {
       return NextResponse.json(
@@ -45,19 +67,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // プロンプト組み立て: デフォルト + カスタム（あれば追加）
+    // Whisper API は prompt フィールドに1回だけ文字列を受け取る
+    const finalPrompt = customPrompt
+      ? `${DEFAULT_WHISPER_PROMPT} ${customPrompt}`
+      : DEFAULT_WHISPER_PROMPT;
+
     // OpenAI Whisper API へリクエスト
     const whisperFormData = new FormData();
     whisperFormData.append("file", audioFile);
     whisperFormData.append("model", "whisper-1");
     whisperFormData.append("language", language);
-    if (prompt) {
-      whisperFormData.append("prompt", prompt);
-    }
-    // 日本語の固有名詞認識を強化するプロンプト
-    whisperFormData.append(
-      "prompt",
-      "チョップ、アンジュスパ、予約、セラピスト、アロマ、リフレクソロジー、コース、指名、お客様"
-    );
+    whisperFormData.append("prompt", finalPrompt);
 
     const startTime = Date.now();
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
