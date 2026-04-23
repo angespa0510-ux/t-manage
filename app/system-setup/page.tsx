@@ -446,6 +446,361 @@ export default function SystemSetup() {
                 ))}
               </div>
             </div>
+
+            {/* ═══════════════════════════════════════════ */}
+            {/* 🆕 iPhone CTI Bridge (Beta) セクション      */}
+            {/* ═══════════════════════════════════════════ */}
+            <div
+              className="rounded-2xl p-6"
+              style={{
+                backgroundColor: T.card,
+                border: "1.5px solid rgba(232,132,154,0.4)",
+              }}
+            >
+              {/* ヘッダー */}
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-[22px]">📱</span>
+                <div className="flex-1">
+                  <h2 className="text-[16px] font-medium" style={{ color: T.text }}>
+                    iPhone でも使いたい方へ
+                  </h2>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>
+                    Windows PC経由で iPhone の着信も T-MANAGE に連携できます
+                  </p>
+                </div>
+                <span
+                  className="px-3 py-1 rounded-full text-[10px] font-medium"
+                  style={{ backgroundColor: "#e8849a", color: "#fff" }}
+                >
+                  BETA
+                </span>
+              </div>
+
+              {/* ベータ版の注意書き */}
+              <div
+                className="mb-5 p-4 rounded-xl"
+                style={{ backgroundColor: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)" }}
+              >
+                <p className="text-[12px] mb-2" style={{ color: "#f59e0b", fontWeight: 600 }}>
+                  ⚠ これはベータ版です。100%の検出は保証できません
+                </p>
+                <ul className="text-[11px] space-y-1 pl-4" style={{ color: T.textSub }}>
+                  <li>• iPhoneとWindowsのPhone Link接続が切れている時は動作しません</li>
+                  <li>• iPhone連絡先に登録済みの番号は「名前」で通知が来るため番号が取れません</li>
+                  <li>• 集中モード/サイレント中・PCスリープ中は動作しません</li>
+                  <li>• <strong style={{ color: T.text }}>業務クリティカルな用途には Twilio連携版(有料) をおすすめします</strong></li>
+                </ul>
+              </div>
+
+              {/* 動作原理 */}
+              <div className="mb-5 p-4 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>🔄 動作の仕組み</h3>
+                <div className="flex items-center gap-2 flex-wrap text-[11px]" style={{ color: T.textSub }}>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#e8849a18", color: "#e8849a" }}>📱 iPhone着信</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#3d6b9f18", color: "#3d6b9f" }}>🔗 Phone Link</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#a855f718", color: "#a855f7" }}>🐍 Pythonブリッジ</span>
+                  <span style={{ color: T.textMuted }}>→</span>
+                  <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>💻 T-MANAGE表示</span>
+                </div>
+              </div>
+
+              {/* 事前準備 */}
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={stepNumStyle("#3d6b9f")}>0</div>
+                  <div>
+                    <h3 className="text-[14px] font-medium" style={{ color: T.text }}>事前準備: Phone Link で iPhone をペアリング</h3>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>ここが成功しないと先に進めません (最重要)</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pl-11">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#3d6b9f", fontWeight: 600 }}>①</span> Windows スタートメニューで「<strong style={{ color: T.text }}>スマートフォン連携</strong>」を検索して起動
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#3d6b9f", fontWeight: 600 }}>②</span> 「iPhone」を選択 → QRコードが表示される → iPhoneカメラで読み取り
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#3d6b9f", fontWeight: 600 }}>③</span> iPhone側で「Bluetooth共有」「通知の表示」「システム通知の表示」を全て許可
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#f59e0b", fontWeight: 600 }}>🧪 テスト</span>: 別の電話から自分のiPhoneに発信してもらう
+                    </p>
+                    <div className="mt-2 text-[11px] space-y-1" style={{ color: T.textSub, paddingLeft: 20 }}>
+                      <div>✅ <strong style={{ color: "#4a7c59" }}>番号で表示</strong> → 完璧。このまま進む</div>
+                      <div>⚠ <strong style={{ color: "#f59e0b" }}>名前で表示</strong> → 連絡先登録済み。一時削除 or 別番号でテスト</div>
+                      <div>❌ <strong style={{ color: "#c45555" }}>何も出ない</strong> → Bridge起動しても無駄。再ペアリングが必要</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 1: フォルダ配置 */}
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={stepNumStyle("#3d6b9f")}>1</div>
+                  <div>
+                    <h3 className="text-[14px] font-medium" style={{ color: T.text }}>Bridge フォルダを配置</h3>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>GitHub から最新コードを取得</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pl-11">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px] mb-2" style={{ color: T.textSub }}>
+                      <span style={{ color: "#3d6b9f", fontWeight: 600 }}>①</span> PowerShell を開いて最新版を取得:
+                    </p>
+                    <code className="text-[11px] block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
+                      cd C:\Users\user\Desktop\t-manage<br />
+                      git pull origin main
+                    </code>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#3d6b9f", fontWeight: 600 }}>②</span> <code style={{ color: "#c3a782" }}>iphone-cti-bridge</code> フォルダが存在すればOK
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 2: Python */}
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={stepNumStyle("#a855f7")}>2</div>
+                  <div>
+                    <h3 className="text-[14px] font-medium" style={{ color: T.text }}>Python 3.10以降をインストール</h3>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>既にインストール済みならスキップ</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pl-11">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px] mb-2" style={{ color: T.textSub }}>
+                      <span style={{ color: "#a855f7", fontWeight: 600 }}>①</span> 確認: PowerShell で
+                    </p>
+                    <code className="text-[11px] block px-3 py-2 rounded-lg mb-2" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
+                      python --version
+                    </code>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>
+                      <strong style={{ color: "#4a7c59" }}>Python 3.10 以降</strong>が表示されればOK
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#a855f7", fontWeight: 600 }}>②</span> 未インストールなら{" "}
+                      <a href="https://www.python.org/downloads/" target="_blank" rel="noopener" style={{ color: "#c3a782", textDecoration: "underline" }}>
+                        python.org
+                      </a>{" "}
+                      から最新版DL
+                    </p>
+                    <p className="text-[11px] mt-1" style={{ color: "#c45555" }}>
+                      ⚠ インストール時「Add Python to PATH」に<strong>必ずチェック</strong>を入れる
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 3: .env設定 */}
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={stepNumStyle("#f59e0b")}>3</div>
+                  <div>
+                    <h3 className="text-[14px] font-medium" style={{ color: T.text }}>設定ファイル <code>.env</code> を作成</h3>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>Supabaseの接続情報を書き込む</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pl-11">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px] mb-2" style={{ color: T.textSub }}>
+                      <span style={{ color: "#f59e0b", fontWeight: 600 }}>①</span> PowerShell で:
+                    </p>
+                    <code className="text-[11px] block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
+                      cd C:\Users\user\Desktop\t-manage\iphone-cti-bridge<br />
+                      copy .env.example .env<br />
+                      notepad .env
+                    </code>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px] mb-2" style={{ color: T.textSub }}>
+                      <span style={{ color: "#f59e0b", fontWeight: 600 }}>②</span> メモ帳で以下を確認・編集:
+                    </p>
+                    <code className="text-[11px] block px-3 py-2 rounded-lg whitespace-pre" style={{ backgroundColor: T.bg, color: "#c3a782", lineHeight: 1.6 }}>
+{`SUPABASE_URL=https://cbewozzdyjqmhzkxsjqo.supabase.co
+SUPABASE_ANON_KEY=（Supabase Anon Key）
+STORE_ID=1`}
+                    </code>
+                    <p className="text-[11px] mt-1" style={{ color: T.textMuted }}>
+                      アンジュスパは <code style={{ color: "#c3a782" }}>STORE_ID=1</code> のまま
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 4: 起動 */}
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={stepNumStyle("#4a7c59")}>4</div>
+                  <div>
+                    <h3 className="text-[14px] font-medium" style={{ color: T.text }}>Bridge を起動</h3>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>初回のみ依存パッケージの自動インストール(2〜5分)</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pl-11">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#4a7c59", fontWeight: 600 }}>①</span> <code style={{ color: "#c3a782" }}>iphone-cti-bridge</code> フォルダを開いて <strong style={{ color: T.text }}>start-bridge.bat</strong> をダブルクリック
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#4a7c59", fontWeight: 600 }}>②</span> Windows が「Python の通知アクセスを許可しますか?」とダイアログを出す → <strong style={{ color: T.text }}>はい</strong>
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px] mb-2" style={{ color: T.textSub }}>
+                      <span style={{ color: "#4a7c59", fontWeight: 600 }}>③</span> 起動成功時の表示:
+                    </p>
+                    <code className="text-[10px] block px-3 py-2 rounded-lg whitespace-pre" style={{ backgroundColor: T.bg, color: "#4a7c59", lineHeight: 1.5 }}>
+{`✅ 通知アクセス許可 OK
+🎧 通知監視開始 (store_id=1, device=DESKTOP-XXX)
+🚀 T-MANAGE iPhone CTI Bridge 起動`}
+                    </code>
+                    <p className="text-[11px] mt-2" style={{ color: T.textMuted }}>
+                      ⚠ ウィンドウを<strong style={{ color: "#c45555" }}>開いたまま</strong>にしておく (閉じると停止)
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 5: テスト発信 */}
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={stepNumStyle("#c45555")}>5</div>
+                  <div>
+                    <h3 className="text-[14px] font-medium" style={{ color: T.text }}>動作テスト</h3>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>実際に電話を受けて動作確認</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pl-11">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#c45555", fontWeight: 600 }}>①</span> <strong style={{ color: T.text }}>未登録番号</strong>から自分のiPhoneに発信してもらう
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px] mb-2" style={{ color: T.textSub }}>
+                      <span style={{ color: "#c45555", fontWeight: 600 }}>②</span> Bridge コンソールに着信ログが流れる:
+                    </p>
+                    <code className="text-[10px] block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#4a7c59" }}>
+                      📞 着信検出: phone=08012345678<br />
+                      ✅ 送信成功: 08012345678
+                    </code>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#c45555", fontWeight: 600 }}>③</span> T-MANAGE のタブに切り替え → 画面右下に<strong style={{ color: T.text }}>📱 iPhone Beta バッジ付きポップアップ</strong>が出れば成功
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: "rgba(74,124,89,0.08)", border: "1px solid rgba(74,124,89,0.3)" }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#4a7c59", fontWeight: 600 }}>🎯 ダッシュボードで統計確認</span>
+                    </p>
+                    <a
+                      href="/cti-monitor"
+                      className="inline-block mt-2 px-4 py-2 rounded-lg text-[11px] cursor-pointer"
+                      style={{ backgroundColor: "#4a7c59", color: "#fff", fontWeight: 600, textDecoration: "none" }}
+                    >
+                      📞 CTI監視ページを開く
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 6: 自動起動 */}
+              <div className="rounded-2xl p-5 mb-5" style={{ backgroundColor: T.cardAlt }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={stepNumStyle("#a855f7")}>6</div>
+                  <div>
+                    <h3 className="text-[14px] font-medium" style={{ color: T.text }}>PC起動時に自動実行 (推奨)</h3>
+                    <p className="text-[11px]" style={{ color: T.textMuted }}>毎回手動で起動しなくて済む</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pl-11">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#a855f7", fontWeight: 600 }}>①</span> <strong style={{ color: T.text }}>register-startup.bat</strong> をダブルクリック
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <p className="text-[12px]" style={{ color: T.textSub }}>
+                      <span style={{ color: "#a855f7", fontWeight: 600 }}>②</span> 次回 Windows 起動時から Bridge が自動実行されます
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* トラブルシューティング */}
+              <div className="rounded-2xl p-5 mb-5" style={{ backgroundColor: T.cardAlt }}>
+                <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>❓ iPhone Beta版 よくあるトラブル</h3>
+                <div className="space-y-2">
+                  {[
+                    { q: "Bridgeは起動してるけど反応しない", a: "Phone LinkとiPhoneの接続が切れている可能性。Windowsの「スマートフォン連携」アプリを開いて接続状態を確認してください。" },
+                    { q: "名前で表示されて番号が取れない", a: "iPhoneの連絡先にその番号が登録されているためです。業務用iPhoneなら連絡先を入れない運用を推奨します。" },
+                    { q: "「winsdk」のインストールに失敗する", a: "Python 3.9以前を使っている可能性。Python 3.10以降に更新してください (python --version で確認)。" },
+                    { q: "通知アクセス許可ダイアログが出ない", a: "Windows設定 → プライバシーとセキュリティ → 通知 → 「アプリや他の送信者からの通知を取得」をオンにしてください。" },
+                    { q: "Supabase送信エラー HTTP 401", a: ".envのSUPABASE_ANON_KEYが間違っています。Supabase DashboardのAPI設定から正しい値をコピーしてください。" },
+                    { q: "集中モード中はどうなる？", a: "Windowsの集中モードがオンの間は通知が届かないため、Bridgeも反応しません。営業時間中は集中モードをオフにしてください。" },
+                  ].map((faq, i) => (
+                    <details key={i} className="rounded-xl" style={{ backgroundColor: T.card }}>
+                      <summary className="px-4 py-3 text-[12px] cursor-pointer" style={{ color: T.text }}>{faq.q}</summary>
+                      <div className="px-4 pb-3 text-[11px] whitespace-pre-wrap" style={{ color: T.textSub }}>{faq.a}</div>
+                    </details>
+                  ))}
+                </div>
+              </div>
+
+              {/* 有料版導線 */}
+              <div
+                className="rounded-2xl p-5"
+                style={{
+                  backgroundColor: "rgba(195,167,130,0.08)",
+                  border: "1px solid rgba(195,167,130,0.3)",
+                }}
+              >
+                <h3 className="text-[13px] font-medium mb-3" style={{ color: T.text }}>
+                  🚀 100% の検出率が必要な方へ: Twilio 連携版 (有料)
+                </h3>
+                <p className="text-[12px] mb-3 leading-relaxed" style={{ color: T.textSub }}>
+                  iPhone Beta版は無料ですが、Phone Link接続状態や連絡先登録の影響で検出漏れが発生します。
+                  業務クリティカルな用途には、<strong style={{ color: T.text }}>Twilio連携版</strong>がおすすめです。
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-[11px]" style={{ color: T.textSub }}>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <div style={{ color: "#4a7c59", fontWeight: 600, marginBottom: 4 }}>☁ クラウド完結</div>
+                    PC/スマホの状態に依存しない
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <div style={{ color: "#4a7c59", fontWeight: 600, marginBottom: 4 }}>🎯 100%検出</div>
+                    Webhook方式で着信漏れゼロ
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <div style={{ color: "#4a7c59", fontWeight: 600, marginBottom: 4 }}>📞 業務専用番号</div>
+                    050番号を取得して転送運用
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card }}>
+                    <div style={{ color: "#4a7c59", fontWeight: 600, marginBottom: 4 }}>🎙 通話録音</div>
+                    履歴と音声をT-MANAGEに保存 (オプション)
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
