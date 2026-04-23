@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useToast } from "../../lib/toast";
 import { supabase } from "../../lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -51,7 +51,7 @@ type TcConfig = {
 const TIMES_10MIN: string[] = [];
 for (let m = 0; m <= 18 * 60; m += 10) TIMES_10MIN.push(minutesToTime(m));
 
-export default function TimeChart() {
+function TimeChartInner() {
   const router = useRouter();
   const toast = useToast();
   const { dark, toggle, T } = useTheme();
@@ -3046,5 +3046,28 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
 
       <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } @keyframes scrollLeft { 0%,5% { transform: translateX(10%); } 95%,100% { transform: translateX(-100%); } } @keyframes scrollNote { 0%,15% { transform: translateY(0); } 85%,100% { transform: translateY(calc(-100% + 20px)); } } @keyframes ngFlash { 0% { opacity: 0; } 30% { opacity: 1; } 50% { opacity: 0.7; } 70% { opacity: 1; } 100% { opacity: 1; } } @keyframes ngBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } } @keyframes ngShake { 0%, 100% { transform: rotate(0deg); } 20% { transform: rotate(-15deg); } 40% { transform: rotate(15deg); } 60% { transform: rotate(-10deg); } 80% { transform: rotate(10deg); } }`}</style>
     </div>
+  );
+}
+// Next.js 16: useSearchParams を使うため Suspense 境界で包む
+// (contact-sync と同じパターン)
+export default function TimeChart() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100vh",
+            fontSize: "12px",
+          }}
+        >
+          読み込み中...
+        </div>
+      }
+    >
+      <TimeChartInner />
+    </Suspense>
   );
 }
