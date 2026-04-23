@@ -16,7 +16,7 @@ if errorlevel 1 (
 )
 
 REM ─── 依存パッケージ確認 ─────────────────
-python -c "import winsdk, requests, dotenv" >nul 2>&1
+python -c "import winrt.windows.ui.notifications.management, requests, dotenv" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] 初回起動: 依存パッケージをインストールします...
     python -m pip install --upgrade pip

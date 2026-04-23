@@ -1,8 +1,14 @@
 # T-MANAGE iPhone CTI Bridge 依存パッケージ
-# Python 3.10+ 推奨
+# Python 3.10〜3.13 対応 (事前ビルド済みwheel使用、Visual Studio 不要)
 
 # Windows ランタイム API (通知監視)
-winsdk>=1.0.0b10
+# 旧 winsdk は Python 3.13 で source build 必須 → Visual Studio 必須だった
+# 新 winrt-* は namespace ごとに分割された pre-built wheel を提供 (cp310〜cp314)
+winrt-runtime>=3.0.0
+winrt-Windows.Foundation>=3.0.0
+winrt-Windows.Foundation.Collections>=3.0.0
+winrt-Windows.UI.Notifications>=3.0.0
+winrt-Windows.UI.Notifications.Management>=3.0.0
 
 # HTTP クライアント (Supabase REST)
 requests>=2.31.0
