@@ -1,0 +1,11 @@
+# T-MANAGE iPhone CTI Bridge 依存パッケージ
+# Python 3.10+ 推奨
+
+# Windows ランタイム API (通知監視)
+winsdk>=1.0.0b10
+
+# HTTP クライアント (Supabase REST)
+requests>=2.31.0
+
+# 環境変数読込
+python-dotenv>=1.0.0

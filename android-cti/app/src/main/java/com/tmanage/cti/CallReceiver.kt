@@ -65,7 +65,7 @@ class CallReceiver : BroadcastReceiver() {
                 conn.connectTimeout = 5000
                 conn.readTimeout = 5000
 
-                val json = """{"phone":"$phone"}"""
+                val json = """{"phone":"$phone","source":"android","store_id":1}"""
                 OutputStreamWriter(conn.outputStream).use { it.write(json) }
 
                 val code = conn.responseCode

@@ -54,6 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   // ── その他 ──
   { icon: "📺", label: "カメラ・ロック管理", path: "/camera",        category: "その他" },
   { icon: "📡", label: "IoTデバイス設定",   path: "/iot-settings",  category: "その他" },
+  { icon: "📞", label: "CTI監視",          path: "/cti-monitor",   category: "その他", requiresManager: true },
 
   // ── 登録・設定 ──
   { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },

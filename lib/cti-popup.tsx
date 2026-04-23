@@ -8,6 +8,25 @@ import { useTheme } from "./theme";
 
 const normPhone = (p: string) => p.replace(/[-\s\u3000()（）\u2010-\u2015\uff0d]/g, "");
 
+// iPhone Beta版で番号抽出に失敗した(phone="unknown" 等)かどうか
+const isPhoneUnknown = (phone: string) =>
+  !phone || phone === "unknown" || normPhone(phone).length < 10;
+
+// iPhone Beta版で番号がなくても、通知本文(raw_text)の先頭=iPhone連絡先の表示名
+// を取り出して表示する。bridge.py は "title | body" 形式で送ってくる。
+const extractDisplayNameFromRaw = (raw: string | null | undefined): string => {
+  if (!raw) return "";
+  // "山田太郎 | 着信中..." → "山田太郎"
+  const head = raw.split("|")[0].trim();
+  // Phone Link / Intel Unison が付けるプレフィックスを剥がす
+  const cleaned = head
+    .replace(/^(着信(中)?[:：]?\s*)/i, "")
+    .replace(/^(Incoming call from[:：]?\s*)/i, "")
+    .replace(/^(電話[:：]?\s*)/i, "")
+    .trim();
+  return cleaned.slice(0, 30);  // 長すぎる場合に備えて上限
+};
+
 const RANKS: Record<string, { label: string; color: string; bg: string }> = {
   banned: { label: "出禁", color: "#c96b83", bg: "#c96b8318" },
   caution: { label: "要注意", color: "#b38419", bg: "#b3841918" },
@@ -15,7 +34,14 @@ const RANKS: Record<string, { label: string; color: string; bg: string }> = {
   good: { label: "善良", color: "#4a7c59", bg: "#4a7c5918" },
 };
 
-type CtiCall = { id: number; phone: string; created_at: string; handled: boolean };
+type CtiCall = {
+  id: number;
+  phone: string;
+  created_at: string;
+  handled: boolean;
+  source?: string | null;       // 'android' | 'iphone_beta' | 'twilio' | 'manual'
+  raw_text?: string | null;     // iphone_beta で番号抽出失敗時の通知全文
+};
 type Customer = {
   id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string;
   rank: string; birthday: string; notes: string; login_email: string;
@@ -245,7 +271,13 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                 style={{ background: isBanned ? "#c96b83" : isCaution ? "#b38419" : "#c3a782", borderRadius: 12, padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.25)", minWidth: 200 }}>
                 <span style={{ fontSize: 16 }}>📞</span>
                 <span style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>
-                  {p.customer ? p.customer.name : p.therapist ? `🏥 ${p.therapist.name}` : p.call.phone}
+                  {p.customer
+                    ? p.customer.name
+                    : p.therapist
+                    ? `🏥 ${p.therapist.name}`
+                    : isPhoneUnknown(p.call.phone)
+                    ? extractDisplayNameFromRaw(p.call.raw_text) || "番号不明"
+                    : p.call.phone}
                 </span>
               </div>
             );
@@ -266,8 +298,30 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 20 }}>📞</span>
                     <div>
-                      <div style={{ fontSize: 10, color: T.textMuted }}>着信 {fmtTime(p.call.created_at)}</div>
-                      <div style={{ fontSize: 14, color: T.text, fontWeight: 600, letterSpacing: 1 }}>{p.call.phone}</div>
+                      <div style={{ fontSize: 10, color: T.textMuted, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>着信 {fmtTime(p.call.created_at)}</span>
+                        {p.call.source === "iphone_beta" && (
+                          <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#e8849a22", color: "#e8849a", fontWeight: 600 }}>
+                            📱 iPhone Beta
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 14, color: T.text, fontWeight: 600, letterSpacing: 1 }}>
+                        {isPhoneUnknown(p.call.phone) ? (
+                          extractDisplayNameFromRaw(p.call.raw_text) ? (
+                            <>
+                              {extractDisplayNameFromRaw(p.call.raw_text)}
+                              <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 6, fontWeight: 400 }}>
+                                (番号非通知)
+                              </span>
+                            </>
+                          ) : (
+                            "番号不明"
+                          )
+                        ) : (
+                          p.call.phone
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
@@ -373,12 +427,29 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
                   {/* === 該当なしの場合 === */}
                   {!p.customer && !p.therapist && (
                     <div style={{ textAlign: "center", padding: "12px 0" }}>
-                      <div style={{ fontSize: 15, color: T.text, fontWeight: 600, marginBottom: 4 }}>👤 新規のお客様</div>
-                      <div style={{ fontSize: 12, color: T.textSub, marginBottom: 12 }}>この電話番号は未登録です</div>
-                      <button onClick={() => { window.open(`/timechart?cti_phone=${encodeURIComponent(p.call.phone)}`, "_blank"); dismissPopup(p.call.id); }} style={{
-                        padding: "8px 20px", borderRadius: 10, border: "none",
-                        background: "#c96b83", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
-                      }}>📋 オーダー登録（新規顧客）</button>
+                      {isPhoneUnknown(p.call.phone) ? (
+                        <>
+                          <div style={{ fontSize: 15, color: T.text, fontWeight: 600, marginBottom: 4 }}>
+                            👤 {extractDisplayNameFromRaw(p.call.raw_text) || "番号不明"}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#f59e0b", marginBottom: 4, padding: "6px 10px", background: "#f59e0b12", borderRadius: 8 }}>
+                            ⚠ 番号が取得できませんでした
+                          </div>
+                          <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
+                            iPhone 連絡先に登録済み、または Phone Link の接続問題の可能性<br />
+                            正確な検出には Twilio 連携版（有料）をご検討ください
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 15, color: T.text, fontWeight: 600, marginBottom: 4 }}>👤 新規のお客様</div>
+                          <div style={{ fontSize: 12, color: T.textSub, marginBottom: 12 }}>この電話番号は未登録です</div>
+                          <button onClick={() => { window.open(`/timechart?cti_phone=${encodeURIComponent(p.call.phone)}`, "_blank"); dismissPopup(p.call.id); }} style={{
+                            padding: "8px 20px", borderRadius: 10, border: "none",
+                            background: "#c96b83", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600
+                          }}>📋 オーダー登録（新規顧客）</button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
