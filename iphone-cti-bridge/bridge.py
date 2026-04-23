@@ -214,11 +214,51 @@ def send_to_supabase(phone: Optional[str], raw_text: str) -> bool:
 
 
 # ─── 通知監視ループ ──────────────────────────────────────
+def _get_listener():
+    """winrt のバージョン差異を吸収して UserNotificationListener インスタンスを取得。
+
+    winrt 3.x / 旧 winsdk / 極一部の古い binding で API 名が異なるため、
+    想定される呼び出し方をすべて試し、どれも駄目なら dir() の内容を
+    ログに出して手動デバッグを可能にする。
+    """
+    # パターン1: winrt 3.x 新式 (classmethod)
+    if hasattr(UserNotificationListener, "get_current"):
+        try:
+            return UserNotificationListener.get_current()
+        except Exception as e:
+            log.debug(f"get_current() 失敗: {e}")
+
+    # パターン2: 旧 winsdk / pywinrt 一部 (classmethod → プロパティ形式)
+    if hasattr(UserNotificationListener, "current"):
+        try:
+            current = UserNotificationListener.current
+            # プロパティなら値、メソッドなら呼び出し
+            if callable(current):
+                return current()
+            return current
+        except Exception as e:
+            log.debug(f".current 失敗: {e}")
+
+    # パターン3: winrt 一部の版で `_get_current` のような prefix あり
+    for name in ("_get_current", "getCurrent", "GetCurrent", "Current"):
+        if hasattr(UserNotificationListener, name):
+            try:
+                attr = getattr(UserNotificationListener, name)
+                return attr() if callable(attr) else attr
+            except Exception as e:
+                log.debug(f"{name} 失敗: {e}")
+
+    # 全滅 → デバッグ情報を出して終了
+    attrs = [a for a in dir(UserNotificationListener) if not a.startswith("__")]
+    log.error("❌ UserNotificationListener を取得できませんでした。")
+    log.error(f"   利用可能な属性: {attrs}")
+    log.error("   この一覧を開発者に共有してください。")
+    raise RuntimeError("UserNotificationListener の取得方法が特定できません")
+
+
 async def request_access() -> bool:
     """ユーザーに通知アクセス許可を求める。"""
-    # winrt では UserNotificationListener.current プロパティではなく
-    # UserNotificationListener.get_current() メソッド呼び出しが必要
-    listener = UserNotificationListener.get_current()
+    listener = _get_listener()
     status = await listener.request_access_async()
 
     if status == UserNotificationListenerAccessStatus.ALLOWED:
@@ -238,7 +278,7 @@ MAX_SEEN_IDS = 1000  # メモリ上限
 
 async def poll_notifications() -> None:
     """通知を定期的にポーリングして処理。"""
-    listener = UserNotificationListener.get_current()
+    listener = _get_listener()
 
     log.info(f"🎧 通知監視開始 (間隔 {POLL_INTERVAL_SEC}s, store_id={STORE_ID}, device={DEVICE_ID})")
 
