@@ -246,16 +246,25 @@ export default function CallTestPage() {
     <div className="min-h-screen" style={{ backgroundColor: T.bg }}>
       <div className="max-w-[1200px] mx-auto p-4 md:p-6">
         {/* ヘッダー */}
-        <div className="mb-6">
-          <h1
-            className="text-[20px] md:text-[24px] font-medium mb-1"
-            style={{ color: T.text }}
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <div>
+            <h1
+              className="text-[20px] md:text-[24px] font-medium mb-1"
+              style={{ color: T.text }}
+            >
+              🎙 通話AI アシスタント
+            </h1>
+            <p className="text-[12px]" style={{ color: T.textSub }}>
+              Phase 2 — AI分析・顧客特定・予約下書き対応
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/call-assistant/settings")}
+            className="text-[11px] px-3 py-2 rounded-xl cursor-pointer flex-shrink-0"
+            style={{ backgroundColor: T.cardAlt, color: T.textSub }}
           >
-            🎙 通話AI アシスタント
-          </h1>
-          <p className="text-[12px]" style={{ color: T.textSub }}>
-            Phase 1 テスト版 — 録音・文字起こしのみ
-          </p>
+            ⚙️ 設定
+          </button>
         </div>
 
         {/* 情報バナー */}
