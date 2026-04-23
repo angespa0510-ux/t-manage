@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../../lib/toast";
 import { supabase } from "../../lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "../../lib/theme"; import { NavMenu } from "../../lib/nav-menu";
 import { SokuhoPanel, BlueskyAutoPost } from "../../lib/sokuho-panel";
 import { useBackNav } from "../../lib/use-back-nav";
@@ -75,6 +75,56 @@ export default function TimeChart() {
       sessionStorage.setItem("timechart-selected-date", selectedDate);
     }
   }, [selectedDate]);
+
+  // 🤖 通話AIからの予約下書き受信
+  // /call-test の「予約下書き」ボタンから ?from=call_ai&... で遷移してくる
+  const searchParams = useSearchParams();
+  const aiDraftProcessedRef = useRef(false);
+  useEffect(() => {
+    if (aiDraftProcessedRef.current) return;
+    const from = searchParams.get("from");
+    if (from !== "call_ai") return;
+
+    aiDraftProcessedRef.current = true;
+
+    const customerName = searchParams.get("customer_name") || "";
+    const phone = searchParams.get("phone") || "";
+    const dateTime = searchParams.get("date_time") || "";
+    const course = searchParams.get("course") || "";
+    const notes = searchParams.get("notes") || "";
+    const callId = searchParams.get("call_id") || "";
+
+    // 顧客情報をセット
+    setNewCustName(customerName);
+    setNewCustPhone(phone);
+
+    // 備考欄に AI下書き情報を整形して格納
+    // （日時・コースは自由文のため、スタッフが手動で正式なプルダウン値を選ぶ）
+    const draftLines: string[] = [];
+    draftLines.push(
+      `🤖 AI下書き${callId ? ` (通話 #${callId})` : ""}`
+    );
+    if (dateTime) draftLines.push(`希望日時: ${dateTime}`);
+    if (course) draftLines.push(`希望コース: ${course}`);
+    if (notes) draftLines.push(`備考: ${notes}`);
+    draftLines.push("── ここから編集してください ──");
+    setNewNotes(draftLines.join("\n"));
+
+    // 関連 state をリセット（顧客検索経由でモーダルを開く時と同じ挙動に合わせる）
+    setNewNomination("");
+    setNewNomFee(0);
+    setNewOptions([]);
+    setNewDiscounts([]);
+    setNewExtension("");
+    setNewExtPrice(0);
+    setNewExtDur(0);
+
+    // モーダルを開く
+    setShowNewRes(true);
+
+    // URL をクリーンアップ（戻るボタンやリロードで再発火しないように）
+    router.replace("/timechart");
+  }, [searchParams, router]);
   const [clockedOut, setClockedOut] = useState<Set<number>>(new Set());
   const [webReservations, setWebReservations] = useState<{ id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; status: string; customer_status: string; created_at: string }[]>([]);
   const [showWebRes, setShowWebRes] = useState(false);
