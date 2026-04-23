@@ -11,8 +11,9 @@ import { useStaffSession } from "./staff-session";
 // category が変わる境目にセパレーターを自動表示
 // requiresTaxPortal: true の項目は 社長・経営責任者・税理士 のみ表示
 // requiresCashDashboard: true の項目は 社長・経営責任者 のみ表示 (税理士除外)
+// requiresCallAssistant: true の項目は 社長・経営責任者 のみ表示 (通話AI)
 
-type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean; requiresCashDashboard?: boolean; requiresManager?: boolean };
+type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean; requiresCashDashboard?: boolean; requiresManager?: boolean; requiresCallAssistant?: boolean };
 
 const NAV_ITEMS: NavItem[] = [
   // ── 日常業務（毎日使うもの）──
@@ -21,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "🏢", label: "部屋割り管理",  path: "/room-assignments",       category: "日常業務" },
   { icon: "💰", label: "経費管理",      path: "/expenses",               category: "日常業務" },
   { icon: "🔒", label: "営業締め",      path: "DASHBOARD_PAGE:営業締め",  category: "日常業務" },
+  { icon: "🎙", label: "通話AI",       path: "/call-test",              category: "日常業務", requiresCallAssistant: true },
 
   // ── 売上 ──
   { icon: "📊", label: "売上分析",  path: "/analytics",      category: "売上" },
@@ -69,7 +71,7 @@ const NAV_ITEMS: NavItem[] = [
 
 function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
-  const { canAccessTaxPortal, canAccessCashDashboard, isManager } = useStaffSession();
+  const { canAccessTaxPortal, canAccessCashDashboard, canAccessCallAssistant, isManager } = useStaffSession();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   if (!mounted || !open) return null;
@@ -79,6 +81,7 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
     if (item.requiresTaxPortal && !canAccessTaxPortal) return false;
     if (item.requiresCashDashboard && !canAccessCashDashboard) return false;
     if (item.requiresManager && !isManager) return false;
+    if (item.requiresCallAssistant && !canAccessCallAssistant) return false;
     return true;
   });
 

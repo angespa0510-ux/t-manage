@@ -43,6 +43,7 @@ const StaffSessionCtx = createContext<{
   isManager: boolean;
   canAccessTaxPortal: boolean;
   canAccessCashDashboard: boolean;
+  canAccessCallAssistant: boolean;
   needsPinChange: boolean;
   login: (pin: string) => Promise<LoginResult>;
   logout: () => void;
@@ -53,6 +54,7 @@ const StaffSessionCtx = createContext<{
   isManager: false,
   canAccessTaxPortal: false,
   canAccessCashDashboard: false,
+  canAccessCallAssistant: false,
   needsPinChange: false,
   login: async () => ({ ok: false, staff: null }),
   logout: () => {},
@@ -292,9 +294,15 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
     activeStaff?.company_position === "社長" ||
     activeStaff?.company_position === "経営責任者";
 
+  // 通話AIアシスタント: 社長/経営責任者のみ（最も厳しい設定）
+  const defaultCanCallAssistant =
+    activeStaff?.company_position === "社長" ||
+    activeStaff?.company_position === "経営責任者";
+
   const isManager = activeStaff?.override_is_manager ?? defaultIsManager;
   const canAccessTaxPortal = activeStaff?.override_can_tax_portal ?? defaultCanTaxPortal;
   const canAccessCashDashboard = activeStaff?.override_can_cash_dashboard ?? defaultCanCashDashboard;
+  const canAccessCallAssistant = defaultCanCallAssistant;
 
   // PIN 未変更 = pin_updated_at が NULL（初期 PIN のまま）
   const needsPinChange = !!activeStaff && !activeStaff.pin_updated_at && !pinChangeDismissed;
@@ -306,6 +314,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
         isManager,
         canAccessTaxPortal,
         canAccessCashDashboard,
+        canAccessCallAssistant,
         needsPinChange,
         login,
         logout,
