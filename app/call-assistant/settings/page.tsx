@@ -44,8 +44,10 @@ type CallAiSettings = {
 };
 
 const MODEL_OPTIONS = [
-  { value: "sonnet-4-6", label: "Sonnet 4.6（標準）" },
-  { value: "opus-4-7", label: "Opus 4.7（最高精度）" },
+  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6（標準・推奨）" },
+  { value: "claude-opus-4-7", label: "Claude Opus 4.7（最高精度・高コスト）" },
+  { value: "claude-opus-4-6", label: "Claude Opus 4.6（旧Opus）" },
+  { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5（旧Sonnet）" },
 ];
 
 export default function CallAssistantSettingsPage() {
