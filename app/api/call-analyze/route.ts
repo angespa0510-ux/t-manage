@@ -81,6 +81,7 @@ type CallAISettings = {
   escalate_on_negative: boolean;
   escalate_on_vip: boolean;
   escalate_on_blacklist: boolean;
+  monthly_budget_jpy: number;
 };
 
 const DEFAULT_SETTINGS: CallAISettings = {
@@ -92,6 +93,7 @@ const DEFAULT_SETTINGS: CallAISettings = {
   escalate_on_negative: true,
   escalate_on_vip: false,
   escalate_on_blacklist: true,
+  monthly_budget_jpy: 3000,
 };
 
 /**
@@ -351,6 +353,8 @@ export async function POST(req: NextRequest) {
             escalate_on_vip: data.escalate_on_vip ?? DEFAULT_SETTINGS.escalate_on_vip,
             escalate_on_blacklist:
               data.escalate_on_blacklist ?? DEFAULT_SETTINGS.escalate_on_blacklist,
+            monthly_budget_jpy:
+              data.monthly_budget_jpy ?? DEFAULT_SETTINGS.monthly_budget_jpy,
           };
         }
       } catch (e) {
@@ -369,6 +373,49 @@ export async function POST(req: NextRequest) {
         },
         { status: 403 }
       );
+    }
+
+    // 予算超過チェック（今月の累計コストが monthly_budget_jpy を超えたら停止）
+    // Whisper + Sonnet + Opus の合計を USD → JPY 換算（1USD=155円概算）
+    if (supabase) {
+      try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const monthStart = `${year}-${month}-01`;
+
+        const { data: usageRows } = await supabase
+          .from("call_usage_logs")
+          .select("whisper_cost_usd, sonnet_cost_usd, opus_cost_usd")
+          .gte("usage_date", monthStart);
+
+        if (usageRows && usageRows.length > 0) {
+          let totalUsd = 0;
+          for (const row of usageRows as Array<Record<string, unknown>>) {
+            totalUsd +=
+              Number(row.whisper_cost_usd || 0) +
+              Number(row.sonnet_cost_usd || 0) +
+              Number(row.opus_cost_usd || 0);
+          }
+          const totalJpy = Math.round(totalUsd * 155);
+          const budget = settings.monthly_budget_jpy ?? 3000;
+
+          if (totalJpy >= budget) {
+            return NextResponse.json(
+              {
+                error: `月間予算を超過しているため、今月の AI 分析を停止しています（使用: ¥${totalJpy.toLocaleString()} / 予算: ¥${budget.toLocaleString()}）。設定画面で予算上限を見直してください。`,
+                budget_exceeded: true,
+                total_jpy: totalJpy,
+                budget_jpy: budget,
+              },
+              { status: 429 }
+            );
+          }
+        }
+      } catch (e) {
+        console.error("[call-analyze] budget check failed:", e);
+        // 予算チェックに失敗しても本体は続行（DBダウン時に止まらないように）
+      }
     }
 
     // モデル名を設定から取得（短縮形が混ざっていたら正式名にマップ）
