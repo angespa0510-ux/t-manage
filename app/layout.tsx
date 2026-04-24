@@ -7,6 +7,7 @@ import { StaffSessionProvider } from "../lib/staff-session";
 import { CtiPopupProvider } from "../lib/cti-popup";
 import PinChangeModal from "../components/PinChangeModal";
 import PwaRegister from "../components/PwaRegister";
+import { VercelAnalyticsGate } from "../components/VercelAnalyticsGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,6 +61,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col" style={{ margin: 0 }}>
         <ThemeProvider><ToastProvider><StaffSessionProvider><CtiPopupProvider>{children}<PinChangeModal /><PwaRegister /></CtiPopupProvider></StaffSessionProvider></ToastProvider></ThemeProvider>
+        <VercelAnalyticsGate />
       </body>
     </html>
   );
