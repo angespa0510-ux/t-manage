@@ -42,7 +42,7 @@ type Message = {
   created_at: string;
 };
 
-type Therapist = { id: number; name: string };
+type Therapist = { id: number; name: string; status: string };
 type Staff = { id: number; name: string; role: string };
 
 type AiFeature = "polite" | "translate" | "draft" | "summarize" | "ng_check";
@@ -57,6 +57,8 @@ export default function ChatPage() {
   const [currentConvId, setCurrentConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  // 全会話分の participants（会話一覧のタイトル解決用、当該会話 ID のものを loadConversations で取得）
+  const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [unreadByConv, setUnreadByConv] = useState<Record<number, number>>({});
@@ -103,6 +105,14 @@ export default function ChatPage() {
       .order("last_message_at", { ascending: false });
 
     setConversations(convs || []);
+
+    // 全会話の participants を一括取得（会話タイトルの解決用）
+    const { data: allParts } = await supabase
+      .from("chat_participants")
+      .select("*")
+      .in("conversation_id", convIds)
+      .is("left_at", null);
+    setAllParticipants(allParts || []);
 
     // 未読カウント
     const unreadMap: Record<number, number> = {};
@@ -154,10 +164,11 @@ export default function ChatPage() {
   );
 
   const loadMasters = useCallback(async () => {
+    // 全ステータスのセラピストを取得（active/inactive/retired 全て）
+    // 削除済み (deleted_at) のみ除外
     const { data: ths } = await supabase
       .from("therapists")
-      .select("id, name")
-      .eq("status", "active")
+      .select("id, name, status")
       .is("deleted_at", null)
       .order("name");
     setTherapists(ths || []);
@@ -310,6 +321,9 @@ export default function ChatPage() {
     []
   );
   const [newConvName, setNewConvName] = useState("");
+  // 検索 & ステータスフィルタ（セラピスト選択時）
+  const [newConvSearch, setNewConvSearch] = useState("");
+  const [newConvStatusFilter, setNewConvStatusFilter] = useState<"active" | "inactive" | "retired" | "all">("active");
 
   const createConversation = async () => {
     if (!activeStaff) return;
@@ -389,8 +403,25 @@ export default function ChatPage() {
 
   const getConvDisplayName = (conv: Conversation) => {
     if (conv.name) return conv.name;
-    // DM で相手の名前を推定
-    return "(名前未設定)";
+    if (conv.type === "broadcast") return "📢 一斉配信";
+    // allParticipants から自分以外を抽出して表示
+    const parts = allParticipants.filter((p) => p.conversation_id === conv.id);
+    const others = parts.filter(
+      (p) => !(p.participant_type === "staff" && p.participant_id === activeStaff?.id),
+    );
+    if (others.length === 0) return "(相手なし)";
+    const names = others.map((p) => {
+      if (p.display_name) return p.display_name;
+      if (p.participant_type === "therapist") {
+        return therapists.find((t) => t.id === p.participant_id)?.name || "セラピスト";
+      } else {
+        return staffList.find((s) => s.id === p.participant_id)?.name || "スタッフ";
+      }
+    });
+    if (conv.type === "dm") return names[0];
+    // グループ: 3人まで列挙、残りは "他◯名"
+    if (names.length <= 3) return names.join(", ");
+    return `${names.slice(0, 3).join(", ")} 他${names.length - 3}名`;
   };
 
   if (!activeStaff) return <div style={{ padding: 40 }}>読み込み中...</div>;
@@ -824,10 +855,84 @@ export default function ChatPage() {
                   相手を選択{" "}
                   {newConvType === "group" && <span style={{ color: "#c3a782" }}>(複数選択可)</span>}
                 </label>
+
+                {/* 🔍 検索バー */}
+                <div style={{ marginTop: 8, marginBottom: 6, position: "relative" }}>
+                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: T.textMuted, pointerEvents: "none" }}>🔍</span>
+                  <input
+                    type="text"
+                    value={newConvSearch}
+                    onChange={(e) => setNewConvSearch(e.target.value)}
+                    placeholder={(newConvType === "dm_therapist" || newConvType === "group") ? "セラピスト名で検索..." : "スタッフ名で検索..."}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px 8px 30px",
+                      borderRadius: 8,
+                      border: `1px solid ${T.border}`,
+                      backgroundColor: T.bg,
+                      color: T.text,
+                      fontSize: 12,
+                      outline: "none",
+                    }}
+                  />
+                  {newConvSearch && (
+                    <button
+                      onClick={() => setNewConvSearch("")}
+                      style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: T.textMuted, cursor: "pointer", fontSize: 14, padding: 4 }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* 🏷 ステータスタブ（セラピスト選択時のみ） */}
+                {(newConvType === "dm_therapist" || newConvType === "group") && (() => {
+                  const counts = {
+                    active: therapists.filter((t) => t.status === "active").length,
+                    inactive: therapists.filter((t) => t.status === "inactive").length,
+                    retired: therapists.filter((t) => t.status === "retired").length,
+                    all: therapists.length,
+                  };
+                  const tabs: { key: "active" | "inactive" | "retired" | "all"; label: string; color: string }[] = [
+                    { key: "active",   label: "稼働中", color: "#4a7c59" },
+                    { key: "inactive", label: "休止中", color: "#888780" },
+                    { key: "retired",  label: "退店",   color: "#c45555" },
+                    { key: "all",      label: "全て",   color: T.accent },
+                  ];
+                  return (
+                    <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
+                      {tabs.map((tab) => {
+                        const active = newConvStatusFilter === tab.key;
+                        return (
+                          <button
+                            key={tab.key}
+                            onClick={() => setNewConvStatusFilter(tab.key)}
+                            style={{
+                              padding: "4px 10px",
+                              border: `1px solid ${active ? tab.color : T.border}`,
+                              backgroundColor: active ? `${tab.color}18` : T.card,
+                              color: active ? tab.color : T.textSub,
+                              fontSize: 11,
+                              fontWeight: active ? 600 : 400,
+                              borderRadius: 999,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                            }}
+                          >
+                            <span>{tab.label}</span>
+                            <span style={{ fontSize: 10, opacity: 0.75 }}>{counts[tab.key]}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
                 <div
                   style={{
-                    marginTop: 8,
-                    maxHeight: 300,
+                    maxHeight: 280,
                     overflowY: "auto",
                     border: `1px solid ${T.border}`,
                     borderRadius: 8,
@@ -835,23 +940,31 @@ export default function ChatPage() {
                   }}
                 >
                   {(newConvType === "dm_therapist" || newConvType === "group"
-                    ? therapists.map((t) => ({ type: "therapist" as const, id: t.id, name: t.name }))
+                    ? therapists
+                        .filter((t) => newConvStatusFilter === "all" || t.status === newConvStatusFilter)
+                        .filter((t) => !newConvSearch || t.name.toLowerCase().includes(newConvSearch.toLowerCase()))
+                        .map((t) => ({ type: "therapist" as const, id: t.id, name: t.name, status: t.status }))
                     : []
                   ).map((item) => {
                     const selected = newConvTargets.some(
                       (t) => t.type === item.type && t.id === item.id
                     );
+                    const statusBadge = {
+                      active:   { label: "稼働", color: "#4a7c59" },
+                      inactive: { label: "休止", color: "#888780" },
+                      retired:  { label: "退店", color: "#c45555" },
+                    }[item.status] || { label: "", color: T.textMuted };
                     return (
                       <div
                         key={`th-${item.id}`}
                         onClick={() => {
                           if (newConvType === "dm_therapist") {
-                            setNewConvTargets([item]);
+                            setNewConvTargets([{ type: item.type, id: item.id, name: item.name }]);
                           } else {
                             setNewConvTargets((prev) =>
                               selected
                                 ? prev.filter((t) => !(t.type === item.type && t.id === item.id))
-                                : [...prev, item]
+                                : [...prev, { type: item.type, id: item.id, name: item.name }]
                             );
                           }
                         }}
@@ -867,13 +980,29 @@ export default function ChatPage() {
                         }}
                       >
                         <span style={{ fontSize: 14 }}>{selected ? "✅" : "💆"}</span>
-                        {item.name}
+                        <span style={{ flex: 1 }}>{item.name}</span>
+                        {statusBadge.label && (
+                          <span
+                            style={{
+                              padding: "1px 7px",
+                              fontSize: 9,
+                              fontWeight: 600,
+                              color: statusBadge.color,
+                              backgroundColor: `${statusBadge.color}18`,
+                              borderRadius: 999,
+                              letterSpacing: "0.05em",
+                            }}
+                          >
+                            {statusBadge.label}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
                   {(newConvType === "dm_staff" || newConvType === "group"
                     ? staffList
                         .filter((s) => s.id !== activeStaff.id)
+                        .filter((s) => !newConvSearch || s.name.toLowerCase().includes(newConvSearch.toLowerCase()))
                         .map((s) => ({ type: "staff" as const, id: s.id, name: s.name }))
                     : []
                   ).map((item) => {
@@ -910,6 +1039,34 @@ export default function ChatPage() {
                       </div>
                     );
                   })}
+
+                  {/* 🔎 検索結果ゼロ時 */}
+                  {(() => {
+                    const thCount = (newConvType === "dm_therapist" || newConvType === "group")
+                      ? therapists
+                          .filter((t) => newConvStatusFilter === "all" || t.status === newConvStatusFilter)
+                          .filter((t) => !newConvSearch || t.name.toLowerCase().includes(newConvSearch.toLowerCase()))
+                          .length
+                      : 0;
+                    const stCount = (newConvType === "dm_staff" || newConvType === "group")
+                      ? staffList
+                          .filter((s) => s.id !== activeStaff.id)
+                          .filter((s) => !newConvSearch || s.name.toLowerCase().includes(newConvSearch.toLowerCase()))
+                          .length
+                      : 0;
+                    if (thCount + stCount === 0) {
+                      return (
+                        <div style={{ padding: "20px 12px", textAlign: "center", fontSize: 11, color: T.textMuted, lineHeight: 1.8 }}>
+                          {newConvSearch ? (
+                            <>「{newConvSearch}」に一致する相手が見つかりません</>
+                          ) : (
+                            <>該当する相手がいません</>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
             )}
