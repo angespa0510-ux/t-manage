@@ -191,6 +191,92 @@ export default function SystemSetup() {
               </div>
             </div>
 
+            {/* ⚠ 重要: お客様情報の表示ルール */}
+            <div
+              className="rounded-2xl p-6"
+              style={{
+                backgroundColor: T.card,
+                border: "1.5px solid rgba(61,107,159,0.35)",
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span style={{ fontSize: 20 }}>💡</span>
+                <h3 className="text-[15px] font-medium" style={{ color: "#3d6b9f" }}>
+                  大事なお知らせ: ポップアップに名前が出るかどうかの仕組み
+                </h3>
+              </div>
+              <p className="text-[12px] mb-4 leading-relaxed" style={{ color: T.textSub }}>
+                「スマホの連絡先に登録してあるお客様なら自動で名前が出る」と思われがちですが、実は違います。
+                <br />
+                <strong style={{ color: T.text }}>ポップアップに名前が出るかどうかは、T-MANAGE の「顧客一覧」に登録されているかだけで決まります。</strong>
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                {/* スマホ側 */}
+                <div className="p-4 rounded-xl" style={{ backgroundColor: T.cardAlt, border: "1px dashed rgba(232,132,154,0.4)" }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span style={{ fontSize: 18 }}>📱</span>
+                    <strong className="text-[13px]" style={{ color: "#e8849a" }}>スマホの連絡先</strong>
+                  </div>
+                  <p className="text-[11px] mb-2" style={{ color: T.textSub }}>
+                    プライベートなデータ
+                  </p>
+                  <ul className="text-[10px] space-y-1 pl-3" style={{ color: T.textMuted }}>
+                    <li>• 家族・友人・取引先など</li>
+                    <li>• <strong style={{ color: T.text }}>サロン業務とは無関係</strong></li>
+                    <li>• 整理・削除しても T-MANAGE に影響なし</li>
+                    <li>• 着信番号を T-MANAGE に渡すだけの役割</li>
+                  </ul>
+                </div>
+
+                {/* T-MANAGE側 */}
+                <div className="p-4 rounded-xl" style={{ backgroundColor: T.cardAlt, border: "1px dashed rgba(74,124,89,0.4)" }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span style={{ fontSize: 18 }}>💻</span>
+                    <strong className="text-[13px]" style={{ color: "#4a7c59" }}>T-MANAGE の顧客一覧</strong>
+                  </div>
+                  <p className="text-[11px] mb-2" style={{ color: T.textSub }}>
+                    サロンのお客様データ
+                  </p>
+                  <ul className="text-[10px] space-y-1 pl-3" style={{ color: T.textMuted }}>
+                    <li>• お店で管理しているお客様</li>
+                    <li>• 名前・来店履歴・ランク・メモ</li>
+                    <li>• <strong style={{ color: T.text }}>ここに登録があれば名前で表示</strong></li>
+                    <li>• 登録がなければ「新規のお客様」</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                <p className="text-[12px] mb-2" style={{ color: T.text, fontWeight: 600 }}>
+                  📋 実際の表示パターン
+                </p>
+                <div className="space-y-2 text-[11px]" style={{ color: T.textSub }}>
+                  <div className="flex items-start gap-2">
+                    <span style={{ color: "#4a7c59", fontSize: 14, lineHeight: 1 }}>✅</span>
+                    <div>
+                      <strong style={{ color: T.text }}>T-MANAGE に登録済みのお客様から着信</strong>
+                      <div style={{ color: "#4a7c59", marginTop: 2 }}>→ お名前・ランク・来店回数で表示 🎉</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span style={{ color: "#f59e0b", fontSize: 14, lineHeight: 1 }}>⚠</span>
+                    <div>
+                      <strong style={{ color: T.text }}>未登録のお客様から着信</strong>
+                      <div style={{ color: "#f59e0b", marginTop: 2 }}>→「新規のお客様」と表示(オーダー登録ボタンで即登録可能)</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: "rgba(195,167,130,0.08)", border: "1px solid rgba(195,167,130,0.3)" }}>
+                <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+                  🎯 <strong style={{ color: T.text }}>運用のコツ:</strong>{" "}
+                  新規のお客様から電話があった時、その場で<strong style={{ color: "#4a7c59" }}>「オーダー登録(新規顧客)」</strong>ボタンを押して T-MANAGE に登録すれば、次回以降の着信では自動でお名前が表示されるようになります。お客様情報を T-MANAGE にどれだけ貯めるかで、業務の快適さが決まります 💪
+                </p>
+              </div>
+            </div>
+
             {/* 必要なもの */}
             <div className="rounded-2xl p-6" style={cardStyle}>
               <h3 className="text-[14px] font-medium mb-4" style={{ color: T.text }}>🧰 必要なもの</h3>
@@ -505,6 +591,83 @@ export default function SystemSetup() {
                   <span style={{ color: T.textMuted }}>→</span>
                   <span className="px-3 py-1.5 rounded-lg" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>💻 T-MANAGE表示</span>
                 </div>
+              </div>
+
+              {/* ⚠ 重要: データの住み分け */}
+              <div
+                className="mb-5 p-4 rounded-xl"
+                style={{
+                  backgroundColor: "rgba(61,107,159,0.08)",
+                  border: "1px solid rgba(61,107,159,0.3)",
+                }}
+              >
+                <h3 className="text-[13px] font-medium mb-3" style={{ color: "#3d6b9f" }}>
+                  💡 重要: iPhone の連絡先と T-MANAGE の顧客情報は別物です
+                </h3>
+                <p className="text-[11px] mb-3 leading-relaxed" style={{ color: T.textSub }}>
+                  よくある勘違いですが、ポップアップでお客様名が表示されるかどうかは、<strong style={{ color: T.text }}>iPhone の連絡先とは無関係</strong>です。T-MANAGE の顧客データベースとの照合で決まります。
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  {/* iPhone側 */}
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card, border: "1px dashed rgba(232,132,154,0.4)" }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span style={{ fontSize: 16 }}>📱</span>
+                      <strong className="text-[12px]" style={{ color: "#e8849a" }}>iPhone の連絡先</strong>
+                    </div>
+                    <p className="text-[10px] mb-2" style={{ color: T.textSub }}>
+                      社長個人のプライベートデータ
+                    </p>
+                    <ul className="text-[10px] space-y-1 pl-3" style={{ color: T.textMuted }}>
+                      <li>• 家族・友人・取引先など</li>
+                      <li>• サロン業務とは <strong style={{ color: T.text }}>無関係</strong></li>
+                      <li>• 整理・削除しても T-MANAGE に影響なし</li>
+                    </ul>
+                  </div>
+
+                  {/* T-MANAGE側 */}
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: T.card, border: "1px dashed rgba(74,124,89,0.4)" }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span style={{ fontSize: 16 }}>💻</span>
+                      <strong className="text-[12px]" style={{ color: "#4a7c59" }}>T-MANAGE の顧客DB</strong>
+                    </div>
+                    <p className="text-[10px] mb-2" style={{ color: T.textSub }}>
+                      サロンのお客様データ
+                    </p>
+                    <ul className="text-[10px] space-y-1 pl-3" style={{ color: T.textMuted }}>
+                      <li>• 顧客一覧で管理しているお客様</li>
+                      <li>• 名前・来店履歴・ランク・NG情報など</li>
+                      <li>• <strong style={{ color: T.text }}>ここに登録がないと「新規」と表示</strong></li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
+                    <strong style={{ color: T.text }}>動作例:</strong>
+                  </p>
+                  <div className="mt-2 space-y-1 text-[10px]" style={{ color: T.textSub }}>
+                    <div>
+                      ✅ iPhone連絡先に未登録 + T-MANAGE顧客DBに登録あり
+                      <br />
+                      <span style={{ paddingLeft: 18, color: "#4a7c59" }}>→ お客様名でポップアップ表示 🎉</span>
+                    </div>
+                    <div className="mt-1">
+                      ⚠ iPhone連絡先に未登録 + T-MANAGE顧客DBにも未登録
+                      <br />
+                      <span style={{ paddingLeft: 18, color: "#f59e0b" }}>→「新規のお客様」と表示(オーダー登録ボタンあり)</span>
+                    </div>
+                    <div className="mt-1">
+                      ℹ iPhone連絡先に登録あり(どちらでも影響なし)
+                      <br />
+                      <span style={{ paddingLeft: 18, color: T.textMuted }}>→ 表示はT-MANAGE顧客DBの有無で決まる</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] mt-3 leading-relaxed" style={{ color: T.textSub }}>
+                  🎯 <strong style={{ color: T.text }}>つまり</strong>: お客様情報を充実させたいなら、<strong style={{ color: "#4a7c59" }}>T-MANAGE の顧客一覧に登録</strong>してください。新規のお客様から着信があった時は、その場で「オーダー登録(新規顧客)」ボタンから登録すれば、次回以降は名前で表示されます。
+                </p>
               </div>
 
               {/* 事前準備 */}
