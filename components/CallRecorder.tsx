@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTheme } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
 
 type TranscriptChunk = {
   at: string; // ISO string
@@ -17,6 +18,10 @@ type CallRecorderProps = {
     durationSec: number;
     startedAt: Date;
     endedAt: Date;
+    consentNotified?: boolean;
+    consentNotifiedAt?: Date;
+    consentScriptKey?: string;
+    consentScriptShown?: string;
   }) => void;
   chunkIntervalMs?: number; // 文字起こし送信間隔（デフォルト30秒）
 };
@@ -54,6 +59,18 @@ export default function CallRecorder({
   // 文字起こし結果
   const [chunks, setChunks] = useState<TranscriptChunk[]>([]);
   const chunksRef = useRef<TranscriptChunk[]>([]);
+
+  // 同意ポップアップ
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [consentScript, setConsentScript] = useState("");
+  const [consentScriptKey, setConsentScriptKey] = useState("manual_recording");
+  const [consentLoading, setConsentLoading] = useState(false);
+  const consentInfoRef = useRef<{
+    notified: boolean;
+    notifiedAt: Date | null;
+    scriptKey: string;
+    scriptShown: string;
+  }>({ notified: false, notifiedAt: null, scriptKey: "", scriptShown: "" });
 
   // refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -294,12 +311,17 @@ export default function CallRecorder({
     // 完了コールバック
     if (onRecordingComplete && startedAtRef.current) {
       const latestChunks = chunksRef.current;
+      const consentInfo = consentInfoRef.current;
       onRecordingComplete({
         chunks: latestChunks,
         fullText: latestChunks.map((c) => c.text).join("\n"),
         durationSec,
         startedAt: startedAtRef.current,
         endedAt,
+        consentNotified: consentInfo.notified,
+        consentNotifiedAt: consentInfo.notifiedAt || undefined,
+        consentScriptKey: consentInfo.scriptKey,
+        consentScriptShown: consentInfo.scriptShown,
       });
     }
   }, [flushChunk, onRecordingComplete]);
@@ -324,6 +346,62 @@ export default function CallRecorder({
     const s = (sec % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
+
+  // 録音リクエスト（同意ポップアップを表示）
+  const handleRecordRequest = useCallback(async () => {
+    setError("");
+    setConsentLoading(true);
+    try {
+      // DBから最新のセリフを取得（manual_recording）
+      const { data } = await supabase
+        .from("call_consent_scripts")
+        .select("script_text, script_key")
+        .eq("script_key", "manual_recording")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      const script =
+        data?.script_text ||
+        "サービス品質向上のため、通話を録音させていただきます。ご了承ください。";
+      const key = data?.script_key || "manual_recording";
+      setConsentScript(script);
+      setConsentScriptKey(key);
+      setShowConsentModal(true);
+    } catch (e) {
+      // DB失敗時もデフォルトセリフで続行可能に
+      setConsentScript(
+        "サービス品質向上のため、通話を録音させていただきます。ご了承ください。"
+      );
+      setConsentScriptKey("manual_recording");
+      setShowConsentModal(true);
+    } finally {
+      setConsentLoading(false);
+    }
+  }, []);
+
+  // 「伝えました」で録音開始
+  const handleConsentConfirmed = useCallback(() => {
+    consentInfoRef.current = {
+      notified: true,
+      notifiedAt: new Date(),
+      scriptKey: consentScriptKey,
+      scriptShown: consentScript,
+    };
+    setShowConsentModal(false);
+    startRecording();
+  }, [consentScript, consentScriptKey, startRecording]);
+
+  // 同意なしで強制録音（非推奨だが緊急時用）
+  const handleSkipConsent = useCallback(() => {
+    consentInfoRef.current = {
+      notified: false,
+      notifiedAt: null,
+      scriptKey: "",
+      scriptShown: "",
+    };
+    setShowConsentModal(false);
+    startRecording();
+  }, [startRecording]);
 
   return (
     <div
@@ -441,15 +519,15 @@ export default function CallRecorder({
       <div className="flex gap-2">
         {!isRecording ? (
           <button
-            onClick={startRecording}
-            disabled={!selectedDeviceId || isProcessing}
+            onClick={handleRecordRequest}
+            disabled={!selectedDeviceId || isProcessing || consentLoading}
             className="flex-1 px-4 py-3 rounded-xl text-[13px] font-medium cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               backgroundColor: T.accent,
               color: "white",
             }}
           >
-            🎙 録音開始
+            {consentLoading ? "準備中..." : "🎙 録音開始"}
           </button>
         ) : (
           <button
@@ -507,6 +585,103 @@ export default function CallRecorder({
                 {c.text}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 同意確認モーダル */}
+      {showConsentModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowConsentModal(false);
+          }}
+        >
+          <div
+            className="rounded-2xl p-6 max-w-md w-full border shadow-2xl"
+            style={{
+              backgroundColor: T.card,
+              borderColor: T.border,
+            }}
+          >
+            {/* タイトル */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-[24px]">🎙</span>
+              <h3
+                className="text-[16px] font-medium"
+                style={{ color: T.text }}
+              >
+                録音を開始します
+              </h3>
+            </div>
+
+            {/* 説明 */}
+            <p
+              className="text-[12px] mb-3"
+              style={{ color: T.textSub }}
+            >
+              お客様に以下をお伝えください
+            </p>
+
+            {/* セリフカード */}
+            <div
+              className="p-4 rounded-xl mb-4 border-2"
+              style={{
+                backgroundColor: T.accentBg || "rgba(195,167,130,0.08)",
+                borderColor: T.accent,
+              }}
+            >
+              <p
+                className="text-[14px] leading-relaxed"
+                style={{ color: T.text }}
+              >
+                「{consentScript}」
+              </p>
+            </div>
+
+            {/* ボタン */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowConsentModal(false)}
+                className="px-4 py-2.5 rounded-xl text-[12px] font-medium border cursor-pointer"
+                style={{
+                  backgroundColor: T.cardAlt,
+                  color: T.text,
+                  borderColor: T.border,
+                }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleConsentConfirmed}
+                className="flex-1 px-4 py-2.5 rounded-xl text-[13px] font-medium cursor-pointer"
+                style={{
+                  backgroundColor: T.accent,
+                  color: "white",
+                }}
+              >
+                ✓ 伝えました・録音開始
+              </button>
+            </div>
+
+            {/* 緊急時の告知なし録音（小さく） */}
+            <div className="mt-3 text-center">
+              <button
+                onClick={handleSkipConsent}
+                className="text-[10px] underline cursor-pointer"
+                style={{ color: T.textMuted }}
+              >
+                告知なしで録音（緊急時のみ）
+              </button>
+            </div>
+
+            <p
+              className="text-[10px] mt-3 text-center"
+              style={{ color: T.textMuted }}
+            >
+              「伝えました」を押すと録音が開始されます
+            </p>
           </div>
         </div>
       )}

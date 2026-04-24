@@ -67,6 +67,11 @@ type CallTranscript = {
   note: string;
   recording_reason: string;
   created_at: string;
+  // Session 62: 同意記録
+  consent_notified?: boolean;
+  consent_notified_at?: string | null;
+  consent_script_shown?: string;
+  consent_script_key?: string;
 };
 
 export default function CallTestPage() {
@@ -85,6 +90,9 @@ export default function CallTestPage() {
   // フィルタ
   const [intentFilter, setIntentFilter] = useState<string | null>(null);
   const [sentimentFilter, setSentimentFilter] = useState<string | null>(null);
+  const [consentFilter, setConsentFilter] = useState<
+    "notified" | "not_notified" | null
+  >(null);
 
   // アクセス権チェック
   useEffect(() => {
@@ -125,6 +133,10 @@ export default function CallTestPage() {
       durationSec: number;
       startedAt: Date;
       endedAt: Date;
+      consentNotified?: boolean;
+      consentNotifiedAt?: Date;
+      consentScriptKey?: string;
+      consentScriptShown?: string;
     }) => {
       if (!activeStaff) return;
       setSaving(true);
@@ -139,6 +151,12 @@ export default function CallTestPage() {
           transcript_chunks: data.chunks,
           recording_reason: "manual",
           ai_model_used: "sonnet-4-6",
+          consent_notified: data.consentNotified ?? false,
+          consent_notified_at: data.consentNotifiedAt
+            ? data.consentNotifiedAt.toISOString()
+            : null,
+          consent_script_key: data.consentScriptKey ?? "",
+          consent_script_shown: data.consentScriptShown ?? "",
         });
         if (error) {
           console.error("[call-test] save error:", error);
@@ -250,6 +268,10 @@ export default function CallTestPage() {
   const filteredTranscripts = transcripts.filter((t) => {
     if (intentFilter && t.ai_intent !== intentFilter) return false;
     if (sentimentFilter && t.ai_sentiment !== sentimentFilter) return false;
+    if (consentFilter === "notified" && t.consent_notified !== true)
+      return false;
+    if (consentFilter === "not_notified" && t.consent_notified !== false)
+      return false;
     return true;
   });
 
@@ -395,6 +417,34 @@ export default function CallTestPage() {
                     </button>
                   ))}
                 </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[9px]" style={{ color: T.textMuted }}>
+                    告知:
+                  </span>
+                  {[
+                    { key: null, label: "全て" },
+                    { key: "notified", label: "✓ 告知済" },
+                    { key: "not_notified", label: "⚠ 告知なし" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key || "all"}
+                      onClick={() =>
+                        setConsentFilter(
+                          opt.key as "notified" | "not_notified" | null
+                        )
+                      }
+                      className="text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all"
+                      style={{
+                        backgroundColor:
+                          consentFilter === opt.key ? T.accent : T.cardAlt,
+                        color:
+                          consentFilter === opt.key ? "#ffffff" : T.textSub,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -511,6 +561,35 @@ export default function CallTestPage() {
                           🚨
                         </span>
                       )}
+                      {/* 告知バッジ (Session 62) */}
+                      {t.consent_notified === true && (
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: "#22c55e20",
+                            color: "#22c55e",
+                          }}
+                          title={
+                            t.consent_script_shown
+                              ? `告知済: 「${t.consent_script_shown}」`
+                              : "お客様へ録音告知済み"
+                          }
+                        >
+                          ✓ 告知済
+                        </span>
+                      )}
+                      {t.consent_notified === false && (
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: "#c4555520",
+                            color: "#c45555",
+                          }}
+                          title="告知なしで録音（緊急時モード）"
+                        >
+                          ⚠ 告知なし
+                        </span>
+                      )}
                     </div>
                   </div>
                   {t.transcript_full && (
@@ -588,6 +667,88 @@ export default function CallTestPage() {
                 </p>
               </div>
             </div>
+
+            {/* === 告知セリフ (Session 62) === */}
+            {(selectedTranscript.consent_notified !== undefined ||
+              selectedTranscript.consent_script_shown) && (
+              <div className="mb-4">
+                <p className="text-[11px] mb-2" style={{ color: T.textSub }}>
+                  📢 お客様への告知
+                </p>
+                {selectedTranscript.consent_notified ? (
+                  <div
+                    className="p-3 rounded-xl border-2"
+                    style={{
+                      backgroundColor: "#22c55e08",
+                      borderColor: "#22c55e44",
+                    }}
+                  >
+                    <div
+                      className="flex items-center gap-2 mb-2 flex-wrap"
+                      style={{ fontSize: 11 }}
+                    >
+                      <span
+                        className="px-2 py-0.5 rounded-full font-medium"
+                        style={{
+                          backgroundColor: "#22c55e22",
+                          color: "#22c55e",
+                          fontSize: 10,
+                        }}
+                      >
+                        ✓ 告知済み
+                      </span>
+                      {selectedTranscript.consent_notified_at && (
+                        <span style={{ color: T.textMuted, fontSize: 10 }}>
+                          {new Date(
+                            selectedTranscript.consent_notified_at
+                          ).toLocaleString("ja-JP", {
+                            month: "numeric",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    {selectedTranscript.consent_script_shown && (
+                      <p
+                        className="text-[12px]"
+                        style={{ color: T.text, lineHeight: 1.6 }}
+                      >
+                        「{selectedTranscript.consent_script_shown}」
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className="p-3 rounded-xl border-2"
+                    style={{
+                      backgroundColor: "#c4555508",
+                      borderColor: "#c4555544",
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="px-2 py-0.5 rounded-full font-medium text-[10px]"
+                        style={{
+                          backgroundColor: "#c4555522",
+                          color: "#c45555",
+                        }}
+                      >
+                        ⚠ 告知なし
+                      </span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: T.textMuted }}
+                      >
+                        緊急時モードで録音開始されました
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mb-4">
               <p className="text-[11px] mb-2" style={{ color: T.textSub }}>

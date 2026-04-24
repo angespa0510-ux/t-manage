@@ -84,6 +84,15 @@ export default function CallAssistantSettingsPage() {
   };
   const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>([]);
 
+  // 今月の告知遵守率 (Session 62)
+  type ConsentStats = {
+    total_count: number;
+    notified_count: number;
+    not_notified_count: number;
+    rate_percent: number;
+  };
+  const [consentStats, setConsentStats] = useState<ConsentStats | null>(null);
+
   // アクセス権チェック
   useEffect(() => {
     if (activeStaff === null) return;
@@ -197,13 +206,53 @@ export default function CallAssistantSettingsPage() {
     setDailyUsage(result);
   }, []);
 
+  // 今月の告知遵守率読み込み (Session 62)
+  const loadConsentStats = useCallback(async () => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString()
+      .split("T")[0];
+
+    const { data, error } = await supabase
+      .from("call_transcripts")
+      .select("consent_notified")
+      .gte("started_at", firstDay + "T00:00:00+09:00");
+
+    if (error) {
+      console.error("[settings] consent stats load error:", error);
+      return;
+    }
+
+    const rows = (data || []) as Array<{ consent_notified: boolean | null }>;
+    const total = rows.length;
+    const notified = rows.filter((r) => r.consent_notified === true).length;
+    const notNotified = rows.filter(
+      (r) => r.consent_notified === false
+    ).length;
+    const rate = total > 0 ? Math.round((notified / total) * 100) : 0;
+
+    setConsentStats({
+      total_count: total,
+      notified_count: notified,
+      not_notified_count: notNotified,
+      rate_percent: rate,
+    });
+  }, []);
+
   useEffect(() => {
     if (canAccessCallAssistant) {
       loadSettings();
       loadMonthlyUsage();
       loadDailyUsage();
+      loadConsentStats();
     }
-  }, [canAccessCallAssistant, loadSettings, loadMonthlyUsage, loadDailyUsage]);
+  }, [
+    canAccessCallAssistant,
+    loadSettings,
+    loadMonthlyUsage,
+    loadDailyUsage,
+    loadConsentStats,
+  ]);
 
   // 値の更新ヘルパー
   const updateField = <K extends keyof CallAiSettings>(
@@ -616,6 +665,121 @@ export default function CallAssistantSettingsPage() {
           );
         })()}
 
+        {/* === 告知遵守率 (Session 62) === */}
+        {consentStats && consentStats.total_count > 0 && (() => {
+          const rate = consentStats.rate_percent;
+          const rateColor =
+            rate >= 95
+              ? "#22c55e"
+              : rate >= 80
+              ? "#b38419"
+              : "#c45555";
+          const emoji =
+            rate >= 95 ? "🟢" : rate >= 80 ? "🟡" : "🔴";
+          return (
+            <div
+              className="rounded-2xl p-4 md:p-5 border mb-4"
+              style={{ backgroundColor: T.card, borderColor: T.border }}
+            >
+              <h2
+                className="text-[14px] font-medium mb-3"
+                style={{ color: T.text }}
+              >
+                📢 今月の告知遵守率
+              </h2>
+              <div className="flex items-center gap-4 mb-3">
+                <div className="flex-1">
+                  <div
+                    className="h-3 rounded-full overflow-hidden"
+                    style={{ backgroundColor: T.cardAlt }}
+                  >
+                    <div
+                      className="h-full transition-all"
+                      style={{
+                        width: `${rate}%`,
+                        backgroundColor: rateColor,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div
+                  className="text-[28px] font-medium flex-shrink-0"
+                  style={{
+                    color: rateColor,
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                  }}
+                >
+                  {emoji} {rate}%
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div
+                  className="p-2 rounded-lg text-center"
+                  style={{ backgroundColor: T.cardAlt }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    録音件数
+                  </p>
+                  <p
+                    className="text-[14px] font-medium mt-0.5"
+                    style={{
+                      color: T.text,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {consentStats.total_count}
+                  </p>
+                </div>
+                <div
+                  className="p-2 rounded-lg text-center"
+                  style={{ backgroundColor: "#22c55e10" }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    告知済
+                  </p>
+                  <p
+                    className="text-[14px] font-medium mt-0.5"
+                    style={{
+                      color: "#22c55e",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {consentStats.notified_count}
+                  </p>
+                </div>
+                <div
+                  className="p-2 rounded-lg text-center"
+                  style={{ backgroundColor: "#c4555510" }}
+                >
+                  <p className="text-[9px]" style={{ color: T.textMuted }}>
+                    告知なし
+                  </p>
+                  <p
+                    className="text-[14px] font-medium mt-0.5"
+                    style={{
+                      color: "#c45555",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {consentStats.not_notified_count}
+                  </p>
+                </div>
+              </div>
+              <p
+                className="text-[10px] mt-3"
+                style={{ color: T.textSub, lineHeight: 1.6 }}
+              >
+                {rate >= 95
+                  ? "✅ しっかり告知できています。この調子で運用してください。"
+                  : rate >= 80
+                  ? "⚠ 告知忘れが散見されます。スタッフに再徹底しましょう。"
+                  : "🚨 告知遵守率が低いです。トラブル防止のため、早急に改善が必要です。"}
+              </p>
+            </div>
+          );
+        })()}
+
         {/* === 日次使用量グラフ === */}
         {dailyUsage.length > 0 && (() => {
           const maxCost = Math.max(
@@ -875,6 +1039,9 @@ export default function CallAssistantSettingsPage() {
             T={T}
           />
         </SettingSection>
+
+        {/* === 同意・セリフ設定 === */}
+        <ConsentScriptsSection T={T} updatedByName={activeStaff?.name || ""} />
 
         {/* 最終更新情報 */}
         {settings.updated_at && (
@@ -1182,5 +1349,266 @@ function NumberRow({
         <span>{max.toLocaleString()}{unit}</span>
       </div>
     </div>
+  );
+}
+
+// ========================================
+// 同意セリフ設定セクション（独立保存）
+// ========================================
+
+type ConsentScript = {
+  id: number;
+  script_key: string;
+  title: string;
+  description: string;
+  script_text: string;
+  customer_type: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+function ConsentScriptsSection({
+  T,
+  updatedByName,
+}: {
+  T: ThemeColors;
+  updatedByName: string;
+}) {
+  const [scripts, setScripts] = useState<ConsentScript[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<Record<number, boolean>>({});
+  const [editValues, setEditValues] = useState<Record<number, string>>({});
+  const [savedMessage, setSavedMessage] = useState<Record<number, string>>({});
+
+  const loadScripts = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("call_consent_scripts")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+    if (!error && data) {
+      setScripts(data);
+      const initial: Record<number, string> = {};
+      data.forEach((s: ConsentScript) => {
+        initial[s.id] = s.script_text;
+      });
+      setEditValues(initial);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadScripts();
+  }, [loadScripts]);
+
+  const handleSave = async (script: ConsentScript) => {
+    const newText = editValues[script.id];
+    if (!newText || newText.trim() === "") {
+      setSavedMessage((prev) => ({ ...prev, [script.id]: "❌ 空にできません" }));
+      return;
+    }
+    if (newText === script.script_text) {
+      return; // 変更なし
+    }
+    setSaving((prev) => ({ ...prev, [script.id]: true }));
+    const { error } = await supabase
+      .from("call_consent_scripts")
+      .update({
+        script_text: newText.trim(),
+        updated_at: new Date().toISOString(),
+        updated_by_name: updatedByName,
+      })
+      .eq("id", script.id);
+
+    if (error) {
+      setSavedMessage((prev) => ({
+        ...prev,
+        [script.id]: `❌ ${error.message}`,
+      }));
+    } else {
+      setSavedMessage((prev) => ({ ...prev, [script.id]: "✅ 保存しました" }));
+      await loadScripts();
+      setTimeout(() => {
+        setSavedMessage((prev) => {
+          const next = { ...prev };
+          delete next[script.id];
+          return next;
+        });
+      }, 2500);
+    }
+    setSaving((prev) => ({ ...prev, [script.id]: false }));
+  };
+
+  const handleReset = (script: ConsentScript) => {
+    setEditValues((prev) => ({ ...prev, [script.id]: script.script_text }));
+    setSavedMessage((prev) => {
+      const next = { ...prev };
+      delete next[script.id];
+      return next;
+    });
+  };
+
+  const customerTypeLabel = (type: string) => {
+    switch (type) {
+      case "new":
+        return { label: "🆕 新規", color: "#c96b83" };
+      case "repeat":
+        return { label: "🔁 リピーター", color: "#4a7c59" };
+      case "vip":
+        return { label: "⭐ VIP", color: "#b38419" };
+      case "caution":
+        return { label: "⚠ 要注意", color: "#c45555" };
+      case "all":
+      default:
+        return { label: "全般", color: "#888780" };
+    }
+  };
+
+  return (
+    <SettingSection title="💬 同意・セリフ設定" T={T}>
+      <p
+        className="text-[11px] mb-4 p-3 rounded-xl"
+        style={{
+          color: T.textSub,
+          backgroundColor: T.cardAlt,
+        }}
+      >
+        録音開始時にスタッフがお客様にお伝えするセリフです。
+        録音ボタン押下時やCTI着信時にポップアップで表示されます。
+        状況に応じて編集してください。
+      </p>
+
+      {loading && (
+        <p
+          className="text-[11px] py-4 text-center"
+          style={{ color: T.textMuted }}
+        >
+          読み込み中...
+        </p>
+      )}
+
+      {!loading && scripts.length === 0 && (
+        <p
+          className="text-[11px] py-4 text-center"
+          style={{ color: T.textMuted }}
+        >
+          セリフが登録されていません。session62_call_consent.sql を実行してください。
+        </p>
+      )}
+
+      <div className="space-y-4">
+        {scripts.map((script) => {
+          const typeInfo = customerTypeLabel(script.customer_type);
+          const currentValue = editValues[script.id] ?? script.script_text;
+          const isDirty = currentValue !== script.script_text;
+          const msg = savedMessage[script.id];
+          return (
+            <div
+              key={script.id}
+              className="p-4 rounded-xl border"
+              style={{
+                backgroundColor: T.cardAlt,
+                borderColor: isDirty ? T.accent : T.border,
+              }}
+            >
+              {/* ヘッダー */}
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                  style={{
+                    backgroundColor: typeInfo.color + "22",
+                    color: typeInfo.color,
+                  }}
+                >
+                  {typeInfo.label}
+                </span>
+                <h4
+                  className="text-[13px] font-medium"
+                  style={{ color: T.text }}
+                >
+                  {script.title}
+                </h4>
+              </div>
+
+              {/* 説明 */}
+              {script.description && (
+                <p
+                  className="text-[10px] mb-2"
+                  style={{ color: T.textSub }}
+                >
+                  {script.description}
+                </p>
+              )}
+
+              {/* 編集エリア */}
+              <textarea
+                value={currentValue}
+                onChange={(e) =>
+                  setEditValues((prev) => ({
+                    ...prev,
+                    [script.id]: e.target.value,
+                  }))
+                }
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg text-[12px] border resize-y"
+                style={{
+                  backgroundColor: T.card,
+                  borderColor: T.border,
+                  color: T.text,
+                  fontFamily: "inherit",
+                  lineHeight: 1.6,
+                }}
+                placeholder="セリフを入力..."
+              />
+
+              {/* アクション */}
+              <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+                <div className="text-[10px]" style={{ color: T.textMuted }}>
+                  {currentValue.length} 文字
+                  {msg && (
+                    <span
+                      className="ml-3 font-medium"
+                      style={{
+                        color: msg.startsWith("✅") ? "#22c55e" : "#c45555",
+                      }}
+                    >
+                      {msg}
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {isDirty && (
+                    <button
+                      onClick={() => handleReset(script)}
+                      className="px-3 py-1.5 rounded-lg text-[11px] border cursor-pointer"
+                      style={{
+                        backgroundColor: T.card,
+                        color: T.textSub,
+                        borderColor: T.border,
+                      }}
+                    >
+                      元に戻す
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleSave(script)}
+                    disabled={!isDirty || saving[script.id]}
+                    className="px-4 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      backgroundColor: isDirty ? T.accent : T.cardAlt,
+                      color: isDirty ? "#ffffff" : T.textMuted,
+                      border: isDirty ? "none" : `1px solid ${T.border}`,
+                    }}
+                  >
+                    {saving[script.id] ? "保存中..." : "💾 保存"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SettingSection>
   );
 }

@@ -70,6 +70,8 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [popups, setPopups] = useState<CtiPopupData[]>([]);
   const [minimized, setMinimized] = useState<Record<number, boolean>>({});
+  // 顧客属性別セリフキャッシュ（customer_type => script_text）
+  const [consentScripts, setConsentScripts] = useState<Record<string, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // CTIを表示しないパス（セラピスト/お客様/法人サイト/公開HP等）
@@ -112,6 +114,30 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
   })();
 
   useEffect(() => { setMounted(true); }, []);
+
+  // 同意セリフをマウント時に1回ロード（5分ごとにリフレッシュ）
+  useEffect(() => {
+    if (!mounted) return;
+    const loadScripts = async () => {
+      const { data } = await supabase
+        .from("call_consent_scripts")
+        .select("script_key, script_text, customer_type")
+        .eq("is_active", true);
+      if (data) {
+        const map: Record<string, string> = {};
+        // 着信時ポップアップ向けのキーだけマップ化
+        data.forEach((s: { script_key: string; script_text: string; customer_type: string }) => {
+          if (s.script_key.endsWith("_greeting")) {
+            map[s.customer_type] = s.script_text;
+          }
+        });
+        setConsentScripts(map);
+      }
+    };
+    loadScripts();
+    const interval = setInterval(loadScripts, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [mounted]);
 
   // パス変更でCTI無効化ページに入ったら、既存ポップアップを即時クリア
   useEffect(() => {
@@ -332,6 +358,94 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
 
                 {/* 本体 */}
                 <div style={{ padding: 16 }}>
+                  {/* === 冒頭セリフ（録音告知） === */}
+                  {(() => {
+                    // 顧客属性判定: 要注意 > VIP(常連) > リピーター > 新規
+                    let customerType: string = "new";
+                    if (p.customer) {
+                      if (p.customer.rank === "banned" || p.customer.rank === "caution") {
+                        customerType = "caution";
+                      } else if (p.totalVisits >= 10) {
+                        customerType = "vip";
+                      } else if (p.totalVisits >= 1) {
+                        customerType = "repeat";
+                      } else {
+                        customerType = "new";
+                      }
+                    } else if (p.therapist) {
+                      // セラピストからの電話はセリフ不要
+                      return null;
+                    }
+
+                    const scriptText =
+                      consentScripts[customerType] ||
+                      consentScripts["all"] ||
+                      "お電話ありがとうございます、アンジュスパでございます。";
+
+                    const typeInfo =
+                      customerType === "new"
+                        ? { label: "🆕 新規のお客様", color: "#c96b83" }
+                        : customerType === "repeat"
+                        ? { label: "🔁 リピーター", color: "#4a7c59" }
+                        : customerType === "vip"
+                        ? { label: "⭐ 常連様", color: "#b38419" }
+                        : { label: "⚠ 要注意", color: "#c45555" };
+
+                    return (
+                      <div
+                        style={{
+                          background: "rgba(195,167,130,0.08)",
+                          border: "2px solid #c3a782",
+                          borderRadius: 10,
+                          padding: "10px 12px",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span style={{ fontSize: 12 }}>📢</span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 600,
+                              color: typeInfo.color,
+                              padding: "1px 6px",
+                              borderRadius: 8,
+                              background: typeInfo.color + "18",
+                            }}
+                          >
+                            {typeInfo.label}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              color: T.textSub,
+                              fontWeight: 500,
+                            }}
+                          >
+                            最初のセリフ
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            lineHeight: 1.5,
+                            color: T.text,
+                            fontWeight: 500,
+                          }}
+                        >
+                          「{scriptText}」
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* === 顧客見つかった場合 === */}
                   {p.customer && (
                     <>
