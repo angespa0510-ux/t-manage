@@ -266,11 +266,11 @@ function CorporationStep({ T, form, setForm }: any) {
       </p>
 
       <FormRow T={T} label="法人名（必須）">
-        <Input T={T} value={form.corporation_name} onChange={(v) => setForm({ ...form, corporation_name: v })} placeholder="例: 合同会社ライフテラス" />
+        <Input T={T} value={form.corporation_name} onChange={(v: string) => setForm({ ...form, corporation_name: v })} placeholder="例: 合同会社ライフテラス" />
       </FormRow>
 
       <FormRow T={T} label="代表者名">
-        <Input T={T} value={form.representative_name} onChange={(v) => setForm({ ...form, representative_name: v })} placeholder="例: 山田 太郎" />
+        <Input T={T} value={form.representative_name} onChange={(v: string) => setForm({ ...form, representative_name: v })} placeholder="例: 山田 太郎" />
       </FormRow>
 
       <FormRow T={T} label="決算月">
@@ -288,7 +288,7 @@ function CorporationStep({ T, form, setForm }: any) {
       </FormRow>
 
       <FormRow T={T} label="顧問税理士">
-        <Input T={T} value={form.tax_accountant_name} onChange={(v) => setForm({ ...form, tax_accountant_name: v })} placeholder="例: 江坂瑠衣" />
+        <Input T={T} value={form.tax_accountant_name} onChange={(v: string) => setForm({ ...form, tax_accountant_name: v })} placeholder="例: 江坂瑠衣" />
       </FormRow>
     </div>
   );
@@ -302,20 +302,20 @@ function BasicStep({ T, form, setForm }: any) {
       </h3>
 
       <FormRow T={T} label="店舗名（屋号）（必須）">
-        <Input T={T} value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="例: RESEXY〜リゼクシー" />
+        <Input T={T} value={form.name} onChange={(v: string) => setForm({ ...form, name: v })} placeholder="例: RESEXY〜リゼクシー" />
       </FormRow>
 
       <FormRow T={T} label="英語名">
-        <Input T={T} value={form.name_en} onChange={(v) => setForm({ ...form, name_en: v })} placeholder="例: RESEXY" />
+        <Input T={T} value={form.name_en} onChange={(v: string) => setForm({ ...form, name_en: v })} placeholder="例: RESEXY" />
       </FormRow>
 
       <FormRow T={T} label="業種">
-        <Input T={T} value={form.shop_type} onChange={(v) => setForm({ ...form, shop_type: v })} placeholder="例: メンズエステ" />
+        <Input T={T} value={form.shop_type} onChange={(v: string) => setForm({ ...form, shop_type: v })} placeholder="例: メンズエステ" />
       </FormRow>
 
       <FormRow T={T} label="サブドメイン（必須）">
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Input T={T} value={form.subdomain} onChange={(v) => setForm({ ...form, subdomain: v })} placeholder="resexy" />
+          <Input T={T} value={form.subdomain} onChange={(v: string) => setForm({ ...form, subdomain: v })} placeholder="resexy" />
           <span style={{ color: T.textSub, fontSize: 13 }}>.t-manage.jp</span>
         </div>
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
@@ -324,11 +324,11 @@ function BasicStep({ T, form, setForm }: any) {
       </FormRow>
 
       <FormRow T={T} label="独自ドメイン（任意）">
-        <Input T={T} value={form.custom_domain} onChange={(v) => setForm({ ...form, custom_domain: v })} placeholder="例: resexy.info（任意）" />
+        <Input T={T} value={form.custom_domain} onChange={(v: string) => setForm({ ...form, custom_domain: v })} placeholder="例: resexy.info（任意）" />
       </FormRow>
 
       <FormRow T={T} label="コンセプト">
-        <Input T={T} value={form.concept} onChange={(v) => setForm({ ...form, concept: v })} placeholder="例: 大型グループサロン" />
+        <Input T={T} value={form.concept} onChange={(v: string) => setForm({ ...form, concept: v })} placeholder="例: 大型グループサロン" />
       </FormRow>
 
       <FormRow T={T} label="プラン">
@@ -442,7 +442,7 @@ function BrandingStep({ T, form, setForm }: any) {
             onChange={(e) => setForm({ ...form, theme_color_primary: e.target.value })}
             style={{ width: 60, height: 40, borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer" }}
           />
-          <Input T={T} value={form.theme_color_primary} onChange={(v) => setForm({ ...form, theme_color_primary: v })} placeholder="#c3a782" />
+          <Input T={T} value={form.theme_color_primary} onChange={(v: string) => setForm({ ...form, theme_color_primary: v })} placeholder="#c3a782" />
         </div>
       </FormRow>
 
@@ -454,7 +454,7 @@ function BrandingStep({ T, form, setForm }: any) {
             onChange={(e) => setForm({ ...form, theme_color_accent: e.target.value })}
             style={{ width: 60, height: 40, borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer" }}
           />
-          <Input T={T} value={form.theme_color_accent} onChange={(v) => setForm({ ...form, theme_color_accent: v })} placeholder="#8b7355" />
+          <Input T={T} value={form.theme_color_accent} onChange={(v: string) => setForm({ ...form, theme_color_accent: v })} placeholder="#8b7355" />
         </div>
       </FormRow>
 
@@ -603,10 +603,10 @@ function SettingsStep({ T, form, setForm }: any) {
       <div style={{ marginBottom: 30 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 14 }}>💳 決済手数料</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-          <FeeInput T={T} label="クレジット" value={form.payment_fee_card} onChange={(v) => setForm({ ...form, payment_fee_card: v })} />
-          <FeeInput T={T} label="PayPay" value={form.payment_fee_paypay} onChange={(v) => setForm({ ...form, payment_fee_paypay: v })} />
-          <FeeInput T={T} label="LINE Pay" value={form.payment_fee_line_pay} onChange={(v) => setForm({ ...form, payment_fee_line_pay: v })} />
-          <FeeInput T={T} label="現金" value={form.payment_fee_cash} onChange={(v) => setForm({ ...form, payment_fee_cash: v })} />
+          <FeeInput T={T} label="クレジット" value={form.payment_fee_card} onChange={(v: string) => setForm({ ...form, payment_fee_card: v })} />
+          <FeeInput T={T} label="PayPay" value={form.payment_fee_paypay} onChange={(v: string) => setForm({ ...form, payment_fee_paypay: v })} />
+          <FeeInput T={T} label="LINE Pay" value={form.payment_fee_line_pay} onChange={(v: string) => setForm({ ...form, payment_fee_line_pay: v })} />
+          <FeeInput T={T} label="現金" value={form.payment_fee_cash} onChange={(v: string) => setForm({ ...form, payment_fee_cash: v })} />
         </div>
       </div>
 
@@ -615,14 +615,14 @@ function SettingsStep({ T, form, setForm }: any) {
         <CheckboxRow
           T={T}
           checked={form.has_reserve_fund}
-          onChange={(v) => setForm({ ...form, has_reserve_fund: v })}
+          onChange={(v: string) => setForm({ ...form, has_reserve_fund: v })}
           label="予備金制度を使用する"
           description="複数拠点での資金移動管理で使用"
         />
         <CheckboxRow
           T={T}
           checked={form.daily_close_required}
-          onChange={(v) => setForm({ ...form, daily_close_required: v })}
+          onChange={(v: string) => setForm({ ...form, daily_close_required: v })}
           label="当日締めを必須にする"
           description="翌日への持ち越しを禁止"
         />
