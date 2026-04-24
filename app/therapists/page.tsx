@@ -22,7 +22,7 @@ type Therapist = {
   has_withholding: boolean;
   real_name: string; address: string; has_invoice: boolean; therapist_invoice_number: string; invoice_photo_url: string; license_photo_url: string; license_photo_url_back: string; birth_date: string; sort_order: number; entry_date: string; mynumber: string; mynumber_photo_url: string; mynumber_photo_url_back: string;
   deleted_at?: string | null;
-  // ─── 公開HP (Ange Spa ange-spa.com) 掲載用 ───
+  // ─── 公開HP (Ange Spa ange-spa.jp) 掲載用 ───
   is_public?: boolean; bio?: string; catchphrase?: string; specialty?: string; message?: string;
   tags?: string[]; body_type?: string; hair_style?: string; hair_color?: string;
   sub_photo_urls?: string[]; blog_url?: string; twitter_url?: string; instagram_url?: string;

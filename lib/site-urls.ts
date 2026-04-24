@@ -3,11 +3,17 @@
  *
  * ========== 本番ドメイン体系（2026-04-24 設定完了）==========
  *
- *   ange-spa.com                 公開HP（お客様向け、Next.js app/(site)/*）
+ *   ange-spa.jp                  公開HP（お客様向け、Next.js app/(site)/*）
  *   ange-spa.t-manage.jp         T-MANAGE 管理画面 + セラピストマイページ
  *   admin.tera-manage.jp         TERA-MANAGE マスター管理画面
  *   resexy.t-manage.jp           （将来）リゼクシー T-MANAGE
  *   {subdomain}.t-manage.jp      各インスタンスのサブドメイン
+ *
+ * ========== ange-spa.com について ==========
+ *
+ * 旧HP業者（Panda Web Concierge）が運用中の旧ドメイン。テラスライフに権限なし。
+ * 移管不可との回答を受け、2026-04-24 に ange-spa.jp を新規取得し完全移行する方針。
+ * 業者契約終了後、旧HPは閉鎖予定。
  *
  * ========== 使い方 ==========
  *
@@ -27,8 +33,8 @@
 
 // ─── 本番ドメイン定数 ──────────────────────────────────────
 
-/** アンジュスパ公開HP（お客様向け、ange-spa.com で配信） */
-export const PUBLIC_HP_URL = "https://ange-spa.com";
+/** アンジュスパ公開HP（お客様向け、ange-spa.jp で配信） */
+export const PUBLIC_HP_URL = "https://ange-spa.jp";
 
 /** T-MANAGE 管理画面・マイページ（スタッフ・セラピスト・お客様認証後） */
 export const TMANAGE_URL = "https://ange-spa.t-manage.jp";

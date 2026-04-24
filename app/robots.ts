@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 import { PUBLIC_HP_URL } from "../lib/site-urls";
 
 /**
- * robots.txt — 公開HP（ange-spa.com）の SEO 設定
+ * robots.txt — 公開HP（ange-spa.jp）の SEO 設定
  *
- * この robots.txt は ange-spa.com でアクセスされた時にクロール許可するページを制御する。
+ * この robots.txt は ange-spa.jp でアクセスされた時にクロール許可するページを制御する。
  * 管理画面系のパスは disallow して検索結果に出さない。
  *
  * 注: ange-spa.t-manage.jp（管理画面ドメイン）は、別途 meta robots noindex か、

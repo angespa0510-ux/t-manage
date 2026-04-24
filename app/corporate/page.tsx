@@ -841,7 +841,7 @@ export default function CorporatePage() {
                 { l:"取引銀行", v:CO.company_main_bank || "—" },
                 { l:"メール", v:CO.company_email || "—" },
                 { l:"電話", v:CO.company_phone || "—" },
-                { l:"URL", v:CO.company_website_url || "https://ange-spa.com" },
+                { l:"URL", v:CO.company_website_url || "https://ange-spa.jp" },
               ].filter(r => r.v && r.v !== "—" || ["取引銀行","従業員数","メール","電話"].includes(r.l)).map((r,i) => (
                 <div key={i} style={{ display:"flex",padding:"18px 0",borderBottom:"1px solid rgba(255,255,255,0.04)",gap:24,alignItems:"baseline" }}>
                   <span style={{ fontSize:12,fontWeight:700,color:"#60a5fa",minWidth:80,flexShrink:0,letterSpacing:.5 }}>{r.l}</span>

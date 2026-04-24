@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { PUBLIC_HP_URL } from "../lib/site-urls";
 
 /**
- * sitemap.xml — 公開HP（ange-spa.com）のサイトマップ
+ * sitemap.xml — 公開HP（ange-spa.jp）のサイトマップ
  *
  * Next.js App Router の generateSitemap 機能で動的生成。
  * 公開HPの主要ページのみ記載し、管理画面パスは含めない。

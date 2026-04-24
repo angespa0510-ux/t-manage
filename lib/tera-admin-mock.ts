@@ -167,7 +167,7 @@ export const DUMMY_INSTANCES: TmanageInstance[] = [
     theme_color_primary: "#c3a782",
     theme_color_accent: "#8b7355",
     subdomain: "ange-spa",
-    custom_domain: "ange-spa.com",
+    custom_domain: "ange-spa.jp",
     status: "active",
     plan: "full",
     operation_type: "self",

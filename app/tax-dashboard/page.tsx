@@ -229,7 +229,7 @@ export default function TaxDashboard() {
               </div>
               <div>
                 <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>Webサイト</label>
-                <input type="url" value={companyWebsiteUrl} onChange={e => setCompanyWebsiteUrl(e.target.value)} placeholder="https://ange-spa.com" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
+                <input type="url" value={companyWebsiteUrl} onChange={e => setCompanyWebsiteUrl(e.target.value)} placeholder="https://ange-spa.jp" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, color: T.text }}/>
               </div>
               <div>
                 <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>取引銀行</label>
