@@ -46,6 +46,23 @@ type Message = {
 type Therapist = { id: number; name: string; status: string };
 type Staff = { id: number; name: string; role: string };
 
+type ScheduledMessage = {
+  id: number;
+  conversation_id: number;
+  sender_type: string;
+  sender_id: number;
+  sender_name: string;
+  content: string;
+  attachment_url: string | null;
+  attachment_type: string | null;
+  attachment_storage_path: string | null;
+  scheduled_at: string;
+  status: string;
+  created_by_id: number;
+  created_by_name: string;
+  created_at: string;
+};
+
 type AiFeature = "polite" | "translate" | "draft" | "summarize" | "ng_check";
 
 export default function ChatPage() {
@@ -70,6 +87,13 @@ export default function ChatPage() {
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // 送信予約
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showScheduleList, setShowScheduleList] = useState(false);
+  const [scheduledList, setScheduledList] = useState<ScheduledMessage[]>([]);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [showNewConv, setShowNewConv] = useState(false);
   const [aiFeature, setAiFeature] = useState<AiFeature | null>(null);
@@ -375,6 +399,310 @@ export default function ChatPage() {
     setPendingAttachment(null);
     setPendingPreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // ─── 予約送信 ───
+  /**
+   * 予約一覧読み込み（現在会話のpending/failedのみ）
+   */
+  const loadScheduledMessages = useCallback(async () => {
+    if (!currentConvId) return;
+    const { data } = await supabase
+      .from("chat_scheduled_messages")
+      .select("*")
+      .eq("conversation_id", currentConvId)
+      .in("status", ["pending", "failed"])
+      .order("scheduled_at", { ascending: true });
+    setScheduledList(data || []);
+  }, [currentConvId]);
+
+  useEffect(() => {
+    if (currentConvId !== null) loadScheduledMessages();
+  }, [currentConvId, loadScheduledMessages]);
+
+  /**
+   * 予約送信のポーリング（Vercel Hobby プラン向けフォールバック）
+   *
+   * Vercel Hobby では Cron は 1日1回までのため、
+   * スタッフが /chat を開いている間 5分おきに /api/scheduled-messages-send を叩く。
+   * Pro プランで 10 分おき Cron が動いていれば重複するだけで害はない。
+   *
+   * Cron Secret を渡さずに呼ぶと manual モード扱い → 認証バイパスで動く
+   */
+  useEffect(() => {
+    if (!activeStaff) return;
+    // 開いた直後に1回実行
+    fetch("/api/scheduled-messages-send", { method: "POST" }).catch(() => {});
+    // その後 5分おき
+    const interval = setInterval(() => {
+      fetch("/api/scheduled-messages-send", { method: "POST" }).catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [activeStaff]);
+
+  /**
+   * 予約送信モーダルを開く
+   * デフォルトは翌朝 9:00
+   */
+  const openScheduleModal = () => {
+    if (!newMessage.trim() && !pendingAttachment) {
+      toast.show("メッセージまたは添付ファイルを入力してください", "error");
+      return;
+    }
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const yyyy = tomorrow.getFullYear();
+    const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
+    const dd = String(tomorrow.getDate()).padStart(2, "0");
+    setScheduleDate(`${yyyy}-${mm}-${dd}`);
+    setScheduleTime("09:00");
+    setEditingScheduleId(null);
+    setShowScheduleModal(true);
+  };
+
+  /**
+   * クイック時刻セット
+   */
+  const setQuickSchedule = (kind: "tomorrow_9" | "tomorrow_12" | "monday_9" | "next_week") => {
+    const now = new Date();
+    const target = new Date();
+    if (kind === "tomorrow_9") {
+      target.setDate(now.getDate() + 1);
+      target.setHours(9, 0, 0, 0);
+    } else if (kind === "tomorrow_12") {
+      target.setDate(now.getDate() + 1);
+      target.setHours(12, 0, 0, 0);
+    } else if (kind === "monday_9") {
+      // 次の月曜 9:00
+      const day = now.getDay(); // 0=日, 1=月
+      const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7 || 7;
+      target.setDate(now.getDate() + daysUntilMonday);
+      target.setHours(9, 0, 0, 0);
+    } else if (kind === "next_week") {
+      target.setDate(now.getDate() + 7);
+      target.setHours(9, 0, 0, 0);
+    }
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, "0");
+    const dd = String(target.getDate()).padStart(2, "0");
+    const hh = String(target.getHours()).padStart(2, "0");
+    const mi = String(target.getMinutes()).padStart(2, "0");
+    setScheduleDate(`${yyyy}-${mm}-${dd}`);
+    setScheduleTime(`${hh}:${mi}`);
+  };
+
+  /**
+   * 予約実行（新規 or 編集）
+   */
+  const confirmSchedule = async () => {
+    if (!activeStaff || !currentConvId) return;
+    if (!scheduleDate || !scheduleTime) {
+      toast.show("日付と時刻を指定してください", "error");
+      return;
+    }
+    // Local time で Date を構築し、ISO文字列に変換（タイムゾーン誤差なし）
+    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}:00`);
+    if (isNaN(scheduledAt.getTime())) {
+      toast.show("日時が不正です", "error");
+      return;
+    }
+    const now = new Date();
+    if (scheduledAt.getTime() <= now.getTime() + 60000) {
+      // 1分以内は予約不可（即送信でOK）
+      toast.show("予約時刻は現在時刻より後にしてください（最低1分後）", "error");
+      return;
+    }
+
+    // 編集モード
+    if (editingScheduleId !== null) {
+      const { error } = await supabase
+        .from("chat_scheduled_messages")
+        .update({
+          content: newMessage.trim(),
+          scheduled_at: scheduledAt.toISOString(),
+          status: "pending",
+          error_message: null,
+        })
+        .eq("id", editingScheduleId);
+      if (error) {
+        toast.show("予約更新失敗: " + error.message, "error");
+        return;
+      }
+      toast.show("予約を更新しました", "success");
+      setEditingScheduleId(null);
+      setShowScheduleModal(false);
+      setNewMessage("");
+      loadScheduledMessages();
+      return;
+    }
+
+    // 新規作成
+    setLoading(true);
+
+    // 添付ファイルをアップロード（即送信時と同じロジック）
+    let attachmentUrl: string | null = null;
+    let attachmentType: string | null = null;
+    let attachmentPath: string | null = null;
+    let attachmentSize = 0;
+    if (pendingAttachment) {
+      setUploading(true);
+      const ext = pendingAttachment.name.split(".").pop() || "bin";
+      const timestamp = Date.now();
+      const rand = Math.random().toString(36).slice(2, 8);
+      const path = `conv-${currentConvId}/scheduled-${timestamp}-${rand}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-attachments")
+        .upload(path, pendingAttachment, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: pendingAttachment.type,
+        });
+      if (upErr) {
+        toast.show("添付アップロード失敗: " + upErr.message, "error");
+        setUploading(false);
+        setLoading(false);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+      attachmentUrl = urlData.publicUrl;
+      attachmentType = pendingAttachment.type;
+      attachmentPath = path;
+      attachmentSize = pendingAttachment.size;
+      setUploading(false);
+    }
+
+    const { error } = await supabase.from("chat_scheduled_messages").insert({
+      conversation_id: currentConvId,
+      sender_type: "staff",
+      sender_id: activeStaff.id,
+      sender_name: activeStaff.name,
+      content: newMessage.trim(),
+      attachment_url: attachmentUrl,
+      attachment_type: attachmentType,
+      attachment_storage_path: attachmentPath,
+      attachment_size: attachmentSize,
+      scheduled_at: scheduledAt.toISOString(),
+      status: "pending",
+      created_by_id: activeStaff.id,
+      created_by_name: activeStaff.name,
+    });
+
+    if (error) {
+      toast.show("予約失敗: " + error.message, "error");
+    } else {
+      toast.show(`✅ ${scheduleDate} ${scheduleTime} に送信予約しました`, "success");
+      setNewMessage("");
+      if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+      setPendingAttachment(null);
+      setPendingPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setShowScheduleModal(false);
+      loadScheduledMessages();
+    }
+    setLoading(false);
+  };
+
+  /**
+   * 予約をキャンセル（論理削除）
+   */
+  const cancelScheduledMessage = async (id: number) => {
+    if (!confirm("この予約をキャンセルしますか？")) return;
+    const { error } = await supabase
+      .from("chat_scheduled_messages")
+      .update({ status: "cancelled" })
+      .eq("id", id);
+    if (error) {
+      toast.show("キャンセル失敗: " + error.message, "error");
+    } else {
+      toast.show("予約をキャンセルしました", "success");
+      loadScheduledMessages();
+    }
+  };
+
+  /**
+   * 予約を編集モードで開く
+   */
+  const editScheduledMessage = (s: ScheduledMessage) => {
+    setNewMessage(s.content || "");
+    const dt = new Date(s.scheduled_at);
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const hh = String(dt.getHours()).padStart(2, "0");
+    const mi = String(dt.getMinutes()).padStart(2, "0");
+    setScheduleDate(`${yyyy}-${mm}-${dd}`);
+    setScheduleTime(`${hh}:${mi}`);
+    setEditingScheduleId(s.id);
+    setShowScheduleList(false);
+    setShowScheduleModal(true);
+  };
+
+  /**
+   * 今すぐ送信（予約を即時送信に変更）
+   */
+  const sendScheduledNow = async (s: ScheduledMessage) => {
+    if (!confirm("この予約を今すぐ送信しますか？")) return;
+    // scheduled_at を現在時刻に更新 → 次のCron回しで送信される
+    // ただし即時反映のため API を呼ぶ方がよいが、シンプルに scheduled_at を過去にして
+    // ユーザーが次回 Cron を待てば送信される仕組みでも OK
+    // → ここでは直接 chat_messages に insert + status='sent' 更新で即送信
+    const messageType = s.attachment_url
+      ? s.attachment_type?.startsWith("image/")
+        ? "image"
+        : s.attachment_type?.startsWith("video/")
+        ? "video"
+        : "file"
+      : "text";
+    const { data: inserted, error: msgErr } = await supabase
+      .from("chat_messages")
+      .insert({
+        conversation_id: s.conversation_id,
+        sender_type: s.sender_type,
+        sender_id: s.sender_id,
+        sender_name: s.sender_name,
+        content: s.content || "",
+        message_type: messageType,
+        attachment_url: s.attachment_url,
+        attachment_type: s.attachment_type,
+      })
+      .select()
+      .single();
+    if (msgErr || !inserted) {
+      toast.show("送信失敗: " + (msgErr?.message || ""), "error");
+      return;
+    }
+    // 添付登録
+    if (s.attachment_storage_path && s.attachment_url && s.attachment_type) {
+      await supabase.from("chat_attachments").insert({
+        conversation_id: s.conversation_id,
+        message_id: inserted.id,
+        storage_path: s.attachment_storage_path,
+        file_url: s.attachment_url,
+        file_type: s.attachment_type,
+        uploaded_by_type: s.sender_type,
+        uploaded_by_id: s.sender_id,
+        expires_at: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
+    // 会話更新
+    await supabase
+      .from("chat_conversations")
+      .update({
+        last_message_at: new Date().toISOString(),
+        last_message_preview: (s.content || "").slice(0, 80) || "📎 添付",
+      })
+      .eq("id", s.conversation_id);
+    // 予約を sent に
+    await supabase
+      .from("chat_scheduled_messages")
+      .update({
+        status: "sent",
+        sent_at: new Date().toISOString(),
+        sent_message_id: inserted.id,
+      })
+      .eq("id", s.id);
+    toast.show("送信しました", "success");
+    loadScheduledMessages();
   };
 
   // ─── AI 機能実行 ───
@@ -904,6 +1232,29 @@ export default function ChatPage() {
                   {participants.length}人（{participants.filter((p) => p.participant_type === "therapist").length}セラ /{" "}
                   {participants.filter((p) => p.participant_type === "staff").length}スタ）
                 </div>
+                <div style={{ flex: 1 }} />
+                {/* 予約メッセージ一覧ボタン */}
+                {scheduledList.filter((s) => s.status === "pending").length > 0 && (
+                  <button
+                    onClick={() => setShowScheduleList(true)}
+                    style={{
+                      padding: "5px 10px",
+                      border: `1px solid #a855f744`,
+                      backgroundColor: "#a855f718",
+                      color: "#a855f7",
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                    title="予約済みメッセージを確認"
+                  >
+                    📅 予約 {scheduledList.filter((s) => s.status === "pending").length}件
+                  </button>
+                )}
               </div>
 
               {/* メッセージリスト */}
@@ -1300,6 +1651,26 @@ export default function ChatPage() {
                     fontFamily: "inherit",
                   }}
                 />
+                {/* 📅 予約送信ボタン */}
+                <button
+                  onClick={openScheduleModal}
+                  disabled={loading || uploading || (!newMessage.trim() && !pendingAttachment)}
+                  title="日時を指定して送信予約"
+                  style={{
+                    padding: "10px 12px",
+                    border: `1px solid ${T.border}`,
+                    backgroundColor: T.card,
+                    color: T.textSub,
+                    borderRadius: 10,
+                    fontSize: 15,
+                    cursor: loading || uploading || (!newMessage.trim() && !pendingAttachment) ? "not-allowed" : "pointer",
+                    opacity: loading || uploading || (!newMessage.trim() && !pendingAttachment) ? 0.5 : 1,
+                    flexShrink: 0,
+                    alignSelf: "stretch",
+                  }}
+                >
+                  📅
+                </button>
                 <button
                   onClick={() => sendMessage()}
                   disabled={loading || uploading || (!newMessage.trim() && !pendingAttachment)}
@@ -1669,6 +2040,254 @@ export default function ChatPage() {
                 }}
               >
                 作成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ 送信予約モーダル ═══ */}
+      {showScheduleModal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 200, backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          }}
+          onClick={() => setShowScheduleModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 440, width: "100%", backgroundColor: T.card, borderRadius: 12,
+              padding: 22, color: T.text,
+            }}
+          >
+            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              📅 {editingScheduleId !== null ? "予約を編集" : "送信予約"}
+            </h3>
+            {/* メッセージプレビュー */}
+            <div style={{ padding: 10, backgroundColor: T.cardAlt, borderRadius: 8, marginBottom: 14, fontSize: 12, lineHeight: 1.6, maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {newMessage.trim() || <span style={{ color: T.textMuted }}>(添付のみ)</span>}
+              {pendingAttachment && (
+                <div style={{ marginTop: 6, fontSize: 10, color: T.textSub }}>
+                  {pendingAttachment.type.startsWith("image/") ? "📷 " : pendingAttachment.type.startsWith("video/") ? "🎬 " : "📎 "}
+                  {pendingAttachment.name}
+                </div>
+              )}
+            </div>
+
+            {/* 日付・時刻 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, color: T.textSub, display: "block", marginBottom: 4 }}>日付</label>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  style={{
+                    width: "100%", padding: "8px 10px", borderRadius: 8,
+                    border: `1px solid ${T.border}`, backgroundColor: T.bg, color: T.text,
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: T.textSub, display: "block", marginBottom: 4 }}>時刻</label>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  style={{
+                    width: "100%", padding: "8px 10px", borderRadius: 8,
+                    border: `1px solid ${T.border}`, backgroundColor: T.bg, color: T.text,
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* クイック選択 */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 11, color: T.textSub, display: "block", marginBottom: 6 }}>
+                クイック選択
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {[
+                  { k: "tomorrow_9" as const,  label: "明日 9:00" },
+                  { k: "tomorrow_12" as const, label: "明日 12:00" },
+                  { k: "monday_9" as const,    label: "次の月曜 9:00" },
+                  { k: "next_week" as const,   label: "1週間後 9:00" },
+                ].map((q) => (
+                  <button
+                    key={q.k}
+                    onClick={() => setQuickSchedule(q.k)}
+                    style={{
+                      padding: "4px 10px",
+                      border: `1px solid ${T.border}`,
+                      backgroundColor: T.cardAlt,
+                      color: T.text,
+                      fontSize: 11,
+                      borderRadius: 999,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p style={{ fontSize: 10, color: T.textMuted, margin: "0 0 14px", lineHeight: 1.6 }}>
+              💡 予約後はスタッフ側の会話ヘッダーから編集・キャンセルできます。送信時間は ±10分の誤差があります。
+            </p>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => { setShowScheduleModal(false); setEditingScheduleId(null); }}
+                disabled={loading || uploading}
+                style={{
+                  padding: "8px 16px", backgroundColor: T.cardAlt, color: T.text,
+                  border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, cursor: "pointer",
+                }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={confirmSchedule}
+                disabled={loading || uploading}
+                style={{
+                  padding: "8px 20px", backgroundColor: "#a855f7", color: "#fff",
+                  border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  cursor: loading || uploading ? "not-allowed" : "pointer",
+                  opacity: loading || uploading ? 0.6 : 1,
+                }}
+              >
+                {loading || uploading ? "処理中..." : editingScheduleId !== null ? "更新する" : "📅 予約する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ 予約一覧モーダル ═══ */}
+      {showScheduleList && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 200, backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          }}
+          onClick={() => setShowScheduleList(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 560, width: "100%", maxHeight: "85vh", overflowY: "auto",
+              backgroundColor: T.card, borderRadius: 12, padding: 22, color: T.text,
+            }}
+          >
+            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              📅 予約メッセージ一覧
+              <span style={{ fontSize: 11, color: T.textSub, fontWeight: 400 }}>
+                ({scheduledList.filter((s) => s.status === "pending").length}件)
+              </span>
+            </h3>
+            {scheduledList.length === 0 ? (
+              <div style={{ padding: 30, textAlign: "center", color: T.textMuted, fontSize: 12 }}>
+                この会話に予約メッセージはありません。
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {scheduledList.map((s) => {
+                  const dt = new Date(s.scheduled_at);
+                  const isPast = dt.getTime() < Date.now();
+                  const isFailed = s.status === "failed";
+                  return (
+                    <div
+                      key={s.id}
+                      style={{
+                        padding: 12,
+                        backgroundColor: isFailed ? "#c4555508" : T.cardAlt,
+                        border: `1px solid ${isFailed ? "#c4555544" : T.border}`,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: isFailed ? "#c45555" : "#a855f7" }}>
+                          {isFailed ? "⚠ 失敗" : isPast ? "⏳ 処理待ち" : "📅"} {dt.toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        <span style={{ flex: 1 }} />
+                        <button
+                          onClick={() => sendScheduledNow(s)}
+                          style={{
+                            padding: "3px 8px",
+                            border: `1px solid ${T.border}`,
+                            backgroundColor: "#4a7c59",
+                            color: "#fff",
+                            fontSize: 10,
+                            borderRadius: 6,
+                            cursor: "pointer",
+                          }}
+                          title="予約を無視して今すぐ送信"
+                        >
+                          ⚡ 今すぐ送信
+                        </button>
+                        <button
+                          onClick={() => editScheduledMessage(s)}
+                          style={{
+                            padding: "3px 8px",
+                            border: `1px solid ${T.border}`,
+                            backgroundColor: T.card,
+                            color: T.text,
+                            fontSize: 10,
+                            borderRadius: 6,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✏️ 編集
+                        </button>
+                        <button
+                          onClick={() => cancelScheduledMessage(s.id)}
+                          style={{
+                            padding: "3px 8px",
+                            border: `1px solid #c45555`,
+                            backgroundColor: "#c4555518",
+                            color: "#c45555",
+                            fontSize: 10,
+                            borderRadius: 6,
+                            cursor: "pointer",
+                          }}
+                        >
+                          🗑 取消
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word", color: T.text }}>
+                        {s.content || <span style={{ color: T.textMuted, fontStyle: "italic" }}>(本文なし)</span>}
+                      </div>
+                      {s.attachment_url && s.attachment_type && (
+                        <div style={{ marginTop: 6, fontSize: 10, color: T.textSub }}>
+                          {s.attachment_type.startsWith("image/") ? "📷 画像添付" : s.attachment_type.startsWith("video/") ? "🎬 動画添付" : "📎 添付"}
+                        </div>
+                      )}
+                      {isFailed && (
+                        <div style={{ marginTop: 6, fontSize: 10, color: "#c45555" }}>
+                          送信エラー → 編集して再予約してください
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+              <button
+                onClick={() => setShowScheduleList(false)}
+                style={{
+                  padding: "8px 20px", backgroundColor: "#c3a782", color: "#fff",
+                  border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer",
+                }}
+              >
+                閉じる
               </button>
             </div>
           </div>
