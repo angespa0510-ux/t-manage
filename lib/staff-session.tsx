@@ -40,6 +40,7 @@ function getIdleTimeoutMs(staff: ActiveStaff): number {
 
 const StaffSessionCtx = createContext<{
   activeStaff: ActiveStaff;
+  isRestored: boolean;
   isManager: boolean;
   canAccessTaxPortal: boolean;
   canAccessCashDashboard: boolean;
@@ -51,6 +52,7 @@ const StaffSessionCtx = createContext<{
   dismissPinChangeTemporarily: () => void;
 }>({
   activeStaff: null,
+  isRestored: false,
   isManager: false,
   canAccessTaxPortal: false,
   canAccessCashDashboard: false,
@@ -64,6 +66,8 @@ const StaffSessionCtx = createContext<{
 
 export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const [activeStaff, setActiveStaff] = useState<ActiveStaff>(null);
+  // セッション復元完了フラグ（ページ遷移直後の誤リダイレクトを防ぐため）
+  const [isRestored, setIsRestored] = useState(false);
   // PIN 変更モーダルを「このセッション中だけ後回しにする」フラグ（localStorage には保存しない）
   const [pinChangeDismissed, setPinChangeDismissed] = useState(false);
   const activeStaffRef = useRef<ActiveStaff>(null);
@@ -146,6 +150,10 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
           });
       }
     } catch {}
+    finally {
+      // 復元完了を通知（保存なし・エラー・正常復元すべてのケースで true に）
+      setIsRestored(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -311,6 +319,7 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
     <StaffSessionCtx.Provider
       value={{
         activeStaff,
+        isRestored,
         isManager,
         canAccessTaxPortal,
         canAccessCashDashboard,

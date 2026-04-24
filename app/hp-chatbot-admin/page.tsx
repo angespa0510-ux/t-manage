@@ -67,7 +67,7 @@ export default function HpChatbotAdminPage() {
   const router = useRouter();
   const { dark, T } = useTheme();
   const toast = useToast();
-  const { activeStaff, isManager } = useStaffSession();
+  const { activeStaff, isRestored, isManager } = useStaffSession();
 
   const [tab, setTab] = useState<"faq" | "cache" | "logs" | "settings">("faq");
   const [faqs, setFaqs] = useState<Faq[]>([]);
@@ -78,16 +78,16 @@ export default function HpChatbotAdminPage() {
   const [filter, setFilter] = useState<"all" | "ai_only" | "low_rating">("all");
 
   useEffect(() => {
-    if (activeStaff === undefined) return;
+    if (!isRestored) return;
     if (!activeStaff) {
-      router.push("/");
+      router.push("/dashboard");
       return;
     }
     if (!isManager) {
       toast.show("アクセス権がありません", "error");
       router.push("/dashboard");
     }
-  }, [activeStaff, isManager, router, toast]);
+  }, [isRestored, activeStaff, isManager, router, toast]);
 
   const loadFaqs = useCallback(async () => {
     const { data } = await supabase

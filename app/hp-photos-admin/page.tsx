@@ -35,7 +35,7 @@ export default function HpPhotosAdminPage() {
   const router = useRouter();
   const { dark, T } = useTheme();
   const toast = useToast();
-  const { activeStaff, isManager } = useStaffSession();
+  const { activeStaff, isRestored, isManager } = useStaffSession();
 
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [selectedTh, setSelectedTh] = useState<Therapist | null>(null);
@@ -50,16 +50,16 @@ export default function HpPhotosAdminPage() {
   });
 
   useEffect(() => {
-    if (activeStaff === undefined) return;
+    if (!isRestored) return;
     if (!activeStaff) {
-      router.push("/");
+      router.push("/dashboard");
       return;
     }
     if (!isManager) {
       toast.show("アクセス権がありません", "error");
       router.push("/dashboard");
     }
-  }, [activeStaff, isManager, router, toast]);
+  }, [isRestored, activeStaff, isManager, router, toast]);
 
   const loadTherapists = useCallback(async () => {
     const { data } = await supabase

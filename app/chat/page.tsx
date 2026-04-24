@@ -51,7 +51,7 @@ export default function ChatPage() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
   const toast = useToast();
-  const { activeStaff } = useStaffSession();
+  const { activeStaff, isRestored } = useStaffSession();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<number | null>(null);
@@ -70,11 +70,12 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ─── 未ログインはログインページへ ───
+  // ─── 未ログインはログインページ (/dashboard) へ ───
+  // isRestored が true になるまで待つ（localStorage からのセッション復元を完了させる）
   useEffect(() => {
-    if (activeStaff === undefined) return;
-    if (!activeStaff) router.push("/");
-  }, [activeStaff, router]);
+    if (!isRestored) return;
+    if (!activeStaff) router.push("/dashboard");
+  }, [isRestored, activeStaff, router]);
 
   // ─── 初期ロード ───
   const loadConversations = useCallback(async () => {
