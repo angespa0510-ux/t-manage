@@ -223,6 +223,32 @@ export default function ChatPage() {
           loadConversations();
         }
       })
+      // 相手の既読状態を Realtime 反映（既読マーク更新用）
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_participants" }, (payload: any) => {
+        const updated = payload.new as Participant;
+        // 現在会話の participants を更新
+        if (updated.conversation_id === currentConvId) {
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.conversation_id === updated.conversation_id &&
+              p.participant_type === updated.participant_type &&
+              p.participant_id === updated.participant_id
+                ? { ...p, last_read_message_id: updated.last_read_message_id }
+                : p,
+            ),
+          );
+        }
+        // 会話一覧の allParticipants も更新
+        setAllParticipants((prev) =>
+          prev.map((p) =>
+            p.conversation_id === updated.conversation_id &&
+            p.participant_type === updated.participant_type &&
+            p.participant_id === updated.participant_id
+              ? { ...p, last_read_message_id: updated.last_read_message_id }
+              : p,
+          ),
+        );
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -521,6 +547,41 @@ export default function ChatPage() {
     // グループ: 3人まで列挙、残りは "他◯名"
     if (names.length <= 3) return names.join(", ");
     return `${names.slice(0, 3).join(", ")} 他${names.length - 3}名`;
+  };
+
+  /**
+   * 既読マーク判定
+   * - 自分が送ったメッセージに対して、他の参加者がどこまで読んだかを確認
+   * - 戻り値: null=表示しない / "" or "既読" or "既読 N/M"
+   *
+   * 仕様:
+   *   DM → 相手が既読なら "既読" / まだなら ""
+   *   グループ → 全員既読なら "既読" / 一部なら "既読 N/M" / 誰も既読でないなら ""
+   */
+  const getReadStatus = (msg: Message): string | null => {
+    if (!activeStaff || !currentConv) return null;
+    // 自分が送ったメッセージのみ既読表示対象
+    if (!(msg.sender_type === "staff" && msg.sender_id === activeStaff.id)) return null;
+
+    // 現在会話の参加者（自分以外）
+    const others = participants.filter(
+      (p) => !(p.participant_type === "staff" && p.participant_id === activeStaff.id),
+    );
+    if (others.length === 0) return null;
+
+    // このメッセージID以上まで読んでいる人の数
+    const readCount = others.filter(
+      (p) => (p.last_read_message_id || 0) >= msg.id,
+    ).length;
+
+    if (currentConv.type === "dm") {
+      // DM: 相手が読んだら "既読"、まだなら空
+      return readCount > 0 ? "既読" : "";
+    }
+    // グループ or broadcast
+    if (readCount === 0) return "";
+    if (readCount >= others.length) return "既読";
+    return `既読 ${readCount}/${others.length}`;
   };
 
   if (!activeStaff) return <div style={{ padding: 40 }}>読み込み中...</div>;
@@ -976,9 +1037,22 @@ export default function ChatPage() {
                             marginTop: 2,
                             textAlign: isMine ? "right" : "left",
                             padding: "0 8px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            justifyContent: isMine ? "flex-end" : "flex-start",
                           }}
                         >
-                          {formatTime(msg.created_at)}
+                          {isMine && (() => {
+                            const read = getReadStatus(msg);
+                            if (read === null || read === "") return null;
+                            return (
+                              <span style={{ color: "#85a8c4", fontWeight: 500, fontSize: 9 }}>
+                                ✓ {read}
+                              </span>
+                            );
+                          })()}
+                          <span>{formatTime(msg.created_at)}</span>
                         </div>
                       </div>
                     </div>

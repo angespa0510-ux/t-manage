@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 
-type Tab = "cti" | "chrome" | "video" | "sokuho" | "hp" | "mail";
+type Tab = "cti" | "chrome" | "video" | "sokuho" | "hp" | "mail" | "chat-ai";
 
 export default function SystemSetup() {
   const router = useRouter();
@@ -155,6 +155,7 @@ export default function SystemSetup() {
             { key: "video" as Tab, label: "🎥 AI動画生成", desc: "セットアップ" },
             { key: "sokuho" as Tab, label: "📢 リアルタイム速報", desc: "Bluesky / エステ魂" },
             { key: "mail" as Tab, label: "✉️ メール送信", desc: "パスワード再発行" },
+            { key: "chat-ai" as Tab, label: "🧠 チャットAI分析", desc: "ターミナル実行手順" },
           ]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className="flex-1 py-4 rounded-2xl cursor-pointer text-center"
@@ -1603,6 +1604,222 @@ STORE_ID=1`}
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                   <p className="text-[12px] font-medium mb-1">💆 セラピストパスワード再発行</p>
                   <p className="text-[10px]" style={{ color: T.textMuted }}>セラピストマイページで「パスワードを忘れた方はこちら」→ 電話番号入力 → 登録メールアドレスに新パスワードを送信</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== チャットAI分析タブ ===== */}
+        {tab === "chat-ai" && (
+          <div className="space-y-6">
+            {/* タイトル */}
+            <div className="p-5 rounded-2xl" style={{ ...cardStyle, borderLeft: "3px solid #a855f7" }}>
+              <h2 className="text-[16px] font-semibold mb-1" style={{ color: "#a855f7" }}>🧠 チャットAI分析 - ターミナル実行手順</h2>
+              <p className="text-[12px]" style={{ color: T.textMuted, lineHeight: 1.7 }}>
+                スタッフ↔セラピスト間のチャット履歴を Claude MAX プランで分析します。<br />
+                API コストが<strong style={{ color: T.text }}>完全ゼロ</strong>で、毎週日曜深夜などにローカルで手動実行する運用です。
+              </p>
+            </div>
+
+            {/* 3つの実行方法比較 */}
+            <div className="p-5 rounded-2xl" style={cardStyle}>
+              <h3 className="text-[14px] font-semibold mb-3">📊 実行方法 3パターンの比較</h3>
+              <div className="space-y-2 text-[11px]" style={{ lineHeight: 1.7 }}>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <div className="font-medium mb-1">🅰️ Vercel Cron（自動）</div>
+                  <div style={{ color: T.textMuted }}>
+                    毎週日曜深夜3時に自動実行 / <strong style={{ color: "#c45555" }}>API 従量 $0.02〜0.10/回</strong> / Anthropic API Key 必要
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <div className="font-medium mb-1">🅱️ 管理画面から手動実行</div>
+                  <div style={{ color: T.textMuted }}>
+                    /chat-insights の「今すぐ分析」ボタン / <strong style={{ color: "#c45555" }}>API 従量</strong> / Anthropic API Key 必要
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: "#a855f718", border: "1px solid #a855f744" }}>
+                  <div className="font-medium mb-1" style={{ color: "#a855f7" }}>🅲️ Claude MAX でターミナル実行 ← これ</div>
+                  <div style={{ color: T.text }}>
+                    MAX プラン定額内で実行 / <strong>API 費用 ゼロ</strong> / ローカルPC でコマンド実行
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 事前準備 */}
+            <div className="p-5 rounded-2xl" style={cardStyle}>
+              <h3 className="text-[14px] font-semibold mb-3">🔧 事前準備（初回のみ）</h3>
+              <div className="space-y-3 text-[12px]" style={{ lineHeight: 1.8 }}>
+                <div>
+                  <p className="mb-1 font-medium">① Node.js のインストール</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>
+                    <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer" style={{ color: "#c3a782", textDecoration: "underline" }}>nodejs.org</a> から
+                    LTS 版をダウンロードしてインストール（一度だけ）
+                  </p>
+                </div>
+                <div>
+                  <p className="mb-1 font-medium">② T-MANAGE リポジトリをクローン</p>
+                  <pre className="p-2 rounded text-[10px] font-mono overflow-x-auto" style={{ backgroundColor: T.cardAlt, color: T.text }}>
+{`git clone https://github.com/angespa0510-ux/t-manage.git
+cd t-manage/scripts/chat-insights
+npm install`}
+                  </pre>
+                </div>
+                <div>
+                  <p className="mb-1 font-medium">③ Supabase の接続情報を取得</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>
+                    Supabase Dashboard → プロジェクト → <strong>Settings</strong> → <strong>API</strong> から以下をコピー：
+                  </p>
+                  <ul className="text-[11px] mt-1 pl-4 space-y-1" style={{ color: T.textMuted }}>
+                    <li>• <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>Project URL</code> （SUPABASE_URL）</li>
+                    <li>• <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>service_role</code> キー（SUPABASE_SERVICE_KEY・非公開）</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 毎週の実行手順 */}
+            <div className="p-5 rounded-2xl" style={cardStyle}>
+              <h3 className="text-[14px] font-semibold mb-3">📋 毎週の実行手順（4ステップ）</h3>
+
+              {/* STEP 1 */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ backgroundColor: "#a855f7", color: "#fff" }}>1</span>
+                  <span className="text-[13px] font-medium">チャットログをエクスポート</span>
+                </div>
+                <p className="text-[11px] mb-2" style={{ color: T.textMuted }}>ターミナルを開いて：</p>
+                <pre className="p-3 rounded text-[10px] font-mono overflow-x-auto" style={{ backgroundColor: T.cardAlt, color: T.text, lineHeight: 1.7 }}>
+{`cd t-manage/scripts/chat-insights
+
+# 環境変数をセット（Mac/Linux）
+export SUPABASE_URL="https://cbewozzdyjqmhzkxsjqo.supabase.co"
+export SUPABASE_SERVICE_KEY="eyJ..."   # service_role キー
+
+# Windows PowerShell の場合
+# $env:SUPABASE_URL="https://cbewozzdyjqmhzkxsjqo.supabase.co"
+# $env:SUPABASE_SERVICE_KEY="eyJ..."
+
+# 過去7日分をエクスポート
+node export-chat-logs.mjs`}
+                </pre>
+                <p className="text-[11px] mt-2" style={{ color: T.textMuted }}>
+                  ↓ <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>./out/</code> フォルダに 3 つのファイルが作られる
+                </p>
+                <ul className="text-[11px] mt-1 pl-4 space-y-1" style={{ color: T.textMuted }}>
+                  <li>• <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>chat-log-xxx.txt</code>（ログ本体）</li>
+                  <li>• <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>analysis-prompt.txt</code>（Claude に渡すプロンプト）</li>
+                  <li>• <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>period.json</code>（期間情報）</li>
+                </ul>
+              </div>
+
+              {/* STEP 2 */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ backgroundColor: "#a855f7", color: "#fff" }}>2</span>
+                  <span className="text-[13px] font-medium">Claude MAX にプロンプトを貼り付け</span>
+                </div>
+                <p className="text-[11px] mb-2" style={{ color: T.textMuted }}>
+                  <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>out/analysis-prompt.txt</code> の中身を全選択コピーして、以下のどちらかに貼り付け：
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="p-3 rounded-xl text-[11px]" style={{ backgroundColor: T.cardAlt }}>
+                    <div className="font-medium mb-1">💻 Claude Code（推奨）</div>
+                    <div style={{ color: T.textMuted }}>ターミナルで <code>claude</code> コマンドを実行して貼り付け</div>
+                  </div>
+                  <div className="p-3 rounded-xl text-[11px]" style={{ backgroundColor: T.cardAlt }}>
+                    <div className="font-medium mb-1">🌐 claude.ai（ブラウザ）</div>
+                    <div style={{ color: T.textMuted }}>Claude MAX プランの Web UI に貼り付けて送信</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 3 */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ backgroundColor: "#a855f7", color: "#fff" }}>3</span>
+                  <span className="text-[13px] font-medium">返ってきた JSON を保存</span>
+                </div>
+                <p className="text-[11px] mb-2" style={{ color: T.textMuted }}>
+                  Claude が返した JSON ブロック（<code>{'{'} "insights": [...] {'}'}</code>）をコピーして、
+                </p>
+                <pre className="p-3 rounded text-[10px] font-mono" style={{ backgroundColor: T.cardAlt, color: T.text }}>
+{`out/analysis-result.json  ← このファイルとして保存`}
+                </pre>
+                <p className="text-[11px] mt-2" style={{ color: "#f59e0b" }}>
+                  💡 <code>```json</code> の装飾が混ざっていてもOK（CLI で自動除去されます）
+                </p>
+              </div>
+
+              {/* STEP 4 */}
+              <div className="mb-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ backgroundColor: "#a855f7", color: "#fff" }}>4</span>
+                  <span className="text-[13px] font-medium">Supabase に取り込み</span>
+                </div>
+                <pre className="p-3 rounded text-[10px] font-mono overflow-x-auto" style={{ backgroundColor: T.cardAlt, color: T.text }}>
+{`node import-chat-insights.mjs`}
+                </pre>
+                <p className="text-[11px] mt-2" style={{ color: T.textMuted }}>
+                  完了すると <code style={{ backgroundColor: T.cardAlt, padding: "1px 4px", borderRadius: 3 }}>chat_insights</code> テーブルに保存され、
+                  <a href="/chat-insights" style={{ color: "#c3a782", textDecoration: "underline", marginLeft: 4 }}>/chat-insights ページ</a>で閲覧可能になります。
+                </p>
+              </div>
+            </div>
+
+            {/* よくある質問 */}
+            <div className="p-5 rounded-2xl" style={cardStyle}>
+              <h3 className="text-[14px] font-semibold mb-3">❓ よくある質問</h3>
+              <div className="space-y-3 text-[12px]" style={{ lineHeight: 1.7 }}>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="font-medium mb-1">Q. 期間を変えたい</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>
+                    <code>node export-chat-logs.mjs 14</code> のように日数を指定（過去14日分）
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="font-medium mb-1">Q. 毎週手動実行するのは面倒</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>
+                    将来的には、月初に 1 回だけ「先月分」を分析する運用もおすすめ。
+                    API 無料なので分析回数の制限なし。
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="font-medium mb-1">Q. JSON パースエラーが出る</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>
+                    Claude の出力に説明文が混ざると失敗することがあります。
+                    <strong>{'{ "insights": [...] }'}</strong> の JSON ブロックだけ抜き出して保存してください。
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
+                  <p className="font-medium mb-1">Q. <code>scope_id が null です</code> という警告</p>
+                  <p className="text-[11px]" style={{ color: T.textMuted }}>
+                    Claude が出したスタッフ名・セラピスト名が DB と一致しない場合。表示には影響ないが、
+                    フィルタ精度のため名前を揃えると良い。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* リンク */}
+            <div className="p-5 rounded-2xl" style={cardStyle}>
+              <h3 className="text-[14px] font-semibold mb-3">🔗 関連リンク</h3>
+              <div className="space-y-2 text-[12px]">
+                <div>
+                  <a href="/chat-insights" style={{ color: "#c3a782", textDecoration: "underline" }}>
+                    📊 /chat-insights - 分析結果閲覧ページ
+                  </a>
+                </div>
+                <div>
+                  <a href="https://github.com/angespa0510-ux/t-manage/tree/main/scripts/chat-insights" target="_blank" rel="noopener noreferrer" style={{ color: "#c3a782", textDecoration: "underline" }}>
+                    📁 GitHub - scripts/chat-insights (README.md あり)
+                  </a>
+                </div>
+                <div>
+                  <a href="https://supabase.com/dashboard/project/cbewozzdyjqmhzkxsjqo/settings/api" target="_blank" rel="noopener noreferrer" style={{ color: "#c3a782", textDecoration: "underline" }}>
+                    🔑 Supabase - API 設定（service_role キー取得）
+                  </a>
                 </div>
               </div>
             </div>

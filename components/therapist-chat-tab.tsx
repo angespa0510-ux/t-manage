@@ -215,6 +215,28 @@ export default function TherapistChatTab({
             .eq("participant_id", therapistId);
         },
       )
+      // 既読マーク Realtime 反映
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_participants",
+          filter: `conversation_id=eq.${selected}`,
+        },
+        (payload: { new: Participant }) => {
+          const updated = payload.new as Participant;
+          setParticipantsAll((prev) =>
+            prev.map((p) =>
+              p.conversation_id === updated.conversation_id &&
+              p.participant_type === updated.participant_type &&
+              p.participant_id === updated.participant_id
+                ? { ...p, last_read_message_id: updated.last_read_message_id, last_read_at: updated.last_read_at }
+                : p,
+            ),
+          );
+        },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -443,6 +465,35 @@ export default function TherapistChatTab({
   const selectedConv = conversations.find((c) => c.id === selected);
   const selectedMeta = selectedConv ? conversationMeta(selectedConv) : null;
 
+  /**
+   * 既読マーク判定（セラピスト側）
+   * 自分が送ったメッセージに対して、相手（スタッフ・他セラピスト）が読んだかを見る
+   */
+  const getReadStatus = (msg: Message): string | null => {
+    if (!selectedConv) return null;
+    // 自分が送ったメッセージのみ
+    if (!(msg.sender_type === "therapist" && msg.sender_id === therapistId)) return null;
+
+    // 現在会話の参加者（自分以外）
+    const others = participantsAll.filter(
+      (p) =>
+        p.conversation_id === selectedConv.id &&
+        !(p.participant_type === "therapist" && p.participant_id === therapistId),
+    );
+    if (others.length === 0) return null;
+
+    const readCount = others.filter(
+      (p) => (p.last_read_message_id || 0) >= msg.id,
+    ).length;
+
+    if (selectedConv.type === "dm") {
+      return readCount > 0 ? "既読" : "";
+    }
+    if (readCount === 0) return "";
+    if (readCount >= others.length) return "既読";
+    return `既読 ${readCount}/${others.length}`;
+  };
+
   return (
     <div
       style={{
@@ -615,9 +666,20 @@ export default function TherapistChatTab({
                   )}
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
                     {isMine && (
-                      <span style={{ fontSize: 9, color: C.textFaint }}>
-                        {fmtDateTime(m.created_at)}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                        {(() => {
+                          const read = getReadStatus(m);
+                          if (read === null || read === "") return null;
+                          return (
+                            <span style={{ fontSize: 9, color: "#85a8c4", fontWeight: 500 }}>
+                              ✓ {read}
+                            </span>
+                          );
+                        })()}
+                        <span style={{ fontSize: 9, color: C.textFaint }}>
+                          {fmtDateTime(m.created_at)}
+                        </span>
+                      </div>
                     )}
                     <div
                       style={{
