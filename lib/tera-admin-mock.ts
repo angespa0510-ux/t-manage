@@ -262,7 +262,7 @@ export const DUMMY_INSTANCES: TmanageInstance[] = [
       { id: "t7", category: "data", title: "出張コース料金体系の確定", description: "出張○○分コースとして登録する料金設定", status: "pending", assignee: "instance_side", due_date: "2026-10-31" },
 
       // システム設定
-      { id: "t8", category: "system", title: "Supabase Pro プラン移行", description: "Free → Pro ($25/月) にアップグレード", status: "pending", assignee: "terasu_life", due_date: "2026-05-20" },
+      { id: "t8", category: "system", title: "Supabase Pro プラン移行", description: "Free → Pro ($25/月) にアップグレード", status: "done", assignee: "terasu_life", completed_at: "2026-04-24T22:30:00Z" },
       { id: "t9", category: "system", title: "マルチインスタンス基盤実装（Phase 2〜4）", description: "instance_id カラム追加・backfill・ラッパー関数", status: "pending", assignee: "terasu_life", due_date: "2026-11-30" },
       { id: "t10", category: "system", title: "リゼクシー専用インスタンス発行", description: "resexy.t-manage.jp の発行処理", status: "pending", assignee: "terasu_life", due_date: "2026-12-05" },
       { id: "t11", category: "system", title: "サブドメイン設定（resexy.t-manage.jp）", description: "Vercel にドメイン追加・SSL発行", status: "pending", assignee: "terasu_life", due_date: "2026-12-05" },
