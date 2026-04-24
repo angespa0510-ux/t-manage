@@ -39,11 +39,12 @@ const T = {
   accentDeep: SITE.color.pinkDeep,   // #c96b83
 } as const;
 
-// メインタブ（ボトムナビ4つ） / サブセグメント
-type MainTab = "home" | "work" | "money" | "learn";
+// メインタブ（ボトムナビ5つ: 中央にチャット） / サブセグメント
+type MainTab = "home" | "work" | "chat" | "money" | "learn";
 const MAIN_TABS: { key: MainTab; emoji: string; label: string }[] = [
   { key: "home",  emoji: "🏠", label: "ホーム" },
   { key: "work",  emoji: "💼", label: "ワーク" },
+  { key: "chat",  emoji: "💬", label: "チャット" },
   { key: "money", emoji: "💰", label: "マネー" },
   { key: "learn", emoji: "📖", label: "ラーン" },
 ];
@@ -99,17 +100,19 @@ export default function TherapistMyPage() {
   // ワーク / マネー / ラーン タブ内のサブセグメント
   const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers">("schedule");
   const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax">("salary");
-  const [learnSub, setLearnSub] = useState<"notifications" | "manual" | "chat">("notifications");
+  const [learnSub, setLearnSub] = useState<"notifications" | "manual">("notifications");
   // ボトムナビ→実タブへのディスパッチ
   const clickMain = (m: MainTab) => {
     if (m === "home") setTab("home");
     else if (m === "work") setTab(workSub);
+    else if (m === "chat") setTab("chat");
     else if (m === "money") setTab(moneySub);
     else setTab(learnSub);
   };
   // 現在の実タブから メインタブを逆引き
   const getMainTab = (t: string): MainTab => {
     if (t === "home") return "home";
+    if (t === "chat") return "chat";
     if (t === "shift" || t === "schedule" || t === "customers" || t === "work") return "work";
     if (t === "salary" || t === "cert" || t === "tax" || t === "money") return "money";
     return "learn";
@@ -162,6 +165,14 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [manualCats, setManualCats] = useState<ManualCategory[]>([]);
   const [manualArticles, setManualArticles] = useState<ManualArticle[]>([]);
   const [manualReads, setManualReads] = useState<number[]>([]);
+  // チャット（未読数・最新メッセージ）
+  const [chatUnread, setChatUnread] = useState(0);
+  const [chatLatestPreview, setChatLatestPreview] = useState<{
+    title: string;
+    preview: string;
+    at: string;
+    convId: number;
+  } | null>(null);
   const [manualUpdates, setManualUpdates] = useState<ManualUpdate[]>([]);
   const [manualSelCat, setManualSelCat] = useState<number | null>(null);
   const [manualSearch, setManualSearch] = useState("");
@@ -301,6 +312,108 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     };
     fetchAnnual();
   }, [therapist, salaryYear, salaryViewMode]);
+
+  // ─────────────────────────────────────
+  // チャット未読・最新プレビュー取得（ホームカード + ボトムナビバッジ用）
+  // ─────────────────────────────────────
+  useEffect(() => {
+    if (!therapist) return;
+    let cancelled = false;
+    const loadChatStatus = async () => {
+      // 自分が参加している会話の participants を取得
+      const { data: myParts } = await supabase
+        .from("chat_participants")
+        .select("conversation_id, last_read_message_id")
+        .eq("participant_type", "therapist")
+        .eq("participant_id", therapist.id);
+      if (cancelled || !myParts || myParts.length === 0) {
+        if (!cancelled) {
+          setChatUnread(0);
+          setChatLatestPreview(null);
+        }
+        return;
+      }
+      const convIds = myParts.map((p) => p.conversation_id);
+      // 会話メタ
+      const { data: convs } = await supabase
+        .from("chat_conversations")
+        .select("id, name, type, last_message_at, last_message_preview")
+        .in("id", convIds)
+        .eq("is_archived", false)
+        .order("last_message_at", { ascending: false, nullsFirst: false });
+      if (cancelled) return;
+      // 未読数: 各会話で「自分以外からのメッセージ」かつ「自分の last_read_message_id より新しい」ものをカウント
+      let totalUnread = 0;
+      for (const part of myParts) {
+        const { count } = await supabase
+          .from("chat_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("conversation_id", part.conversation_id)
+          .eq("is_deleted", false)
+          .gt("id", part.last_read_message_id || 0)
+          .not("sender_type", "eq", "therapist");
+        totalUnread += count || 0;
+      }
+      if (cancelled) return;
+      setChatUnread(totalUnread);
+      // 最新プレビュー（一番新しい会話）
+      const latest = convs?.[0];
+      if (latest) {
+        // 会話タイトル解決
+        let title = latest.name || "";
+        if (!title) {
+          if (latest.type === "broadcast") title = "📢 スタッフ一斉通知";
+          else {
+            // 相手の participant を取得
+            const { data: otherParts } = await supabase
+              .from("chat_participants")
+              .select("participant_type, participant_id, display_name")
+              .eq("conversation_id", latest.id);
+            const other = otherParts?.find(
+              (p) => !(p.participant_type === "therapist" && p.participant_id === therapist.id),
+            );
+            if (other) {
+              if (other.display_name) {
+                title = other.display_name;
+              } else if (other.participant_type === "staff") {
+                const { data: s } = await supabase
+                  .from("staff")
+                  .select("name")
+                  .eq("id", other.participant_id)
+                  .maybeSingle();
+                title = s?.name || "スタッフ";
+              } else {
+                title = "メンバー";
+              }
+            } else {
+              title = latest.type === "group" ? "グループ" : "メッセージ";
+            }
+          }
+        }
+        setChatLatestPreview({
+          title,
+          preview: latest.last_message_preview || "",
+          at: latest.last_message_at,
+          convId: latest.id,
+        });
+      } else {
+        setChatLatestPreview(null);
+      }
+    };
+    loadChatStatus();
+
+    // Realtime で再取得
+    const ch = supabase
+      .channel(`mypage-chat-${therapist.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => loadChatStatus())
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_conversations" }, () => loadChatStatus())
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_participants" }, () => loadChatStatus())
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(ch);
+    };
+  }, [therapist]);
   // リアルタイム同期
   useEffect(() => {
     const ch = supabase.channel("mypage-sync")
@@ -653,6 +766,132 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
         {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: FONT_SERIF }}>
 
+          {/* ═══ ブロック0 — 💬 チャット入口（最上部・未読があれば目立つ） ═══ */}
+          {(() => {
+            const fmtRel = (iso?: string) => {
+              if (!iso) return "";
+              const d = new Date(iso);
+              const diffMin = Math.floor((Date.now() - d.getTime()) / 60000);
+              if (diffMin < 1) return "たった今";
+              if (diffMin < 60) return `${diffMin}分前`;
+              const diffH = Math.floor(diffMin / 60);
+              if (diffH < 24) return `${diffH}時間前`;
+              const diffD = Math.floor(diffH / 24);
+              if (diffD < 7) return `${diffD}日前`;
+              return `${d.getMonth() + 1}/${d.getDate()}`;
+            };
+            const hasUnread = chatUnread > 0;
+            const hasHistory = chatLatestPreview !== null;
+            return (
+              <button
+                onClick={() => setTab("chat")}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "18px 18px 16px",
+                  backgroundColor: hasUnread ? T.accentBg : T.card,
+                  border: `1px solid ${hasUnread ? T.accent : T.border}`,
+                  borderLeftWidth: 3,
+                  borderLeftColor: T.accentDeep,
+                  cursor: "pointer",
+                  fontFamily: FONT_SERIF,
+                  position: "relative",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {/* ヘッダー行 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: hasHistory ? 10 : 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>💬</span>
+                    <div>
+                      <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, fontWeight: 500, marginBottom: 2 }}>MESSAGES</p>
+                      <p style={{ fontFamily: FONT_SERIF, fontSize: 14, letterSpacing: "0.08em", color: T.text, fontWeight: 600 }}>
+                        スタッフとのチャット
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {hasUnread && (
+                      <span style={{
+                        minWidth: 22,
+                        height: 22,
+                        padding: "0 7px",
+                        borderRadius: 999,
+                        backgroundColor: "#e74c5e",
+                        color: "#fff",
+                        fontFamily: FONT_SANS,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 1px 3px rgba(231,76,94,0.4)",
+                      }}>
+                        {chatUnread > 99 ? "99+" : chatUnread}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 14, color: T.textMuted }}>›</span>
+                  </div>
+                </div>
+
+                {/* プレビュー */}
+                {hasHistory && chatLatestPreview && (
+                  <div style={{
+                    marginTop: 6,
+                    paddingTop: 10,
+                    borderTop: `1px dashed ${T.border}`,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 10,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        fontSize: 11,
+                        color: T.textSub,
+                        fontWeight: 600,
+                        marginBottom: 2,
+                        letterSpacing: "0.02em",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}>
+                        {chatLatestPreview.title}
+                      </p>
+                      <p style={{
+                        fontSize: 12,
+                        color: T.textMuted,
+                        lineHeight: 1.5,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}>
+                        {chatLatestPreview.preview || "（メッセージなし）"}
+                      </p>
+                    </div>
+                    <span style={{ fontSize: 10, color: T.textFaint, flexShrink: 0, marginTop: 2 }}>
+                      {fmtRel(chatLatestPreview.at)}
+                    </span>
+                  </div>
+                )}
+
+                {!hasHistory && (
+                  <p style={{
+                    marginTop: 10,
+                    paddingTop: 10,
+                    borderTop: `1px dashed ${T.border}`,
+                    fontSize: 11,
+                    color: T.textMuted,
+                    lineHeight: 1.6,
+                  }}>
+                    スタッフからの連絡はここに届きます
+                  </p>
+                )}
+              </button>
+            );
+          })()}
+
           {/* ═══ ブロック1 — 本日のヒーロー ═══ */}
           {(() => {
             const bldName = getBuildingForDate(today);
@@ -1004,14 +1243,13 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             items = [
               { key: "notifications", emoji: "🔔", label: "お知らせ",   badge: notifUnread },
               { key: "manual",        emoji: "📖", label: "マニュアル", badge: manualUnread },
-              { key: "chat",          emoji: "💬", label: "チャット" },
             ];
           }
           const clickSub = (k: typeof tab) => {
             setTab(k);
             if (k === "shift" || k === "schedule" || k === "customers") setWorkSub(k);
             else if (k === "salary" || k === "cert" || k === "tax") setMoneySub(k);
-            else if (k === "notifications" || k === "manual" || k === "chat") setLearnSub(k);
+            else if (k === "notifications" || k === "manual") setLearnSub(k);
           };
           const sectionLabel = mainTab === "work" ? "WORK" : mainTab === "money" ? "MONEY" : "LEARN";
           const sectionTitle = mainTab === "work" ? "仕事" : mainTab === "money" ? "報酬・税務" : "情報・お知らせ";
@@ -2037,7 +2275,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
         backgroundColor: T.card,
         borderTop: `1px solid ${T.border}`,
         display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateColumns: "repeat(5, 1fr)",
         zIndex: 30,
         fontFamily: FONT_SERIF,
         boxShadow: "0 -1px 8px rgba(0,0,0,0.03)",
@@ -2048,7 +2286,12 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           const learnUnread = notifUnread + manualUnread;
           return MAIN_TABS.map((m) => {
             const active = mainTab === m.key;
-            const showBadge = m.key === "learn" && learnUnread > 0;
+            const badgeCount =
+              m.key === "learn" ? learnUnread :
+              m.key === "chat" ? chatUnread :
+              0;
+            const showBadge = badgeCount > 0;
+            const isChatTab = m.key === "chat";
             return (
               <button key={m.key} onClick={() => clickMain(m.key)}
                 style={{
@@ -2065,14 +2308,27 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                   color: active ? T.accent : T.textMuted,
                   transition: "color 0.2s ease",
                 }}>
-                <span style={{ fontSize: 20, lineHeight: 1 }}>{m.emoji}</span>
-                <span style={{ fontSize: 9, letterSpacing: "0.15em", fontFamily: FONT_DISPLAY, fontWeight: 500, textTransform: "uppercase" }}>{m.key}</span>
+                <span style={{
+                  fontSize: isChatTab ? 26 : 20,
+                  lineHeight: 1,
+                  // 中央チャットは少し浮かせる
+                  transform: isChatTab ? "translateY(-4px)" : "none",
+                  filter: isChatTab && active ? "drop-shadow(0 2px 6px rgba(201,107,131,0.35))" : "none",
+                }}>{m.emoji}</span>
+                <span style={{
+                  fontSize: 9,
+                  letterSpacing: "0.15em",
+                  fontFamily: FONT_DISPLAY,
+                  fontWeight: 500,
+                  textTransform: "uppercase",
+                  marginTop: isChatTab ? -3 : 0,
+                }}>{m.key}</span>
                 {active && <span style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2, backgroundColor: T.accent }} />}
                 {showBadge && (
                   <span style={{
                     position: "absolute",
-                    top: 6,
-                    right: "28%",
+                    top: isChatTab ? 0 : 6,
+                    right: isChatTab ? "22%" : "28%",
                     fontFamily: FONT_SANS,
                     fontSize: 9,
                     fontWeight: 600,
@@ -2080,13 +2336,14 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     height: 16,
                     padding: "0 4px",
                     borderRadius: 999,
-                    backgroundColor: T.accent,
+                    backgroundColor: "#e74c5e",
                     color: "#fff",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     letterSpacing: 0,
-                  }}>{learnUnread > 99 ? "99+" : learnUnread}</span>
+                    boxShadow: "0 1px 3px rgba(231,76,94,0.4)",
+                  }}>{badgeCount > 99 ? "99+" : badgeCount}</span>
                 )}
               </button>
             );

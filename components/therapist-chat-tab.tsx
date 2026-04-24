@@ -270,6 +270,17 @@ export default function TherapistChatTab({
                     .map((m) => `${m.sender_name || ""}: ${m.content}`)
                     .join("\n")
                 : ""),
+            // draft 時は直近10件を会話コンテキストとして渡す
+            context:
+              feature === "draft"
+                ? messages
+                    .slice(-10)
+                    .map(
+                      (m) =>
+                        `${m.sender_type === "therapist" && m.sender_id === therapistId ? "自分" : m.sender_name || (m.sender_type === "staff" ? "スタッフ" : "相手")}: ${m.content}`,
+                    )
+                    .join("\n")
+                : "",
             target_language: translateLang,
             requester_type: "therapist",
             requester_id: therapistId,
@@ -548,6 +559,70 @@ export default function TherapistChatTab({
             })}
           </div>
 
+          {/* ═══ 定型返信サジェスト（AI不使用・キーワードマッチ）═══ */}
+          {(() => {
+            // 相手からの最新メッセージを取得（自分以外 & system 以外）
+            const lastIncoming = [...messages]
+              .reverse()
+              .find(
+                (m) =>
+                  m.sender_type !== "system" &&
+                  !(m.sender_type === "therapist" && m.sender_id === therapistId),
+              );
+            if (!lastIncoming) return null;
+            const suggestions = getQuickReplies(lastIncoming.content);
+            if (suggestions.length === 0) return null;
+            return (
+              <div
+                style={{
+                  padding: "8px 10px",
+                  backgroundColor: C.accentBg,
+                  border: `1px solid ${C.border}`,
+                  borderLeftWidth: 3,
+                  borderLeftColor: C.accentDeep,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: C.textMuted,
+                    letterSpacing: "0.08em",
+                    fontFamily: FONT_SERIF,
+                  }}
+                >
+                  💡 よくある返信（タップで入力欄にセット）
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setInput(s.text)}
+                      disabled={sending}
+                      style={{
+                        padding: "6px 12px",
+                        border: `1px solid ${C.border}`,
+                        backgroundColor: "#ffffff",
+                        color: C.text,
+                        fontFamily: FONT_SERIF,
+                        fontSize: 12,
+                        lineHeight: 1.3,
+                        cursor: sending ? "default" : "pointer",
+                        opacity: sending ? 0.5 : 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span style={{ marginRight: 4 }}>{s.emoji}</span>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div
             style={{
               display: "flex",
@@ -567,10 +642,23 @@ export default function TherapistChatTab({
             </button>
             <button
               onClick={() => callAI("draft")}
-              disabled={aiBusy}
-              style={aiBtn(C, FONT_SERIF, aiBusy)}
+              disabled={aiBusy || messages.length === 0}
+              style={{
+                padding: "4px 12px",
+                border: `1px solid ${C.accentDeep}`,
+                backgroundColor:
+                  aiBusy || messages.length === 0 ? C.cardAlt : C.accentDeep,
+                color:
+                  aiBusy || messages.length === 0 ? C.textFaint : "#ffffff",
+                fontFamily: FONT_SERIF,
+                fontSize: 11,
+                letterSpacing: "0.03em",
+                cursor:
+                  aiBusy || messages.length === 0 ? "default" : "pointer",
+                fontWeight: 600,
+              }}
             >
-              返信案
+              🤖 AI返信案
             </button>
             <button
               onClick={() => callAI("summarize")}
@@ -694,4 +782,98 @@ function aiBtn(C: MyPageTheme, font: string, disabled: boolean) {
     letterSpacing: "0.03em",
     cursor: disabled ? "default" : "pointer",
   };
+}
+
+/**
+ * 定型返信サジェストを取得（AI不使用・キーワードマッチ）
+ *
+ * 相手の最新メッセージの内容からパターンを検出し、
+ * 候補の返信を返す。セラピストがタップすると入力欄にセットされる。
+ * （即送信ではなく、内容を確認してから送信する設計）
+ *
+ * カテゴリ:
+ *   - 出勤可否の質問      → OK / NG / 相談
+ *   - 時間帯の確認        → OK / 厳しい / 調整して返信
+ *   - 予約依頼・指名      → 了解 / 厳しい / 確認中
+ *   - 感謝・労い          → こちらこそ / お疲れ様
+ *   - 確認依頼            → 確認済 / 少し時間ほしい
+ *   - 連絡事項・了解質問  → 了解です / 了解、ありがとう
+ */
+function getQuickReplies(text: string): { emoji: string; label: string; text: string }[] {
+  if (!text) return [];
+  const t = text.replace(/\s+/g, "").toLowerCase();
+
+  // 1) 出勤可否の質問
+  if (
+    /(出勤|出れる|来れる|来られ|入れる|働け).*[?？]?/.test(text) ||
+    /(シフト|勤務).*(可能|入れ|出せ|できる)/.test(text)
+  ) {
+    return [
+      { emoji: "✅", label: "出勤できます", text: "はい、出勤できます。よろしくお願いします。" },
+      { emoji: "❌", label: "今回は厳しい", text: "申し訳ありません、その日は難しいです。" },
+      { emoji: "🤔", label: "時間を相談したい", text: "時間について少し相談させてください。何時からなら大丈夫そうですか？" },
+    ];
+  }
+
+  // 2) 時間帯・予約時刻の確認
+  if (
+    /(\d{1,2}時|\d{1,2}:\d{2}|入り).*(大丈夫|いけ|可能|空い|入れ|どう)/.test(text) ||
+    /(予約|お客).*(入り|入る|取れ|OK|おk)/i.test(text)
+  ) {
+    return [
+      { emoji: "✅", label: "大丈夫です", text: "はい、大丈夫です。お願いします。" },
+      { emoji: "⏰", label: "その時間は厳しい", text: "すみません、その時間は厳しいです。" },
+      { emoji: "💭", label: "少し調整して返信", text: "少し調整して折り返し返信します。少々お待ちください。" },
+    ];
+  }
+
+  // 3) 指名・ご予約の依頼
+  if (/(指名|ご予約|予約).*(入り|入りました|入った|ありました)/.test(text)) {
+    return [
+      { emoji: "🙏", label: "ありがとうございます", text: "ありがとうございます、よろしくお願いします。" },
+      { emoji: "📝", label: "確認します", text: "確認しますので少々お待ちください。" },
+    ];
+  }
+
+  // 4) 感謝・労い
+  if (/(ありがとう|お疲れ|おつかれ|助かった|頑張っ)/.test(text)) {
+    return [
+      { emoji: "🙏", label: "こちらこそ", text: "こちらこそありがとうございました。" },
+      { emoji: "😊", label: "お疲れ様でした", text: "お疲れ様でした。" },
+    ];
+  }
+
+  // 5) 確認・対応のお願い
+  if (/(確認|見て|チェック|お願い).*(して|しといて|ください|できる)/.test(text)) {
+    return [
+      { emoji: "✅", label: "確認しました", text: "確認しました、ありがとうございます。" },
+      { emoji: "⏳", label: "少し時間ください", text: "少しお時間ください、確認して折り返します。" },
+    ];
+  }
+
+  // 6) 了解確認（「大丈夫?」「いい?」系）
+  if (/(大丈夫[?？]|いい[?？]|よろしく|OK[?？]|問題ない)/i.test(text)) {
+    return [
+      { emoji: "👌", label: "了解です", text: "了解です、問題ありません。" },
+      { emoji: "🙏", label: "ありがとうございます", text: "ありがとうございます、よろしくお願いします。" },
+    ];
+  }
+
+  // 7) 遅刻・欠勤の連絡への返信（相手がスタッフから「体調大丈夫?」等）
+  if (/(体調|大丈夫|無理しないで|気をつけ|お大事)/.test(text)) {
+    return [
+      { emoji: "🙇", label: "ありがとうございます", text: "お気遣いありがとうございます。" },
+      { emoji: "💪", label: "問題ないです", text: "大丈夫です、ご心配おかけしました。" },
+    ];
+  }
+
+  // 8) 汎用（何も該当しない時の最低限の定型）
+  if (text.length <= 50) {
+    return [
+      { emoji: "👍", label: "了解です", text: "了解です、よろしくお願いします。" },
+      { emoji: "🙏", label: "ありがとう", text: "ありがとうございます。" },
+    ];
+  }
+
+  return [];
 }
