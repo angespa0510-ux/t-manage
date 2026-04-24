@@ -11,8 +11,7 @@ import { useCustomerAuth } from "../../../../lib/customer-auth-context";
 type HpPhoto = {
   id: number;
   therapist_id: number;
-  storage_path: string;
-  public_url: string;
+  photo_url: string;
   caption: string | null;
   visibility: "public" | "member_only";
   display_order: number;
@@ -126,7 +125,7 @@ export default function TherapistDetailPage({
           .from("hp_photos")
           .select("*")
           .eq("therapist_id", therapistId)
-          .is("deleted_at", null)
+          .eq("is_active", true)
           .order("display_order", { ascending: true }),
       ]);
       if (!tResp.data) {
@@ -152,8 +151,9 @@ export default function TherapistDetailPage({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "photo_cta",
+        view_type: "cta_shown",
         therapist_id: therapistId,
-        member_only_count: memberOnlyCount,
+        photo_id: hpPhotos.find((p) => p.visibility === "member_only")?.id,
       }),
     }).catch(() => {});
   }, [therapistId, isMember, hpPhotos]);
@@ -616,7 +616,7 @@ export default function TherapistDetailPage({
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
-                            action: "photo_cta_click",
+                            action: "photo_cta", view_type: "cta_clicked",
                             therapist_id: therapistId,
                             photo_id: p.id,
                           }),
@@ -633,6 +633,7 @@ export default function TherapistDetailPage({
                           therapist_id: therapistId,
                           photo_id: p.id,
                           customer_id: customer?.id || null,
+                          is_member: isMember,
                         }),
                       }).catch(() => {});
                     }}
@@ -649,7 +650,7 @@ export default function TherapistDetailPage({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={p.public_url}
+                      src={p.photo_url}
                       alt={p.caption || "photo"}
                       style={{
                         width: "100%",
@@ -681,7 +682,7 @@ export default function TherapistDetailPage({
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              action: "photo_cta_click",
+                              action: "photo_cta", view_type: "cta_clicked",
                               therapist_id: therapistId,
                               photo_id: p.id,
                             }),
@@ -793,7 +794,7 @@ export default function TherapistDetailPage({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={selectedPhoto.public_url}
+            src={selectedPhoto.photo_url}
             alt={selectedPhoto.caption || ""}
             style={{
               maxWidth: "100%",
