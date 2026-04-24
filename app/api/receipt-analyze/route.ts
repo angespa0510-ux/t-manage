@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
+/**
+ * レシート/領収書画像解析API
+ *
+ * モデル選定: claude-haiku-4-5
+ *   - レシート解析は決まったフォーマットからJSONを抽出する単純なOCR+構造化タスク
+ *   - Sonnet 4.6 比で入出力コスト約1/3に削減
+ *   - ビジョン機能対応、日本語レシートの精度も実用上問題なし
+ *   - 経費が月数百枚〜数千枚処理される想定で、コスト削減効果大
+ *
+ * 精度が足りないケース（個別対応）:
+ *   - 極端に読みづらい手書きレシート
+ *   - 特殊フォーマット（免税、複数通貨等）
+ *   → その場合は手動入力 or Sonnet 4.6 再解析フォールバック検討
+ */
+const MODEL = "claude-haiku-4-5";
+
 const DEFAULT_PROMPT = `このレシート/領収書の画像を分析してください。以下の情報をJSON形式のみで返してください（説明文不要）：
 
 {
@@ -27,7 +43,7 @@ export async function POST(req: NextRequest) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: MODEL,
         max_tokens: 500,
         messages: [{
           role: "user",
