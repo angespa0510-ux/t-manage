@@ -2,6 +2,48 @@
 // Phase 5 で実装される tmanage_instances テーブルの設計に沿って作成
 // 実際のDB接続は Phase 2 以降で実装
 
+// ============================================
+// 準備タスクの型定義（status === "preparing" 時に表示）
+// ============================================
+
+export type PreparationTaskCategory =
+  | "contract"      // 契約・法務
+  | "data"          // データ準備
+  | "system"        // システム設定
+  | "content"       // コンテンツ準備
+  | "test"          // テスト
+  | "launch";       // 稼働準備
+
+export type PreparationTaskStatus = "done" | "in_progress" | "pending" | "blocked";
+
+export type PreparationTask = {
+  id: string;
+  category: PreparationTaskCategory;
+  title: string;
+  description?: string;
+  status: PreparationTaskStatus;
+  assignee?: "terasu_life" | "instance_side" | "both";  // 担当
+  due_date?: string;
+  progress?: { current: number; total: number };  // 進捗がある場合
+  completed_at?: string;
+};
+
+export const CATEGORY_INFO: Record<PreparationTaskCategory, { label: string; icon: string; color: string }> = {
+  contract: { label: "契約・法務", icon: "📋", color: "#8b7355" },
+  data: { label: "データ準備", icon: "💾", color: "#4a7c9c" },
+  system: { label: "システム設定", icon: "⚙️", color: "#c96b83" },
+  content: { label: "コンテンツ準備", icon: "🎨", color: "#b38419" },
+  test: { label: "テスト", icon: "🧪", color: "#6b9b7e" },
+  launch: { label: "稼働準備", icon: "🚀", color: "#c45555" },
+};
+
+export const STATUS_INFO: Record<PreparationTaskStatus, { label: string; color: string; icon: string }> = {
+  done: { label: "完了", color: "#6b9b7e", icon: "✅" },
+  in_progress: { label: "進行中", color: "#b38419", icon: "🔄" },
+  pending: { label: "未着手", color: "#888780", icon: "⏳" },
+  blocked: { label: "ブロック中", color: "#c45555", icon: "🚫" },
+};
+
 export type TmanageInstance = {
   id: string;
   corporation_id: string;
@@ -53,6 +95,7 @@ export type TmanageInstance = {
     monthly_revenue: number;
     last_activity_at: string;
   };
+  preparation_tasks?: PreparationTask[];
 };
 
 export type ModuleKey =
@@ -169,8 +212,8 @@ export const DUMMY_INSTANCES: TmanageInstance[] = [
     shop_type: "メンズエステ",
     concept: "大型グループサロン",
     description: "100名超のセラピストが在籍するグループサロン",
-    theme_color_primary: "#8b0020",
-    theme_color_accent: "#d4a5a5",
+    theme_color_primary: "#5d0015",
+    theme_color_accent: "#a82c45",
     subdomain: "resexy",
     custom_domain: undefined,
     status: "preparing",
@@ -206,6 +249,42 @@ export const DUMMY_INSTANCES: TmanageInstance[] = [
       monthly_revenue: 0,
       last_activity_at: "2026-04-24T14:00:00Z",
     },
+    preparation_tasks: [
+      // 契約・法務
+      { id: "t1", category: "contract", title: "業務委託契約書の内容合意", description: "甲乙間で業務範囲・責任分界点を確認", status: "done", assignee: "both", completed_at: "2026-04-24T15:00:00Z" },
+      { id: "t2", category: "contract", title: "書面での正式契約締結", description: "社長同士で対面にて記名押印", status: "done", assignee: "both", completed_at: "2026-04-24T15:30:00Z" },
+      { id: "t3", category: "contract", title: "契約書テンプレートの弁護士レビュー", description: "今後の他店舗展開用として精査", status: "pending", assignee: "terasu_life", due_date: "2026-05-31" },
+
+      // データ準備
+      { id: "t4", category: "data", title: "セラピスト情報の受領", description: "リゼクシー社長から既存セラピスト112名分のデータを直接受領", status: "pending", assignee: "instance_side", due_date: "2026-11-30", progress: { current: 0, total: 112 } },
+      { id: "t5", category: "data", title: "セラピスト写真の転送", description: "既存HPから写真を取得（肖像権クリア済み）", status: "pending", assignee: "terasu_life", due_date: "2026-11-30", progress: { current: 0, total: 112 } },
+      { id: "t6", category: "data", title: "コース・料金表の整理", description: "リゼクシーの既存メニューを T-MANAGE 形式で登録", status: "pending", assignee: "both", due_date: "2026-11-30" },
+      { id: "t7", category: "data", title: "出張コース料金体系の確定", description: "出張○○分コースとして登録する料金設定", status: "pending", assignee: "instance_side", due_date: "2026-10-31" },
+
+      // システム設定
+      { id: "t8", category: "system", title: "Supabase Pro プラン移行", description: "Free → Pro ($25/月) にアップグレード", status: "pending", assignee: "terasu_life", due_date: "2026-05-20" },
+      { id: "t9", category: "system", title: "マルチインスタンス基盤実装（Phase 2〜4）", description: "instance_id カラム追加・backfill・ラッパー関数", status: "pending", assignee: "terasu_life", due_date: "2026-11-30" },
+      { id: "t10", category: "system", title: "リゼクシー専用インスタンス発行", description: "resexy.t-manage.jp の発行処理", status: "pending", assignee: "terasu_life", due_date: "2026-12-05" },
+      { id: "t11", category: "system", title: "サブドメイン設定（resexy.t-manage.jp）", description: "Vercel にドメイン追加・SSL発行", status: "pending", assignee: "terasu_life", due_date: "2026-12-05" },
+      { id: "t12", category: "system", title: "電子契約モジュール実装", description: "e_contract モジュールの開発", status: "pending", assignee: "terasu_life", due_date: "2026-12-20" },
+
+      // コンテンツ準備
+      { id: "t13", category: "content", title: "新HPのデザインテーマ確認", description: "ワインレッド系のブランディング最終確認", status: "pending", assignee: "both", due_date: "2026-11-30" },
+      { id: "t14", category: "content", title: "HPコンテンツ作成", description: "店舗紹介・アクセス・料金・FAQページ", status: "pending", assignee: "terasu_life", due_date: "2026-12-15" },
+      { id: "t15", category: "content", title: "既存HP（resexy.info）の DNS 移行準備", description: "DNS切替のタイミング調整", status: "pending", assignee: "instance_side", due_date: "2027-01-15" },
+
+      // テスト
+      { id: "t16", category: "test", title: "ステージング環境でのテスト運用", description: "2026/12月中にテスト運用実施", status: "pending", assignee: "both", due_date: "2026-12-25" },
+      { id: "t17", category: "test", title: "CTI連携の動作確認", description: "電話着信ポップアップの実機テスト", status: "pending", assignee: "both", due_date: "2026-12-25" },
+      { id: "t18", category: "test", title: "セラピストマイページの動作確認", description: "シフト提出・給与明細表示のテスト", status: "pending", assignee: "both", due_date: "2026-12-28" },
+      { id: "t19", category: "test", title: "決済手数料計算のテスト", description: "カード・PayPay・LINE Pay 全10%の計算確認", status: "pending", assignee: "terasu_life", due_date: "2026-12-28" },
+
+      // 稼働準備
+      { id: "t20", category: "launch", title: "スタッフ研修", description: "Shop Manage からの運用移行サポート", status: "pending", assignee: "both", due_date: "2026-12-28" },
+      { id: "t21", category: "launch", title: "プラチナマガジン告知文面準備", description: "リゼクシー側に一任、稼働後1ヶ月で配信", status: "pending", assignee: "instance_side", due_date: "2027-02-01" },
+      { id: "t22", category: "launch", title: "IoT機材（カメラ・鍵管理）選定", description: "導入判断はリゼクシー側に一任", status: "pending", assignee: "instance_side", due_date: "2027-01-15" },
+      { id: "t23", category: "launch", title: "2027/1/1 本格稼働", description: "月初スタートで経理の区切りを明確化", status: "pending", assignee: "both", due_date: "2027-01-01" },
+    ],
   },
   // 将来予定の店舗（プレースホルダー）
   {
@@ -238,6 +317,13 @@ export const DUMMY_INSTANCES: TmanageInstance[] = [
       monthly_revenue: 0,
       last_activity_at: "2027-03-01T00:00:00Z",
     },
+    preparation_tasks: [
+      { id: "l1", category: "contract", title: "法人情報確定", description: "運営法人の決定", status: "pending", assignee: "instance_side" },
+      { id: "l2", category: "contract", title: "契約書締結", description: "弁護士レビュー済みテンプレートで締結", status: "pending", assignee: "both" },
+      { id: "l3", category: "data", title: "セラピスト情報受領", description: "既存セラピスト一覧の提供", status: "pending", assignee: "instance_side" },
+      { id: "l4", category: "system", title: "インスタンス発行", description: "leon.t-manage.jp 発行", status: "pending", assignee: "terasu_life" },
+      { id: "l5", category: "launch", title: "2027/4/1 稼働開始", status: "pending", assignee: "both", due_date: "2027-04-01" },
+    ],
   },
 ];
 
@@ -283,4 +369,54 @@ export function daysUntilGoLive(go_live_date?: string): number | null {
   const now = new Date();
   const diff = target.getTime() - now.getTime();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+// ============================================
+// 準備タスク関連ヘルパー
+// ============================================
+
+export function getTaskStats(tasks?: PreparationTask[]): {
+  total: number;
+  done: number;
+  in_progress: number;
+  pending: number;
+  blocked: number;
+  progressPct: number;
+} {
+  if (!tasks || tasks.length === 0) {
+    return { total: 0, done: 0, in_progress: 0, pending: 0, blocked: 0, progressPct: 0 };
+  }
+  const total = tasks.length;
+  const done = tasks.filter((t) => t.status === "done").length;
+  const in_progress = tasks.filter((t) => t.status === "in_progress").length;
+  const pending = tasks.filter((t) => t.status === "pending").length;
+  const blocked = tasks.filter((t) => t.status === "blocked").length;
+  const progressPct = Math.round((done / total) * 100);
+  return { total, done, in_progress, pending, blocked, progressPct };
+}
+
+export function getAssigneeLabel(assignee?: PreparationTask["assignee"]): string {
+  switch (assignee) {
+    case "terasu_life": return "テラスライフ側";
+    case "instance_side": return "店舗側";
+    case "both": return "双方";
+    default: return "-";
+  }
+}
+
+export function groupTasksByCategory(
+  tasks: PreparationTask[]
+): Record<PreparationTaskCategory, PreparationTask[]> {
+  const grouped: Record<PreparationTaskCategory, PreparationTask[]> = {
+    contract: [],
+    data: [],
+    system: [],
+    content: [],
+    test: [],
+    launch: [],
+  };
+  for (const task of tasks) {
+    grouped[task.category].push(task);
+  }
+  return grouped;
 }

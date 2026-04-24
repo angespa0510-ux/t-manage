@@ -10,6 +10,7 @@ import {
   formatJPY,
   formatDateJP,
   daysUntilGoLive,
+  getTaskStats,
   MODULE_LABELS,
   type ModuleKey,
 } from "../../lib/tera-admin-mock";
@@ -168,6 +169,38 @@ export default function TeraAdminDashboard() {
                     🚀 稼働まで <strong>あと {daysLeft} 日</strong>({inst.go_live_date})
                   </div>
                 )}
+
+                {/* 準備進捗バー */}
+                {inst.status === "preparing" && inst.preparation_tasks && inst.preparation_tasks.length > 0 && (() => {
+                  const s = getTaskStats(inst.preparation_tasks);
+                  return (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 11 }}>
+                        <span style={{ color: T.textSub, fontWeight: 600 }}>📋 準備タスク</span>
+                        <span style={{ color: T.text, fontWeight: 700 }}>
+                          {s.done} / {s.total} 完了（{s.progressPct}%）
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          height: 8,
+                          background: T.cardAlt,
+                          borderRadius: 4,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${s.progressPct}%`,
+                            height: "100%",
+                            background: `linear-gradient(90deg, ${inst.theme_color_primary}, ${inst.theme_color_accent})`,
+                            transition: "width 0.5s",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* 統計情報 */}
                 {inst.status === "active" && (

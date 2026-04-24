@@ -14,14 +14,24 @@ import {
   MODULE_LABELS,
   TIER1_MODULES,
   TIER2_MODULES,
+  CATEGORY_INFO,
+  STATUS_INFO,
+  getTaskStats,
+  getAssigneeLabel,
+  groupTasksByCategory,
   type ModuleKey,
+  type PreparationTask,
+  type PreparationTaskCategory,
 } from "../../../../lib/tera-admin-mock";
 
 export default function InstanceDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { T } = useTheme();
   const instance = getInstanceById(id);
-  const [activeTab, setActiveTab] = useState<"overview" | "modules" | "settings" | "logs">("overview");
+  const hasPreparationTasks = instance?.status === "preparing" && (instance.preparation_tasks?.length ?? 0) > 0;
+  const [activeTab, setActiveTab] = useState<"overview" | "preparation" | "modules" | "settings" | "logs">(
+    hasPreparationTasks ? "preparation" : "overview"
+  );
 
   if (!instance) {
     return (
@@ -185,11 +195,12 @@ export default function InstanceDetail({ params }: { params: Promise<{ id: strin
         }}
       >
         {[
-          { key: "overview", label: "🏠 概要" },
-          { key: "modules", label: "🧩 モジュール設定" },
-          { key: "settings", label: "⚙️ 独自設定" },
-          { key: "logs", label: "📜 アクティビティ" },
-        ].map((tab) => (
+          { key: "overview", label: "🏠 概要", show: true },
+          { key: "preparation", label: `🚀 準備タスク${instance.preparation_tasks ? ` (${getTaskStats(instance.preparation_tasks).done}/${instance.preparation_tasks.length})` : ""}`, show: hasPreparationTasks },
+          { key: "modules", label: "🧩 モジュール設定", show: true },
+          { key: "settings", label: "⚙️ 独自設定", show: true },
+          { key: "logs", label: "📜 アクティビティ", show: true },
+        ].filter((tab) => tab.show).map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as any)}
@@ -212,6 +223,7 @@ export default function InstanceDetail({ params }: { params: Promise<{ id: strin
 
       {/* タブコンテンツ */}
       {activeTab === "overview" && <OverviewTab T={T} instance={instance} />}
+      {activeTab === "preparation" && <PreparationTab T={T} instance={instance} />}
       {activeTab === "modules" && <ModulesTab T={T} instance={instance} />}
       {activeTab === "settings" && <SettingsTab T={T} instance={instance} />}
       {activeTab === "logs" && <LogsTab T={T} />}
@@ -636,6 +648,311 @@ function Toggle({ enabled, T }: { enabled: boolean; T: any }) {
           boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
         }}
       />
+    </div>
+  );
+}
+
+// ============================================
+// 準備タスクタブ
+// ============================================
+
+function PreparationTab({ T, instance }: { T: any; instance: any }) {
+  const tasks: PreparationTask[] = instance.preparation_tasks || [];
+  const stats = getTaskStats(tasks);
+  const grouped = groupTasksByCategory(tasks);
+  const daysLeft = daysUntilGoLive(instance.go_live_date);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* 進捗サマリー */}
+      <div
+        style={{
+          background: T.card,
+          border: `1px solid ${T.border}`,
+          borderRadius: 14,
+          padding: 24,
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr", gap: 20, alignItems: "center" }}>
+          {/* 全体進捗 */}
+          <div>
+            <div style={{ fontSize: 12, color: T.textSub, marginBottom: 6 }}>全体進捗</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+              <div style={{ fontSize: 36, fontWeight: 800, color: T.text }}>{stats.progressPct}%</div>
+              <div style={{ fontSize: 14, color: T.textSub }}>
+                ({stats.done} / {stats.total})
+              </div>
+            </div>
+            {/* プログレスバー */}
+            <div
+              style={{
+                height: 10,
+                background: T.cardAlt,
+                borderRadius: 5,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${stats.progressPct}%`,
+                  height: "100%",
+                  background: `linear-gradient(90deg, ${instance.theme_color_primary}, ${instance.theme_color_accent})`,
+                  transition: "width 0.5s",
+                }}
+              />
+            </div>
+            {daysLeft !== null && daysLeft > 0 && (
+              <div style={{ fontSize: 11, color: T.textSub, marginTop: 8 }}>
+                稼働まで <strong style={{ color: "#8b6818" }}>あと {daysLeft} 日</strong>（{instance.go_live_date}）
+              </div>
+            )}
+          </div>
+
+          {/* ステータス別件数 */}
+          <TaskCountCard T={T} label="完了" count={stats.done} icon="✅" color="#6b9b7e" />
+          <TaskCountCard T={T} label="進行中" count={stats.in_progress} icon="🔄" color="#b38419" />
+          <TaskCountCard T={T} label="未着手" count={stats.pending} icon="⏳" color="#888780" />
+          <TaskCountCard T={T} label="ブロック" count={stats.blocked} icon="🚫" color="#c45555" />
+        </div>
+      </div>
+
+      {/* カテゴリ別タスク一覧 */}
+      {(Object.keys(grouped) as PreparationTaskCategory[]).map((category) => {
+        const categoryTasks = grouped[category];
+        if (categoryTasks.length === 0) return null;
+        const info = CATEGORY_INFO[category];
+        const categoryStats = getTaskStats(categoryTasks);
+
+        return (
+          <div
+            key={category}
+            style={{
+              background: T.card,
+              border: `1px solid ${T.border}`,
+              borderRadius: 12,
+              overflow: "hidden",
+            }}
+          >
+            {/* カテゴリヘッダー */}
+            <div
+              style={{
+                padding: "14px 20px",
+                background: `${info.color}11`,
+                borderBottom: `1px solid ${T.border}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: `${info.color}33`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 20,
+                }}
+              >
+                {info.icon}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{info.label}</div>
+                <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>
+                  {categoryStats.done} / {categoryStats.total} 完了（{categoryStats.progressPct}%）
+                </div>
+              </div>
+              <div
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 12,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: `${info.color}22`,
+                  color: info.color,
+                }}
+              >
+                {categoryStats.progressPct}%
+              </div>
+            </div>
+
+            {/* タスクリスト */}
+            <div>
+              {categoryTasks.map((task) => (
+                <div key={task.id}>
+                  <TaskRow T={T} task={task} />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* 注記 */}
+      <div
+        style={{
+          padding: 14,
+          background: T.cardAlt,
+          border: `1px solid ${T.border}`,
+          borderRadius: 10,
+          fontSize: 12,
+          color: T.textSub,
+          lineHeight: 1.7,
+        }}
+      >
+        🔒 現在はダミーデータです。Phase 7（2027年以降）で instance_preparation_tasks テーブルを実装予定。
+        タスクのチェック・コメント・担当者割り当て・期限設定などが可能になります。
+      </div>
+    </div>
+  );
+}
+
+function TaskCountCard({
+  T,
+  label,
+  count,
+  icon,
+  color,
+}: {
+  T: any;
+  label: string;
+  count: number;
+  icon: string;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: `${color}11`,
+        borderRadius: 10,
+        textAlign: "center",
+        border: `1px solid ${color}33`,
+      }}
+    >
+      <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
+      <div style={{ fontSize: 10, color: T.textSub, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: color }}>{count}</div>
+    </div>
+  );
+}
+
+function TaskRow({ T, task }: { T: any; task: PreparationTask }) {
+  const statusInfo = STATUS_INFO[task.status];
+  const assigneeLabel = getAssigneeLabel(task.assignee);
+
+  return (
+    <div
+      style={{
+        padding: "14px 20px",
+        borderBottom: `1px solid ${T.border}`,
+        display: "grid",
+        gridTemplateColumns: "40px 1fr auto auto",
+        gap: 14,
+        alignItems: "center",
+        opacity: task.status === "done" ? 0.7 : 1,
+      }}
+    >
+      {/* ステータスアイコン */}
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          background: `${statusInfo.color}22`,
+          border: `2px solid ${statusInfo.color}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 13,
+        }}
+      >
+        {task.status === "done" && "✓"}
+        {task.status === "in_progress" && "◐"}
+        {task.status === "pending" && ""}
+        {task.status === "blocked" && "✕"}
+      </div>
+
+      {/* タスク内容 */}
+      <div>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: T.text,
+            textDecoration: task.status === "done" ? "line-through" : "none",
+            marginBottom: 2,
+          }}
+        >
+          {task.title}
+        </div>
+        {task.description && (
+          <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>
+            {task.description}
+          </div>
+        )}
+        {task.progress && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <div
+              style={{
+                flex: 1,
+                maxWidth: 200,
+                height: 6,
+                background: T.cardAlt,
+                borderRadius: 3,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.round((task.progress.current / task.progress.total) * 100)}%`,
+                  height: "100%",
+                  background: statusInfo.color,
+                }}
+              />
+            </div>
+            <span style={{ fontSize: 10, color: T.textSub, fontWeight: 600 }}>
+              {task.progress.current} / {task.progress.total}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* 担当・期限 */}
+      <div style={{ textAlign: "right", minWidth: 120 }}>
+        <div style={{ fontSize: 11, color: T.textSub, marginBottom: 2 }}>
+          👤 {assigneeLabel}
+        </div>
+        {task.due_date && task.status !== "done" && (
+          <div style={{ fontSize: 11, color: T.textMuted }}>
+            📅 {task.due_date}
+          </div>
+        )}
+        {task.completed_at && (
+          <div style={{ fontSize: 11, color: "#6b9b7e" }}>
+            ✓ {task.completed_at.split("T")[0]}
+          </div>
+        )}
+      </div>
+
+      {/* ステータスバッジ */}
+      <div
+        style={{
+          padding: "4px 10px",
+          borderRadius: 12,
+          fontSize: 10,
+          fontWeight: 700,
+          background: `${statusInfo.color}22`,
+          color: statusInfo.color,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {statusInfo.label}
+      </div>
     </div>
   );
 }
