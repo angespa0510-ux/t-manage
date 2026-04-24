@@ -911,6 +911,161 @@ sql/session{N}_tmanage_06_rezeksi_instance.sql
 
 ---
 
+## 18. ドメイン管理機能（将来計画）⭐ 2026-04-24 追加
+
+### 18.1 背景と意義
+
+TERA-MANAGE を本格的なSaaSプラットフォームとして成長させるためには、新規店舗のオンボーディング体験を可能な限りシンプルにする必要がある。現在は店舗側が個別にドメインを取得・設定する必要があるが、将来的にはTERA-MANAGE管理画面から数クリックで独自ドメイン運用まで完結できる体験を目指す。
+
+### 18.2 段階的実装方針
+
+#### Phase 5-6（2026/12〜2027/1）: 最小実装
+
+**方針**: 店舗側が自分でドメイン取得、TERA-MANAGEは登録UIと自動化のみ提供
+
+- 店舗側: お名前.com / Cloudflare等で自分で取得
+- TERA-MANAGE側:
+  - 取得済みドメインを入力するUI
+  - Vercel API連携で自動追加
+  - DNS設定手順のガイド表示
+  - 動作確認の自動化
+
+**理由**:
+- 決済システム不要
+- 法的リスクなし
+- グループ内は各店舗が自己責任
+- 実装コスト低
+
+#### Phase 7（2027年Q1）: 自動化の強化
+
+- 空き確認API連携（Cloudflare RDAP等、取得は外部サイト誘導）
+- ドメイン候補のAI提案（Claude活用）
+- Vercel・Supabaseへの自動反映
+- SSL証明書発行状況モニタリング
+
+#### Phase 8以降（2028〜）: 完全SaaS化
+
+**前提**: グループ外への本格外販フェーズ
+
+**必要なインフラ整備**:
+1. Stripe契約（合同会社テラスライフ名義）
+2. 利用規約・プライバシーポリシー改定
+3. 弁護士レビュー
+4. 税理士相談（売上計上・消費税・インボイス）
+5. インボイス登録番号取得
+
+**機能**:
+- TERA-MANAGEから直接ドメイン購入（Cloudflare Registrar API連携）
+- 月額サブスクリプション決済（Stripe）
+- 自動請求書発行
+- 使用量ベース課金（APIコール、ストレージ等）
+
+### 18.3 ビジネスモデル（確定方針）
+
+| フェーズ | 対象 | 料金 | ドメイン |
+|---|---|---|---|
+| Phase 5-7 | RESEXY GROUP内店舗 | 無償 | 各店舗が自分で取得 |
+| Phase 8+ | グループ外 | **月額サブスクリプション** | TERA-MANAGE代行取得（Stripe決済） |
+
+**料金プラン（案、外販時）**:
+```
+ベーシック: 月額 ¥9,800
+  - Tier 1-2 機能
+  - サブドメイン（.t-manage.jp）のみ
+  - セラピスト30名まで
+
+プロ:       月額 ¥19,800
+  - 全モジュール
+  - 独自ドメイン1つ込み
+  - セラピスト100名まで
+
+エンタープライズ: 月額 ¥49,800〜
+  - カスタマイズ
+  - 複数独自ドメイン
+  - セラピスト無制限
+  - 優先サポート
+```
+
+### 18.4 アーキテクチャ（将来像）
+
+```
+TERA-MANAGE 管理画面
+  ├─ ドメイン管理タブ
+  │    ├─ [店舗情報] → AIが候補生成（Claude）
+  │    ├─ [空き確認] → RDAP API
+  │    ├─ [購入] → Cloudflare Registrar API
+  │    ├─ [Vercel追加] → Vercel API
+  │    └─ [DNS自動設定] → Cloudflare/Vercel API
+  │
+  ├─ 決済
+  │    ├─ Stripe Checkout
+  │    ├─ 月額サブスク管理
+  │    ├─ 請求書発行
+  │    └─ インボイス対応
+  │
+  └─ 監視
+       ├─ SSL証明書状態
+       ├─ DNS状態
+       └─ ドメイン有効期限アラート
+```
+
+### 18.5 実装ロードマップ
+
+| 時期 | 機能 | 工数 |
+|---|---|---|
+| Phase 5（2026/12） | 取得済みドメインの手動登録UI | 10h |
+| Phase 5（2026/12） | Vercel API連携（ドメイン追加自動化） | 15h |
+| Phase 7（2027 Q1） | DNS設定ガイド自動表示 | 10h |
+| Phase 7（2027 Q1） | SSL発行状態モニタリング | 8h |
+| Phase 7（2027 Q1） | AI候補提案（Claude連携） | 15h |
+| Phase 8（2028〜） | Stripe決済組み込み | 30h |
+| Phase 8（2028〜） | Cloudflare Registrar API連携 | 25h |
+| Phase 8（2028〜） | 自動請求書発行・インボイス対応 | 20h |
+
+### 18.6 データモデル拡張（Phase 5〜）
+
+```sql
+-- インスタンスごとのドメイン情報
+CREATE TABLE IF NOT EXISTS instance_domains (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  instance_id uuid REFERENCES tmanage_instances(id),
+  domain text NOT NULL,
+  domain_type text,                     -- 'subdomain' | 'custom' | 'wildcard'
+  registrar text,                       -- 'onamae' | 'cloudflare' | 'other' | null
+  registered_at date,
+  expires_at date,
+  vercel_verified boolean DEFAULT false,
+  ssl_issued boolean DEFAULT false,
+  auto_renew boolean DEFAULT true,
+  managed_by text,                      -- 'store' | 'terasu_life' | 'tera_manage'
+  stripe_subscription_id text,          -- Phase 8以降
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(domain)
+);
+```
+
+### 18.7 法的配慮
+
+Phase 8以降で代行取得する場合、以下の遵守が必要：
+
+- **特定商取引法**: 代行サービス提供事業者として表記義務
+- **下請法**: 継続取引関係の場合、書面発行義務
+- **消費税法**: 原価+手数料の取引（適格請求書発行）
+- **個人情報保護法**: 店舗側の決済情報取り扱い
+
+**いずれも Phase 8 着手前に弁護士レビュー必須**。
+
+### 18.8 現在の実装状況
+
+- ✅ `lib/site-urls.ts` で URL 一元管理済み
+- ✅ `tmanage_instances.custom_domain` カラム設計済み
+- ✅ Vercel に取得済みドメイン（tera-manage.jp, t-manage.jp）追加済み
+- ⬜ instance_domains テーブル実装（Phase 5）
+- ⬜ Vercel API連携（Phase 5）
+- ⬜ Stripe連携（Phase 8）
+
+---
+
 ## 関連ドキュメント
 - `00_README.md` 〜 `07_API_ROUTES.md` - 既存T-MANAGEドキュメント
 - **`docs/CONTRACT_TEMPLATE.md` - T-MANAGE 利用契約書テンプレート** ⭐
@@ -931,3 +1086,4 @@ sql/session{N}_tmanage_06_rezeksi_instance.sql
 *改訂5: 2026-04-23（**全項目完全確定**。稼働日2027/1/1、Shop Manage移行、契約書テンプレート連携、Windows 6台、Android移行計画、IoT設計先行）*
 *改訂6: 2026-04-24（**ドメイン取得完了**。tera-manage.jp + t-manage.jp 取得済み、初年度2,339円、Vercel連携手順を付録E.2に追加）*
 *改訂7: 2026-04-24（**リゼクシー社長対面ミーティング完了・契約書面締結済み**。電子契約モジュールを新規追加、セラピストデータは社長直接受領、写真は既存HPから流用OK、notification=ON/ranking=OFF確定、告知とIoT機材導入判断はリゼクシー側に一任）*
+*改訂8: 2026-04-24（**Section 18 ドメイン管理機能の将来計画を追加**。Phase 5-7は店舗自己取得+Vercel自動連携、Phase 8〜はStripe+サブスクリプションで外販SaaS化。既存HP業者から独立し ange-spa.jp 新規取得予定）*
