@@ -6,6 +6,18 @@ import { supabase } from "../../../../lib/supabase";
 import { SITE } from "../../../../lib/site-theme";
 import SectionHeading from "../../../../components/site/SectionHeading";
 import { LoadingBlock, EmptyBlock } from "../../../../components/site/SiteLayoutParts";
+import { useCustomerAuth } from "../../../../lib/customer-auth-context";
+
+type HpPhoto = {
+  id: number;
+  therapist_id: number;
+  storage_path: string;
+  public_url: string;
+  caption: string | null;
+  visibility: "public" | "member_only";
+  display_order: number;
+  is_main: boolean;
+};
 
 /**
  * /therapist/[id] — セラピスト詳細ページ
@@ -80,6 +92,10 @@ export default function TherapistDetailPage({
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mainImage, setMainImage] = useState<string>("");
+  const [hpPhotos, setHpPhotos] = useState<HpPhoto[]>([]);
+  const [selectedPhoto, setSelectedPhoto] = useState<HpPhoto | null>(null);
+  const { customer, isLoggedIn } = useCustomerAuth();
+  const isMember = isLoggedIn && !!customer;
 
   useEffect(() => {
     (async () => {
@@ -90,7 +106,7 @@ export default function TherapistDetailPage({
       }
       const today = new Date().toISOString().split("T")[0];
       const weekLater = new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
-      const [tResp, sResp, stResp] = await Promise.all([
+      const [tResp, sResp, stResp, pResp] = await Promise.all([
         supabase
           .from("therapists")
           .select("*")
@@ -106,6 +122,12 @@ export default function TherapistDetailPage({
           .lte("date", weekLater)
           .order("date", { ascending: true }),
         supabase.from("stores").select("id,name,shop_display_name"),
+        supabase
+          .from("hp_photos")
+          .select("*")
+          .eq("therapist_id", therapistId)
+          .is("deleted_at", null)
+          .order("display_order", { ascending: true }),
       ]);
       if (!tResp.data) {
         setNotFound(true);
@@ -115,9 +137,26 @@ export default function TherapistDetailPage({
       }
       setShifts(sResp.data || []);
       setStores(stResp.data || []);
+      setHpPhotos(pResp.data || []);
       setLoading(false);
     })();
   }, [therapistId]);
+
+  // 会員限定写真 CTA 表示ログ
+  useEffect(() => {
+    if (!therapistId || isMember || hpPhotos.length === 0) return;
+    const memberOnlyCount = hpPhotos.filter((p) => p.visibility === "member_only").length;
+    if (memberOnlyCount === 0) return;
+    fetch("/api/hp-chatbot-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "photo_cta",
+        therapist_id: therapistId,
+        member_only_count: memberOnlyCount,
+      }),
+    }).catch(() => {});
+  }, [therapistId, isMember, hpPhotos]);
 
   if (loading) {
     return (
@@ -545,6 +584,265 @@ export default function TherapistDetailPage({
           `}</style>
         </div>
       </section>
+
+      {/* ───── GALLERY / 会員限定写真 ───── */}
+      {hpPhotos.length > 0 && (
+        <section
+          style={{
+            padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+            backgroundColor: "#ffffff",
+          }}
+        >
+          <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
+            <SectionHeading label="GALLERY" title="フォトギャラリー" />
+            <div
+              className="site-therapist-gallery"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: 8,
+                marginTop: SITE.sp.xl,
+              }}
+            >
+              {hpPhotos.map((p) => {
+                const locked = p.visibility === "member_only" && !isMember;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      if (locked) {
+                        // CTAクリックログ
+                        fetch("/api/hp-chatbot-event", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            action: "photo_cta_click",
+                            therapist_id: therapistId,
+                            photo_id: p.id,
+                          }),
+                        }).catch(() => {});
+                        return;
+                      }
+                      setSelectedPhoto(p);
+                      // 閲覧ログ
+                      fetch("/api/hp-chatbot-event", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "photo_view",
+                          therapist_id: therapistId,
+                          photo_id: p.id,
+                          customer_id: customer?.id || null,
+                        }),
+                      }).catch(() => {});
+                    }}
+                    style={{
+                      position: "relative",
+                      padding: 0,
+                      border: "none",
+                      background: "transparent",
+                      cursor: locked ? "default" : "zoom-in",
+                      aspectRatio: "3 / 4",
+                      overflow: "hidden",
+                      display: "block",
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={p.public_url}
+                      alt={p.caption || "photo"}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                        filter: locked ? "blur(24px) brightness(0.85)" : "none",
+                        transform: locked ? "scale(1.15)" : "none",
+                        transition: "filter 0.3s",
+                      }}
+                    />
+                    {locked && (
+                      <Link
+                        href="/customer-mypage"
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 10,
+                          textDecoration: "none",
+                          background: "rgba(0,0,0,0.25)",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fetch("/api/hp-chatbot-event", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "photo_cta_click",
+                              therapist_id: therapistId,
+                              photo_id: p.id,
+                            }),
+                          }).catch(() => {});
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#ffffff",
+                            fontFamily: SITE.font.display,
+                            fontSize: "11px",
+                            letterSpacing: SITE.ls.wide,
+                            textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+                          }}
+                        >
+                          MEMBERS ONLY
+                        </span>
+                        <span
+                          style={{
+                            padding: "8px 20px",
+                            backgroundColor: SITE.color.pink,
+                            color: "#ffffff",
+                            fontFamily: SITE.font.serif,
+                            fontSize: "11px",
+                            letterSpacing: SITE.ls.wide,
+                          }}
+                        >
+                          会員登録して見る
+                        </span>
+                      </Link>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 非会員向け誘導バナー */}
+            {!isMember && hpPhotos.some((p) => p.visibility === "member_only") && (
+              <div
+                style={{
+                  marginTop: SITE.sp.xl,
+                  padding: SITE.sp.xl,
+                  backgroundColor: SITE.color.pinkSoft,
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: SITE.font.serif,
+                    fontSize: "13px",
+                    color: SITE.color.text,
+                    marginBottom: 12,
+                    letterSpacing: SITE.ls.loose,
+                    lineHeight: 1.8,
+                  }}
+                >
+                  会員登録すると、非公開の特別な写真をご覧いただけます
+                </p>
+                <Link
+                  href="/customer-mypage"
+                  style={{
+                    display: "inline-block",
+                    padding: "12px 32px",
+                    backgroundColor: SITE.color.pinkDeep,
+                    color: "#ffffff",
+                    fontFamily: SITE.font.serif,
+                    fontSize: "12px",
+                    letterSpacing: SITE.ls.wide,
+                    textDecoration: "none",
+                  }}
+                >
+                  無料会員登録 / ログイン
+                </Link>
+              </div>
+            )}
+
+            <style>{`
+              @media (min-width: ${SITE.bp.md}) {
+                .site-therapist-gallery {
+                  grid-template-columns: repeat(3, 1fr) !important;
+                  gap: 10px !important;
+                }
+              }
+              @media (min-width: ${SITE.bp.lg}) {
+                .site-therapist-gallery {
+                  grid-template-columns: repeat(4, 1fr) !important;
+                }
+              }
+            `}</style>
+          </div>
+        </section>
+      )}
+
+      {/* ───── 写真拡大モーダル ───── */}
+      {selectedPhoto && (
+        <div
+          onClick={() => setSelectedPhoto(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            backgroundColor: "rgba(0,0,0,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            cursor: "zoom-out",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={selectedPhoto.public_url}
+            alt={selectedPhoto.caption || ""}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "85vh",
+              objectFit: "contain",
+              display: "block",
+            }}
+          />
+          {selectedPhoto.caption && (
+            <p
+              style={{
+                position: "absolute",
+                bottom: 30,
+                left: 0,
+                right: 0,
+                textAlign: "center",
+                color: "#ffffff",
+                fontFamily: SITE.font.serif,
+                fontSize: "13px",
+                letterSpacing: SITE.ls.loose,
+                padding: "0 20px",
+              }}
+            >
+              {selectedPhoto.caption}
+            </p>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedPhoto(null);
+            }}
+            style={{
+              position: "absolute",
+              top: 20,
+              right: 20,
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.6)",
+              background: "transparent",
+              color: "#ffffff",
+              fontSize: 20,
+              cursor: "pointer",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* ───── 自己紹介 / メッセージ ───── */}
       {(t.bio || t.message) && (

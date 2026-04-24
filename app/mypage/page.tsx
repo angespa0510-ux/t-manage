@@ -9,6 +9,7 @@ import { generateContractCertificate, generatePaymentCertificate, generateTransa
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
 import InstallPrompt from "../../components/InstallPrompt";
+import TherapistChatTab from "../../components/therapist-chat-tab";
 
 /* ─────────────────────────────────────────────────────────────
  * セラピストマイページ デザインシステム (Session 60 Phase 1)
@@ -94,11 +95,11 @@ export default function TherapistMyPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert">("home");
+  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "chat">("home");
   // ワーク / マネー / ラーン タブ内のサブセグメント
   const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers">("schedule");
   const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax">("salary");
-  const [learnSub, setLearnSub] = useState<"notifications" | "manual">("notifications");
+  const [learnSub, setLearnSub] = useState<"notifications" | "manual" | "chat">("notifications");
   // ボトムナビ→実タブへのディスパッチ
   const clickMain = (m: MainTab) => {
     if (m === "home") setTab("home");
@@ -1003,13 +1004,14 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             items = [
               { key: "notifications", emoji: "🔔", label: "お知らせ",   badge: notifUnread },
               { key: "manual",        emoji: "📖", label: "マニュアル", badge: manualUnread },
+              { key: "chat",          emoji: "💬", label: "チャット" },
             ];
           }
           const clickSub = (k: typeof tab) => {
             setTab(k);
             if (k === "shift" || k === "schedule" || k === "customers") setWorkSub(k);
             else if (k === "salary" || k === "cert" || k === "tax") setMoneySub(k);
-            else if (k === "notifications" || k === "manual") setLearnSub(k);
+            else if (k === "notifications" || k === "manual" || k === "chat") setLearnSub(k);
           };
           const sectionLabel = mainTab === "work" ? "WORK" : mainTab === "money" ? "MONEY" : "LEARN";
           const sectionTitle = mainTab === "work" ? "仕事" : mainTab === "money" ? "報酬・税務" : "情報・お知らせ";
@@ -1144,6 +1146,21 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             </div>
           </div>
         )}
+
+        {tab === "chat" && therapist && (<div style={{ display: "flex", flexDirection: "column", gap: 14, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CHAT</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>💬 スタッフとのチャット</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+          </div>
+          <TherapistChatTab
+            therapistId={therapist.id}
+            therapistName={therapist.name}
+            C={T}
+            FONT_SERIF={FONT_SERIF}
+          />
+        </div>)}
 
         {tab === "shift" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
           {/* セクション見出し */}

@@ -3,6 +3,7 @@ import { Noto_Serif_JP, Cormorant_Garamond } from "next/font/google";
 import { SITE } from "../../lib/site-theme";
 import SiteHeader from "../../components/site/SiteHeader";
 import SiteFooter from "../../components/site/SiteFooter";
+import ChatbotWidget from "../../components/site/ChatbotWidget";
 import { CustomerAuthProvider } from "../../lib/customer-auth-context";
 
 /**
@@ -69,6 +70,8 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         <main style={{ paddingTop: SITE.layout.headerHeightSp }}>{children}</main>
 
         <SiteFooter />
+
+        <ChatbotWidget />
       </div>
     </CustomerAuthProvider>
   );

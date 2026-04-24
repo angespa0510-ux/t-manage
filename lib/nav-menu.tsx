@@ -44,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "📢", label: "セラピストお知らせ投稿", path: "/therapist-notification-post",  category: "セラピスト" },
   { icon: "👤", label: "セラピストマイページ",  path: "/mypage",                       category: "セラピスト" },
   { icon: "🎬", label: "AI動画生成",           path: "/video-generator",              category: "セラピスト" },
+  { icon: "💬", label: "チャット",             path: "/chat",                         category: "セラピスト" },
   { icon: "📖", label: "マニュアル管理",       path: "/manual",                       category: "セラピスト" },
   { icon: "📨", label: "通知ダッシュボード",    path: "/notification-dashboard",       category: "セラピスト", requiresManager: true },
 
@@ -55,6 +56,8 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "📺", label: "カメラ・ロック管理", path: "/camera",        category: "その他" },
   { icon: "📡", label: "IoTデバイス設定",   path: "/iot-settings",  category: "その他" },
   { icon: "📞", label: "CTI監視",          path: "/cti-monitor",   category: "その他", requiresManager: true },
+  { icon: "🤖", label: "HPチャットBOT",    path: "/hp-chatbot-admin", category: "その他", requiresManager: true },
+  { icon: "📸", label: "HP写真管理",       path: "/hp-photos-admin", category: "その他", requiresManager: true },
 
   // ── 登録・設定 ──
   { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
