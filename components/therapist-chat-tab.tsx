@@ -8,8 +8,10 @@ import { supabase } from "../lib/supabase";
  * セラピストマイページ用チャットタブ
  *
  * スタッフとのメッセージやり取り。スタッフ側の管理画面
- * (app/chat) と同じテーブル (chat_conversations/participants/messages)
- * を共有する。
+ * (app/chat) と同じテーブルを共有する。
+ *
+ * カラム命名は SQL (session62_chat_system.sql) と app/chat/page.tsx に
+ * 準拠：participant_type / sender_type / content / is_deleted / is_archived
  *
  * 方針:
  *   - セラピストは「自分がparticipantsに含まれている会話」のみ表示
@@ -21,30 +23,34 @@ import { supabase } from "../lib/supabase";
 
 type Conversation = {
   id: number;
-  type: "direct" | "group" | "broadcast";
-  title: string | null;
+  type: "dm" | "group" | "broadcast";
+  name: string;
   last_message_at: string;
-  last_message_preview: string | null;
+  last_message_preview: string;
+  is_archived: boolean;
   updated_at: string;
 };
 
 type Participant = {
   id: number;
   conversation_id: number;
-  actor_type: "staff" | "therapist";
-  actor_id: number;
-  last_read_message_id: number | null;
+  participant_type: "staff" | "therapist";
+  participant_id: number;
+  display_name: string;
+  last_read_message_id: number;
+  last_read_at: string | null;
 };
 
 type Message = {
   id: number;
   conversation_id: number;
-  sender_actor_type: "staff" | "therapist";
-  sender_actor_id: number;
-  sender_name: string | null;
-  body: string;
+  sender_type: "staff" | "therapist" | "ai" | "system";
+  sender_id: number | null;
+  sender_name: string;
+  content: string;
+  message_type: string;
   created_at: string;
-  deleted_at: string | null;
+  is_deleted: boolean;
 };
 
 type Staff = { id: number; name: string };
@@ -71,6 +77,7 @@ type Props = {
 };
 
 const fmtDateTime = (iso: string) => {
+  if (!iso) return "";
   const d = new Date(iso);
   const now = new Date();
   const sameDay =
@@ -97,7 +104,6 @@ export default function TherapistChatTab({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [showAiMenu, setShowAiMenu] = useState(false);
   const [translateLang, setTranslateLang] = useState("ja");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -107,10 +113,10 @@ export default function TherapistChatTab({
     const pResp = await supabase
       .from("chat_participants")
       .select("*")
-      .eq("actor_type", "therapist")
-      .eq("actor_id", therapistId);
-    const myPart = pResp.data || [];
-    const convIds = myPart.map((p: Participant) => p.conversation_id);
+      .eq("participant_type", "therapist")
+      .eq("participant_id", therapistId);
+    const myPart: Participant[] = pResp.data || [];
+    const convIds = myPart.map((p) => p.conversation_id);
     if (convIds.length === 0) {
       setConversations([]);
       setParticipantsAll([]);
@@ -121,10 +127,10 @@ export default function TherapistChatTab({
         .from("chat_conversations")
         .select("*")
         .in("id", convIds)
-        .is("deleted_at", null)
+        .eq("is_archived", false)
         .order("last_message_at", { ascending: false, nullsFirst: false }),
       supabase.from("chat_participants").select("*").in("conversation_id", convIds),
-      supabase.from("staff").select("id,name").is("deleted_at", null),
+      supabase.from("staff").select("id,name"),
     ]);
     setConversations(cResp.data || []);
     setParticipantsAll(pAllResp.data || []);
@@ -133,7 +139,6 @@ export default function TherapistChatTab({
 
   useEffect(() => {
     loadConversations();
-    // 会話更新の Realtime 購読
     const ch = supabase
       .channel(`therapist_chat_conv_${therapistId}`)
       .on(
@@ -158,20 +163,22 @@ export default function TherapistChatTab({
         .from("chat_messages")
         .select("*")
         .eq("conversation_id", selected)
-        .is("deleted_at", null)
+        .eq("is_deleted", false)
         .order("created_at", { ascending: true })
         .limit(500);
-      setMessages(mResp.data || []);
-      // 既読更新
-      const msgArr = mResp.data || [];
+      const msgArr: Message[] = mResp.data || [];
+      setMessages(msgArr);
       const last = msgArr.length > 0 ? msgArr[msgArr.length - 1] : null;
       if (last) {
         await supabase
           .from("chat_participants")
-          .update({ last_read_message_id: last.id })
+          .update({
+            last_read_message_id: last.id,
+            last_read_at: new Date().toISOString(),
+          })
           .eq("conversation_id", selected)
-          .eq("actor_type", "therapist")
-          .eq("actor_id", therapistId);
+          .eq("participant_type", "therapist")
+          .eq("participant_id", therapistId);
       }
     })();
 
@@ -187,14 +194,18 @@ export default function TherapistChatTab({
         },
         (payload: { new: Message }) => {
           const m = payload.new as Message;
-          setMessages((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
-          // 既読更新
+          setMessages((prev) =>
+            prev.find((x) => x.id === m.id) ? prev : [...prev, m],
+          );
           supabase
             .from("chat_participants")
-            .update({ last_read_message_id: m.id })
+            .update({
+              last_read_message_id: m.id,
+              last_read_at: new Date().toISOString(),
+            })
             .eq("conversation_id", selected)
-            .eq("actor_type", "therapist")
-            .eq("actor_id", therapistId);
+            .eq("participant_type", "therapist")
+            .eq("participant_id", therapistId);
         },
       )
       .subscribe();
@@ -203,7 +214,6 @@ export default function TherapistChatTab({
     };
   }, [selected, therapistId]);
 
-  // スクロール
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -213,26 +223,26 @@ export default function TherapistChatTab({
   const send = useCallback(async () => {
     if (!input.trim() || !selected || sending) return;
     setSending(true);
-    const body = input.trim();
+    const content = input.trim();
     setInput("");
     const { data: inserted } = await supabase
       .from("chat_messages")
       .insert({
         conversation_id: selected,
-        sender_actor_type: "therapist",
-        sender_actor_id: therapistId,
+        sender_type: "therapist",
+        sender_id: therapistId,
         sender_name: therapistName,
-        body,
+        content,
+        message_type: "text",
       })
       .select()
       .single();
     if (inserted) {
-      // 会話 last_message 更新
       await supabase
         .from("chat_conversations")
         .update({
           last_message_at: new Date().toISOString(),
-          last_message_preview: body.slice(0, 100),
+          last_message_preview: content.slice(0, 80),
           updated_at: new Date().toISOString(),
         })
         .eq("id", selected);
@@ -241,7 +251,9 @@ export default function TherapistChatTab({
   }, [input, selected, sending, therapistId, therapistName]);
 
   const callAI = useCallback(
-    async (feature: "polite" | "translate" | "draft" | "summarize" | "ng_check") => {
+    async (
+      feature: "polite" | "translate" | "draft" | "summarize" | "ng_check",
+    ) => {
       if (aiBusy) return;
       setAiBusy(true);
       try {
@@ -250,57 +262,77 @@ export default function TherapistChatTab({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             feature,
-            input_text: input || (feature === "summarize" ? messages.slice(-20).map((m) => `${m.sender_name || ""}: ${m.body}`).join("\n") : ""),
-            target_lang: translateLang,
-            actor_type: "therapist",
-            actor_id: therapistId,
+            input:
+              input ||
+              (feature === "summarize"
+                ? messages
+                    .slice(-20)
+                    .map((m) => `${m.sender_name || ""}: ${m.content}`)
+                    .join("\n")
+                : ""),
+            target_language: translateLang,
+            requester_type: "therapist",
+            requester_id: therapistId,
+            conversation_id: selected,
           }),
         });
         const data = await res.json();
-        if (data.error) {
-          alert(data.error);
-        } else if (feature === "summarize") {
+        if (!res.ok) {
+          alert(data.error || "AI処理に失敗しました");
+          return;
+        }
+        if (feature === "summarize") {
           alert(`【会話要約】\n\n${data.output}`);
         } else if (feature === "ng_check") {
-          if (data.output?.toLowerCase().includes("ok") || data.output?.includes("問題なし")) {
-            alert(`✓ 問題は見つかりませんでした\n\n${data.output}`);
-          } else {
-            alert(`⚠ チェック結果\n\n${data.output}`);
+          try {
+            const parsed = JSON.parse(data.output);
+            const riskMap: Record<string, string> = {
+              none: "問題なし",
+              low: "軽度注意",
+              medium: "要注意",
+              high: "高リスク",
+            };
+            let msg = `🛡 NGチェック: ${riskMap[parsed.risk] || parsed.risk}\n`;
+            if (parsed.reasons?.length)
+              msg += "理由: " + parsed.reasons.join(" / ") + "\n";
+            if (parsed.suggestion) msg += `提案: ${parsed.suggestion}`;
+            alert(msg);
+          } catch {
+            alert(`NGチェック結果\n\n${data.output}`);
           }
         } else {
-          // polite / translate / draft → 入力欄に反映
           setInput(data.output || "");
         }
       } catch {
         alert("AI呼び出しに失敗しました");
       }
       setAiBusy(false);
-      setShowAiMenu(false);
     },
-    [aiBusy, input, messages, translateLang, therapistId],
+    [aiBusy, input, messages, translateLang, therapistId, selected],
   );
 
-  // 会話ごとの相手名と未読数
+  // 会話ごとの相手名
   const conversationMeta = (conv: Conversation) => {
     const parts = participantsAll.filter((p) => p.conversation_id === conv.id);
     const others = parts.filter(
-      (p) => !(p.actor_type === "therapist" && p.actor_id === therapistId),
+      (p) =>
+        !(p.participant_type === "therapist" && p.participant_id === therapistId),
     );
     const title =
-      conv.title ||
-      (conv.type === "direct" && others.length === 1
-        ? others[0].actor_type === "staff"
-          ? staffList.find((s) => s.id === others[0].actor_id)?.name || "スタッフ"
+      conv.name ||
+      (conv.type === "dm" && others.length === 1
+        ? others[0].participant_type === "staff"
+          ? staffList.find((s) => s.id === others[0].participant_id)?.name ||
+            "スタッフ"
           : "セラピスト"
         : conv.type === "broadcast"
         ? "一斉通知"
         : "グループ");
     const myPart = parts.find(
-      (p) => p.actor_type === "therapist" && p.actor_id === therapistId,
+      (p) =>
+        p.participant_type === "therapist" && p.participant_id === therapistId,
     );
-    const lastReadId = myPart?.last_read_message_id || 0;
-    // 未読数は先読みしないと正確に取れないので近似: 最終メッセージ時刻が既読以降ならバッジを出す
-    return { title, myPart, lastReadId };
+    return { title, myPart };
   };
 
   const selectedConv = conversations.find((c) => c.id === selected);
@@ -315,7 +347,6 @@ export default function TherapistChatTab({
         fontFamily: FONT_SERIF,
       }}
     >
-      {/* 会話一覧 */}
       {conversations.length === 0 ? (
         <div
           style={{
@@ -404,12 +435,10 @@ export default function TherapistChatTab({
               </button>
             );
           })}
-          {/* border調整: 最後に閉じる */}
           <div style={{ borderBottom: `1px solid ${C.border}` }} />
         </div>
       ) : (
         <>
-          {/* 戻るヘッダー */}
           <div
             style={{
               display: "flex",
@@ -439,7 +468,6 @@ export default function TherapistChatTab({
             </span>
           </div>
 
-          {/* メッセージ */}
           <div
             ref={scrollRef}
             style={{
@@ -455,7 +483,9 @@ export default function TherapistChatTab({
           >
             {messages.map((m) => {
               const isMine =
-                m.sender_actor_type === "therapist" && m.sender_actor_id === therapistId;
+                m.sender_type === "therapist" && m.sender_id === therapistId;
+              const isAi = m.sender_type === "ai";
+              const isSystem = m.sender_type === "system";
               return (
                 <div
                   key={m.id}
@@ -465,7 +495,7 @@ export default function TherapistChatTab({
                     alignItems: isMine ? "flex-end" : "flex-start",
                   }}
                 >
-                  {!isMine && m.sender_name && (
+                  {!isMine && m.sender_name && !isSystem && (
                     <div
                       style={{
                         fontSize: 10,
@@ -475,6 +505,7 @@ export default function TherapistChatTab({
                       }}
                     >
                       {m.sender_name}
+                      {isAi && " (AI)"}
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
@@ -487,19 +518,24 @@ export default function TherapistChatTab({
                       style={{
                         maxWidth: "78%",
                         padding: "8px 12px",
-                        backgroundColor: isMine ? C.accent : "#ffffff",
+                        backgroundColor: isMine
+                          ? C.accent
+                          : isSystem
+                          ? C.cardAlt
+                          : "#ffffff",
                         color: isMine ? "#ffffff" : C.text,
                         border: isMine ? "none" : `1px solid ${C.border}`,
                         borderRadius: isMine
                           ? "14px 14px 2px 14px"
                           : "14px 14px 14px 2px",
-                        fontSize: 13,
+                        fontSize: isSystem ? 11 : 13,
                         lineHeight: 1.6,
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-word",
+                        fontStyle: isSystem ? "italic" : "normal",
                       }}
                     >
-                      {m.body}
+                      {m.content}
                     </div>
                     {!isMine && (
                       <span style={{ fontSize: 9, color: C.textFaint }}>
@@ -512,7 +548,6 @@ export default function TherapistChatTab({
             })}
           </div>
 
-          {/* AI支援バー */}
           <div
             style={{
               display: "flex",
@@ -591,13 +626,14 @@ export default function TherapistChatTab({
               </button>
             </div>
             {aiBusy && (
-              <span style={{ fontSize: 10, color: C.textMuted, alignSelf: "center" }}>
+              <span
+                style={{ fontSize: 10, color: C.textMuted, alignSelf: "center" }}
+              >
                 …処理中
               </span>
             )}
           </div>
 
-          {/* 入力 */}
           <div style={{ display: "flex", gap: 6 }}>
             <textarea
               value={input}
