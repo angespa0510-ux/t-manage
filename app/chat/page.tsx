@@ -324,6 +324,9 @@ export default function ChatPage() {
   // 検索 & ステータスフィルタ（セラピスト選択時）
   const [newConvSearch, setNewConvSearch] = useState("");
   const [newConvStatusFilter, setNewConvStatusFilter] = useState<"active" | "inactive" | "retired" | "all">("active");
+  // 会話一覧の検索 & フィルタ
+  const [listSearch, setListSearch] = useState("");
+  const [listFilter, setListFilter] = useState<"all" | "active" | "inactive" | "retired" | "unread" | "staff">("all");
 
   const createConversation = async () => {
     if (!activeStaff) return;
@@ -467,71 +470,244 @@ export default function ChatPage() {
               + 新規
             </button>
           </div>
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {conversations.length === 0 && (
-              <div style={{ padding: 24, color: T.textSub, fontSize: 12, textAlign: "center" }}>
-                会話がありません。<br />
-                「+ 新規」から作成してください。
-              </div>
-            )}
-            {conversations.map((conv) => {
-              const unread = unreadByConv[conv.id] || 0;
-              const active = conv.id === currentConvId;
-              return (
-                <div
-                  key={conv.id}
-                  onClick={() => setCurrentConvId(conv.id)}
-                  style={{
-                    padding: 14,
-                    borderBottom: `1px solid ${T.border}`,
-                    cursor: "pointer",
-                    backgroundColor: active ? T.cardAlt : "transparent",
-                    position: "relative",
-                  }}
+
+          {/* 🔍 検索バー */}
+          <div style={{ padding: "10px 12px 6px", position: "relative", borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: T.textMuted, pointerEvents: "none" }}>🔍</span>
+              <input
+                type="text"
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="名前・メッセージで検索..."
+                style={{
+                  width: "100%",
+                  padding: "7px 10px 7px 28px",
+                  borderRadius: 6,
+                  border: `1px solid ${T.border}`,
+                  backgroundColor: T.bg,
+                  color: T.text,
+                  fontSize: 11,
+                  outline: "none",
+                }}
+              />
+              {listSearch && (
+                <button
+                  onClick={() => setListSearch("")}
+                  style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: T.textMuted, cursor: "pointer", fontSize: 12, padding: 4 }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <div style={{ fontSize: 13, fontWeight: unread > 0 ? 600 : 500 }}>
-                      {conv.type === "dm" ? "💬" : conv.type === "group" ? "👥" : "📢"}{" "}
-                      {getConvDisplayName(conv)}
-                    </div>
-                    <div style={{ fontSize: 10, color: T.textSub }}>{formatTime(conv.last_message_at)}</div>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: T.textSub,
-                      marginTop: 4,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {conv.last_message_preview || "（まだメッセージがありません）"}
-                  </div>
-                  {unread > 0 && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 14,
-                        right: 14,
-                        backgroundColor: "#e8849a",
-                        color: "#fff",
-                        borderRadius: 10,
-                        minWidth: 18,
-                        height: 18,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 10,
-                        padding: "0 6px",
-                      }}
-                    >
-                      {unread > 99 ? "99+" : unread}
-                    </div>
-                  )}
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* 🏷 フィルタタブ */}
+            {(() => {
+              // 各会話の参加者からフィルタ用の集計
+              const convMeta = conversations.map((c) => {
+                const parts = allParticipants.filter((p) => p.conversation_id === c.id);
+                const otherTherapists = parts.filter(
+                  (p) => p.participant_type === "therapist",
+                );
+                const hasTherapist = otherTherapists.length > 0;
+                const therapistStatuses = otherTherapists
+                  .map((p) => therapists.find((t) => t.id === p.participant_id)?.status)
+                  .filter(Boolean) as string[];
+                return {
+                  convId: c.id,
+                  hasTherapist,
+                  therapistStatuses,
+                  type: c.type,
+                  unread: unreadByConv[c.id] || 0,
+                };
+              });
+
+              const counts = {
+                all: conversations.length,
+                active: convMeta.filter((m) => m.therapistStatuses.includes("active")).length,
+                inactive: convMeta.filter((m) => m.therapistStatuses.includes("inactive")).length,
+                retired: convMeta.filter((m) => m.therapistStatuses.includes("retired")).length,
+                staff: convMeta.filter((m) => !m.hasTherapist && m.type !== "broadcast").length,
+                unread: convMeta.filter((m) => m.unread > 0).length,
+              };
+              const tabs: { key: typeof listFilter; label: string; color: string }[] = [
+                { key: "all",      label: "全て",   color: T.accent },
+                { key: "unread",   label: "未読",   color: "#e8849a" },
+                { key: "active",   label: "稼働中", color: "#4a7c59" },
+                { key: "inactive", label: "休止中", color: "#888780" },
+                { key: "retired",  label: "退店",   color: "#c45555" },
+                { key: "staff",    label: "スタッフ", color: "#85a8c4" },
+              ];
+              return (
+                <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+                  {tabs.map((tab) => {
+                    const isActive = listFilter === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        onClick={() => setListFilter(tab.key)}
+                        style={{
+                          padding: "3px 8px",
+                          border: `1px solid ${isActive ? tab.color : T.border}`,
+                          backgroundColor: isActive ? `${tab.color}18` : T.card,
+                          color: isActive ? tab.color : T.textSub,
+                          fontSize: 10,
+                          fontWeight: isActive ? 600 : 400,
+                          borderRadius: 999,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <span>{tab.label}</span>
+                        <span style={{ fontSize: 9, opacity: 0.75 }}>{counts[tab.key]}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               );
-            })}
+            })()}
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {(() => {
+              // フィルタ適用
+              const filteredConvs = conversations.filter((conv) => {
+                // フィルタタブ
+                const parts = allParticipants.filter((p) => p.conversation_id === conv.id);
+                const therapistParts = parts.filter((p) => p.participant_type === "therapist");
+                const therapistStatuses = therapistParts
+                  .map((p) => therapists.find((t) => t.id === p.participant_id)?.status)
+                  .filter(Boolean) as string[];
+                const unread = unreadByConv[conv.id] || 0;
+
+                if (listFilter === "unread" && unread === 0) return false;
+                if (listFilter === "active" && !therapistStatuses.includes("active")) return false;
+                if (listFilter === "inactive" && !therapistStatuses.includes("inactive")) return false;
+                if (listFilter === "retired" && !therapistStatuses.includes("retired")) return false;
+                if (listFilter === "staff" && (therapistParts.length > 0 || conv.type === "broadcast")) return false;
+
+                // 検索
+                if (listSearch) {
+                  const q = listSearch.toLowerCase();
+                  const title = getConvDisplayName(conv).toLowerCase();
+                  const preview = (conv.last_message_preview || "").toLowerCase();
+                  if (!title.includes(q) && !preview.includes(q)) return false;
+                }
+                return true;
+              });
+
+              if (conversations.length === 0) {
+                return (
+                  <div style={{ padding: 24, color: T.textSub, fontSize: 12, textAlign: "center" }}>
+                    会話がありません。<br />
+                    「+ 新規」から作成してください。
+                  </div>
+                );
+              }
+
+              if (filteredConvs.length === 0) {
+                return (
+                  <div style={{ padding: 24, color: T.textMuted, fontSize: 11, textAlign: "center", lineHeight: 1.8 }}>
+                    {listSearch ? <>「{listSearch}」に一致する会話がありません</> : <>該当する会話がありません</>}
+                  </div>
+                );
+              }
+
+              return filteredConvs.map((conv) => {
+                const unread = unreadByConv[conv.id] || 0;
+                const active = conv.id === currentConvId;
+                // 相手のセラピストステータス取得
+                const parts = allParticipants.filter((p) => p.conversation_id === conv.id);
+                const therapistPart = parts.find(
+                  (p) => p.participant_type === "therapist",
+                );
+                const therapistStatus = therapistPart
+                  ? therapists.find((t) => t.id === therapistPart.participant_id)?.status
+                  : null;
+                const statusBadge = therapistStatus ? ({
+                  active:   { label: "稼働", color: "#4a7c59" },
+                  inactive: { label: "休止", color: "#888780" },
+                  retired:  { label: "退店", color: "#c45555" },
+                } as Record<string, { label: string; color: string }>)[therapistStatus] : null;
+
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => setCurrentConvId(conv.id)}
+                    style={{
+                      padding: 14,
+                      borderBottom: `1px solid ${T.border}`,
+                      cursor: "pointer",
+                      backgroundColor: active ? T.cardAlt : "transparent",
+                      position: "relative",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: unread > 0 ? 600 : 500, display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
+                        <span>{conv.type === "dm" ? "💬" : conv.type === "group" ? "👥" : "📢"}</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {getConvDisplayName(conv)}
+                        </span>
+                        {statusBadge && (
+                          <span
+                            style={{
+                              flexShrink: 0,
+                              padding: "1px 6px",
+                              fontSize: 9,
+                              fontWeight: 600,
+                              color: statusBadge.color,
+                              backgroundColor: `${statusBadge.color}18`,
+                              borderRadius: 999,
+                              letterSpacing: "0.05em",
+                            }}
+                          >
+                            {statusBadge.label}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, color: T.textSub, flexShrink: 0 }}>{formatTime(conv.last_message_at)}</div>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: T.textSub,
+                        marginTop: 4,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        paddingRight: unread > 0 ? 28 : 0,
+                      }}
+                    >
+                      {conv.last_message_preview || "（まだメッセージがありません）"}
+                    </div>
+                    {unread > 0 && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 12,
+                          right: 14,
+                          backgroundColor: "#e8849a",
+                          color: "#fff",
+                          borderRadius: 10,
+                          minWidth: 18,
+                          height: 18,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 10,
+                          padding: "0 6px",
+                          boxShadow: "0 1px 3px rgba(232,132,154,0.4)",
+                        }}
+                      >
+                        {unread > 99 ? "99+" : unread}
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
 
@@ -639,6 +815,60 @@ export default function ChatPage() {
                 })}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* ═══ 定型返信サジェスト（AI不使用）═══ */}
+              {(() => {
+                // セラピストからの最新メッセージ（自分以外・system以外）
+                const lastIncoming = [...messages]
+                  .reverse()
+                  .find(
+                    (m) =>
+                      m.sender_type !== "system" &&
+                      !(m.sender_type === "staff" && m.sender_id === activeStaff?.id),
+                  );
+                if (!lastIncoming) return null;
+                const suggestions = getStaffQuickReplies(lastIncoming.content);
+                if (suggestions.length === 0) return null;
+                return (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      backgroundColor: "#f0ebe0",
+                      borderTop: `1px solid ${T.border}`,
+                      borderBottom: `1px solid ${T.border}`,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <p style={{ fontSize: 10, color: T.textSub, margin: 0, letterSpacing: "0.05em" }}>
+                      💡 よくある返信（タップで入力欄にセット）
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {suggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setNewMessage(s.text)}
+                          style={{
+                            padding: "5px 10px",
+                            border: `1px solid ${T.border}`,
+                            backgroundColor: "#ffffff",
+                            color: T.text,
+                            fontSize: 11,
+                            lineHeight: 1.3,
+                            cursor: "pointer",
+                            borderRadius: 6,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <span style={{ marginRight: 4 }}>{s.emoji}</span>
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* AI ボタンバー */}
               <div
@@ -1134,4 +1364,135 @@ export default function ChatPage() {
       opacity: aiWorking ? 0.6 : 1,
     };
   }
+}
+
+/**
+ * スタッフ→セラピスト向けの定型返信サジェスト（AI不使用・キーワードマッチ）
+ *
+ * セラピストから届いた最新メッセージのパターンを検出し、返信候補を返す。
+ * スタッフがタップすると入力欄にセットされる（即送信ではなく確認してから送信）。
+ *
+ * カテゴリ:
+ *   - 体調不良・休み希望      → お大事に / 代わり手配 / 電話で話す
+ *   - 遅刻連絡               → 気をつけて / 何時頃？ / 無理せず
+ *   - 出勤できます            → ありがとう / シフト調整 / 時間確定?
+ *   - 予約キャンセル連絡       → 残念お疲れ / 他枠調整 / 了解
+ *   - 指名ありがとう          → お疲れ様 / 素晴らしい / ナイス
+ *   - 質問・確認              → 調べて折り返す / 了解 / すぐ答える
+ *   - 出勤希望                → シフト確認 / OKです / 相談したい
+ *   - ありがとう・お疲れ       → こちらこそ / いつもありがとう
+ *   - トラブル・困った         → 落ち着いて / すぐ対応 / 詳しく教えて
+ */
+function getStaffQuickReplies(text: string): { emoji: string; label: string; text: string }[] {
+  if (!text) return [];
+
+  // 1) 体調不良・休み希望
+  if (/(体調|具合|熱|風邪|だるい|気持ち悪|吐き|お腹|頭痛|休みたい|休ませ|早退|帰らせ)/.test(text)) {
+    return [
+      { emoji: "🙏", label: "お大事に", text: "無理せずゆっくり休んでください。お大事に。" },
+      { emoji: "🔄", label: "代わり手配します", text: "了解しました、代わりのシフトこちらで調整します。" },
+      { emoji: "📞", label: "電話で話しましょう", text: "詳しくお話ししたいので、少しお電話できますか？" },
+    ];
+  }
+
+  // 2) 遅刻・遅れる連絡
+  if (/(遅れ|遅刻|間に合わ|まにあわ|遅く|ちょっと遅|少し遅)/.test(text)) {
+    return [
+      { emoji: "👌", label: "了解、気をつけて", text: "了解しました、気をつけて来てください。" },
+      { emoji: "⏰", label: "何時頃になりそう？", text: "承知しました。何時頃になりそうですか？" },
+      { emoji: "😊", label: "無理せず", text: "大丈夫です、無理せず安全第一で。" },
+    ];
+  }
+
+  // 3) 出勤できる・空きあります
+  if (
+    /(出勤でき|出れ|入れま|出せ|働け|空いて|空きあ|入れる|空きが)/.test(text) &&
+    !/(でき(ない|ません)|ない|厳しい|難し)/.test(text)
+  ) {
+    return [
+      { emoji: "🙏", label: "助かります", text: "ありがとうございます、助かります！" },
+      { emoji: "📝", label: "シフト確認します", text: "ありがとうございます、確認してシフト調整します。" },
+      { emoji: "❓", label: "時間確定する？", text: "ありがとうございます。時間帯はどうしましょうか？" },
+    ];
+  }
+
+  // 4) 出勤できない・難しい
+  if (
+    /((出れ|出勤|入れ|働け).*(ない|ません|厳しい|難し))|都合悪|用事|予定が|NGです|出られ(ない|ません)/.test(text)
+  ) {
+    return [
+      { emoji: "👌", label: "了解です", text: "了解しました、また次回よろしくお願いします。" },
+      { emoji: "🤔", label: "他日なら可能？", text: "承知しました。他の日で入れる日はありますか？" },
+    ];
+  }
+
+  // 5) 予約キャンセル・ドタキャン報告
+  if (/(キャンセル|来なかった|来店なし|ドタキャン|連絡なし)/.test(text)) {
+    return [
+      { emoji: "😔", label: "残念お疲れ", text: "残念でしたね、お疲れ様でした。" },
+      { emoji: "🔄", label: "他の枠調整します", text: "了解、こちらで他の予約が入るよう調整してみます。" },
+      { emoji: "👍", label: "了解しました", text: "了解しました、報告ありがとうございます。" },
+    ];
+  }
+
+  // 6) 指名入った・予約入った
+  if (/(指名|本指名|ネット指名|ご予約|予約).*(入り|入った|きた|来た|ありました|確定)/.test(text)) {
+    return [
+      { emoji: "🙌", label: "ありがとう", text: "ありがとうございます、よろしくお願いします！" },
+      { emoji: "🎉", label: "ナイスです", text: "ナイスです！頑張ってください。" },
+    ];
+  }
+
+  // 7) 指名のお礼・施術終了報告
+  if (/(ありがとうござい|お疲れ様|おつかれ|終わり|終了|完了)/.test(text)) {
+    return [
+      { emoji: "🙌", label: "お疲れ様", text: "お疲れ様でした！ゆっくり休んでください。" },
+      { emoji: "💐", label: "こちらこそ", text: "こちらこそ、いつもありがとうございます。" },
+    ];
+  }
+
+  // 8) 質問・確認依頼
+  if (/(聞きたい|質問|確認したい|教えて|わからな|分からな|どう|どなた|どんな|何|なに).*[?？]?/.test(text)) {
+    return [
+      { emoji: "📝", label: "確認して返信", text: "確認して折り返し返信しますね。少々お待ちください。" },
+      { emoji: "📞", label: "電話で説明", text: "少しお電話で説明したいのですが、今大丈夫ですか？" },
+      { emoji: "👍", label: "了解、調べます", text: "了解しました、調べてから改めてご連絡します。" },
+    ];
+  }
+
+  // 9) トラブル・お客様問題
+  if (/(お客様|客|クレーム|トラブル|怖|怪しい|変な|マナー|困った|困っ)/.test(text)) {
+    return [
+      { emoji: "🆘", label: "すぐ対応します", text: "詳しく教えてください、すぐ対応します。" },
+      { emoji: "😌", label: "落ち着いて", text: "大丈夫、落ち着いて話してください。一緒に考えましょう。" },
+      { emoji: "📞", label: "電話ください", text: "状況を詳しく聞きたいので、お電話いただけますか？" },
+    ];
+  }
+
+  // 10) シフト変更・希望
+  if (/(シフト|希望|変更|追加|出勤日|出勤時間|時間変え)/.test(text)) {
+    return [
+      { emoji: "📝", label: "確認します", text: "承知しました、シフト確認して調整します。" },
+      { emoji: "✅", label: "OKです", text: "大丈夫です、調整しておきます。" },
+      { emoji: "💬", label: "相談したい", text: "少し相談したいので、他の日程も含めて聞いてもいいですか？" },
+    ];
+  }
+
+  // 11) 業務依頼・お願いへの了解
+  if (/(お願い|頼みます|やって|見て|確認して|伝えて)/.test(text)) {
+    return [
+      { emoji: "✅", label: "了解です", text: "了解しました、対応します。" },
+      { emoji: "⏳", label: "少し時間ください", text: "承知しました、少しお時間いただきます。" },
+    ];
+  }
+
+  // 12) 汎用（何も該当しない短文向け）
+  if (text.length <= 40) {
+    return [
+      { emoji: "👍", label: "了解", text: "了解しました、ありがとうございます。" },
+      { emoji: "🙏", label: "お疲れ様", text: "お疲れ様です。ありがとうございます。" },
+    ];
+  }
+
+  return [];
 }
