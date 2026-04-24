@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useConfirm } from "../../components/useConfirm";
+import { customerMypageUrl } from "../../lib/site-urls";
 
 type Nomination = { id: number; name: string; price: number; therapist_back: number };
 type Discount = { id: number; name: string; amount: number; type: string; newcomer_only: boolean; web_available: boolean; valid_from: string | null; valid_until: string | null; combinable: boolean };
@@ -1219,7 +1220,7 @@ export default function ServiceSettings() {
                         "{指名}": "本指名", "{割引}": "新規割引", "{店舗名}": "チョップ豊橋店",
                         "{金額}": "12,000", "{送信者}": "田中", "{セラピスト名}": "花子",
                         "{場所URL}": ntLocToyohashi || "https://example.com/location",
-                        "{お客様リンク}": "https://t-manage.vercel.app/mypage/customer?name=田中太郎",
+                        "{お客様リンク}": customerMypageUrl("田中太郎"),
                         "{ルーム名}": "Room A", "{ビル名}": "豊橋ルーム",
                       };
                       text = text.replace(/\{指名行\}/g, "\n指名 : 本指名");

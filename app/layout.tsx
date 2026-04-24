@@ -8,6 +8,7 @@ import { CtiPopupProvider } from "../lib/cti-popup";
 import PinChangeModal from "../components/PinChangeModal";
 import PwaRegister from "../components/PwaRegister";
 import { VercelAnalyticsGate } from "../components/VercelAnalyticsGate";
+import { METADATA_BASE_URL } from "../lib/site-urls";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(METADATA_BASE_URL),
   title: "T-MANAGE | チョップ",
   description: "リラクゼーションサロン「チョップ」の統合管理システム",
   manifest: "/manifest.json",

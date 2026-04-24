@@ -23,8 +23,8 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 type Feature = "polite" | "translate" | "draft" | "summarize" | "ng_check";
 
-const MODEL = "claude-sonnet-4-5";
-// Claude Sonnet 4.5 料金目安（入力 $3/1M, 出力 $15/1M, 150円/USD 換算）
+const MODEL = "claude-sonnet-4-6";
+// Claude Sonnet 4.6 料金目安（入力 $3/1M, 出力 $15/1M, 150円/USD 換算）
 const PRICE_IN_PER_TOKEN_JPY = (3 / 1_000_000) * 150;
 const PRICE_OUT_PER_TOKEN_JPY = (15 / 1_000_000) * 150;
 

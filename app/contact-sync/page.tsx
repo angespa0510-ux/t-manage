@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { googleOauthCallbackUrl } from "../../lib/site-urls";
 
 type SyncResult = { name: string; status: string; error?: string };
 
@@ -362,7 +363,7 @@ function ContactSyncInner() {
             <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
               <p className="font-medium mb-1">④ 認証情報を作成</p>
               <p className="text-[10px]" style={{ color: T.textMuted }}>「認証情報」→「+ 認証情報を作成」→「OAuth クライアント ID」→ 種類「ウェブアプリケーション」→ 承認済みリダイレクトURIに以下を追加:</p>
-              <p className="text-[10px] mt-1 px-2 py-1 rounded font-mono" style={{ backgroundColor: T.bg, color: "#4285f4" }}>{typeof window !== "undefined" ? `${window.location.origin}/api/google-auth/callback` : "https://t-manage.vercel.app/api/google-auth/callback"}</p>
+              <p className="text-[10px] mt-1 px-2 py-1 rounded font-mono" style={{ backgroundColor: T.bg, color: "#4285f4" }}>{typeof window !== "undefined" ? `${window.location.origin}/api/google-auth/callback` : googleOauthCallbackUrl()}</p>
             </div>
           </div>
         </div>

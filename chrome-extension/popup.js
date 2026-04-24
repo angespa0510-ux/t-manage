@@ -1,9 +1,9 @@
-// T-MANAGE Popup Script v2.0
+// T-MANAGE Popup Script v2.2
 
 // タブ接続状態チェック
 function checkStatus() {
   chrome.tabs.query({}, (tabs) => {
-    const hasTmanage = tabs.some(t => t.url && t.url.includes('t-manage.vercel.app'));
+    const hasTmanage = tabs.some(t => t.url && t.url.includes('ange-spa.t-manage.jp'));
     const hasLine = tabs.some(t => t.url && t.url.includes('chat.line.biz'));
     const hasSms = tabs.some(t => t.url && t.url.includes('messages.google.com'));
 

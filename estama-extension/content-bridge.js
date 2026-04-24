@@ -1,6 +1,6 @@
 // =============================================
 // T-MANAGE エステ魂自動投稿 — content-bridge.js
-// ブリッジページ (t-manage.vercel.app/estama-bridge) 自動通過
+// ブリッジページ (ange-spa.t-manage.jp/estama-bridge) 自動通過
 // =============================================
 
 (function () {

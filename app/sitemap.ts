@@ -1,12 +1,12 @@
 import type { MetadataRoute } from "next";
+import { PUBLIC_HP_URL } from "../lib/site-urls";
 
 /**
- * sitemap.xml — Next.js App Router の generateSitemap 機能で動的生成
+ * sitemap.xml — 公開HP（ange-spa.com）のサイトマップ
  *
- * 公開HPの主要ページのみ。管理画面(/dashboard, /staff-login 等) は含めない。
+ * Next.js App Router の generateSitemap 機能で動的生成。
+ * 公開HPの主要ページのみ記載し、管理画面パスは含めない。
  */
-
-const SITE_URL = "https://t-manage.vercel.app"; // TODO: 独自ドメイン取得後は差し替え
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
@@ -21,7 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ];
 
   return paths.map((p) => ({
-    url: `${SITE_URL}${p.path}`,
+    url: `${PUBLIC_HP_URL}${p.path}`,
     lastModified: now,
     changeFrequency: p.changeFreq,
     priority: p.priority,

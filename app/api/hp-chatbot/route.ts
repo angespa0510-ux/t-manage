@@ -20,7 +20,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
  *   - 応答時間・ソースをログ化
  */
 
-const MODEL = "claude-sonnet-4-5";
+const MODEL = "claude-sonnet-4-6";
 const PRICE_IN_PER_TOKEN_JPY = (3 / 1_000_000) * 150;
 const PRICE_OUT_PER_TOKEN_JPY = (15 / 1_000_000) * 150;
 

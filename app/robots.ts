@@ -1,7 +1,14 @@
 import type { MetadataRoute } from "next";
+import { PUBLIC_HP_URL } from "../lib/site-urls";
 
 /**
- * robots.txt — 公開HPはクロール許可、管理画面は除外
+ * robots.txt — 公開HP（ange-spa.com）の SEO 設定
+ *
+ * この robots.txt は ange-spa.com でアクセスされた時にクロール許可するページを制御する。
+ * 管理画面系のパスは disallow して検索結果に出さない。
+ *
+ * 注: ange-spa.t-manage.jp（管理画面ドメイン）は、別途 meta robots noindex か、
+ *     host ベースのミドルウェアで処理する想定。
  */
 
 export default function robots(): MetadataRoute.Robots {
@@ -54,9 +61,21 @@ export default function robots(): MetadataRoute.Robots {
           "/invoice-upload/",
           "/license-upload/",
           "/mynumber-upload/",
+          "/tera-admin",
+          "/call-assistant",
+          "/call-test",
+          "/chat",
+          "/chat-insights",
+          "/cti-monitor",
+          "/hp-chatbot-admin",
+          "/hp-photos-admin",
+          "/install-guide",
+          "/inventory",
+          "/notification-dashboard",
+          "/sales",
         ],
       },
     ],
-    sitemap: "https://t-manage.vercel.app/sitemap.xml",
+    sitemap: `${PUBLIC_HP_URL}/sitemap.xml`,
   };
 }

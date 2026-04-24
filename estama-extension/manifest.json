@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "T-MANAGE エステ魂 自動投稿",
-  "version": "2.3.0",
-  "description": "T-MANAGEの速報パネルからエステ魂へワンクリック投稿",
+  "version": "2.4.0",
+  "description": "T-MANAGEの速報パネルからエステ魂へワンクリック投稿（独自ドメイン対応）",
   "permissions": [
     "storage",
     "tabs",
@@ -11,6 +11,7 @@
   "host_permissions": [
     "https://estama.jp/*",
     "https://ange-spa.com/*",
+    "https://ange-spa.t-manage.jp/*",
     "https://cbewozzdyjqmhzkxsjqo.supabase.co/*"
   ],
   "background": {
@@ -19,7 +20,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://t-manage.vercel.app/estama-bridge*"
+        "https://ange-spa.t-manage.jp/estama-bridge*"
       ],
       "js": ["content-bridge.js"],
       "run_at": "document_idle"

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "T-MANAGE 通知アシスタント",
-  "version": "2.1.0",
-  "description": "T-MANAGEの予約通知をLINE/SMSに自動入力 + 確定シフトLINE送信",
+  "version": "2.2.0",
+  "description": "T-MANAGEの予約通知をLINE/SMSに自動入力 + 確定シフトLINE送信（独自ドメイン対応）",
   "permissions": [
     "storage",
     "clipboardWrite",
@@ -11,7 +11,7 @@
     "scripting"
   ],
   "host_permissions": [
-    "https://t-manage.vercel.app/*",
+    "https://ange-spa.t-manage.jp/*",
     "https://chat.line.biz/*",
     "https://messages.google.com/*"
   ],
@@ -20,7 +20,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://t-manage.vercel.app/*"],
+      "matches": ["https://ange-spa.t-manage.jp/*"],
       "js": ["content_tmanage.js"],
       "run_at": "document_idle"
     },

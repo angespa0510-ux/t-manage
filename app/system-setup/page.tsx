@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
+import { TMANAGE_URL } from "../../lib/site-urls";
 
 type Tab = "cti" | "chrome" | "video" | "sokuho" | "hp" | "mail" | "chat-ai";
 
@@ -429,7 +430,7 @@ export default function SystemSetup() {
                     <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> スマホのブラウザ（Chrome）で<span style={{ fontWeight: 600 }}>このページ</span>を開く
                   </p>
                   <code className="text-[11px] mt-1 block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
-                    https://t-manage.vercel.app/system-setup
+                    {TMANAGE_URL}/system-setup
                   </code>
                 </div>
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
@@ -1257,7 +1258,7 @@ STORE_ID=1`}
                       初回のSMS②ボタン押下時に「Microsoft Edgeを開きますか？」ダイアログが表示されます。
                     </p>
                     <p>
-                      ✅ 「<span style={{ fontWeight: 600, color: T.text }}>t-manage.vercel.app でのこのタイプのリンクは常に関連付けられたアプリで開く</span>」にチェック → 「Microsoft Edgeを開く」
+                      ✅ 「<span style={{ fontWeight: 600, color: T.text }}>ange-spa.t-manage.jp でのこのタイプのリンクは常に関連付けられたアプリで開く</span>」にチェック → 「Microsoft Edgeを開く」
                     </p>
                     <p className="text-[10px]" style={{ color: T.textMuted }}>
                       ※ 以降はダイアログなしで即Edge起動になります
@@ -1298,7 +1299,7 @@ STORE_ID=1`}
                   { q: "Chromeを更新したら拡張が消えた", a: "デベロッパーモードで読み込んだ拡張はChromeの更新で無効になることがあります。chrome://extensions から再度読み込んでください。" },
                   { q: "SMS②でGoogleメッセージが開かない", a: "Edge拡張が有効になっているか確認してください。edge://extensions で「T-MANAGE SMS② 自動入力」がONになっているか確認してください。" },
                   { q: "SMS②で検索はされるがメッセージが入力されない", a: "edge://extensions で拡張機能の🔄リロードボタンを押してから再度試してください。Googleメッセージの画面が変わった場合はフォルダの更新が必要です。" },
-                  { q: "「Microsoft Edgeを開きますか？」が毎回出る", a: "ダイアログの「t-manage.vercel.app でのこのタイプのリンクは常に関連付けられたアプリで開く」にチェックを入れてから「Microsoft Edgeを開く」をクリックしてください。" },
+                  { q: "「Microsoft Edgeを開きますか？」が毎回出る", a: "ダイアログの「ange-spa.t-manage.jp でのこのタイプのリンクは常に関連付けられたアプリで開く」にチェックを入れてから「Microsoft Edgeを開く」をクリックしてください。" },
                 ].map((faq, i) => (
                   <details key={i} className="rounded-xl" style={{ backgroundColor: T.cardAlt }}>
                     <summary className="px-4 py-3 text-[12px] cursor-pointer" style={{ color: T.text }}>{faq.q}</summary>
