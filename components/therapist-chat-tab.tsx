@@ -49,6 +49,8 @@ type Message = {
   sender_name: string;
   content: string;
   message_type: string;
+  attachment_url: string | null;
+  attachment_type: string | null;
   created_at: string;
   is_deleted: boolean;
 };
@@ -106,6 +108,11 @@ export default function TherapistChatTab({
   const [aiBusy, setAiBusy] = useState(false);
   const [translateLang, setTranslateLang] = useState("ja");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // 添付ファイル
+  const [pendingAttachment, setPendingAttachment] = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 会話一覧取得
   const loadConversations = useCallback(async () => {
@@ -221,9 +228,49 @@ export default function TherapistChatTab({
   }, [messages]);
 
   const send = useCallback(async () => {
-    if (!input.trim() || !selected || sending) return;
+    if ((!input.trim() && !pendingAttachment) || !selected || sending) return;
     setSending(true);
     const content = input.trim();
+
+    // 添付アップロード
+    let attachmentUrl: string | null = null;
+    let attachmentType: string | null = null;
+    if (pendingAttachment) {
+      setUploading(true);
+      const ext = pendingAttachment.name.split(".").pop() || "bin";
+      const timestamp = Date.now();
+      const rand = Math.random().toString(36).slice(2, 8);
+      const path = `conv-${selected}/${timestamp}-${rand}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-attachments")
+        .upload(path, pendingAttachment, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: pendingAttachment.type,
+        });
+      if (upErr) {
+        alert("添付のアップロードに失敗しました: " + upErr.message);
+        setUploading(false);
+        setSending(false);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+      attachmentUrl = urlData.publicUrl;
+      attachmentType = pendingAttachment.type;
+      // 15日後削除のため記録
+      await supabase.from("chat_attachments").insert({
+        conversation_id: selected,
+        storage_path: path,
+        file_url: attachmentUrl,
+        file_type: attachmentType,
+        file_size: pendingAttachment.size,
+        uploaded_by_type: "therapist",
+        uploaded_by_id: therapistId,
+        expires_at: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      setUploading(false);
+    }
+
     setInput("");
     const { data: inserted } = await supabase
       .from("chat_messages")
@@ -233,22 +280,69 @@ export default function TherapistChatTab({
         sender_id: therapistId,
         sender_name: therapistName,
         content,
-        message_type: "text",
+        message_type: attachmentUrl
+          ? attachmentType?.startsWith("image/")
+            ? "image"
+            : attachmentType?.startsWith("video/")
+            ? "video"
+            : "file"
+          : "text",
+        attachment_url: attachmentUrl,
+        attachment_type: attachmentType,
       })
       .select()
       .single();
     if (inserted) {
+      const preview = content
+        ? content.slice(0, 80)
+        : attachmentType?.startsWith("image/")
+        ? "📷 画像を送信"
+        : attachmentType?.startsWith("video/")
+        ? "🎬 動画を送信"
+        : "📎 ファイル";
       await supabase
         .from("chat_conversations")
         .update({
           last_message_at: new Date().toISOString(),
-          last_message_preview: content.slice(0, 80),
+          last_message_preview: preview,
           updated_at: new Date().toISOString(),
         })
         .eq("id", selected);
     }
+    // 添付クリア
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingAttachment(null);
+    setPendingPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setSending(false);
-  }, [input, selected, sending, therapistId, therapistName]);
+  }, [input, selected, sending, therapistId, therapistName, pendingAttachment, pendingPreviewUrl]);
+
+  // ファイル選択
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const MAX_SIZE = 30 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert(`ファイルサイズが大きすぎます（上限 30MB、現在 ${(file.size / 1024 / 1024).toFixed(1)}MB）`);
+      e.target.value = "";
+      return;
+    }
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      alert("画像または動画を選んでください");
+      e.target.value = "";
+      return;
+    }
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingAttachment(file);
+    setPendingPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearAttachment = () => {
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingAttachment(null);
+    setPendingPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const callAI = useCallback(
     async (
@@ -547,6 +641,32 @@ export default function TherapistChatTab({
                       }}
                     >
                       {m.content}
+                      {/* 添付ファイル */}
+                      {m.attachment_url && m.attachment_type && (
+                        <div style={{ marginTop: m.content ? 8 : 0 }}>
+                          {m.attachment_type.startsWith("image/") ? (
+                            <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={m.attachment_url}
+                                alt="attachment"
+                                style={{ maxWidth: "100%", maxHeight: 240, borderRadius: 8, display: "block", cursor: "zoom-in" }}
+                              />
+                            </a>
+                          ) : m.attachment_type.startsWith("video/") ? (
+                            <video
+                              src={m.attachment_url}
+                              controls
+                              preload="metadata"
+                              style={{ maxWidth: "100%", maxHeight: 240, borderRadius: 8, display: "block" }}
+                            />
+                          ) : (
+                            <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" style={{ color: isMine ? "#fff" : C.accentDeep, textDecoration: "underline", fontSize: 12 }}>
+                              📎 添付ファイル
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {!isMine && (
                       <span style={{ fontSize: 9, color: C.textFaint }}>
@@ -722,7 +842,76 @@ export default function TherapistChatTab({
             )}
           </div>
 
+          {/* 添付プレビュー */}
+          {pendingAttachment && (
+            <div
+              style={{
+                padding: "8px 10px",
+                backgroundColor: C.cardAlt,
+                border: `1px solid ${C.border}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              {pendingAttachment.type.startsWith("image/") && pendingPreviewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={pendingPreviewUrl} alt="preview" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 6, border: `1px solid ${C.border}` }} />
+              ) : pendingAttachment.type.startsWith("video/") && pendingPreviewUrl ? (
+                <video src={pendingPreviewUrl} style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 6, border: `1px solid ${C.border}`, backgroundColor: "#000" }} />
+              ) : null}
+              <div style={{ flex: 1, fontSize: 11 }}>
+                <div style={{ fontWeight: 500, color: C.text }}>
+                  {pendingAttachment.type.startsWith("image/") ? "📷 " : "🎬 "}
+                  {pendingAttachment.name}
+                </div>
+                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 1 }}>
+                  {(pendingAttachment.size / 1024 / 1024).toFixed(2)} MB ・ 15日後に自動削除
+                </div>
+              </div>
+              <button
+                onClick={clearAttachment}
+                disabled={uploading}
+                style={{
+                  padding: "3px 8px",
+                  border: `1px solid ${C.border}`,
+                  backgroundColor: "#ffffff",
+                  color: C.textSub,
+                  fontSize: 10,
+                  cursor: uploading ? "not-allowed" : "pointer",
+                  fontFamily: FONT_SERIF,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 6 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || uploading}
+              title="画像・動画を添付"
+              style={{
+                padding: "8px 10px",
+                border: `1px solid ${C.border}`,
+                backgroundColor: "#ffffff",
+                color: C.textSub,
+                fontSize: 15,
+                cursor: sending || uploading ? "not-allowed" : "pointer",
+                opacity: sending || uploading ? 0.5 : 1,
+                alignSelf: "stretch",
+              }}
+            >
+              📎
+            </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -748,7 +937,7 @@ export default function TherapistChatTab({
             />
             <button
               onClick={send}
-              disabled={sending || !input.trim()}
+              disabled={sending || uploading || (!input.trim() && !pendingAttachment)}
               style={{
                 padding: "0 18px",
                 backgroundColor: C.accentDeep,
@@ -757,12 +946,12 @@ export default function TherapistChatTab({
                 fontFamily: FONT_SERIF,
                 fontSize: 12,
                 letterSpacing: "0.05em",
-                cursor: sending || !input.trim() ? "default" : "pointer",
-                opacity: sending || !input.trim() ? 0.5 : 1,
+                cursor: sending || uploading || (!input.trim() && !pendingAttachment) ? "default" : "pointer",
+                opacity: sending || uploading || (!input.trim() && !pendingAttachment) ? 0.5 : 1,
                 alignSelf: "stretch",
               }}
             >
-              送信
+              {uploading ? "送信中..." : "送信"}
             </button>
           </div>
         </>

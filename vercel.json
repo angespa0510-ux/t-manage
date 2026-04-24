@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/chat-insights-batch",
+      "schedule": "0 18 * * 0"
+    },
+    {
+      "path": "/api/chat-attachments-cleanup",
+      "schedule": "30 18 * * 0"
+    }
+  ]
+}

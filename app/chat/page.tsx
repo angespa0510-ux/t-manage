@@ -36,6 +36,7 @@ type Message = {
   content: string;
   message_type: string;
   attachment_url: string | null;
+  attachment_type: string | null;
   ai_feature_used: string | null;
   is_edited: boolean;
   is_deleted: boolean;
@@ -64,6 +65,11 @@ export default function ChatPage() {
   const [unreadByConv, setUnreadByConv] = useState<Record<number, number>>({});
 
   const [newMessage, setNewMessage] = useState("");
+  // 添付ファイル（画像・動画）
+  const [pendingAttachment, setPendingAttachment] = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [showNewConv, setShowNewConv] = useState(false);
   const [aiFeature, setAiFeature] = useState<AiFeature | null>(null);
@@ -227,32 +233,122 @@ export default function ChatPage() {
   const sendMessage = async (override?: string) => {
     if (!activeStaff || !currentConvId) return;
     const content = (override ?? newMessage).trim();
-    if (!content) return;
+    // 添付もテキストも空なら何もしない
+    if (!content && !pendingAttachment) return;
 
     setLoading(true);
+
+    // 添付ファイルをアップロード
+    let attachmentUrl: string | null = null;
+    let attachmentType: string | null = null;
+    if (pendingAttachment) {
+      setUploading(true);
+      const ext = pendingAttachment.name.split(".").pop() || "bin";
+      const timestamp = Date.now();
+      const rand = Math.random().toString(36).slice(2, 8);
+      const path = `conv-${currentConvId}/${timestamp}-${rand}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-attachments")
+        .upload(path, pendingAttachment, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: pendingAttachment.type,
+        });
+      if (upErr) {
+        toast.show("添付ファイルのアップロード失敗: " + upErr.message, "error");
+        setUploading(false);
+        setLoading(false);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+      attachmentUrl = urlData.publicUrl;
+      attachmentType = pendingAttachment.type;
+      // chat_attachments テーブルに記録（15日後削除用）
+      await supabase.from("chat_attachments").insert({
+        conversation_id: currentConvId,
+        storage_path: path,
+        file_url: attachmentUrl,
+        file_type: attachmentType,
+        file_size: pendingAttachment.size,
+        uploaded_by_type: "staff",
+        uploaded_by_id: activeStaff.id,
+        expires_at: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      setUploading(false);
+    }
+
     const { error } = await supabase.from("chat_messages").insert({
       conversation_id: currentConvId,
       sender_type: "staff",
       sender_id: activeStaff.id,
       sender_name: activeStaff.name,
       content,
-      message_type: "text",
+      message_type: attachmentUrl
+        ? attachmentType?.startsWith("image/")
+          ? "image"
+          : attachmentType?.startsWith("video/")
+          ? "video"
+          : "file"
+        : "text",
+      attachment_url: attachmentUrl,
+      attachment_type: attachmentType,
     });
     if (error) {
       toast.show("送信に失敗しました: " + error.message, "error");
     } else {
       // 会話の last_message_at を更新
+      const preview = content
+        ? content.slice(0, 80)
+        : attachmentType?.startsWith("image/")
+        ? "📷 画像を送信"
+        : attachmentType?.startsWith("video/")
+        ? "🎬 動画を送信"
+        : "📎 ファイルを送信";
       await supabase
         .from("chat_conversations")
         .update({
           last_message_at: new Date().toISOString(),
-          last_message_preview: content.slice(0, 80),
+          last_message_preview: preview,
         })
         .eq("id", currentConvId);
       setNewMessage("");
+      // 添付クリア
+      if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+      setPendingAttachment(null);
+      setPendingPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       loadConversations();
     }
     setLoading(false);
+  };
+
+  // ─── ファイル選択時の処理 ───
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // 容量チェック
+    const MAX_SIZE = 30 * 1024 * 1024; // 30MB
+    if (file.size > MAX_SIZE) {
+      toast.show(`ファイルサイズが大きすぎます（上限 30MB、現在 ${(file.size / 1024 / 1024).toFixed(1)}MB）`, "error");
+      e.target.value = "";
+      return;
+    }
+    // 種類チェック
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      toast.show("画像または動画ファイルを選択してください", "error");
+      e.target.value = "";
+      return;
+    }
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingAttachment(file);
+    setPendingPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearAttachment = () => {
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingAttachment(null);
+    setPendingPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // ─── AI 機能実行 ───
@@ -761,6 +857,24 @@ export default function ChatPage() {
                 {messages.map((msg) => {
                   const isMine = msg.sender_type === "staff" && msg.sender_id === activeStaff.id;
                   const isAi = msg.sender_type === "ai";
+                  const isSystem = msg.sender_type === "system";
+                  // 送信者タイプ別のラベル情報
+                  const senderBadge = (() => {
+                    if (isAi) return { label: "AI", color: "#a855f7", bg: "#a855f718" };
+                    if (msg.sender_type === "therapist") return { label: "セラ", color: "#e8849a", bg: "#e8849a18" };
+                    if (msg.sender_type === "staff") return { label: "スタッフ", color: "#85a8c4", bg: "#85a8c418" };
+                    return null;
+                  })();
+                  // システムメッセージは中央寄せの特殊表示
+                  if (isSystem) {
+                    return (
+                      <div key={msg.id} style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
+                        <div style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic", backgroundColor: T.cardAlt, padding: "4px 10px", borderRadius: 10 }}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div
                       key={msg.id}
@@ -771,13 +885,39 @@ export default function ChatPage() {
                       }}
                     >
                       <div style={{ maxWidth: "70%" }}>
-                        {!isMine && (
-                          <div style={{ fontSize: 10, color: T.textSub, marginBottom: 2, marginLeft: 8 }}>
-                            {msg.sender_name}
-                            {msg.sender_type === "therapist" && " (セラ)"}
-                            {isAi && " 🤖 AI"}
-                          </div>
-                        )}
+                        {/* 送信者バッジ（自分含めて全員に表示）*/}
+                        <div
+                          style={{
+                            fontSize: 10,
+                            color: T.textSub,
+                            marginBottom: 3,
+                            padding: "0 8px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                            justifyContent: isMine ? "flex-end" : "flex-start",
+                          }}
+                        >
+                          {senderBadge && (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 600,
+                                color: senderBadge.color,
+                                backgroundColor: senderBadge.bg,
+                                padding: "1px 6px",
+                                borderRadius: 999,
+                                letterSpacing: "0.05em",
+                              }}
+                            >
+                              {senderBadge.label}
+                            </span>
+                          )}
+                          <span style={{ fontWeight: isMine ? 500 : 400 }}>
+                            {msg.sender_name || (msg.sender_type === "staff" ? "スタッフ" : msg.sender_type === "therapist" ? "セラピスト" : "")}
+                            {isMine && " (自分)"}
+                          </span>
+                        </div>
                         <div
                           style={{
                             padding: "8px 12px",
@@ -792,6 +932,37 @@ export default function ChatPage() {
                           }}
                         >
                           {msg.content}
+                          {/* 添付ファイル表示（画像・動画）*/}
+                          {msg.attachment_url && msg.attachment_type && (
+                            <div style={{ marginTop: msg.content ? 8 : 0 }}>
+                              {msg.attachment_type.startsWith("image/") ? (
+                                <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={msg.attachment_url}
+                                    alt="attachment"
+                                    style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 8, display: "block", cursor: "zoom-in" }}
+                                  />
+                                </a>
+                              ) : msg.attachment_type.startsWith("video/") ? (
+                                <video
+                                  src={msg.attachment_url}
+                                  controls
+                                  preload="metadata"
+                                  style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 8, display: "block" }}
+                                />
+                              ) : (
+                                <a
+                                  href={msg.attachment_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: isMine ? "#fff" : T.accent, textDecoration: "underline", fontSize: 12 }}
+                                >
+                                  📎 添付ファイル
+                                </a>
+                              )}
+                            </div>
+                          )}
                           {msg.ai_feature_used && (
                             <div style={{ fontSize: 9, opacity: 0.7, marginTop: 4 }}>
                               (AI: {msg.ai_feature_used})
@@ -941,6 +1112,59 @@ export default function ChatPage() {
                 {aiWorking && <div style={{ fontSize: 10, color: T.textSub, marginLeft: 8 }}>AI処理中...</div>}
               </div>
 
+              {/* 添付プレビュー */}
+              {pendingAttachment && (
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    backgroundColor: T.cardAlt,
+                    borderTop: `1px solid ${T.border}`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  {pendingAttachment.type.startsWith("image/") && pendingPreviewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={pendingPreviewUrl}
+                      alt="preview"
+                      style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }}
+                    />
+                  ) : pendingAttachment.type.startsWith("video/") && pendingPreviewUrl ? (
+                    <video
+                      src={pendingPreviewUrl}
+                      style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}`, backgroundColor: "#000" }}
+                    />
+                  ) : null}
+                  <div style={{ flex: 1, fontSize: 12 }}>
+                    <div style={{ fontWeight: 500, color: T.text }}>
+                      {pendingAttachment.type.startsWith("image/") ? "📷 " : "🎬 "}
+                      {pendingAttachment.name}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.textSub, marginTop: 2 }}>
+                      {(pendingAttachment.size / 1024 / 1024).toFixed(2)} MB
+                      <span style={{ marginLeft: 8, color: T.textMuted }}>・15日後に自動削除</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={clearAttachment}
+                    disabled={uploading}
+                    style={{
+                      padding: "4px 10px",
+                      border: `1px solid ${T.border}`,
+                      backgroundColor: T.card,
+                      color: T.textSub,
+                      fontSize: 11,
+                      borderRadius: 6,
+                      cursor: uploading ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ✕ 取消
+                  </button>
+                </div>
+              )}
+
               {/* 入力エリア */}
               <div
                 style={{
@@ -952,6 +1176,33 @@ export default function ChatPage() {
                   alignItems: "flex-end",
                 }}
               >
+                {/* 📎 ファイル添付ボタン */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  style={{ display: "none" }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading || uploading}
+                  title="画像・動画を添付（30MBまで・15日で自動削除）"
+                  style={{
+                    padding: "10px 12px",
+                    border: `1px solid ${T.border}`,
+                    backgroundColor: T.card,
+                    color: T.textSub,
+                    borderRadius: 10,
+                    fontSize: 16,
+                    cursor: loading || uploading ? "not-allowed" : "pointer",
+                    opacity: loading || uploading ? 0.5 : 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  📎
+                </button>
+
                 <textarea
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
@@ -977,7 +1228,7 @@ export default function ChatPage() {
                 />
                 <button
                   onClick={() => sendMessage()}
-                  disabled={loading || !newMessage.trim()}
+                  disabled={loading || uploading || (!newMessage.trim() && !pendingAttachment)}
                   style={{
                     padding: "12px 20px",
                     backgroundColor: "#c3a782",
@@ -986,11 +1237,11 @@ export default function ChatPage() {
                     border: "none",
                     fontSize: 13,
                     fontWeight: 600,
-                    cursor: loading || !newMessage.trim() ? "not-allowed" : "pointer",
-                    opacity: loading || !newMessage.trim() ? 0.5 : 1,
+                    cursor: loading || uploading || (!newMessage.trim() && !pendingAttachment) ? "not-allowed" : "pointer",
+                    opacity: loading || uploading || (!newMessage.trim() && !pendingAttachment) ? 0.5 : 1,
                   }}
                 >
-                  送信
+                  {uploading ? "送信中..." : "送信"}
                 </button>
               </div>
             </>

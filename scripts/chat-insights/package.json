@@ -1,0 +1,13 @@
+{
+  "name": "t-manage-chat-insights-scripts",
+  "version": "1.0.0",
+  "description": "Claude MAX 経由でチャットログを分析するための CLI スクリプト",
+  "type": "module",
+  "scripts": {
+    "export": "node export-chat-logs.mjs",
+    "import": "node import-chat-insights.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.0"
+  }
+}

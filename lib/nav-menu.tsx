@@ -58,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "📞", label: "CTI監視",          path: "/cti-monitor",   category: "その他", requiresManager: true },
   { icon: "🤖", label: "HPチャットBOT",    path: "/hp-chatbot-admin", category: "その他", requiresManager: true },
   { icon: "📸", label: "HP写真管理",       path: "/hp-photos-admin", category: "その他", requiresManager: true },
+  { icon: "🧠", label: "チャット分析",       path: "/chat-insights",   category: "その他", requiresManager: true },
 
   // ── 登録・設定 ──
   { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
