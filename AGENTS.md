@@ -12,6 +12,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 **T-MANAGE 利用契約書テンプレート**:
 - `docs/CONTRACT_TEMPLATE.md`（他店舗展開で再利用可能な雛形。無償/有償両対応）
 
+**Supabase Pro プラン移行計画**:
+- `docs/09_SUPABASE_PRO_MIGRATION.md`
+
+**ドメイン設定手順書（Vercel + お名前.com）**:
+- `docs/10_DOMAIN_SETUP_GUIDE.md`（取得済みドメイン `ange-spa.com` / `tera-manage.jp` / `t-manage.jp` のVercel連携手順）
+
 今後、T-MANAGE を複数店舗向けのマルチインスタンスSaaS（**TERA-MANAGE**）として発展させる構想がある。
 新機能を実装する際は、将来的な `instance_id` による分離を考慮した設計にすること。
 
