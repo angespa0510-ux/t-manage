@@ -354,8 +354,11 @@ COMMENT ON COLUMN therapist_diary_entries.status IS
   'published | edited | deleted | unlisted (退店/休止時の自動非公開)';
 
 -- ---------------------------------------------------------------------
--- 12. データ保存ポリシーのドキュメント (system_settings に保存)
+-- 12. データ保存ポリシーのドキュメント
 -- ---------------------------------------------------------------------
+-- store_settings に description カラムが無ければ追加 (冪等)
+ALTER TABLE store_settings ADD COLUMN IF NOT EXISTS description TEXT;
+
 -- データ保持期間設定 (将来的に管理画面から変更可能にする想定)
 INSERT INTO store_settings (key, value, description) VALUES 
   ('story_lifetime_hours', '24', 'ストーリーの公開時間 (時間)'),
