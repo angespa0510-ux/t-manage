@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import TherapistStorySection from "./therapist-story-section";
 
 /**
  * ═══════════════════════════════════════════════════════════
@@ -461,6 +462,16 @@ export default function TherapistDiaryTab({
           <p style={{ fontSize: 9, color: C.textMuted, fontFamily: FONT_SERIF, marginTop: 2 }}>今月のいいね</p>
         </div>
       </div>
+
+      {/* ストーリーズ セクション (24時間で消える) */}
+      <TherapistStorySection
+        therapistId={therapistId}
+        authToken={authToken}
+        C={C}
+        FONT_SERIF={FONT_SERIF}
+        FONT_DISPLAY={FONT_DISPLAY}
+        FONT_SANS={FONT_SANS}
+      />
 
       {/* 過去投稿一覧 */}
       <div>
