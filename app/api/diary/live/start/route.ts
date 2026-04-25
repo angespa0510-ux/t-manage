@@ -107,7 +107,10 @@ export async function POST(req: Request) {
 
     if (insErr || !stream) {
       console.error("live_streams insert error:", insErr);
-      return NextResponse.json({ error: "ルーム作成に失敗しました" }, { status: 500 });
+      return NextResponse.json({
+        error: `ルーム作成に失敗しました: ${insErr?.message || "不明なエラー"}`,
+        details: insErr ? { code: insErr.code, hint: insErr.hint, details: insErr.details } : null,
+      }, { status: 500 });
     }
 
     // 5. LiveKit AccessToken 発行 (配信者用、canPublish=true)
