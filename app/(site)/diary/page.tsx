@@ -637,7 +637,13 @@ export default function DiaryTimelinePage() {
                           }}
                         >
                           <span>{fmtTime(entry.publishedAt)}</span>
-                          <span style={{ display: "flex", gap: 8 }}>
+                          <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                            {entry.likeCount > 0 && (
+                              <span style={{ display: "flex", alignItems: "center", gap: 3, color: SITE.color.pinkDeep }}>
+                                <span style={{ fontSize: 11 }}>♥</span>
+                                <span>{entry.likeCount.toLocaleString()}</span>
+                              </span>
+                            )}
                             <span>{entry.viewCount.toLocaleString()} views</span>
                           </span>
                         </div>

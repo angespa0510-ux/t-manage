@@ -70,6 +70,10 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
   const [error, setError] = useState<string | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [related, setRelated] = useState<RelatedEntry[]>([]);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [likeAnimating, setLikeAnimating] = useState(false);
 
   // ════════════════════════════════════════════════════
   // データ取得
@@ -86,6 +90,9 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
       if (res.ok) {
         setData(json);
         setActiveImageIdx(0);
+        if (json.entry) {
+          setLikeCount(json.entry.likeCount || 0);
+        }
       } else if (res.status === 401 && json.requiresMembership) {
         // 会員限定: 誘導画面を出す
         setData(json);
@@ -98,6 +105,65 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
       setLoading(false);
     }
   }, [id, customer]);
+
+  // いいね状態取得
+  const fetchLikeStatus = useCallback(async () => {
+    if (!customer) {
+      setLiked(false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/diary/like?entryId=${id}&customerId=${customer.id}`);
+      const json = await res.json();
+      if (res.ok) {
+        setLiked(json.liked);
+        setLikeCount(json.likeCount);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [id, customer]);
+
+  // いいねトグル
+  const toggleLike = async () => {
+    if (!customer) {
+      // 非会員: ログインへ誘導
+      window.location.href = "/login";
+      return;
+    }
+    if (likeLoading) return;
+    setLikeLoading(true);
+    setLikeAnimating(true);
+    setTimeout(() => setLikeAnimating(false), 400);
+
+    // 楽観的更新
+    const prevLiked = liked;
+    const prevCount = likeCount;
+    setLiked(!prevLiked);
+    setLikeCount(prevCount + (prevLiked ? -1 : 1));
+
+    try {
+      const res = await fetch("/api/diary/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: id, customerId: customer.id }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setLiked(json.liked);
+        setLikeCount(json.likeCount);
+      } else {
+        // 失敗時は戻す
+        setLiked(prevLiked);
+        setLikeCount(prevCount);
+      }
+    } catch {
+      setLiked(prevLiked);
+      setLikeCount(prevCount);
+    } finally {
+      setLikeLoading(false);
+    }
+  };
 
   const fetchRelated = useCallback(async (therapistId: number, currentId: number) => {
     try {
@@ -121,6 +187,12 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
       fetchRelated(data.therapist.id, data.entry.id);
     }
   }, [data, fetchRelated]);
+
+  useEffect(() => {
+    if (data?.entry?.id) {
+      fetchLikeStatus();
+    }
+  }, [data, fetchLikeStatus]);
 
   // ════════════════════════════════════════════════════
   // ヘルパー
@@ -572,23 +644,62 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
-        {/* 統計 */}
+        {/* いいねボタン + 統計 */}
         <div
           style={{
             display: "flex",
-            justifyContent: "center",
-            gap: 24,
-            paddingTop: 20,
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 16,
+            paddingTop: 24,
             borderTop: `1px solid ${SITE.color.border}`,
-            fontSize: SITE.fs.xs,
-            color: SITE.color.textMuted,
-            fontFamily: SITE.font.display,
-            letterSpacing: SITE.ls.wide,
           }}
         >
-          <span>{entry.viewCount.toLocaleString()} VIEWS</span>
-          {entry.likeCount > 0 && <span>{entry.likeCount.toLocaleString()} LIKES</span>}
-          {entry.commentCount > 0 && <span>{entry.commentCount.toLocaleString()} COMMENTS</span>}
+          {/* いいねボタン */}
+          <button
+            onClick={toggleLike}
+            disabled={likeLoading}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "12px 28px",
+              fontSize: SITE.fs.body,
+              cursor: likeLoading ? "wait" : "pointer",
+              backgroundColor: liked ? SITE.color.pinkSoft : "transparent",
+              color: liked ? SITE.color.pinkDeep : SITE.color.textSub,
+              border: `1px solid ${liked ? SITE.color.pinkDeep : SITE.color.border}`,
+              fontFamily: SITE.font.serif,
+              letterSpacing: SITE.ls.loose,
+              transition: "all 0.2s ease",
+              transform: likeAnimating ? "scale(1.08)" : "scale(1)",
+              fontWeight: 500,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>{liked ? "♥" : "♡"}</span>
+            <span>{liked ? "いいね済み" : customer ? "いいね" : "ログインして いいね"}</span>
+            {likeCount > 0 && (
+              <span style={{ fontSize: SITE.fs.xs, color: liked ? SITE.color.pinkDeep : SITE.color.textMuted, fontFamily: SITE.font.display, letterSpacing: SITE.ls.normal, fontVariantNumeric: "tabular-nums" }}>
+                {likeCount.toLocaleString()}
+              </span>
+            )}
+          </button>
+
+          {/* 統計 */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 20,
+              fontSize: SITE.fs.xs,
+              color: SITE.color.textMuted,
+              fontFamily: SITE.font.display,
+              letterSpacing: SITE.ls.wide,
+            }}
+          >
+            <span>{entry.viewCount.toLocaleString()} VIEWS</span>
+            {entry.commentCount > 0 && <span>{entry.commentCount.toLocaleString()} COMMENTS</span>}
+          </div>
         </div>
 
         {/* セラピストプロフィールへの導線 */}
