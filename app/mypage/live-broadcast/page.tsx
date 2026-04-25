@@ -135,28 +135,52 @@ export default function LiveBroadcastPage() {
   // ─────────────────────────────────────────────────────────
   const startCamera = async () => {
     try {
-      // カメラとマイクを別々に取得 (マイクは合成しないので別ストリーム)
-      const cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 720 },
-          height: { ideal: 1280 },
-          facingMode: "user",
-          frameRate: { ideal: 30, max: 30 },
-        },
-        audio: false,
-      });
+      setDebugInfo("カメラ起動中...");
+
+      // iOS Safari互換: 最小限のconstraintsから始める
+      // 厳しい指定 (frameRate等) を入れるとiOSで失敗することがある
+      let cameraStream: MediaStream;
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false,
+        });
+      } catch (e1) {
+        // facingMode指定で失敗したらフォールバック
+        console.warn("facingMode指定で失敗、フォールバック:", e1);
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
       const audioStream = await navigator.mediaDevices.getUserMedia({
         video: false,
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: true,
       });
 
       cameraStreamRef.current = cameraStream;
       audioStreamRef.current = audioStream;
 
+      // トラック情報をデバッグ
+      const vTracks = cameraStream.getVideoTracks();
+      const vTrack = vTracks[0];
+      const settings = vTrack?.getSettings?.();
+      setDebugInfo(
+        `track=${vTracks.length}個\n` +
+        `live=${vTrack?.readyState}\n` +
+        `${settings?.width}x${settings?.height}@${settings?.frameRate}fps\n` +
+        `label=${vTrack?.label?.slice(0, 30) || "?"}`
+      );
+
       if (videoRef.current) {
         const v = videoRef.current;
         v.srcObject = cameraStream;
-        v.muted = true; // iOS Safari の自動再生に必須
+        v.muted = true;
+        v.setAttribute("playsinline", "true");
+        v.setAttribute("webkit-playsinline", "true");
+        v.setAttribute("autoplay", "true");
+
         // メタデータ読み込み完了を待つ
         await new Promise<void>((resolve) => {
           if (v.readyState >= 1) {
@@ -168,16 +192,18 @@ export default function LiveBroadcastPage() {
             resolve();
           };
           v.addEventListener("loadedmetadata", onLoaded);
-          // タイムアウト保険 (5秒)
           setTimeout(resolve, 5000);
         });
-        try {
-          await v.play();
-        } catch (playErr) {
-          console.warn("video.play() failed, retrying:", playErr);
-          // 再試行
-          await new Promise(r => setTimeout(r, 100));
-          await v.play().catch(() => {});
+
+        // iOS Safariで複数回 play() を試す
+        for (let i = 0; i < 3; i++) {
+          try {
+            await v.play();
+            break;
+          } catch (playErr) {
+            console.warn(`video.play() attempt ${i + 1} failed:`, playErr);
+            await new Promise(r => setTimeout(r, 200));
+          }
         }
       }
 
@@ -187,14 +213,14 @@ export default function LiveBroadcastPage() {
           faceLandmarkerRef.current = await initFaceLandmarker();
         }
       } catch (mpErr) {
-        console.warn("Face Landmarker初期化失敗 (フィルターは使えませんが配信は可能):", mpErr);
-        // 続行 (フィルターなしで配信可能)
+        console.warn("Face Landmarker初期化失敗:", mpErr);
       }
 
       // 描画ループ開始
       startRenderLoop();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "カメラ起動エラー";
+      const msg = e instanceof Error ? `${e.name}: ${e.message}` : "カメラ起動エラー";
+      setDebugInfo(`エラー: ${msg}`);
       setErrorMsg(`カメラ/マイクへのアクセスが必要です: ${msg}`);
       throw e;
     }
@@ -212,15 +238,19 @@ export default function LiveBroadcastPage() {
       const fl = faceLandmarkerRef.current;
       frameCount++;
 
-      // デバッグ情報を1秒に1回更新
+      // デバッグ情報を1秒に1回更新 (トラック情報の後に追記)
       const now = performance.now();
       if (now - lastDebugUpdate > 1000) {
         lastDebugUpdate = now;
         if (video) {
+          const cs = cameraStreamRef.current;
+          const vt = cs?.getVideoTracks?.()[0];
           setDebugInfo(
             `vw=${video.videoWidth} vh=${video.videoHeight}\n` +
             `rs=${video.readyState} paused=${video.paused}\n` +
-            `t=${video.currentTime.toFixed(1)}s frames=${frameCount}`
+            `t=${video.currentTime.toFixed(1)}s frames=${frameCount}\n` +
+            `track=${vt?.readyState || "?"} muted=${vt?.muted}\n` +
+            `enabled=${vt?.enabled}`
           );
         }
       }
