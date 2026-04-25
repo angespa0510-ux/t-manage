@@ -72,6 +72,16 @@ export default function CustomerDiaryTab({ customerId, C, FONT_SERIF, FONT_DISPL
       if (viewMode === "members_only") {
         params.set("visibility", "members_only");
         params.set("memberAuth", String(customerId));
+      } else if (viewMode === "favorites") {
+        // お気に入りセラピストの全公開+会員限定
+        if (favoriteIds.length === 0) {
+          setEntries([]);
+          setLoading(false);
+          return;
+        }
+        params.set("visibility", "all");
+        params.set("memberAuth", String(customerId));
+        params.set("therapistIds", favoriteIds.join(","));
       } else {
         params.set("visibility", "public");
       }
@@ -86,25 +96,33 @@ export default function CustomerDiaryTab({ customerId, C, FONT_SERIF, FONT_DISPL
     } finally {
       setLoading(false);
     }
-  }, [viewMode, customerId]);
+  }, [viewMode, customerId, favoriteIds]);
 
-  // お気に入りセラピスト取得 (Phase 2 でテーブル整備、今はスキップ)
-  // TODO: customer_diary_favorites or 既存お気に入りテーブルから取得
+  // お気に入りセラピスト取得
+  const fetchFavorites = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/diary/favorite?customerId=${customerId}`);
+      const data = await res.json();
+      if (res.ok && data.therapistIds) {
+        setFavoriteIds(data.therapistIds);
+      }
+    } catch (e) {
+      console.error("fetch favorites:", e);
+    }
+  }, [customerId]);
 
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
 
+  useEffect(() => {
+    fetchFavorites();
+  }, [fetchFavorites]);
+
   // ════════════════════════════════════════════════════
-  // 表示用フィルタ
+  // 表示用フィルタ (APIで絞ってるのでそのまま)
   // ════════════════════════════════════════════════════
-  const filtered = useMemo(() => {
-    if (viewMode === "favorites") {
-      if (favoriteIds.length === 0) return [];
-      return entries.filter((e) => favoriteIds.includes(e.therapist.id));
-    }
-    return entries;
-  }, [entries, viewMode, favoriteIds]);
+  const filtered = entries;
 
   // 日付グループ化
   const grouped = useMemo(() => {

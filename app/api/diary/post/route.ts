@@ -287,12 +287,21 @@ export async function POST(req: Request) {
       ekichikaScheduled = true;
     }
 
+    // 6. お気に入り会員へpush通知 (非同期 fire-and-forget)
+    const baseUrlForPush = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+    fetch(`${baseUrlForPush}/api/diary/notify-favorites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entryId }),
+    }).catch((e) => console.error("notify-favorites trigger failed:", e));
+
     return NextResponse.json({
       success: true,
       entryId,
       coverImageUrl,
       visibility,
       ekichikaDispatchScheduled: ekichikaScheduled,
+      pushNotificationScheduled: true,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "不明なエラー";

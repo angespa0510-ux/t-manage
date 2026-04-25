@@ -75,6 +75,9 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
   const [likeCount, setLikeCount] = useState(0);
   const [likeLoading, setLikeLoading] = useState(false);
   const [likeAnimating, setLikeAnimating] = useState(false);
+  const [favorited, setFavorited] = useState(false);
+  const [notifyEnabled, setNotifyEnabled] = useState(true);
+  const [favLoading, setFavLoading] = useState(false);
 
   // ════════════════════════════════════════════════════
   // データ取得
@@ -166,6 +169,74 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  // お気に入り状態取得
+  const fetchFavoriteStatus = useCallback(async (therapistId: number) => {
+    if (!customer) {
+      setFavorited(false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/diary/favorite?customerId=${customer.id}`);
+      const json = await res.json();
+      if (res.ok && json.therapistIds) {
+        const found = json.therapistIds.includes(therapistId);
+        setFavorited(found);
+        if (found && json.items) {
+          const item = json.items.find((i: { therapist: { id: number }; notifyOnPost: boolean }) => i.therapist.id === therapistId);
+          if (item) setNotifyEnabled(item.notifyOnPost);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [customer]);
+
+  // お気に入りトグル
+  const toggleFavorite = async (therapistId: number) => {
+    if (!customer) {
+      window.location.href = "/login";
+      return;
+    }
+    if (favLoading) return;
+    setFavLoading(true);
+    const prev = favorited;
+    setFavorited(!prev);
+    try {
+      const res = await fetch("/api/diary/favorite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: customer.id, therapistId, notifyOnPost: true }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setFavorited(json.favorited);
+        if (json.favorited) setNotifyEnabled(true);
+      } else {
+        setFavorited(prev);
+      }
+    } catch {
+      setFavorited(prev);
+    } finally {
+      setFavLoading(false);
+    }
+  };
+
+  // 通知ON/OFFトグル
+  const toggleNotify = async (therapistId: number) => {
+    if (!customer || !favorited) return;
+    const newValue = !notifyEnabled;
+    setNotifyEnabled(newValue);
+    try {
+      await fetch("/api/diary/favorite", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: customer.id, therapistId, notifyOnPost: newValue }),
+      });
+    } catch {
+      setNotifyEnabled(!newValue);
+    }
+  };
+
   const fetchRelated = useCallback(async (therapistId: number, currentId: number) => {
     try {
       const res = await fetch(`/api/diary/list?therapistId=${therapistId}&limit=8&visibility=public`);
@@ -194,6 +265,12 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
       fetchLikeStatus();
     }
   }, [data, fetchLikeStatus]);
+
+  useEffect(() => {
+    if (data?.therapist?.id) {
+      fetchFavoriteStatus(data.therapist.id);
+    }
+  }, [data, fetchFavoriteStatus]);
 
   // ════════════════════════════════════════════════════
   // ヘルパー
@@ -703,8 +780,63 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* セラピストプロフィールへの導線 */}
-        <div style={{ marginTop: 36, textAlign: "center" }}>
+        {/* セラピストプロフィールへの導線 + お気に入り */}
+        <div style={{ marginTop: 36, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+          {/* お気に入りボタン */}
+          <button
+            onClick={() => toggleFavorite(therapist.id)}
+            disabled={favLoading}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 24px",
+              fontSize: SITE.fs.sm,
+              cursor: favLoading ? "wait" : "pointer",
+              backgroundColor: favorited ? SITE.color.pinkSoft : "transparent",
+              color: favorited ? SITE.color.pinkDeep : SITE.color.textSub,
+              border: `1px solid ${favorited ? SITE.color.pinkDeep : SITE.color.border}`,
+              fontFamily: SITE.font.serif,
+              letterSpacing: SITE.ls.loose,
+              fontWeight: 500,
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span style={{ fontSize: 14 }}>{favorited ? "★" : "☆"}</span>
+            <span>
+              {favorited
+                ? `${therapist.name}をお気に入り済み`
+                : customer
+                ? `${therapist.name}をお気に入り登録`
+                : "ログインしてお気に入り登録"}
+            </span>
+          </button>
+
+          {/* 通知ON/OFFトグル (お気に入り登録済みのときのみ) */}
+          {favorited && (
+            <button
+              onClick={() => toggleNotify(therapist.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 14px",
+                fontSize: SITE.fs.xs,
+                cursor: "pointer",
+                backgroundColor: "transparent",
+                color: notifyEnabled ? SITE.color.pinkDeep : SITE.color.textMuted,
+                border: "none",
+                fontFamily: SITE.font.serif,
+                letterSpacing: SITE.ls.loose,
+              }}
+            >
+              <span style={{ fontSize: 13 }}>{notifyEnabled ? "🔔" : "🔕"}</span>
+              <span style={{ fontSize: SITE.fs.xs }}>
+                新しい日記を{notifyEnabled ? "通知する" : "通知しない"} (タップで切替)
+              </span>
+            </button>
+          )}
+
           <Link
             href={`/therapist/${therapist.id}`}
             style={{

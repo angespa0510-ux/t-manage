@@ -35,6 +35,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const therapistId = url.searchParams.get("therapistId");
+    const therapistIdsStr = url.searchParams.get("therapistIds"); // カンマ区切り
     const tag = url.searchParams.get("tag");
     const q = url.searchParams.get("q");
     const visibility = url.searchParams.get("visibility") || "public";
@@ -68,6 +69,12 @@ export async function GET(req: Request) {
 
     if (therapistId) {
       query = query.eq("therapist_id", parseInt(therapistId));
+    } else if (therapistIdsStr) {
+      const ids = therapistIdsStr.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
+      if (ids.length === 0) {
+        return NextResponse.json({ entries: [], total: 0, hasMore: false });
+      }
+      query = query.in("therapist_id", ids);
     }
 
     if (q) {
