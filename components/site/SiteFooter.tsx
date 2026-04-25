@@ -204,6 +204,7 @@ export default function SiteFooter() {
                     color: SITE.color.text,
                     textDecoration: "none",
                     letterSpacing: SITE.ls.loose,
+                    lineHeight: 1.4,
                   }}
                 >
                   {TEL_SECONDARY}
