@@ -55,6 +55,12 @@ export type FilterOptions = {
   stamp?: StampKind;
   mosaicTarget?: MosaicTarget;
   beautyStrength?: number; // 0-1
+  /** スタンプ拡大率 0.5(50%) 〜 2.0(200%)、デフォルト 1.0 */
+  stampSize?: number;
+  /** スタンプ横位置オフセット(顔幅の比率) -0.5 〜 +0.5、デフォルト 0 */
+  stampOffsetX?: number;
+  /** スタンプ縦位置オフセット(顔高さの比率) -0.5 〜 +0.5、デフォルト 0 */
+  stampOffsetY?: number;
 };
 
 // MediaPipe Face Landmarker のCDN
@@ -189,7 +195,13 @@ function applyStamp(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
   landmarks: { x: number; y: number }[] | null,
-  stamp: StampKind
+  stamp: StampKind,
+  /** 全体スケール (1.0=デフォルト, 0.5〜2.0) */
+  sizeMul: number = 1.0,
+  /** 横オフセット (顔幅比、0=中心、負=左、正=右) */
+  offsetX: number = 0,
+  /** 縦オフセット (顔高さ比、0=中心、負=上、正=下) */
+  offsetY: number = 0
 ) {
   const canvas = ctx.canvas;
   const w = canvas.width;
@@ -206,15 +218,21 @@ function applyStamp(
 
   if (!noseTip || !leftCheek || !rightCheek || !chin || !forehead) return;
 
-  const cx = noseTip.x * w;
-  const cy = noseTip.y * h;
   const faceWidth = Math.abs(rightCheek.x - leftCheek.x) * w;
   const faceHeight = Math.abs(chin.y - forehead.y) * h;
+
+  // 鼻先 + ユーザー指定オフセット (offsetは顔サイズに対する比率なので顔の大きさで自動スケール)
+  const cx = noseTip.x * w + faceWidth * offsetX;
+  const cy = noseTip.y * h + faceHeight * offsetY;
+
+  // ヘルパー: スタンプの相対位置 (顔基準) にオフセットを乗せる
+  const dx = faceWidth * offsetX;
+  const dy = faceHeight * offsetY;
 
   if (stamp === "sakura") {
     // 顔全体に桜マーク (大きめ)
     ctx.save();
-    ctx.font = `${Math.round(faceWidth * 1.4)}px serif`;
+    ctx.font = `${Math.round(faceWidth * 1.4 * sizeMul)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("🌸", cx, cy);
@@ -225,28 +243,28 @@ function applyStamp(
     const rightEyeTop = landmarks[FACE_LANDMARK_INDICES.rightEyeTop];
     if (leftEyeTop && rightEyeTop) {
       const eyeY = ((leftEyeTop.y + rightEyeTop.y) / 2) * h;
-      const heartSize = faceWidth * 0.35;
+      const heartSize = faceWidth * 0.35 * sizeMul;
       ctx.save();
       ctx.font = `${Math.round(heartSize)}px serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("💗", leftEyeTop.x * w, eyeY);
-      ctx.fillText("💗", rightEyeTop.x * w, eyeY);
+      ctx.fillText("💗", leftEyeTop.x * w + dx, eyeY + dy);
+      ctx.fillText("💗", rightEyeTop.x * w + dx, eyeY + dy);
       ctx.restore();
     }
   } else if (stamp === "usagi") {
     // 顔全体マスク + 上にうさ耳
     ctx.save();
-    ctx.font = `${Math.round(faceWidth * 1.3)}px serif`;
+    ctx.font = `${Math.round(faceWidth * 1.3 * sizeMul)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     // 顔
     ctx.fillText("🐰", cx, cy);
     // 耳 (顔の上)
-    const earSize = faceWidth * 0.5;
+    const earSize = faceWidth * 0.5 * sizeMul;
     ctx.font = `${Math.round(earSize)}px serif`;
-    ctx.fillText("🌸", forehead.x * w - earSize * 0.7, forehead.y * h - earSize * 0.5);
-    ctx.fillText("🌸", forehead.x * w + earSize * 0.7, forehead.y * h - earSize * 0.5);
+    ctx.fillText("🌸", forehead.x * w - earSize * 0.7 + dx, forehead.y * h - earSize * 0.5 + dy);
+    ctx.fillText("🌸", forehead.x * w + earSize * 0.7 + dx, forehead.y * h - earSize * 0.5 + dy);
     ctx.restore();
   } else if (stamp === "cat") {
     // 鼻〜口を覆う猫マスク
@@ -257,126 +275,122 @@ function applyStamp(
       const mouthCy = ((mouthLeft.y + mouthRight.y) / 2) * h;
       // 鼻〜口エリアに猫
       ctx.save();
-      ctx.font = `${Math.round(faceWidth * 0.8)}px serif`;
+      ctx.font = `${Math.round(faceWidth * 0.8 * sizeMul)}px serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("😺", cx, (cy + mouthCy) / 2);
+      ctx.fillText("😺", noseTip.x * w + dx, (noseTip.y * h + mouthCy) / 2 + dy);
       ctx.restore();
     }
   } else if (stamp === "ribbon") {
     // 装飾系: 目の周りに星、頭にリボン (顔は見える)
     ctx.save();
-    const decoSize = faceWidth * 0.2;
+    const decoSize = faceWidth * 0.2 * sizeMul;
     ctx.font = `${Math.round(decoSize)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     // 頬の星
-    ctx.fillText("✨", leftCheek.x * w + decoSize * 0.5, leftCheek.y * h);
-    ctx.fillText("✨", rightCheek.x * w - decoSize * 0.5, rightCheek.y * h);
+    ctx.fillText("✨", leftCheek.x * w + decoSize * 0.5 + dx, leftCheek.y * h + dy);
+    ctx.fillText("✨", rightCheek.x * w - decoSize * 0.5 + dx, rightCheek.y * h + dy);
     // 頭のリボン
-    ctx.font = `${Math.round(faceWidth * 0.4)}px serif`;
-    ctx.fillText("🎀", forehead.x * w, forehead.y * h - decoSize);
+    ctx.font = `${Math.round(faceWidth * 0.4 * sizeMul)}px serif`;
+    ctx.fillText("🎀", forehead.x * w + dx, forehead.y * h - decoSize + dy);
     ctx.restore();
   } else if (stamp === "blackbar") {
     // 目元に黒帯
     const leftEyeOuter = landmarks[FACE_LANDMARK_INDICES.leftEyeOuter];
     const rightEyeOuter = landmarks[FACE_LANDMARK_INDICES.rightEyeOuter];
     if (leftEyeOuter && rightEyeOuter) {
-      const x1 = Math.min(leftEyeOuter.x, rightEyeOuter.x) * w - faceWidth * 0.05;
-      const x2 = Math.max(leftEyeOuter.x, rightEyeOuter.x) * w + faceWidth * 0.05;
-      const y = ((leftEyeOuter.y + rightEyeOuter.y) / 2) * h;
-      const barH = faceHeight * 0.12;
+      const x1 = Math.min(leftEyeOuter.x, rightEyeOuter.x) * w - faceWidth * 0.05 * sizeMul + dx;
+      const x2 = Math.max(leftEyeOuter.x, rightEyeOuter.x) * w + faceWidth * 0.05 * sizeMul + dx;
+      const y = ((leftEyeOuter.y + rightEyeOuter.y) / 2) * h + dy;
+      const barH = faceHeight * 0.12 * sizeMul;
       ctx.fillStyle = "#000";
       ctx.fillRect(x1, y - barH / 2, x2 - x1, barH);
     }
   } else if (stamp === "star") {
-    // ⭐ 顔全体に大きな星（キラキラ系・人気）
+    // ⭐ 顔全体に大きな星
     ctx.save();
-    ctx.font = `${Math.round(faceWidth * 1.3)}px serif`;
+    ctx.font = `${Math.round(faceWidth * 1.3 * sizeMul)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("⭐", cx, cy);
     ctx.restore();
   } else if (stamp === "crown") {
-    // 👑 頭の上に王冠 + 顔は隠さない（華やか系）
+    // 👑 頭の上に王冠 + 顔は隠さない
     ctx.save();
-    ctx.font = `${Math.round(faceWidth * 0.7)}px serif`;
+    ctx.font = `${Math.round(faceWidth * 0.7 * sizeMul)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // 王冠は額より少し上
-    ctx.fillText("👑", forehead.x * w, forehead.y * h - faceHeight * 0.25);
+    ctx.fillText("👑", forehead.x * w + dx, forehead.y * h - faceHeight * 0.25 + dy);
     ctx.restore();
   } else if (stamp === "sunglasses") {
-    // 😎 目元にサングラス（顔下半分は見える）
+    // 🕶 目元にサングラス
     const leftEyeOuter = landmarks[FACE_LANDMARK_INDICES.leftEyeOuter];
     const rightEyeOuter = landmarks[FACE_LANDMARK_INDICES.rightEyeOuter];
     if (leftEyeOuter && rightEyeOuter) {
       const eyeCx = ((leftEyeOuter.x + rightEyeOuter.x) / 2) * w;
       const eyeCy = ((leftEyeOuter.y + rightEyeOuter.y) / 2) * h;
       ctx.save();
-      ctx.font = `${Math.round(faceWidth * 0.85)}px serif`;
+      ctx.font = `${Math.round(faceWidth * 0.85 * sizeMul)}px serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("🕶", eyeCx, eyeCy);
+      ctx.fillText("🕶", eyeCx + dx, eyeCy + dy);
       ctx.restore();
     }
   } else if (stamp === "mask") {
-    // 😷 マスクで口元を隠す（実用系）
+    // 😷 マスクで口元を隠す
     const mouthLeft = landmarks[FACE_LANDMARK_INDICES.mouthLeft];
     const mouthRight = landmarks[FACE_LANDMARK_INDICES.mouthRight];
     if (mouthLeft && mouthRight) {
-      const mouthCx = ((mouthLeft.x + mouthRight.x) / 2) * w;
       const mouthCy = ((mouthLeft.y + mouthRight.y) / 2) * h;
       ctx.save();
-      ctx.font = `${Math.round(faceWidth * 0.9)}px serif`;
+      ctx.font = `${Math.round(faceWidth * 0.9 * sizeMul)}px serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("😷", cx, (cy + mouthCy) / 2 + faceHeight * 0.05);
+      ctx.fillText("😷", noseTip.x * w + dx, (noseTip.y * h + mouthCy) / 2 + faceHeight * 0.05 + dy);
       ctx.restore();
     }
   } else if (stamp === "kira") {
-    // ✨ 顔の周りに複数のキラキラ（顔は見える、装飾のみ）
+    // ✨ 顔の周りに複数のキラキラ
     ctx.save();
-    const decoSize = faceWidth * 0.25;
+    const decoSize = faceWidth * 0.25 * sizeMul;
     ctx.font = `${Math.round(decoSize)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // 頬とこめかみに散らす
-    ctx.fillText("✨", leftCheek.x * w - decoSize * 0.3, leftCheek.y * h - decoSize * 0.3);
-    ctx.fillText("✨", rightCheek.x * w + decoSize * 0.3, rightCheek.y * h - decoSize * 0.3);
-    ctx.fillText("⭐", forehead.x * w - faceWidth * 0.3, forehead.y * h);
-    ctx.fillText("⭐", forehead.x * w + faceWidth * 0.3, forehead.y * h);
-    ctx.fillText("💫", chin.x * w, chin.y * h + decoSize * 0.3);
+    ctx.fillText("✨", leftCheek.x * w - decoSize * 0.3 + dx, leftCheek.y * h - decoSize * 0.3 + dy);
+    ctx.fillText("✨", rightCheek.x * w + decoSize * 0.3 + dx, rightCheek.y * h - decoSize * 0.3 + dy);
+    ctx.fillText("⭐", forehead.x * w - faceWidth * 0.3 + dx, forehead.y * h + dy);
+    ctx.fillText("⭐", forehead.x * w + faceWidth * 0.3 + dx, forehead.y * h + dy);
+    ctx.fillText("💫", chin.x * w + dx, chin.y * h + decoSize * 0.3 + dy);
     ctx.restore();
   } else if (stamp === "flower") {
-    // 🌷 顔全体をチューリップで覆う（桜の代替）
+    // 🌷 顔全体をチューリップで覆う
     ctx.save();
-    ctx.font = `${Math.round(faceWidth * 1.4)}px serif`;
+    ctx.font = `${Math.round(faceWidth * 1.4 * sizeMul)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("🌷", cx, cy);
     ctx.restore();
   } else if (stamp === "kiss") {
-    // 💋 頬にキスマーク（装飾のみ、顔は見える）
+    // 💋 頬にキスマーク
     ctx.save();
-    const kissSize = faceWidth * 0.28;
+    const kissSize = faceWidth * 0.28 * sizeMul;
     ctx.font = `${Math.round(kissSize)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("💋", leftCheek.x * w + kissSize * 0.3, leftCheek.y * h);
-    ctx.fillText("💋", rightCheek.x * w - kissSize * 0.3, rightCheek.y * h);
+    ctx.fillText("💋", leftCheek.x * w + kissSize * 0.3 + dx, leftCheek.y * h + dy);
+    ctx.fillText("💋", rightCheek.x * w - kissSize * 0.3 + dx, rightCheek.y * h + dy);
     ctx.restore();
   } else if (stamp === "halo") {
-    // 😇 頭の上に天使の輪（華やか・癒し系）
+    // 😇 頭の上に天使
     ctx.save();
-    ctx.font = `${Math.round(faceWidth * 0.55)}px serif`;
+    ctx.font = `${Math.round(faceWidth * 0.55 * sizeMul)}px serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // 輪は額のさらに上
-    ctx.fillText("😇", forehead.x * w, forehead.y * h - faceHeight * 0.35);
+    ctx.fillText("😇", forehead.x * w + dx, forehead.y * h - faceHeight * 0.35 + dy);
     ctx.restore();
   } else if (stamp === "fullblur") {
-    // 顔全体ぼかし (スタンプとして提供、mosaicの顔モードと等価)
+    // 顔全体ぼかし
     applyMosaic(ctx, video, landmarks, "face");
   }
 }
@@ -452,7 +466,15 @@ export function applyFilter(
   if (options.mode === "beauty") {
     applyBeauty(ctx, video, landmarks, { strength: options.beautyStrength ?? 0.6 });
   } else if (options.mode === "stamp") {
-    applyStamp(ctx, video, landmarks, options.stamp || "sakura");
+    applyStamp(
+      ctx,
+      video,
+      landmarks,
+      options.stamp || "sakura",
+      options.stampSize ?? 1.0,
+      options.stampOffsetX ?? 0,
+      options.stampOffsetY ?? 0
+    );
   } else if (options.mode === "mosaic") {
     applyMosaic(ctx, video, landmarks, options.mosaicTarget || "face");
   }

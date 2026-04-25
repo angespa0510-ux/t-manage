@@ -90,6 +90,25 @@ export default function LiveBroadcastPage() {
   const [mosaicTarget, setMosaicTarget] = useState<MosaicTarget>("face");
   const [beautyStrength, setBeautyStrength] = useState(0.6);
 
+  // スタンプ調整 (種類ごとに独立保持: 桜の調整→ハート切替→桜に戻ったら桜の調整値が復元)
+  type StampAdjust = { size: number; offsetX: number; offsetY: number };
+  const defaultAdjust: StampAdjust = { size: 1.0, offsetX: 0, offsetY: 0 };
+  const [stampAdjustments, setStampAdjustments] = useState<Record<string, StampAdjust>>({});
+  const currentAdjust = stampAdjustments[stampKind] || defaultAdjust;
+  const updateAdjust = (patch: Partial<StampAdjust>) => {
+    setStampAdjustments((prev) => ({
+      ...prev,
+      [stampKind]: { ...(prev[stampKind] || defaultAdjust), ...patch },
+    }));
+  };
+  const resetAdjust = () => {
+    setStampAdjustments((prev) => {
+      const next = { ...prev };
+      delete next[stampKind];
+      return next;
+    });
+  };
+
   // LiveKit
   const [streamId, setStreamId] = useState<number | null>(null);
   const [roomName, setRoomName] = useState<string | null>(null);
@@ -120,6 +139,9 @@ export default function LiveBroadcastPage() {
     stamp: "sakura",
     mosaicTarget: "face",
     beautyStrength: 0.6,
+    stampSize: 1.0,
+    stampOffsetX: 0,
+    stampOffsetY: 0,
   });
   useEffect(() => {
     filterOptionsRef.current = {
@@ -127,8 +149,11 @@ export default function LiveBroadcastPage() {
       stamp: stampKind,
       mosaicTarget,
       beautyStrength,
+      stampSize: currentAdjust.size,
+      stampOffsetX: currentAdjust.offsetX,
+      stampOffsetY: currentAdjust.offsetY,
     };
-  }, [filterMode, stampKind, mosaicTarget, beautyStrength]);
+  }, [filterMode, stampKind, mosaicTarget, beautyStrength, currentAdjust.size, currentAdjust.offsetX, currentAdjust.offsetY]);
 
   // ─────────────────────────────────────────────────────────
   // カメラ起動
@@ -370,7 +395,7 @@ export default function LiveBroadcastPage() {
           description: description.trim(),
           visibility,
           filterMode,
-          filterOptions: { stamp: stampKind, mosaicTarget, beautyStrength },
+          filterOptions: { stamp: stampKind, mosaicTarget, beautyStrength, stampSize: currentAdjust.size, stampOffsetX: currentAdjust.offsetX, stampOffsetY: currentAdjust.offsetY },
         }),
       });
       const startData = await startRes.json();
@@ -505,7 +530,7 @@ export default function LiveBroadcastPage() {
           therapistId,
           authToken,
           filterMode,
-          filterOptions: { stamp: stampKind, mosaicTarget, beautyStrength },
+          filterOptions: { stamp: stampKind, mosaicTarget, beautyStrength, stampSize: currentAdjust.size, stampOffsetX: currentAdjust.offsetX, stampOffsetY: currentAdjust.offsetY },
         }),
       }).catch(() => {});
     }, 800); // デバウンス
@@ -834,6 +859,99 @@ export default function LiveBroadcastPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* スタンプ調整 (サイズ・位置)。fullblur は調整不要なので除外 */}
+            {filterMode === "stamp" && stampKind !== "fullblur" && (
+              <div style={{
+                marginBottom: 12,
+                padding: 10,
+                backgroundColor: C.cardAlt,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+              }}>
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
+                  fontSize: 10,
+                  color: C.textSub,
+                  fontFamily: FONT_SERIF,
+                }}>
+                  <span>✨ {STAMP_OPTIONS.find((s) => s.kind === stampKind)?.label} の調整</span>
+                  <button
+                    onClick={resetAdjust}
+                    style={{
+                      padding: "3px 8px",
+                      fontSize: 9,
+                      cursor: "pointer",
+                      backgroundColor: "transparent",
+                      color: C.textSub,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 4,
+                      fontFamily: FONT_SERIF,
+                    }}
+                  >
+                    🔄 リセット
+                  </button>
+                </div>
+
+                {/* サイズスライダー */}
+                <label style={{ display: "block", marginBottom: 6, fontSize: 9, color: C.textSub, fontFamily: FONT_SERIF }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <span>サイズ</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{Math.round(currentAdjust.size * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2.0"
+                    step="0.05"
+                    value={currentAdjust.size}
+                    onChange={(e) => updateAdjust({ size: parseFloat(e.target.value) })}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+
+                {/* 横位置スライダー */}
+                <label style={{ display: "block", marginBottom: 6, fontSize: 9, color: C.textSub, fontFamily: FONT_SERIF }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <span>左右</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {currentAdjust.offsetX === 0 ? "中央" : (currentAdjust.offsetX > 0 ? "→ " : "← ") + Math.abs(Math.round(currentAdjust.offsetX * 100)) + "%"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-0.5"
+                    max="0.5"
+                    step="0.02"
+                    value={currentAdjust.offsetX}
+                    onChange={(e) => updateAdjust({ offsetX: parseFloat(e.target.value) })}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+
+                {/* 縦位置スライダー */}
+                <label style={{ display: "block", marginBottom: 0, fontSize: 9, color: C.textSub, fontFamily: FONT_SERIF }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <span>上下</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {currentAdjust.offsetY === 0 ? "中央" : (currentAdjust.offsetY > 0 ? "↓ " : "↑ ") + Math.abs(Math.round(currentAdjust.offsetY * 100)) + "%"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-0.5"
+                    max="0.5"
+                    step="0.02"
+                    value={currentAdjust.offsetY}
+                    onChange={(e) => updateAdjust({ offsetY: parseFloat(e.target.value) })}
+                    style={{ width: "100%" }}
+                  />
+                </label>
               </div>
             )}
 
