@@ -174,7 +174,7 @@ export default function SiteFooter() {
                 <a
                   href={`tel:${TEL_PRIMARY}`}
                   style={{
-                    fontFamily: SITE.font.display,
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                     fontSize: "18px",
                     color: SITE.color.text,
                     textDecoration: "none",
@@ -199,7 +199,7 @@ export default function SiteFooter() {
                 <a
                   href={`tel:${TEL_SECONDARY}`}
                   style={{
-                    fontFamily: SITE.font.display,
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                     fontSize: "14px",
                     color: SITE.color.textSub,
                     textDecoration: "none",

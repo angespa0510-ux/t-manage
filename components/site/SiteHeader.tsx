@@ -232,7 +232,7 @@ export default function SiteHeader() {
                 border: `1px solid ${SITE.color.pink}`,
                 color: SITE.color.pink,
                 fontSize: "12px",
-                fontFamily: SITE.font.display,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                 letterSpacing: SITE.ls.loose,
                 textDecoration: "none",
                 transition: SITE.transition.fast,
@@ -507,7 +507,7 @@ export default function SiteHeader() {
                   color: "#ffffff",
                   textDecoration: "none",
                   textAlign: "center",
-                  fontFamily: SITE.font.display,
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                   fontSize: "15px",
                   letterSpacing: SITE.ls.wide,
                 }}
@@ -524,7 +524,7 @@ export default function SiteHeader() {
                   color: SITE.color.pink,
                   textDecoration: "none",
                   textAlign: "center",
-                  fontFamily: SITE.font.display,
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                   fontSize: "14px",
                   letterSpacing: SITE.ls.loose,
                 }}
