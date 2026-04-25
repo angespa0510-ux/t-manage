@@ -180,6 +180,7 @@ export default function SiteFooter() {
                     textDecoration: "none",
                     letterSpacing: SITE.ls.loose,
                     lineHeight: 1.4,
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
                   {TEL_PRIMARY}
@@ -205,6 +206,7 @@ export default function SiteFooter() {
                     textDecoration: "none",
                     letterSpacing: SITE.ls.loose,
                     lineHeight: 1.4,
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
                   {TEL_SECONDARY}
