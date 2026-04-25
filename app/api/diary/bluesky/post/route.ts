@@ -5,7 +5,7 @@ import {
   uploadBlob,
   createPost,
   fetchImageAsBuffer,
-} from "../../../../lib/bluesky-client";
+} from "../../../../../lib/bluesky-client";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://cbewozzdyjqmhzkxsjqo.supabase.co";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
