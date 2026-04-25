@@ -201,7 +201,7 @@ export default function SiteFooter() {
                   style={{
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                     fontSize: "18px",
-                    color: SITE.color.textSub,
+                    color: SITE.color.text,
                     textDecoration: "none",
                     letterSpacing: SITE.ls.loose,
                   }}
