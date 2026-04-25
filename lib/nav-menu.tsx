@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
 
   // ── 売上 ──
   { icon: "📊", label: "売上分析",  path: "/analytics",      category: "売上" },
+  { icon: "📈", label: "集客分析",  path: "/marketing-analytics", category: "売上", requiresManager: true },
   { icon: "📋", label: "バックオフィス",  path: "/tax-dashboard",  category: "売上", requiresCashDashboard: true },
   { icon: "💴", label: "資金管理", path: "/cash-dashboard", category: "売上", requiresCashDashboard: true },
   { icon: "📦", label: "棚卸管理", path: "/inventory", category: "売上", requiresCashDashboard: true },
