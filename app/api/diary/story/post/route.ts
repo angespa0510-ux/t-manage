@@ -74,22 +74,25 @@ async function processImage(base64: string): Promise<{
 }
 
 /**
- * 動画処理: バリデーションのみ (再エンコードはしない)
- * Phase 2 では動画のリエンコードはせず、クライアント側の制約に任せる
- * Phase 3 で ffmpeg.wasm or サーバーサイド ffmpeg 検討
+ * 動画処理: バリデーションのみ (実際のリエンコードは /api/diary/video/upload + process-job で実行)
+ *
+ * Phase 3 Step I で本格対応:
+ *   - MP4 だけでなく MOV(QuickTime) も受付
+ *   - サーバーサイド ffmpeg で H.264 + AAC に統一
+ *   - 9:16 へのアスペクト変換
  */
 async function processVideo(
   base64: string,
   contentType: string,
   durationSec?: number
 ): Promise<{ buffer: Buffer; size: number }> {
-  const cleanBase64 = base64.replace(/^data:video\/[a-z0-9]+;base64,/, "");
+  const cleanBase64 = base64.replace(/^data:video\/[a-z0-9-]+;base64,/, "");
   const buffer = Buffer.from(cleanBase64, "base64");
   if (buffer.length > MAX_VIDEO_BYTES) {
     throw new Error(`動画サイズが上限(${MAX_VIDEO_BYTES / 1024 / 1024}MB)を超えています`);
   }
-  if (contentType !== "video/mp4") {
-    throw new Error("動画はMP4形式のみ対応しています");
+  if (!["video/mp4", "video/quicktime", "video/x-m4v"].includes(contentType)) {
+    throw new Error("動画は MP4 か MOV(iPhone標準) のみ対応しています");
   }
   if (durationSec && durationSec > MAX_VIDEO_SECONDS) {
     throw new Error(`動画は${MAX_VIDEO_SECONDS}秒以内にしてください`);
@@ -156,6 +159,8 @@ export async function POST(req: Request) {
       let width = 0;
       let height = 0;
       let fileSize = 0;
+      let videoJobId: number | null = null;
+      let isProcessingVideo = false;
 
       if (input.mediaType === "image") {
         const result = await processImage(input.mediaBase64);
@@ -167,59 +172,102 @@ export async function POST(req: Request) {
         mainPath = `${input.therapistId}/${storyId}/${ts}.webp`;
         thumbPath = `${input.therapistId}/${storyId}/${ts}_thumb.webp`;
         mainContentType = "image/webp";
-      } else {
-        const result = await processVideo(
-          input.mediaBase64,
-          input.mediaContentType,
-          input.videoDurationSec
-        );
-        mainBuffer = result.buffer;
-        fileSize = result.size;
-        mainPath = `${input.therapistId}/${storyId}/${ts}.mp4`;
-        mainContentType = "video/mp4";
-      }
 
-      // メディア本体アップロード
-      const upMain = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(mainPath, mainBuffer, { contentType: mainContentType, upsert: false });
-      if (upMain.error) throw new Error(`メディアアップロード失敗: ${upMain.error.message}`);
-
-      const mainUrl = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(mainPath).data.publicUrl;
-
-      // サムネイル (画像のみ)
-      let thumbUrl: string | null = null;
-      if (thumbBuffer && thumbPath) {
-        const upThumb = await supabase.storage
+        // メディア本体アップロード
+        const upMain = await supabase.storage
           .from(STORAGE_BUCKET)
-          .upload(thumbPath, thumbBuffer, { contentType: "image/webp", upsert: false });
-        if (!upThumb.error) {
-          thumbUrl = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
+          .upload(mainPath, mainBuffer, { contentType: mainContentType, upsert: false });
+        if (upMain.error) throw new Error(`メディアアップロード失敗: ${upMain.error.message}`);
+
+        const mainUrl = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(mainPath).data.publicUrl;
+
+        // サムネ
+        let thumbUrl: string | null = null;
+        if (thumbBuffer && thumbPath) {
+          const upThumb = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(thumbPath, thumbBuffer, { contentType: "image/webp", upsert: false });
+          if (!upThumb.error) {
+            thumbUrl = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
+          }
         }
+
+        await supabase
+          .from("therapist_diary_stories")
+          .update({
+            media_url: mainUrl,
+            thumbnail_url: thumbUrl,
+            file_size_bytes: fileSize,
+            image_width: width,
+            image_height: height,
+          })
+          .eq("id", storyId);
+
+        return NextResponse.json({
+          success: true,
+          storyId,
+          mediaUrl: mainUrl,
+          thumbnailUrl: thumbUrl,
+          expiresAt,
+          visibility,
+        });
+      } else {
+        // 動画: video upload API に転送して処理ジョブを作成
+        // バリデーション
+        const cleanBase64 = input.mediaBase64.replace(/^data:video\/[a-z0-9-]+;base64,/, "");
+        const buffer = Buffer.from(cleanBase64, "base64");
+        if (buffer.length > MAX_VIDEO_BYTES) {
+          throw new Error(`動画サイズが上限(${MAX_VIDEO_BYTES / 1024 / 1024}MB)を超えています`);
+        }
+        if (input.videoDurationSec && input.videoDurationSec > MAX_VIDEO_SECONDS) {
+          throw new Error(`動画は${MAX_VIDEO_SECONDS}秒以内にしてください`);
+        }
+
+        // Storage(raw) にアップロード + ジョブ作成
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+        const uploadRes = await fetch(`${baseUrl}/api/diary/video/upload`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            therapistId: input.therapistId,
+            authToken: input.authToken,
+            sourceType: "story",
+            sourceId: storyId,
+            videoBase64: input.mediaBase64,
+            videoMime: input.mediaContentType,
+            targetAspect: "9:16",  // ストーリーは縦動画
+            estimatedDurationSec: input.videoDurationSec,
+          }),
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) {
+          throw new Error(uploadData.error || "動画アップロード失敗");
+        }
+        videoJobId = uploadData.jobId;
+        isProcessingVideo = true;
+
+        // 仮メディアURLとして raw URL を入れておく (処理完了後に上書きされる)
+        await supabase
+          .from("therapist_diary_stories")
+          .update({
+            media_url: uploadData.rawUrl,
+            file_size_bytes: buffer.length,
+            video_processing_job_id: videoJobId,
+          })
+          .eq("id", storyId);
+
+        return NextResponse.json({
+          success: true,
+          storyId,
+          mediaUrl: uploadData.rawUrl,
+          thumbnailUrl: null,
+          expiresAt,
+          visibility,
+          isProcessingVideo,
+          videoJobId,
+          processingMessage: "動画を処理中です(数十秒〜1分)。完了するとストーリーに反映されます。",
+        });
       }
-
-      // story レコードに URL/メタ更新
-      await supabase
-        .from("therapist_diary_stories")
-        .update({
-          media_url: mainUrl,
-          thumbnail_url: thumbUrl,
-          file_size_bytes: fileSize,
-          image_width: input.mediaType === "image" ? width : null,
-          image_height: input.mediaType === "image" ? height : null,
-          video_width: input.mediaType === "video" ? width : null,
-          video_height: input.mediaType === "video" ? height : null,
-        })
-        .eq("id", storyId);
-
-      return NextResponse.json({
-        success: true,
-        storyId,
-        mediaUrl: mainUrl,
-        thumbnailUrl: thumbUrl,
-        expiresAt,
-        visibility,
-      });
     } catch (mediaErr) {
       // 失敗したら story を削除
       await supabase.from("therapist_diary_stories").delete().eq("id", storyId);

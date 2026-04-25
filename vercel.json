@@ -23,6 +23,10 @@
     {
       "path": "/api/diary/publish-scheduled",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/diary/video/process-job",
+      "schedule": "*/3 * * * *"
     }
   ]
 }

@@ -116,6 +116,18 @@ export default function TherapistStorySection({
     return () => clearInterval(t);
   }, []);
 
+  // 動画処理中のストーリーがあれば30秒ごとに状態確認 (処理完了検知)
+  useEffect(() => {
+    const hasProcessing = stories.some(
+      (s) => s.mediaType === "video" && s.mediaUrl && s.mediaUrl.includes("therapist-videos-raw")
+    );
+    if (!hasProcessing) return;
+    const t = setInterval(() => {
+      fetchStories();
+    }, 30000);
+    return () => clearInterval(t);
+  }, [stories, fetchStories]);
+
   // ════════════════════════════════════════════════════
   // ファイル選択
   // ════════════════════════════════════════════════════
@@ -142,8 +154,8 @@ export default function TherapistStorySection({
       return;
     }
 
-    if (isVideo && file.type !== "video/mp4") {
-      setErrorMsg("動画は MP4 形式のみ対応しています");
+    if (isVideo && !["video/mp4", "video/quicktime", "video/x-m4v"].includes(file.type)) {
+      setErrorMsg("動画は MP4 または MOV (iPhone標準) のみ対応しています");
       return;
     }
 
@@ -228,10 +240,14 @@ export default function TherapistStorySection({
       if (!res.ok) {
         setErrorMsg(data.error || "投稿に失敗しました");
       } else {
-        setSuccessMsg("✨ ストーリーを投稿しました! 24時間後に消えます");
+        if (data.isProcessingVideo) {
+          setSuccessMsg("✨ 動画を処理中です(数十秒〜1分)。完了次第ストーリーに反映されます");
+        } else {
+          setSuccessMsg("✨ ストーリーを投稿しました! 24時間後に消えます");
+        }
         closeComposer();
         await fetchStories();
-        setTimeout(() => setSuccessMsg(null), 3000);
+        setTimeout(() => setSuccessMsg(null), 5000);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "通信エラー";
@@ -474,13 +490,13 @@ export default function TherapistStorySection({
                     <span style={{ fontSize: 12 }}>タップして選択</span>
                     <span style={{ fontSize: 10, color: C.textFaint, lineHeight: 1.5, textAlign: "center" }}>
                       画像: 5MB以下<br />
-                      動画: 15秒/20MB以下 (MP4)
+                      動画: 15秒/20MB以下 (MP4 / MOV)
                     </span>
                   </button>
                   <input
                     type="file"
                     ref={fileInputRef}
-                    accept="image/*,video/mp4"
+                    accept="image/*,video/mp4,video/quicktime"
                     onChange={handleFileSelect}
                     style={{ display: "none" }}
                   />
