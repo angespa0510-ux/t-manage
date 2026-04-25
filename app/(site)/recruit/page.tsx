@@ -385,7 +385,7 @@ export default function RecruitPage() {
                 padding: "18px 24px",
                 backgroundColor: SITE.color.pink,
                 color: "#ffffff",
-                fontFamily: SITE.font.display,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                 fontSize: "15px",
                 letterSpacing: SITE.ls.wide,
                 textDecoration: "none",

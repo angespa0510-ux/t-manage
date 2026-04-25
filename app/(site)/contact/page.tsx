@@ -159,7 +159,9 @@ export default function ContactPage() {
                     padding: "14px 28px",
                     backgroundColor: SITE.color.pink,
                     color: "#ffffff",
-                    fontFamily: SITE.font.display,
+                    fontFamily: c.label === "TEL"
+                      ? '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif'
+                      : SITE.font.display,
                     fontSize: "16px",
                     letterSpacing: SITE.ls.loose,
                     textDecoration: "none",
@@ -175,7 +177,7 @@ export default function ContactPage() {
                     <a
                       href={c.subHref}
                       style={{
-                        fontFamily: SITE.font.display,
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                         fontSize: "16px",
                         color: SITE.color.textSub,
                         textDecoration: "none",

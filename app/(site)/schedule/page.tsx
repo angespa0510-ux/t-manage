@@ -444,7 +444,7 @@ export default function SchedulePage() {
                 padding: "16px 24px",
                 backgroundColor: SITE.color.pink,
                 color: "#ffffff",
-                fontFamily: SITE.font.display,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                 fontSize: "14px",
                 letterSpacing: SITE.ls.wide,
                 textDecoration: "none",

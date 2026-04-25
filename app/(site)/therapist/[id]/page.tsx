@@ -504,7 +504,7 @@ export default function TherapistDetailPage({
                     padding: "14px 24px",
                     border: `1px solid ${SITE.color.pink}`,
                     color: SITE.color.pink,
-                    fontFamily: SITE.font.display,
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                     fontSize: "13px",
                     letterSpacing: SITE.ls.loose,
                     textDecoration: "none",
