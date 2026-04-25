@@ -360,7 +360,7 @@ export default function HomePage() {
                 backgroundColor: "rgba(252,228,233,0.95)",
                 border: `1px solid ${SITE.color.pink}`,
                 color: SITE.color.pink,
-                fontFamily: SITE.font.display,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
                 fontSize: "20px",
                 fontWeight: 600,
                 letterSpacing: SITE.ls.normal,
