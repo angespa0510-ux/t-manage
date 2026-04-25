@@ -11,6 +11,14 @@
     {
       "path": "/api/scheduled-messages-send",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/diary/cleanup-stories",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/diary/process-deletion-queue",
+      "schedule": "0 3 * * *"
     }
   ]
 }
