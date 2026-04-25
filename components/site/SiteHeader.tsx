@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { label: "料金",             en: "SYSTEM",     path: "/system" },
   { label: "セラピスト",       en: "THERAPIST",  path: "/therapist" },
   { label: "スケジュール",     en: "SCHEDULE",   path: "/schedule" },
+  { label: "写メ日記",         en: "DIARY",      path: "/diary" },
   { label: "アクセス",         en: "ACCESS",     path: "/access" },
   { label: "求人",             en: "RECRUIT",    path: "/recruit" },
 ];

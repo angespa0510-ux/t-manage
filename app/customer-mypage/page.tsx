@@ -9,9 +9,10 @@ import {
   IconHome, IconCalendar, IconHeart, IconBell, IconSettings,
   IconUser, IconPhone, IconClock, IconMapPin, IconCheck, IconClose,
   IconEdit, IconWarning, IconLogout, IconArrowRight, IconSparkle,
-  IconCard,
+  IconCard, IconCamera,
   StarRating, BellWithBadge,
 } from "../../components/mypage/Icon";
+import CustomerDiaryTab from "../../components/mypage/CustomerDiaryTab";
 
 type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number; point_used?: number };
@@ -75,7 +76,7 @@ export default function CustomerMypage() {
   const [authMode, setAuthMode] = useState<"login" | "register" | "reset">("login");
   const [authEmail, setAuthEmail] = useState(""); const [authPw, setAuthPw] = useState(""); const [authName, setAuthName] = useState(""); const [authPhone, setAuthPhone] = useState(""); const [authError, setAuthError] = useState(""); const [authLoading, setAuthLoading] = useState(false); const [showPw, setShowPw] = useState(false);
   const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "schedule" | "favorites" | "notifications" | "settings">("home");
+  const [tab, setTab] = useState<"home" | "schedule" | "favorites" | "notifications" | "settings" | "diary">("home");
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -546,6 +547,7 @@ export default function CustomerMypage() {
   const tabs: { key: typeof tab; label: string; Icon: React.ComponentType<{ size?: number; color?: string }> }[] = [
     { key: "home", label: "ホーム", Icon: IconHome },
     { key: "schedule", label: "予約", Icon: IconCalendar },
+    { key: "diary", label: "日記", Icon: IconCamera },
     { key: "favorites", label: "お気に入り", Icon: IconHeart },
     { key: "notifications", label: "お知らせ", Icon: IconBell },
     { key: "settings", label: "設定", Icon: IconSettings },
@@ -1261,6 +1263,18 @@ export default function CustomerMypage() {
           </div>
         )}
       </div>)}
+
+      {/* ═══ 写メ日記 ═══ */}
+      {tab === "diary" && customer && (
+        <div className="animate-[fadeIn_0.3s]">
+          <CustomerDiaryTab
+            customerId={customer.id}
+            C={C}
+            FONT_SERIF={FONT_SERIF}
+            FONT_DISPLAY={FONT_DISPLAY}
+          />
+        </div>
+      )}
 
       {/* ═══ 設定 ═══ */}
       {tab === "settings" && (<div className="animate-[fadeIn_0.3s]" style={{ display: "flex", flexDirection: "column", gap: 20 }}>

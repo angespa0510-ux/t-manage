@@ -201,6 +201,15 @@ export function IconNote({ size = 16, color = "currentColor", strokeWidth = 1.2,
   );
 }
 
+export function IconCamera({ size = 18, color = "currentColor", strokeWidth = 1.2, style, className }: IconProps) {
+  return (
+    <svg {...base(size, style)} stroke={color} strokeWidth={strokeWidth} className={className}>
+      <path d="M3 7h3l2-3h8l2 3h3v13H3V7z" strokeLinejoin="round"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+  );
+}
+
 export function IconLogout({ size = 16, color = "currentColor", strokeWidth = 1.2, style, className }: IconProps) {
   return (
     <svg {...base(size, style)} stroke={color} strokeWidth={strokeWidth} className={className}>
