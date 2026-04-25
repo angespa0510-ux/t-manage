@@ -48,6 +48,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "配信は終了しています" }, { status: 410 });
     }
 
+    // セラピスト名取得 (UI表示用)
+    const { data: therapist } = await supabase
+      .from("therapists")
+      .select("name")
+      .eq("id", stream.therapist_id)
+      .maybeSingle();
+    const therapistName = therapist?.name || "セラピスト";
+
     // 2. 会員限定チェック
     if (stream.visibility === "members_only") {
       if (!customerId) {
@@ -130,6 +138,7 @@ export async function POST(req: Request) {
       streamId,
       roomName: stream.room_name,
       title: stream.title,
+      therapistName,
       accessToken,
       wsUrl: LIVEKIT_WS_URL,
       identity,

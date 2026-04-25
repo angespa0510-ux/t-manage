@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import TherapistStorySection from "./therapist-story-section";
 import TherapistCommentReplySection from "./therapist-comment-reply-section";
 import TherapistBlueskySection from "./therapist-bluesky-section";
+import TherapistGiftSection from "./therapist-gift-section";
 
 /**
  * ═══════════════════════════════════════════════════════════
@@ -701,6 +702,16 @@ export default function TherapistDiaryTab({
 
       {/* Bluesky自動投稿セクション */}
       <TherapistBlueskySection
+        therapistId={therapistId}
+        authToken={authToken}
+        C={C}
+        FONT_SERIF={FONT_SERIF}
+        FONT_DISPLAY={FONT_DISPLAY}
+        FONT_SANS={FONT_SANS}
+      />
+
+      {/* 投げ銭受領セクション */}
+      <TherapistGiftSection
         therapistId={therapistId}
         authToken={authToken}
         C={C}

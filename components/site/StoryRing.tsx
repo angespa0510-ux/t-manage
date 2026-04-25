@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { SITE } from "../../lib/site-theme";
 import { useCustomerAuth } from "../../lib/customer-auth-context";
+import GiftModal from "../gift-modal";
 
 /**
  * HP写メ日記ページ用 ストーリーリング + 全画面ビューア
@@ -44,6 +45,8 @@ export default function StoryRing() {
 
   // ビューア状態
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [giftModalOpen, setGiftModalOpen] = useState(false);
+  const [giftSentMsg, setGiftSentMsg] = useState<string | null>(null);
   const [activeGroupIdx, setActiveGroupIdx] = useState(0);
   const [activeStoryIdx, setActiveStoryIdx] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -493,9 +496,9 @@ export default function StoryRing() {
             <div
               style={{
                 position: "absolute",
-                bottom: 32,
+                bottom: 80,
                 left: 16,
-                right: 16,
+                right: 80,
                 padding: "10px 14px",
                 backgroundColor: "rgba(0,0,0,0.5)",
                 color: "#fff",
@@ -509,7 +512,59 @@ export default function StoryRing() {
               {currentStory.caption}
             </div>
           )}
+
+          {/* 投げ銭ボタン (右下) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!customer) return;
+              setPaused(true);
+              setGiftModalOpen(true);
+            }}
+            style={{
+              position: "absolute",
+              right: 16,
+              bottom: 32,
+              zIndex: 10,
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              border: "none",
+              background: "linear-gradient(135deg, #ffd668 0%, #ff9844 100%)",
+              color: "#fff",
+              fontSize: 24,
+              cursor: customer ? "pointer" : "not-allowed",
+              boxShadow: "0 4px 12px rgba(255, 152, 68, 0.5)",
+              opacity: customer ? 1 : 0.4,
+            }}
+            title={customer ? "投げ銭を送る" : "ログインが必要です"}
+          >
+            🎁
+          </button>
+
+          {/* 投げ銭成功トースト */}
+          {giftSentMsg && (
+            <div style={{ position: "absolute", top: 80, left: 16, right: 16, zIndex: 11, padding: "10px 14px", backgroundColor: "rgba(107, 155, 126, 0.95)", color: "#fff", fontSize: 12, fontFamily: SITE.font.serif, textAlign: "center" }}>
+              {giftSentMsg}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* 投げ銭モーダル */}
+      {currentStory && currentGroup && (
+        <GiftModal
+          open={giftModalOpen}
+          onClose={() => { setGiftModalOpen(false); setPaused(false); }}
+          customerId={customer?.id || null}
+          sourceType="story"
+          sourceId={currentStory.id}
+          recipientName={currentGroup.therapist.name}
+          onSent={(g) => {
+            setGiftSentMsg(`✨ ${g.emoji} ${g.pointAmount}pt を送りました!`);
+            setTimeout(() => setGiftSentMsg(null), 3000);
+          }}
+        />
       )}
     </>
   );

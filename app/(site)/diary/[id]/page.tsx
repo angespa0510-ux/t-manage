@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { SITE, MARBLE } from "../../../../lib/site-theme";
 import { useCustomerAuth } from "../../../../lib/customer-auth-context";
 import DiaryComments from "../../../../components/site/DiaryComments";
+import GiftModal from "../../../../components/gift-modal";
 
 /**
  * Ange Spa 写メ日記 個別ページ
@@ -73,6 +74,8 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
   const [related, setRelated] = useState<RelatedEntry[]>([]);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [giftModalOpen, setGiftModalOpen] = useState(false);
+  const [giftSentMsg, setGiftSentMsg] = useState<string | null>(null);
   const [likeLoading, setLikeLoading] = useState(false);
   const [likeAnimating, setLikeAnimating] = useState(false);
   const [favorited, setFavorited] = useState(false);
@@ -763,6 +766,34 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
             )}
           </button>
 
+          {/* 投げ銭ボタン */}
+          <button
+            onClick={() => {
+              if (!customer) {
+                router.push("/customer-mypage");
+                return;
+              }
+              setGiftModalOpen(true);
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "12px 28px",
+              fontSize: SITE.fs.body,
+              cursor: "pointer",
+              background: "linear-gradient(135deg, #fff5e6 0%, #ffe5cc 100%)",
+              color: "#cc6600",
+              border: `1px solid #ffb866`,
+              fontFamily: SITE.font.serif,
+              letterSpacing: SITE.ls.loose,
+              fontWeight: 500,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>🎁</span>
+            <span>{customer ? "投げ銭" : "ログインして 投げ銭"}</span>
+          </button>
+
           {/* 統計 */}
           <div
             style={{
@@ -941,6 +972,29 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
             ))}
           </div>
         </section>
+      )}
+
+      {/* 投げ銭成功トースト */}
+      {giftSentMsg && (
+        <div style={{ position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)", zIndex: 10001, padding: "12px 24px", backgroundColor: "#6b9b7e", color: "#fff", fontSize: 13, fontFamily: SITE.font.serif, boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}>
+          {giftSentMsg}
+        </div>
+      )}
+
+      {/* 投げ銭モーダル */}
+      {entry && (
+        <GiftModal
+          open={giftModalOpen}
+          onClose={() => setGiftModalOpen(false)}
+          customerId={customer?.id || null}
+          sourceType="diary"
+          sourceId={entry.id}
+          recipientName={entry.therapist.name}
+          onSent={(g) => {
+            setGiftSentMsg(`✨ ${g.emoji} ${g.pointAmount}pt を送りました!`);
+            setTimeout(() => setGiftSentMsg(null), 3000);
+          }}
+        />
       )}
     </div>
   );

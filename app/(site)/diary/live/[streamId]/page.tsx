@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Room, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, RemoteParticipant, Track } from "livekit-client";
 import { SITE, MARBLE } from "../../../../../lib/site-theme";
+import GiftModal from "../../../../../components/gift-modal";
+import type { GiftKind } from "../../../../../lib/gift-catalog";
 
 const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
 const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
@@ -60,6 +62,14 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
   const [floatingHearts, setFloatingHearts] = useState<FloatingHeart[]>([]);
   const heartBufferRef = useRef(0);
   const heartIdRef = useRef(0);
+
+  // ギフト
+  const [giftModalOpen, setGiftModalOpen] = useState(false);
+  type FloatingGift = { id: number; emoji: string; size: number; x: number; message: string | null; senderName: string };
+  const [floatingGifts, setFloatingGifts] = useState<FloatingGift[]>([]);
+  const giftIdRef = useRef(0);
+  const [recentGifts, setRecentGifts] = useState<{ id: number; senderName: string; emoji: string; pointAmount: number; message: string | null }[]>([]);
+  const [lastGiftAt, setLastGiftAt] = useState<string | null>(null);
 
   // コメント
   const [comments, setComments] = useState<Comment[]>([]);
@@ -119,7 +129,7 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
         throw new Error(joinData.error || "視聴開始失敗");
       }
 
-      setStreamInfo({ title: joinData.title });
+      setStreamInfo({ title: joinData.title, therapistName: joinData.therapistName });
       setDisplayName(joinData.displayName);
 
       // 2. LiveKit Room 接続
@@ -243,6 +253,55 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
     }, 1000);
     return () => clearInterval(t);
   }, [phase, streamId, memberId]);
+
+  // ─────────────────────────────────────────────
+  // ギフト処理
+  // ─────────────────────────────────────────────
+  const onGiftSent = (sentGift: { kind: GiftKind; emoji: string; pointAmount: number; message: string | null }) => {
+    // 自分のギフトを画面に演出
+    showFloatingGift(sentGift.emoji, sentGift.pointAmount, sentGift.message, displayName || "あなた");
+  };
+
+  const showFloatingGift = (emoji: string, pointAmount: number, message: string | null, senderName: string) => {
+    const id = giftIdRef.current++;
+    const size = pointAmount >= 1000 ? 80 : pointAmount >= 300 ? 60 : pointAmount >= 100 ? 48 : 36;
+    const x = 25 + Math.random() * 50;
+    setFloatingGifts((prev) => [...prev, { id, emoji, size, x, message, senderName }]);
+    // 3秒後に削除 (ギフトはハートより長く表示)
+    setTimeout(() => {
+      setFloatingGifts((prev) => prev.filter((g) => g.id !== id));
+    }, 3500);
+    // recent list にも追加 (右側表示用)
+    setRecentGifts((prev) => [...prev, { id, senderName, emoji, pointAmount, message }].slice(-5));
+    setTimeout(() => {
+      setRecentGifts((prev) => prev.filter((g) => g.id !== id));
+    }, 6000);
+  };
+
+  // 他人のギフトをポーリング (5秒ごと、since以降増分)
+  useEffect(() => {
+    if (phase !== "live") return;
+    const fetchGifts = async () => {
+      try {
+        const url = lastGiftAt
+          ? `/api/gift/list?sourceType=live&sourceId=${streamId}&since=${encodeURIComponent(lastGiftAt)}`
+          : `/api/gift/list?sourceType=live&sourceId=${streamId}&limit=10`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.gifts) && data.gifts.length > 0) {
+          for (const g of data.gifts) {
+            // 自分が送ったギフトは onGiftSent で既に表示済みなのでスキップ
+            if (g.sender.id === memberId) continue;
+            showFloatingGift(g.gift.emoji || "🎁", g.gift.pointAmount, g.message, g.sender.displayName);
+          }
+          setLastGiftAt(data.gifts[data.gifts.length - 1].createdAt);
+        }
+      } catch {}
+    };
+    fetchGifts();
+    const t = setInterval(fetchGifts, 5000);
+    return () => clearInterval(t);
+  }, [phase, streamId, lastGiftAt, memberId]);
 
   // ─────────────────────────────────────────────
   // コメント取得 (3秒ごとポーリング、since以降増分のみ)
@@ -396,7 +455,46 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
                 {h.emoji}
               </span>
             ))}
+            {/* フローティングギフト (ハートより大きく長く) */}
+            {floatingGifts.map((g) => (
+              <div
+                key={`gift-${g.id}`}
+                style={{
+                  position: "absolute",
+                  bottom: 100,
+                  left: `${g.x}%`,
+                  textAlign: "center",
+                  animation: "floatUpBig 3.5s ease-out forwards",
+                  pointerEvents: "none",
+                }}
+              >
+                <div style={{ fontSize: g.size }}>{g.emoji}</div>
+                <div style={{ fontSize: 10, color: SITE.color.pink, fontWeight: 500, marginTop: 4, textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>
+                  {g.senderName}
+                </div>
+              </div>
+            ))}
           </div>
+
+          {/* 直近ギフト表示 (右側) */}
+          {recentGifts.length > 0 && (
+            <div style={{ position: "absolute", right: 14, bottom: 160, maxWidth: 200, display: "flex", flexDirection: "column", gap: 4, pointerEvents: "none" }}>
+              {recentGifts.map((g) => (
+                <div key={`recent-${g.id}`} style={{ padding: "5px 10px", backgroundColor: "rgba(0,0,0,0.65)", border: `1px solid rgba(255,255,255,0.15)`, animation: "fadeInRight 0.3s ease-out" }}>
+                  <p style={{ fontSize: 9, color: SITE.color.pink, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em", marginBottom: 1 }}>
+                    {g.senderName}
+                  </p>
+                  <p style={{ fontSize: 11, color: "#fff" }}>
+                    <span style={{ fontSize: 14, marginRight: 4 }}>{g.emoji}</span>
+                    <span style={{ color: "#ffd668", fontVariantNumeric: "tabular-nums" }}>+{g.pointAmount}pt</span>
+                  </p>
+                  {g.message && (
+                    <p style={{ fontSize: 10, color: "#ddd", marginTop: 2 }}>“{g.message}”</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 右側: コメント表示 (最新10件) */}
           <div style={{ position: "absolute", left: 14, right: 80, bottom: 70, maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, pointerEvents: "none" }}>
@@ -410,26 +508,42 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
             ))}
           </div>
 
-          {/* 右下: ハートボタン */}
-          <button
-            onClick={sendHeart}
-            style={{
-              position: "absolute",
-              right: 14,
-              bottom: 80,
-              width: 60,
-              height: 60,
-              borderRadius: "50%",
-              border: "none",
-              backgroundColor: "rgba(220, 50, 80, 0.85)",
-              color: "#fff",
-              fontSize: 28,
-              cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-            }}
-          >
-            💗
-          </button>
+          {/* 右下: ギフト&ハートボタン (縦並び) */}
+          <div style={{ position: "absolute", right: 14, bottom: 80, display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              onClick={() => setGiftModalOpen(true)}
+              title="投げ銭を送る"
+              style={{
+                width: 60,
+                height: 60,
+                borderRadius: "50%",
+                border: "none",
+                background: "linear-gradient(135deg, #ffd668 0%, #ff9844 100%)",
+                color: "#fff",
+                fontSize: 26,
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(255, 152, 68, 0.45)",
+              }}
+            >
+              🎁
+            </button>
+            <button
+              onClick={sendHeart}
+              style={{
+                width: 60,
+                height: 60,
+                borderRadius: "50%",
+                border: "none",
+                backgroundColor: "rgba(220, 50, 80, 0.85)",
+                color: "#fff",
+                fontSize: 28,
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+              }}
+            >
+              💗
+            </button>
+          </div>
 
           {/* 下部: コメント入力 */}
           <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: 10, backgroundColor: "rgba(0,0,0,0.7)", display: "flex", gap: 6, alignItems: "center" }}>
@@ -490,7 +604,46 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
             opacity: 0;
           }
         }
+        @keyframes floatUpBig {
+          0% {
+            transform: translateY(0) scale(0.5);
+            opacity: 0;
+          }
+          15% {
+            transform: translateY(-30px) scale(1.2);
+            opacity: 1;
+          }
+          50% {
+            transform: translateY(-180px) scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(-380px) scale(0.7);
+            opacity: 0;
+          }
+        }
+        @keyframes fadeInRight {
+          0% {
+            transform: translateX(20px);
+            opacity: 0;
+          }
+          100% {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
       `}</style>
+
+      {/* 投げ銭モーダル */}
+      <GiftModal
+        open={giftModalOpen}
+        onClose={() => setGiftModalOpen(false)}
+        customerId={memberId}
+        sourceType="live"
+        sourceId={streamId}
+        recipientName={streamInfo?.therapistName}
+        onSent={onGiftSent}
+      />
     </main>
   );
 }
