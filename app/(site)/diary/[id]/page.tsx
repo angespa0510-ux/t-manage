@@ -982,14 +982,14 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
       )}
 
       {/* 投げ銭モーダル */}
-      {entry && (
+      {entry && therapist && (
         <GiftModal
           open={giftModalOpen}
           onClose={() => setGiftModalOpen(false)}
           customerId={customer?.id || null}
           sourceType="diary"
           sourceId={entry.id}
-          recipientName={entry.therapist.name}
+          recipientName={therapist.name}
           onSent={(g) => {
             setGiftSentMsg(`✨ ${g.emoji} ${g.pointAmount}pt を送りました!`);
             setTimeout(() => setGiftSentMsg(null), 3000);
