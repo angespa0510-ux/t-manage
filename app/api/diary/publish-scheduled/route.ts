@@ -94,6 +94,15 @@ export async function GET(req: Request) {
         body: JSON.stringify({ entryId: entry.id }),
       }).catch((e) => console.error(`notify trigger ${entry.id}:`, e));
       notifyTriggered++;
+
+      // Bluesky 自動投稿 (非同期、公開記事のみ)
+      if (entry.visibility === "public") {
+        fetch(`${baseUrl}/api/diary/bluesky/post`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entryId: entry.id }),
+        }).catch((e) => console.error(`bluesky trigger ${entry.id}:`, e));
+      }
     }
 
     return NextResponse.json({

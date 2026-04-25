@@ -317,6 +317,16 @@ export async function POST(req: Request) {
       }).catch((e) => console.error("notify-favorites trigger failed:", e));
     }
 
+    // 7. Bluesky 自動投稿 (非同期 fire-and-forget) ※予約時は実行しない、公開のみ
+    if (!isScheduled && visibility === "public") {
+      const baseUrlForBsky = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+      fetch(`${baseUrlForBsky}/api/diary/bluesky/post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId }),
+      }).catch((e) => console.error("bluesky post trigger failed:", e));
+    }
+
     return NextResponse.json({
       success: true,
       entryId,
