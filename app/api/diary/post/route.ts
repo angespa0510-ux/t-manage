@@ -30,6 +30,7 @@ type PostInput = {
   images: ImageInput[];
   tags?: string[];
   sendToEkichika?: boolean;
+  scheduledAt?: string; // ISO datetime string (予約投稿時)
 };
 
 /**
@@ -198,6 +199,20 @@ export async function POST(req: Request) {
     }
 
     const visibility = input.visibility === "members_only" ? "members_only" : "public";
+
+    // 予約投稿の判定 (未来日時なら scheduled、それ以外は即時公開)
+    const now = new Date();
+    let scheduledAt: Date | null = null;
+    let isScheduled = false;
+    if (input.scheduledAt) {
+      const parsed = new Date(input.scheduledAt);
+      if (!isNaN(parsed.getTime()) && parsed.getTime() > now.getTime() + 60 * 1000) {
+        // 1分以上未来なら予約とみなす
+        scheduledAt = parsed;
+        isScheduled = true;
+      }
+    }
+
     // 会員限定の場合は駅ちか送信を強制false
     const sendToEkichika = visibility === "public" && input.sendToEkichika !== false;
 
@@ -209,10 +224,15 @@ export async function POST(req: Request) {
         title: input.title.trim(),
         body: input.body.trim(),
         visibility,
-        status: "published",
+        status: isScheduled ? "scheduled" : "published",
         send_to_ekichika: sendToEkichika,
-        ekichika_dispatch_status: sendToEkichika ? "pending" : "skipped",
-        published_at: new Date().toISOString(),
+        // 予約時は配信もまだ走らせない (publish時にpending化)
+        ekichika_dispatch_status: isScheduled
+          ? (sendToEkichika ? "scheduled" : "skipped")
+          : (sendToEkichika ? "pending" : "skipped"),
+        scheduled_at: scheduledAt ? scheduledAt.toISOString() : null,
+        // published_at: 予約なら未来時刻、即時なら今
+        published_at: scheduledAt ? scheduledAt.toISOString() : now.toISOString(),
         source: "mypage",
       })
       .select("id")
@@ -274,9 +294,9 @@ export async function POST(req: Request) {
       await processTags(entryId, input.tags);
     }
 
-    // 5. 駅ちか送信は非同期 (fire-and-forget)
+    // 5. 駅ちか送信は非同期 (fire-and-forget) ※予約投稿時は実行しない (cron が実行)
     let ekichikaScheduled = false;
-    if (sendToEkichika) {
+    if (sendToEkichika && !isScheduled) {
       const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
       // 投稿レスポンスを返した後に駅ちか送信を走らせる(awaitしない)
       fetch(`${baseUrl}/api/diary/dispatch-ekichika`, {
@@ -287,21 +307,25 @@ export async function POST(req: Request) {
       ekichikaScheduled = true;
     }
 
-    // 6. お気に入り会員へpush通知 (非同期 fire-and-forget)
-    const baseUrlForPush = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
-    fetch(`${baseUrlForPush}/api/diary/notify-favorites`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entryId }),
-    }).catch((e) => console.error("notify-favorites trigger failed:", e));
+    // 6. お気に入り会員へpush通知 (非同期 fire-and-forget) ※予約時は実行しない
+    if (!isScheduled) {
+      const baseUrlForPush = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+      fetch(`${baseUrlForPush}/api/diary/notify-favorites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId }),
+      }).catch((e) => console.error("notify-favorites trigger failed:", e));
+    }
 
     return NextResponse.json({
       success: true,
       entryId,
       coverImageUrl,
       visibility,
+      isScheduled,
+      scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
       ekichikaDispatchScheduled: ekichikaScheduled,
-      pushNotificationScheduled: true,
+      pushNotificationScheduled: !isScheduled,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "不明なエラー";

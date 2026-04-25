@@ -110,6 +110,11 @@ export default function TherapistDiaryTab({
   const [visibility, setVisibility] = useState<"public" | "members_only">("public");
   const [sendToEkichika, setSendToEkichika] = useState(true);
 
+  // 予約投稿
+  const [scheduledEnabled, setScheduledEnabled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState(""); // YYYY-MM-DD
+  const [scheduledTime, setScheduledTime] = useState(""); // HH:MM
+
   // 人気タグ
   const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
 
@@ -205,6 +210,9 @@ export default function TherapistDiaryTab({
     setEditingEntryId(null);
     setErrorMsg(null);
     setAiCheckResult(null);
+    setScheduledEnabled(false);
+    setScheduledDate("");
+    setScheduledTime("");
   };
 
   const openComposer = () => {
@@ -378,6 +386,16 @@ export default function TherapistDiaryTab({
 
     setSubmitting(true);
     try {
+      // 予約日時を計算 (有効なときだけISO化)
+      let scheduledAtIso: string | null = null;
+      if (scheduledEnabled && scheduledDate && scheduledTime) {
+        // ローカル日時として解釈 → ISO文字列化
+        const local = new Date(`${scheduledDate}T${scheduledTime}:00`);
+        if (!isNaN(local.getTime())) {
+          scheduledAtIso = local.toISOString();
+        }
+      }
+
       const res = await fetch("/api/diary/post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -393,17 +411,24 @@ export default function TherapistDiaryTab({
           })),
           tags: selectedTags,
           sendToEkichika: visibility === "public" ? sendToEkichika : false,
+          scheduledAt: scheduledAtIso,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setErrorMsg(data.error || "投稿に失敗しました");
       } else {
-        setSuccessMsg(
-          visibility === "public" && sendToEkichika
-            ? "✨ 投稿しました!駅ちかへの自動送信も開始しました"
-            : "✨ 投稿しました!"
-        );
+        if (data.isScheduled) {
+          const d = new Date(data.scheduledAt);
+          const fmt = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          setSuccessMsg(`📅 ${fmt} に公開予約しました`);
+        } else {
+          setSuccessMsg(
+            visibility === "public" && sendToEkichika
+              ? "✨ 投稿しました!駅ちかへの自動送信も開始しました"
+              : "✨ 投稿しました!"
+          );
+        }
         closeComposer();
         await fetchMyEntries();
         // 3秒後にメッセージ消す
@@ -834,6 +859,83 @@ export default function TherapistDiaryTab({
               </div>
             )}
 
+            {/* 予約投稿 */}
+            <div style={{ marginBottom: 18 }}>
+              <p style={{ fontSize: 10, letterSpacing: "0.15em", color: C.textSub, marginBottom: 8, fontFamily: FONT_DISPLAY }}>
+                SCHEDULE · 投稿予約
+              </p>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: `1px solid ${scheduledEnabled ? C.accent : C.border}`, backgroundColor: scheduledEnabled ? "#fef7f9" : C.cardAlt, cursor: "pointer", fontFamily: FONT_SERIF }}>
+                <input
+                  type="checkbox"
+                  checked={scheduledEnabled}
+                  onChange={(e) => {
+                    setScheduledEnabled(e.target.checked);
+                    if (e.target.checked && !scheduledDate) {
+                      // デフォルト = 1時間後
+                      const d = new Date(Date.now() + 60 * 60 * 1000);
+                      const yyyy = d.getFullYear();
+                      const mm = String(d.getMonth() + 1).padStart(2, "0");
+                      const dd = String(d.getDate()).padStart(2, "0");
+                      setScheduledDate(`${yyyy}-${mm}-${dd}`);
+                      // 15分単位に丸める
+                      const min = Math.ceil(d.getMinutes() / 15) * 15;
+                      const h = (min === 60 ? d.getHours() + 1 : d.getHours()) % 24;
+                      const m = min === 60 ? 0 : min;
+                      setScheduledTime(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+                    }
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 11, color: C.text, fontWeight: 500, marginBottom: 2 }}>📅 指定日時に予約投稿する</p>
+                  <p style={{ fontSize: 9, color: C.textMuted, lineHeight: 1.5 }}>
+                    予約時刻になったら自動で公開・駅ちか送信・通知が走ります
+                  </p>
+                </div>
+              </label>
+              {scheduledEnabled && (
+                <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div>
+                    <p style={{ fontSize: 9, color: C.textSub, marginBottom: 4, fontFamily: FONT_DISPLAY, letterSpacing: "0.1em" }}>日付</p>
+                    <input
+                      type="date"
+                      value={scheduledDate}
+                      onChange={(e) => setScheduledDate(e.target.value)}
+                      min={new Date().toISOString().split("T")[0]}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        fontSize: 12,
+                        border: `1px solid ${C.border}`,
+                        backgroundColor: C.bg,
+                        color: C.text,
+                        fontFamily: FONT_SERIF,
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 9, color: C.textSub, marginBottom: 4, fontFamily: FONT_DISPLAY, letterSpacing: "0.1em" }}>時刻 (15分単位推奨)</p>
+                    <input
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      step={900}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        fontSize: 12,
+                        border: `1px solid ${C.border}`,
+                        backgroundColor: C.bg,
+                        color: C.text,
+                        fontFamily: FONT_SERIF,
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* AIチェック結果 */}
             {aiCheckResult && (
               <div
@@ -973,9 +1075,11 @@ export default function TherapistDiaryTab({
               }}
             >
               {submitting
-                ? "投稿中..."
+                ? (scheduledEnabled ? "予約中..." : "投稿中...")
                 : aiCheckResult?.severity === "ng"
                 ? "🚨 NG項目を修正してください"
+                : scheduledEnabled && scheduledDate && scheduledTime
+                ? "📅 予約投稿する"
                 : "📤 投稿する"}
             </button>
           </div>
