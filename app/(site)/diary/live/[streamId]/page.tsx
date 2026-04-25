@@ -176,7 +176,7 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
       });
 
       room.on("participantConnected", () => {
-        setViewerCount(room.numParticipants - 1);
+        setViewerCount(Math.max(0, room.numParticipants - 1));
       });
       room.on("participantDisconnected", () => {
         setViewerCount(Math.max(0, room.numParticipants - 1));
