@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { SITE, MARBLE } from "../../../lib/site-theme";
 import { useCustomerAuth } from "../../../lib/customer-auth-context";
+import StoryRing from "../../../components/site/StoryRing";
 
 /**
  * Ange Spa 写メ日記 タイムライン
@@ -197,6 +198,9 @@ export default function DiaryTimelinePage() {
 
       {/* コンテンツコンテナ */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 16px" }}>
+        {/* ストーリーリング (24時間限定、公開中の投稿があるときだけ表示) */}
+        <StoryRing />
+
         {/* 公開/会員限定タブ */}
         <div
           style={{
