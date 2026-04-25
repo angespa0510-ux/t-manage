@@ -437,6 +437,9 @@ function PriceTable({
     return (
       <div
         style={{
+          backgroundColor: "#ffffff",
+          borderRadius: 12,
+          padding: "8px 24px",
           display: "grid",
           gap: "0",
           gridTemplateColumns: "1fr",
@@ -461,6 +464,9 @@ function PriceTable({
   return (
     <div
       style={{
+        backgroundColor: "#ffffff",
+        borderRadius: 12,
+        padding: "8px 24px",
         borderTop: `1px solid ${SITE.color.border}`,
       }}
     >
