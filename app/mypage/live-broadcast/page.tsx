@@ -103,6 +103,9 @@ export default function LiveBroadcastPage() {
   const audioStreamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarkerType | null>(null);
+
+  // デバッグ情報 (iOS Safari 動作確認用)
+  const [debugInfo, setDebugInfo] = useState<string>("");
   const lastVideoTimeRef = useRef(-1);
 
   // 統計
@@ -201,17 +204,38 @@ export default function LiveBroadcastPage() {
   // 描画ループ (毎フレーム)
   // ─────────────────────────────────────────────────────────
   const startRenderLoop = useCallback(() => {
+    let frameCount = 0;
+    let lastDebugUpdate = 0;
     const tick = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const fl = faceLandmarkerRef.current;
+      frameCount++;
+
+      // デバッグ情報を1秒に1回更新
+      const now = performance.now();
+      if (now - lastDebugUpdate > 1000) {
+        lastDebugUpdate = now;
+        if (video) {
+          setDebugInfo(
+            `vw=${video.videoWidth} vh=${video.videoHeight}\n` +
+            `rs=${video.readyState} paused=${video.paused}\n` +
+            `t=${video.currentTime.toFixed(1)}s frames=${frameCount}`
+          );
+        }
+      }
+
       if (!video || !canvas) {
         animationFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 
+      // iOS Safari: video が止まっていたら再生し直す
+      if (video.paused && cameraStreamRef.current) {
+        video.play().catch(() => {});
+      }
+
       // video の videoWidth が 0 = まだ準備できていない
-      // (readyState はブラウザ依存でブレるので、videoWidth でチェック)
       if (!video.videoWidth || !video.videoHeight) {
         animationFrameRef.current = requestAnimationFrame(tick);
         return;
@@ -617,24 +641,39 @@ export default function LiveBroadcastPage() {
               x-webkit-airplay="deny"
               style={{
                 position: "absolute",
-                left: "-9999px",
-                top: "-9999px",
-                width: 1,
-                height: 1,
-                opacity: 0,
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                zIndex: 0,
+                opacity: 0.001, // ほぼ透明だが描画は維持される
                 pointerEvents: "none",
               }}
             />
             <canvas
               ref={canvasRef}
               style={{
+                position: "relative",
                 display: "block",
                 width: "100%",
                 aspectRatio: "9 / 16",
                 objectFit: "cover",
                 backgroundColor: "#000",
+                zIndex: 1,
               }}
             />
+            {/* デバッグ情報 (iOS Safari 動作確認用) */}
+            {debugInfo && (
+              <div style={{
+                position: "absolute", top: 50, left: 10,
+                padding: "4px 8px", fontSize: 10, fontFamily: "monospace",
+                backgroundColor: "rgba(0,0,0,0.7)", color: "#0f0",
+                zIndex: 10, maxWidth: "calc(100% - 20px)", whiteSpace: "pre-line",
+              }}>
+                {debugInfo}
+              </div>
+            )}
             {/* オーバーレイ統計 (live時) */}
             {phase === "live" && (
               <>
