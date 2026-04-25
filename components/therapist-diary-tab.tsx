@@ -145,6 +145,19 @@ export default function TherapistDiaryTab({
   const [aiChecking, setAiChecking] = useState(false);
   const [aiCheckResult, setAiCheckResult] = useState<AICheckResult | null>(null);
 
+  // AIサジェスト
+  type AISuggestion = {
+    tone: string;
+    title: string;
+    body: string;
+    tags: string[];
+  };
+  const [suggestModalOpen, setSuggestModalOpen] = useState(false);
+  const [suggestHint, setSuggestHint] = useState("");
+  const [aiSuggesting, setAiSuggesting] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
+  const [suggestErrorMsg, setSuggestErrorMsg] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ═══════════════════════════════════════════════════════════
@@ -308,6 +321,54 @@ export default function TherapistDiaryTab({
     }
     setSelectedTags([...selectedTags, clean]);
     setCustomTagInput("");
+  };
+
+  // ═══════════════════════════════════════════════════════════
+  // AIサジェスト (3パターン提案)
+  // ═══════════════════════════════════════════════════════════
+  const requestAISuggest = async () => {
+    setSuggestErrorMsg(null);
+    setAiSuggesting(true);
+    setAiSuggestions([]);
+    try {
+      const res = await fetch("/api/diary/ai-suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          therapistId,
+          authToken,
+          hint: suggestHint.trim() || undefined,
+          draftTitle: title.trim() || undefined,
+          draftBody: body.trim() || undefined,
+          tags: selectedTags.length > 0 ? selectedTags : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSuggestErrorMsg(data.error || "サジェストに失敗しました");
+      } else if (data.suggestions && data.suggestions.length > 0) {
+        setAiSuggestions(data.suggestions);
+      } else {
+        setSuggestErrorMsg(data.error || "提案を生成できませんでした");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "通信エラー";
+      setSuggestErrorMsg(msg);
+    } finally {
+      setAiSuggesting(false);
+    }
+  };
+
+  // 提案を採用してフォームに反映
+  const applySuggestion = (s: AISuggestion) => {
+    setTitle(s.title);
+    setBody(s.body);
+    // タグはマージ (既存のもあるので)
+    const merged = Array.from(new Set([...selectedTags, ...s.tags])).slice(0, 5);
+    setSelectedTags(merged);
+    setSuggestModalOpen(false);
+    setAiSuggestions([]);
+    setAiCheckResult(null); // 内容変わったので再チェック促す
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -718,6 +779,30 @@ export default function TherapistDiaryTab({
               </p>
             </div>
 
+            {/* AIサジェストボタン */}
+            <div style={{ marginBottom: 14 }}>
+              <button
+                onClick={() => { setSuggestModalOpen(true); setSuggestErrorMsg(null); setAiSuggestions([]); }}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  background: "linear-gradient(135deg, #fef7f9 0%, #fef0f4 100%)",
+                  color: C.accentDeep,
+                  border: `1px solid ${C.accent}`,
+                  fontFamily: FONT_SERIF,
+                  letterSpacing: "0.1em",
+                  fontWeight: 500,
+                }}
+              >
+                💡 AIに下書きを3パターン提案してもらう
+              </button>
+              <p style={{ fontSize: 9, color: C.textMuted, marginTop: 4, textAlign: "center", fontFamily: FONT_SERIF, lineHeight: 1.5 }}>
+                何書こう...と迷ったら使ってね♡ 過去の投稿スタイルに合わせて提案します
+              </p>
+            </div>
+
             {/* タイトル */}
             <div style={{ marginBottom: 18 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
@@ -1082,6 +1167,164 @@ export default function TherapistDiaryTab({
                 ? "📅 予約投稿する"
                 : "📤 投稿する"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* AIサジェストモーダル */}
+      {suggestModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "center",
+            overflow: "auto",
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setSuggestModalOpen(false); setAiSuggestions([]); } }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 540,
+              minHeight: "100vh",
+              backgroundColor: C.bg,
+              padding: "16px 14px 80px",
+              fontFamily: FONT_SERIF,
+            }}
+          >
+            {/* ヘッダ */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+              <button
+                onClick={() => { setSuggestModalOpen(false); setAiSuggestions([]); }}
+                style={{ padding: "6px 10px", fontSize: 11, cursor: "pointer", backgroundColor: "transparent", border: "none", color: C.textSub, fontFamily: FONT_SERIF }}
+              >
+                ← 戻る
+              </button>
+              <p style={{ fontSize: 13, fontWeight: 500, color: C.text, letterSpacing: "0.08em" }}>💡 AIサジェスト</p>
+              <div style={{ width: 50 }} />
+            </div>
+
+            {/* ヒント入力 */}
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ fontSize: 10, letterSpacing: "0.15em", color: C.textSub, marginBottom: 6, fontFamily: FONT_DISPLAY }}>
+                HINT · ヒント (任意)
+              </p>
+              <textarea
+                value={suggestHint}
+                onChange={(e) => setSuggestHint(e.target.value)}
+                placeholder={`例:\n・今日は出勤予定\n・髪を切りました\n・常連様にお花いただいた\n・最近お気に入りのカフェの話 など`}
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  fontSize: 12,
+                  border: `1px solid ${C.border}`,
+                  backgroundColor: C.card,
+                  color: C.text,
+                  fontFamily: FONT_SERIF,
+                  outline: "none",
+                  resize: "vertical",
+                  lineHeight: 1.6,
+                }}
+              />
+              <p style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+                書きたいキーワードや出来事を入れると、より的確に提案できます
+              </p>
+            </div>
+
+            {/* 既に書いてある内容の表示 */}
+            {(title.trim() || body.trim() || selectedTags.length > 0) && (
+              <div style={{ marginBottom: 14, padding: 10, backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>
+                <p style={{ fontSize: 10, color: C.textSub, marginBottom: 4, fontFamily: FONT_DISPLAY, letterSpacing: "0.1em" }}>
+                  すでに入力済みの内容も参考にします
+                </p>
+                {title.trim() && <p style={{ fontSize: 11, color: C.text, marginTop: 4 }}>📝 {title.slice(0, 40)}{title.length > 40 ? "..." : ""}</p>}
+                {body.trim() && <p style={{ fontSize: 10, color: C.textSub, marginTop: 4 }}>📄 {body.slice(0, 60)}{body.length > 60 ? "..." : ""}</p>}
+                {selectedTags.length > 0 && <p style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>🏷 {selectedTags.join(", ")}</p>}
+              </div>
+            )}
+
+            {/* リクエストボタン */}
+            <button
+              onClick={requestAISuggest}
+              disabled={aiSuggesting}
+              style={{
+                width: "100%",
+                padding: "12px",
+                fontSize: 13,
+                cursor: aiSuggesting ? "wait" : "pointer",
+                backgroundColor: C.accent,
+                color: "#fff",
+                border: "none",
+                fontFamily: FONT_SERIF,
+                letterSpacing: "0.1em",
+                fontWeight: 500,
+                marginBottom: 14,
+                opacity: aiSuggesting ? 0.5 : 1,
+              }}
+            >
+              {aiSuggesting ? "✨ AI考え中..." : "✨ 3パターン提案してもらう"}
+            </button>
+
+            {/* エラー表示 */}
+            {suggestErrorMsg && (
+              <div style={{ padding: 10, backgroundColor: "#fef2f2", border: `1px solid #c45555`, fontSize: 11, color: "#7a2929", marginBottom: 14, fontFamily: FONT_SERIF }}>
+                {suggestErrorMsg}
+              </div>
+            )}
+
+            {/* 提案リスト */}
+            {aiSuggestions.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {aiSuggestions.map((s, i) => {
+                  const toneEmoji = s.tone === "cheerful" ? "✨" : s.tone === "elegant" ? "🌸" : s.tone === "sweet" ? "💗" : "📝";
+                  const toneLabel = s.tone === "cheerful" ? "元気系" : s.tone === "elegant" ? "上品系" : s.tone === "sweet" ? "甘え系" : s.tone;
+                  return (
+                    <div key={i} style={{ padding: 14, backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+                      <p style={{ fontSize: 10, color: C.accent, fontFamily: FONT_DISPLAY, letterSpacing: "0.15em", marginBottom: 8, fontWeight: 500 }}>
+                        {toneEmoji} {toneLabel}
+                      </p>
+                      <p style={{ fontSize: 13, color: C.text, fontWeight: 500, marginBottom: 6, lineHeight: 1.6 }}>
+                        {s.title}
+                      </p>
+                      <p style={{ fontSize: 11, color: C.textSub, marginBottom: 8, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                        {s.body}
+                      </p>
+                      {s.tags.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+                          {s.tags.map((tag, j) => (
+                            <span key={j} style={{ fontSize: 9, padding: "2px 6px", backgroundColor: C.accentBg, color: C.accentDeep, fontFamily: FONT_SERIF }}>
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => applySuggestion(s)}
+                        style={{
+                          width: "100%",
+                          padding: "8px",
+                          fontSize: 11,
+                          cursor: "pointer",
+                          backgroundColor: C.accent,
+                          color: "#fff",
+                          border: "none",
+                          fontFamily: FONT_SERIF,
+                          letterSpacing: "0.1em",
+                          fontWeight: 500,
+                        }}
+                      >
+                        この案を採用する →
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
