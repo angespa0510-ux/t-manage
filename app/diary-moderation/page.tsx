@@ -383,7 +383,7 @@ export default function DiaryModerationPage() {
           <div style={{ padding: 14, textAlign: "center", borderRight: `1px solid ${T.border}` }}>
             <p style={{ fontSize: 9, letterSpacing: "0.15em", color: T.textMuted, marginBottom: 4 }}>📤 駅ちか送信成功率</p>
             <p style={{ fontSize: 22, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-              {stats.thisMonthSent + stats.thisMonthEkichikaFailed > 0
+              {stats.thisMonthEkichikaSent + stats.thisMonthEkichikaFailed > 0
                 ? Math.round((stats.thisMonthEkichikaSent / (stats.thisMonthEkichikaSent + stats.thisMonthEkichikaFailed)) * 100)
                 : 100}%
             </p>
