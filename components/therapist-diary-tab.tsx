@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import TherapistStorySection from "./therapist-story-section";
+import TherapistCommentReplySection from "./therapist-comment-reply-section";
 
 /**
  * ═══════════════════════════════════════════════════════════
@@ -465,6 +466,16 @@ export default function TherapistDiaryTab({
 
       {/* ストーリーズ セクション (24時間で消える) */}
       <TherapistStorySection
+        therapistId={therapistId}
+        authToken={authToken}
+        C={C}
+        FONT_SERIF={FONT_SERIF}
+        FONT_DISPLAY={FONT_DISPLAY}
+        FONT_SANS={FONT_SANS}
+      />
+
+      {/* コメントへの返信セクション */}
+      <TherapistCommentReplySection
         therapistId={therapistId}
         authToken={authToken}
         C={C}

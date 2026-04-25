@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SITE, MARBLE } from "../../../../lib/site-theme";
 import { useCustomerAuth } from "../../../../lib/customer-auth-context";
+import DiaryComments from "../../../../components/site/DiaryComments";
 
 /**
  * Ange Spa 写メ日記 個別ページ
@@ -721,6 +722,11 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
           </Link>
         </div>
       </article>
+
+      {/* コメントセクション */}
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 20px" }}>
+        <DiaryComments entryId={entry.id} therapistName={therapist.name} />
+      </div>
 
       {/* 関連記事 (同じセラピスト) */}
       {related.length > 0 && (
