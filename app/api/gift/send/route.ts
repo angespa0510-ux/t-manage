@@ -165,9 +165,15 @@ export async function POST(req: Request) {
       .single();
 
     if (txErr || !tx) {
+      console.error("gift_transactions insert error:", txErr);
       // ポイント消費を取り消し
       await supabase.from("customer_points").delete().eq("id", pt.id);
-      return NextResponse.json({ error: "投げ銭の記録に失敗しました" }, { status: 500 });
+      return NextResponse.json({
+        error: "投げ銭の記録に失敗しました",
+        detail: txErr?.message || "不明なエラー",
+        code: txErr?.code || null,
+        hint: txErr?.hint || null,
+      }, { status: 500 });
     }
 
     // 6. therapist_gift_points を upsert (累計+期間別加算)

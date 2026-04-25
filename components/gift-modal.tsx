@@ -82,7 +82,11 @@ export default function GiftModal({ open, onClose, customerId, sourceType, sourc
         if (typeof data.currentBalance === "number") {
           setBalance(data.currentBalance);
         }
-        setErrorMsg(data.error || "送信に失敗しました");
+        setErrorMsg(
+          data.detail
+            ? `${data.error || "送信に失敗しました"}\n${data.detail}${data.hint ? "\n💡 " + data.hint : ""}`
+            : data.error || "送信に失敗しました"
+        );
       } else {
         setBalance(data.newBalance);
         setSuccessMsg(`✨ ${data.gift.emoji} ${data.gift.label} を送りました!`);
@@ -162,7 +166,7 @@ export default function GiftModal({ open, onClose, customerId, sourceType, sourc
 
         {/* エラー */}
         {errorMsg && (
-          <div style={{ padding: 10, backgroundColor: "#fef2f2", border: `1px solid #c45555`, fontSize: 11, color: "#7a2929", marginBottom: 12, textAlign: "center" }}>
+          <div style={{ padding: 10, backgroundColor: "#fef2f2", border: `1px solid #c45555`, fontSize: 11, color: "#7a2929", marginBottom: 12, textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
             {errorMsg}
           </div>
         )}
