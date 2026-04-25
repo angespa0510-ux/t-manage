@@ -200,7 +200,7 @@ export default function SiteFooter() {
                   href={`tel:${TEL_SECONDARY}`}
                   style={{
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
-                    fontSize: "14px",
+                    fontSize: "18px",
                     color: SITE.color.textSub,
                     textDecoration: "none",
                     letterSpacing: SITE.ls.loose,

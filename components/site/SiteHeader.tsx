@@ -525,7 +525,7 @@ export default function SiteHeader() {
                   textDecoration: "none",
                   textAlign: "center",
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif',
-                  fontSize: "14px",
+                  fontSize: "15px",
                   letterSpacing: SITE.ls.loose,
                 }}
               >
