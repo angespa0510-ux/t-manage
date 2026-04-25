@@ -7,6 +7,7 @@ import { Room, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, Remot
 import { SITE, MARBLE } from "../../../../../lib/site-theme";
 import GiftModal from "../../../../../components/gift-modal";
 import type { GiftKind } from "../../../../../lib/gift-catalog";
+import { useCustomerAuth, displayName as displayNameOf } from "../../../../../lib/customer-auth-context";
 
 const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
 const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
@@ -45,10 +46,15 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [streamInfo, setStreamInfo] = useState<{ title: string; therapistName?: string } | null>(null);
 
-  // 会員情報
-  const [memberId, setMemberId] = useState<number | null>(null);
-  const [memberAuth, setMemberAuth] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string>("");
+  // 会員情報 (HP 共通の CustomerAuthContext から取得)
+  // 旧実装は localStorage('customer_session_v1') を見ていたが、HP 全体は
+  // 'customer_mypage_id' キーを使う設計なので常にログアウト扱いになり、
+  // ログイン中なのに「投げ銭には会員ログインが必要」が出るバグがあった。
+  const { customer: authCustomer, refreshSummary } = useCustomerAuth();
+  const memberId: number | null = authCustomer?.id ?? null;
+  const memberName: string = displayNameOf(authCustomer);
+  // join API が返す displayName (鈴木 → 鈴●など)。コメント送信時の表示名に使う
+  const [serverDisplayName, setServerDisplayName] = useState<string>("");
 
   // LiveKit
   const roomRef = useRef<Room | null>(null);
@@ -78,21 +84,10 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
   const [lastCommentAt, setLastCommentAt] = useState<string | null>(null);
 
   // ─────────────────────────────────────────────
-  // 会員セッション読み込み
+  // 会員セッションは CustomerAuthContext が読み込み済み
+  // (旧実装のここで localStorage('customer_session_v1') を読んでいたが、
+  //  そのキーは存在せず常にログアウト扱いになっていたため Context 化)
   // ─────────────────────────────────────────────
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = localStorage.getItem("customer_session_v1");
-      if (raw) {
-        const session = JSON.parse(raw);
-        if (session?.id && session?.authToken) {
-          setMemberId(session.id);
-          setMemberAuth(session.authToken);
-        }
-      }
-    } catch {}
-  }, []);
 
   // ─────────────────────────────────────────────
   // 参加 (joining)
@@ -130,7 +125,7 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
       }
 
       setStreamInfo({ title: joinData.title, therapistName: joinData.therapistName });
-      setDisplayName(joinData.displayName);
+      setServerDisplayName(joinData.displayName || "");
 
       // 2. LiveKit Room 接続
       const room = new Room({ adaptiveStream: true, dynacast: true });
@@ -295,7 +290,14 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
   // ─────────────────────────────────────────────
   const onGiftSent = (sentGift: { kind: GiftKind; emoji: string; pointAmount: number; message: string | null }) => {
     // 自分のギフトを画面に演出
-    showFloatingGift(sentGift.emoji, sentGift.pointAmount, sentGift.message, displayName || "あなた");
+    showFloatingGift(
+      sentGift.emoji,
+      sentGift.pointAmount,
+      sentGift.message,
+      serverDisplayName || memberName || "あなた"
+    );
+    // ヘッダーのポイント残高を即時更新
+    refreshSummary().catch(() => {});
   };
 
   const showFloatingGift = (emoji: string, pointAmount: number, message: string | null, senderName: string) => {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { SITE, MARBLE } from "../../../../lib/site-theme";
+import { useCustomerAuth } from "../../../../lib/customer-auth-context";
 
 const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
 const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
@@ -31,24 +32,12 @@ type LiveStream = {
 export default function LiveListPage() {
   const [streams, setStreams] = useState<LiveStream[]>([]);
   const [loading, setLoading] = useState(true);
-  const [memberAuth, setMemberAuth] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = localStorage.getItem("customer_session_v1");
-      if (raw) {
-        const session = JSON.parse(raw);
-        if (session?.id && session?.authToken) {
-          setMemberAuth(session.authToken);
-        }
-      }
-    } catch {}
-  }, []);
+  const { customer: authCustomer } = useCustomerAuth();
+  const memberId: number | null = authCustomer?.id ?? null;
 
   const fetchList = useCallback(async () => {
     try {
-      const url = memberAuth ? `/api/diary/live/list?memberAuth=${encodeURIComponent(memberAuth)}` : `/api/diary/live/list`;
+      const url = memberId ? `/api/diary/live/list?customerId=${memberId}` : `/api/diary/live/list`;
       const res = await fetch(url);
       const data = await res.json();
       if (res.ok) {
@@ -59,7 +48,7 @@ export default function LiveListPage() {
     } finally {
       setLoading(false);
     }
-  }, [memberAuth]);
+  }, [memberId]);
 
   useEffect(() => {
     fetchList();

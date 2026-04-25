@@ -8,14 +8,16 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 /**
  * 配信中ライブ一覧 (HP用)
  *
- * GET ?memberAuth=xx (会員限定も含める) [&limit=20]
+ * GET ?customerId=xx (会員限定も含める) [&limit=20]
+ *  または旧パラメータ ?memberAuth=xx も後方互換で受け付ける
  */
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const memberAuth = url.searchParams.get("memberAuth");
+    const customerId = url.searchParams.get("customerId");
+    const memberAuth = url.searchParams.get("memberAuth"); // 後方互換
     const limit = Math.min(parseInt(url.searchParams.get("limit") || "20"), 50);
-    const isMember = !!memberAuth;
+    const isMember = !!customerId || !!memberAuth;
 
     let query = supabase
       .from("live_streams")
