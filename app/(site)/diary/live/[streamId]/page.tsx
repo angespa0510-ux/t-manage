@@ -136,15 +136,38 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
       const room = new Room({ adaptiveStream: true, dynacast: true });
       roomRef.current = room;
 
-      room.on("trackSubscribed", (track, publication, participant) => {
+      // 動画トラックを attach するヘルパー (要素がまだ無い場合は短くリトライ)
+      const attachVideo = (track: RemoteVideoTrack, retry = 0) => {
+        if (videoEl.current) {
+          try {
+            track.attach(videoEl.current);
+          } catch (e) {
+            console.warn("video attach failed:", e);
+          }
+        } else if (retry < 20) {
+          // 最大 20回 × 50ms = 1秒待つ
+          setTimeout(() => attachVideo(track, retry + 1), 50);
+        } else {
+          console.error("videoEl.current が用意されないまま 1秒経過");
+        }
+      };
+      const attachAudio = (track: RemoteAudioTrack, retry = 0) => {
+        if (audioEl.current) {
+          try {
+            track.attach(audioEl.current);
+          } catch (e) {
+            console.warn("audio attach failed:", e);
+          }
+        } else if (retry < 20) {
+          setTimeout(() => attachAudio(track, retry + 1), 50);
+        }
+      };
+
+      room.on("trackSubscribed", (track, _publication, _participant) => {
         if (track.kind === Track.Kind.Video) {
-          if (videoEl.current) {
-            (track as RemoteVideoTrack).attach(videoEl.current);
-          }
+          attachVideo(track as RemoteVideoTrack);
         } else if (track.kind === Track.Kind.Audio) {
-          if (audioEl.current) {
-            (track as RemoteAudioTrack).attach(audioEl.current);
-          }
+          attachAudio(track as RemoteAudioTrack);
         }
       });
 
@@ -163,27 +186,40 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
         setPhase("ended");
       });
 
+      // ★ 重要: LiveKit 接続 & attach の前に phase='live' にして
+      //   video/audio 要素を DOM に出しておく。
+      //   旧実装では setPhase('live') が attach の後だったため、
+      //   videoEl.current=null で attach が無視され画面が真っ黒になる
+      //   バグがあった (配信側の startCamera と同種の DOM タイミング問題)。
+      setPhase("live");
+
+      // React のレンダリング完了を確実に待つ
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
       await room.connect(joinData.wsUrl, joinData.accessToken);
 
       // 既存 publication を attach (room.connect 後)
+      // attachVideo / attachAudio ヘルパーを使い、要素がまだ無くてもリトライさせる
       room.remoteParticipants.forEach((p: RemoteParticipant) => {
         p.trackPublications.forEach((pub: RemoteTrackPublication) => {
           if (pub.track) {
-            if (pub.track.kind === Track.Kind.Video && videoEl.current) {
-              (pub.track as RemoteVideoTrack).attach(videoEl.current);
-            } else if (pub.track.kind === Track.Kind.Audio && audioEl.current) {
-              (pub.track as RemoteAudioTrack).attach(audioEl.current);
+            if (pub.track.kind === Track.Kind.Video) {
+              attachVideo(pub.track as RemoteVideoTrack);
+            } else if (pub.track.kind === Track.Kind.Audio) {
+              attachAudio(pub.track as RemoteAudioTrack);
             }
           }
         });
       });
 
       setViewerCount(Math.max(0, room.numParticipants - 1));
-      setPhase("live");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "視聴開始エラー";
       setErrorMsg(msg);
       setPhase("error");
+      try { roomRef.current?.disconnect(); } catch {}
+      roomRef.current = null;
     }
   }, [streamId, memberId]);
 
