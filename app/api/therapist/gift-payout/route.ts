@@ -6,28 +6,27 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PU
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ─── 設定値 ───────────────────────────────────────────
-const STORE_FEE_RATE = 0.10;          // 店舗手数料 10%
-const INVOICE_DEDUCTION_RATE = 0.10;  // インボイス未登録時の控除 10%
-const WITHHOLDING_RATE = 0.1021;      // 源泉徴収 10.21%
+// C案: 控除なし (投げ銭はそのままバック額に上乗せ、インボイス・源泉は精算側で計算)
 const MIN_REQUEST_POINTS = 1000;      // 最低申請額
 const REQUEST_UNIT = 100;             // 申請単位
 
-// ─── 控除計算ヘルパー (申請API・UI で同じロジックを使うので export 可能な形に) ───
+// ─── 控除計算ヘルパー (C案: 控除なし、net = gross) ───
 export type PayoutCalc = {
   requested: number;          // 申請額 (=ポイント、1pt=1円)
-  storeFee: number;           // 店舗手数料
-  invoiceDeduction: number;   // インボイス控除
-  withholding: number;        // 源泉徴収
-  netPayout: number;          // 手取り
+  storeFee: number;           // 店舗手数料 (常に0)
+  invoiceDeduction: number;   // インボイス控除 (常に0、精算側で計算)
+  withholding: number;        // 源泉徴収 (常に0、精算側で計算)
+  netPayout: number;          // 手取り (= requested、精算時にバック額として上乗せ)
 };
 
-function calcPayout(points: number, hasInvoice: boolean, hasWithholding: boolean): PayoutCalc {
-  const requested = points;
-  const storeFee = Math.floor(requested * STORE_FEE_RATE);
-  const invoiceDeduction = hasInvoice ? 0 : Math.floor(requested * INVOICE_DEDUCTION_RATE);
-  const withholding = hasWithholding ? Math.floor(requested * WITHHOLDING_RATE) : 0;
-  const netPayout = requested - storeFee - invoiceDeduction - withholding;
-  return { requested, storeFee, invoiceDeduction, withholding, netPayout };
+function calcPayout(points: number): PayoutCalc {
+  return {
+    requested: points,
+    storeFee: 0,
+    invoiceDeduction: 0,
+    withholding: 0,
+    netPayout: points,
+  };
 }
 
 /**
@@ -56,9 +55,6 @@ export async function GET(req: Request) {
     return NextResponse.json({
       payouts: payouts || [],
       config: {
-        storeFeeRate: STORE_FEE_RATE,
-        invoiceDeductionRate: INVOICE_DEDUCTION_RATE,
-        withholdingRate: WITHHOLDING_RATE,
         minRequestPoints: MIN_REQUEST_POINTS,
         requestUnit: REQUEST_UNIT,
       },
@@ -123,10 +119,10 @@ export async function POST(req: Request) {
       }, { status: 402 });
     }
 
-    // 控除計算 (申請時のステータスでスナップショット)
+    // 控除計算 (C案: 控除なし、申請時のステータスはスナップショットとして残す)
     const hasInvoice = !!th.has_invoice;
     const hasWithholding = !!th.has_withholding;
-    const calc = calcPayout(pts, hasInvoice, hasWithholding);
+    const calc = calcPayout(pts);
 
     // 1. gift_payouts に挿入
     const { data: payout, error: payoutErr } = await supabase

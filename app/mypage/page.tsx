@@ -2804,14 +2804,9 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                             </div>
                             <span style={{ fontSize: 10, color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
                           </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, fontSize: 9, color: T.textSub, fontVariantNumeric: "tabular-nums", marginBottom: 4 }}>
-                            <span>店舗手数料 (10%):</span><span style={{ textAlign: "right" }}>−¥{p.store_fee_amount.toLocaleString()}</span>
-                            {p.invoice_deduction > 0 && (<><span>インボイス控除 (10%):</span><span style={{ textAlign: "right" }}>−¥{p.invoice_deduction.toLocaleString()}</span></>)}
-                            {p.withholding_tax > 0 && (<><span>源泉徴収 (10.21%):</span><span style={{ textAlign: "right" }}>−¥{p.withholding_tax.toLocaleString()}</span></>)}
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, borderTop: `1px dashed ${T.border}`, fontSize: 11, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-                            <span>{p.status === "paid" ? "受領額:" : "受領予定額:"}</span>
-                            <span style={{ color: T.accent }}>¥{p.net_payout_amount.toLocaleString()}</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, fontSize: 11, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                            <span>{p.status === "paid" ? "上乗せ額:" : "上乗せ予定:"}</span>
+                            <span style={{ color: T.accent }}>+¥{p.requested_points.toLocaleString()}</span>
                           </div>
                           {p.status === "paid" && p.settlement_date && (
                             <p style={{ margin: "4px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
@@ -3007,7 +3002,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 <p style={{ fontSize: 10, color: T.textSub, lineHeight: 1.8, margin: 0 }}>
                   💡 投げ銭ポイントは出勤日の精算と一緒に支給されます。<br />
                   💡 1,000pt 以上 / 100pt 単位で換金申請できます。<br />
-                  💡 控除内訳: 店舗手数料 10% + (インボイス未登録時 10%) + (源泉対象なら 10.21%)。<br />
+                  💡 投げ銭バックは通常のバック額に上乗せされ、インボイス・源泉も合わせて自動計算されます。<br />
                   ※ お客様のお名前は最初の1文字だけ表示されます（プライバシー保護）。
                 </p>
               </div>
@@ -3018,12 +3013,6 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           {payoutModalOpen && giftSummary && therapist && (() => {
             const requestedNum = parseInt(payoutAmountInput) || 0;
             const validAmount = requestedNum >= 1000 && requestedNum % 100 === 0 && requestedNum <= giftSummary.currentBalancePoints;
-            const hasInvoice = !!(therapist as { has_invoice?: boolean }).has_invoice;
-            const hasWithholding = !!(therapist as { has_withholding?: boolean }).has_withholding;
-            const storeFee = Math.floor(requestedNum * 0.10);
-            const invoiceDed = hasInvoice ? 0 : Math.floor(requestedNum * 0.10);
-            const withholding = hasWithholding ? Math.floor(requestedNum * 0.1021) : 0;
-            const netPayout = requestedNum - storeFee - invoiceDed - withholding;
 
             return (
               <div
@@ -3121,32 +3110,18 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     </div>
                   </label>
 
-                  {/* 控除シミュレーション */}
+                  {/* シンプル案内 (C案: 控除なし、そのままバック額に上乗せ) */}
                   {requestedNum > 0 && (
                     <div style={{ padding: "12px 14px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, marginBottom: 14 }}>
-                      <p style={{ margin: "0 0 8px", fontSize: 10, color: T.textMuted, letterSpacing: "0.1em" }}>控除内訳</p>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span>申請額:</span><span>¥{requestedNum.toLocaleString()}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "#c45555" }}>
-                          <span>店舗手数料 (10%):</span><span>−¥{storeFee.toLocaleString()}</span>
-                        </div>
-                        {!hasInvoice && (
-                          <div style={{ display: "flex", justifyContent: "space-between", color: "#c45555" }}>
-                            <span>インボイス未登録控除 (10%):</span><span>−¥{invoiceDed.toLocaleString()}</span>
-                          </div>
-                        )}
-                        {hasWithholding && (
-                          <div style={{ display: "flex", justifyContent: "space-between", color: "#c45555" }}>
-                            <span>源泉徴収 (10.21%):</span><span>−¥{withholding.toLocaleString()}</span>
-                          </div>
-                        )}
-                        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, borderTop: `1px dashed ${T.border}`, fontSize: 13, color: T.text, fontWeight: 500, marginTop: 4 }}>
-                          <span>受領予定額:</span>
-                          <span style={{ color: T.accent }}>¥{netPayout.toLocaleString()}</span>
-                        </div>
+                      <p style={{ margin: "0 0 8px", fontSize: 10, color: T.textMuted, letterSpacing: "0.1em" }}>申請内容</p>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                        <span>投げ銭バック:</span>
+                        <span style={{ color: T.accent }}>+¥{requestedNum.toLocaleString()}</span>
                       </div>
+                      <p style={{ margin: "8px 0 0", fontSize: 9, color: T.textSub, lineHeight: 1.6 }}>
+                        ※ 次の出勤日のバック額にそのまま上乗せされます。<br />
+                        ※ インボイス控除・源泉徴収は通常のバック額と同じく精算時に計算されます。
+                      </p>
                     </div>
                   )}
 
