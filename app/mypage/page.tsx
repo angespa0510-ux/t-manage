@@ -226,6 +226,30 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [giftMonthlyBreakdown, setGiftMonthlyBreakdown] = useState<GiftMonthlyAgg[]>([]);
   const [giftLoading, setGiftLoading] = useState(false);
 
+  // 換金申請関連
+  type GiftPayout = {
+    id: number;
+    therapist_id: number;
+    requested_points: number;
+    requested_amount_yen: number;
+    store_fee_amount: number;
+    invoice_deduction: number;
+    withholding_tax: number;
+    net_payout_amount: number;
+    has_invoice_at_request: boolean;
+    has_withholding_at_request: boolean;
+    status: "pending" | "paid" | "cancelled";
+    requested_at: string;
+    settlement_date: string | null;
+    paid_at: string | null;
+    cancelled_at: string | null;
+  };
+  const [giftPayouts, setGiftPayouts] = useState<GiftPayout[]>([]);
+  const [payoutModalOpen, setPayoutModalOpen] = useState(false);
+  const [payoutAmountInput, setPayoutAmountInput] = useState("1000");
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
     setLoginLoading(true); setLoginError("");
@@ -337,13 +361,20 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     if (!therapist) return;
     setGiftLoading(true);
     try {
-      const res = await fetch(`/api/therapist/gift-summary?therapistId=${therapist.id}`);
-      if (res.ok) {
-        const data = await res.json();
+      const [sumRes, payRes] = await Promise.all([
+        fetch(`/api/therapist/gift-summary?therapistId=${therapist.id}`),
+        fetch(`/api/therapist/gift-payout?therapistId=${therapist.id}`),
+      ]);
+      if (sumRes.ok) {
+        const data = await sumRes.json();
         setGiftSummary(data.summary || null);
         setGiftTransactions(data.transactions || []);
         setGiftKindBreakdown(data.kindBreakdown || []);
         setGiftMonthlyBreakdown(data.monthlyBreakdown || []);
+      }
+      if (payRes.ok) {
+        const pdata = await payRes.json();
+        setGiftPayouts(pdata.payouts || []);
       }
     } catch (e) {
       console.error("gift summary fetch error:", e);
@@ -2714,14 +2745,121 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                   ≒ ¥{(giftSummary.currentBalancePoints || 0).toLocaleString()} 相当
                 </p>
 
-                {/* 換金申請ボタン (今は未実装、設計確定後に有効化) */}
-                <div style={{ marginTop: 18, padding: "10px 14px", backgroundColor: "rgba(195,167,130,0.08)", border: `1px dashed ${T.accent}`, borderRadius: 4 }}>
-                  <p style={{ fontSize: 10, color: T.textSub, lineHeight: 1.7 }}>
-                    💡 換金フローは現在準備中です。<br />
-                    詳細はスタッフからご案内します。
-                  </p>
+                {/* 換金申請ボタン */}
+                <div style={{ marginTop: 18 }}>
+                  {giftSummary.currentBalancePoints >= 1000 ? (
+                    <button
+                      onClick={() => {
+                        setPayoutAmountInput(String(Math.floor(giftSummary.currentBalancePoints / 100) * 100));
+                        setPayoutError(null);
+                        setPayoutModalOpen(true);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "14px 18px",
+                        backgroundColor: T.accent,
+                        color: "#fff",
+                        border: "none",
+                        fontSize: 13,
+                        fontFamily: FONT_SERIF,
+                        letterSpacing: "0.1em",
+                        cursor: "pointer",
+                        fontWeight: 500,
+                      }}
+                    >
+                      💰 換金を申請する
+                    </button>
+                  ) : (
+                    <div style={{ padding: "10px 14px", backgroundColor: "rgba(195,167,130,0.08)", border: `1px dashed ${T.accent}` }}>
+                      <p style={{ fontSize: 11, color: T.textSub, lineHeight: 1.7, margin: 0 }}>
+                        💡 1,000pt 以上で換金申請できます<br />
+                        あと <strong style={{ color: T.accent, fontVariantNumeric: "tabular-nums" }}>{(1000 - giftSummary.currentBalancePoints).toLocaleString()}pt</strong> です
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* 換金申請履歴 */}
+              {giftPayouts.length > 0 && (
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>PAYOUT REQUESTS</p>
+                  <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>💰 換金申請履歴</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {giftPayouts.map((p) => {
+                      const reqDate = new Date(p.requested_at);
+                      const reqStr = `${reqDate.getMonth() + 1}/${reqDate.getDate()} ${String(reqDate.getHours()).padStart(2, "0")}:${String(reqDate.getMinutes()).padStart(2, "0")}`;
+                      const statusColor = p.status === "paid" ? "#6b9b7e" : p.status === "pending" ? "#c96b83" : T.textMuted;
+                      const statusLabel = p.status === "paid" ? "✅ 受領済み" : p.status === "pending" ? "⏳ 出勤待ち" : "❌ 取消";
+                      return (
+                        <div key={p.id} style={{ padding: "10px 12px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                            <div>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                                {p.requested_points.toLocaleString()}pt 申請
+                              </p>
+                              <p style={{ margin: "2px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
+                                {reqStr} 申請
+                              </p>
+                            </div>
+                            <span style={{ fontSize: 10, color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, fontSize: 9, color: T.textSub, fontVariantNumeric: "tabular-nums", marginBottom: 4 }}>
+                            <span>店舗手数料 (10%):</span><span style={{ textAlign: "right" }}>−¥{p.store_fee_amount.toLocaleString()}</span>
+                            {p.invoice_deduction > 0 && (<><span>インボイス控除 (10%):</span><span style={{ textAlign: "right" }}>−¥{p.invoice_deduction.toLocaleString()}</span></>)}
+                            {p.withholding_tax > 0 && (<><span>源泉徴収 (10.21%):</span><span style={{ textAlign: "right" }}>−¥{p.withholding_tax.toLocaleString()}</span></>)}
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, borderTop: `1px dashed ${T.border}`, fontSize: 11, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                            <span>{p.status === "paid" ? "受領額:" : "受領予定額:"}</span>
+                            <span style={{ color: T.accent }}>¥{p.net_payout_amount.toLocaleString()}</span>
+                          </div>
+                          {p.status === "paid" && p.settlement_date && (
+                            <p style={{ margin: "4px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
+                              {p.settlement_date} の精算で受領
+                            </p>
+                          )}
+                          {p.status === "pending" && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`${p.requested_points}pt の申請を取り消しますか？`)) return;
+                                try {
+                                  const res = await fetch("/api/therapist/gift-payout", {
+                                    method: "DELETE",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ therapistId: therapist.id, payoutId: p.id, reason: "セラピスト操作" }),
+                                  });
+                                  if (res.ok) {
+                                    fetchGiftSummary();
+                                  } else {
+                                    const ed = await res.json();
+                                    alert(ed.error || "キャンセルに失敗しました");
+                                  }
+                                } catch {
+                                  alert("通信エラーが発生しました");
+                                }
+                              }}
+                              style={{
+                                marginTop: 6,
+                                padding: "4px 10px",
+                                fontSize: 9,
+                                cursor: "pointer",
+                                backgroundColor: "transparent",
+                                color: T.textSub,
+                                border: `1px solid ${T.border}`,
+                                fontFamily: FONT_SERIF,
+                              }}
+                            >
+                              申請取消
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "none" }}>{/* ↓ 旧「準備中」案内は換金ボタンに置換 */}</div>
 
               {/* 期間別サマリー */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
@@ -2867,12 +3005,227 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               {/* 注意書き */}
               <div style={{ padding: "12px 14px", backgroundColor: "rgba(195,167,130,0.05)", border: `1px solid ${T.border}` }}>
                 <p style={{ fontSize: 10, color: T.textSub, lineHeight: 1.8, margin: 0 }}>
-                  💡 投げ銭ポイントは換金可能です。詳細な換金フロー（最低額・換金方法）は、運営からご案内します。<br />
+                  💡 投げ銭ポイントは出勤日の精算と一緒に支給されます。<br />
+                  💡 1,000pt 以上 / 100pt 単位で換金申請できます。<br />
+                  💡 控除内訳: 店舗手数料 10% + (インボイス未登録時 10%) + (源泉対象なら 10.21%)。<br />
                   ※ お客様のお名前は最初の1文字だけ表示されます（プライバシー保護）。
                 </p>
               </div>
             </>
           )}
+
+          {/* ── 換金申請モーダル ── */}
+          {payoutModalOpen && giftSummary && therapist && (() => {
+            const requestedNum = parseInt(payoutAmountInput) || 0;
+            const validAmount = requestedNum >= 1000 && requestedNum % 100 === 0 && requestedNum <= giftSummary.currentBalancePoints;
+            const hasInvoice = !!(therapist as { has_invoice?: boolean }).has_invoice;
+            const hasWithholding = !!(therapist as { has_withholding?: boolean }).has_withholding;
+            const storeFee = Math.floor(requestedNum * 0.10);
+            const invoiceDed = hasInvoice ? 0 : Math.floor(requestedNum * 0.10);
+            const withholding = hasWithholding ? Math.floor(requestedNum * 0.1021) : 0;
+            const netPayout = requestedNum - storeFee - invoiceDed - withholding;
+
+            return (
+              <div
+                onClick={() => !payoutSubmitting && setPayoutModalOpen(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  backgroundColor: "rgba(0,0,0,0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1000,
+                  padding: 20,
+                }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    backgroundColor: T.card,
+                    border: `1px solid ${T.border}`,
+                    padding: 22,
+                    maxWidth: 420,
+                    width: "100%",
+                    maxHeight: "90vh",
+                    overflowY: "auto",
+                    fontFamily: FONT_SERIF,
+                  }}
+                >
+                  <div style={{ textAlign: "center", marginBottom: 18 }}>
+                    <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>PAYOUT REQUEST</p>
+                    <p style={{ fontSize: 14, color: T.text, fontWeight: 500 }}>💰 換金を申請する</p>
+                    <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "10px auto 0" }} />
+                  </div>
+
+                  <div style={{ marginBottom: 14, padding: "10px 12px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                    <p style={{ margin: 0, fontSize: 10, color: T.textMuted, marginBottom: 4 }}>現在の残高</p>
+                    <p style={{ margin: 0, fontSize: 18, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                      {giftSummary.currentBalancePoints.toLocaleString()}<span style={{ fontSize: 10, color: T.textSub, marginLeft: 4 }}>pt</span>
+                    </p>
+                  </div>
+
+                  <label style={{ display: "block", marginBottom: 14 }}>
+                    <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub }}>申請するポイント (1,000pt以上 / 100pt単位)</p>
+                    <input
+                      type="number"
+                      step="100"
+                      min="1000"
+                      max={giftSummary.currentBalancePoints}
+                      value={payoutAmountInput}
+                      onChange={(e) => setPayoutAmountInput(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        fontSize: 16,
+                        backgroundColor: T.cardAlt,
+                        border: `1px solid ${T.border}`,
+                        color: T.text,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    />
+                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      {[1000, 3000, 5000].filter((v) => v <= giftSummary.currentBalancePoints).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setPayoutAmountInput(String(v))}
+                          style={{
+                            flex: 1,
+                            padding: "6px 4px",
+                            fontSize: 10,
+                            backgroundColor: T.cardAlt,
+                            color: T.textSub,
+                            border: `1px solid ${T.border}`,
+                            cursor: "pointer",
+                            fontFamily: FONT_SERIF,
+                          }}
+                        >
+                          {v.toLocaleString()}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setPayoutAmountInput(String(Math.floor(giftSummary.currentBalancePoints / 100) * 100))}
+                        style={{
+                          flex: 1,
+                          padding: "6px 4px",
+                          fontSize: 10,
+                          backgroundColor: T.cardAlt,
+                          color: T.textSub,
+                          border: `1px solid ${T.border}`,
+                          cursor: "pointer",
+                          fontFamily: FONT_SERIF,
+                        }}
+                      >
+                        全額
+                      </button>
+                    </div>
+                  </label>
+
+                  {/* 控除シミュレーション */}
+                  {requestedNum > 0 && (
+                    <div style={{ padding: "12px 14px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, marginBottom: 14 }}>
+                      <p style={{ margin: "0 0 8px", fontSize: 10, color: T.textMuted, letterSpacing: "0.1em" }}>控除内訳</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span>申請額:</span><span>¥{requestedNum.toLocaleString()}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#c45555" }}>
+                          <span>店舗手数料 (10%):</span><span>−¥{storeFee.toLocaleString()}</span>
+                        </div>
+                        {!hasInvoice && (
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "#c45555" }}>
+                            <span>インボイス未登録控除 (10%):</span><span>−¥{invoiceDed.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {hasWithholding && (
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "#c45555" }}>
+                            <span>源泉徴収 (10.21%):</span><span>−¥{withholding.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, borderTop: `1px dashed ${T.border}`, fontSize: 13, color: T.text, fontWeight: 500, marginTop: 4 }}>
+                          <span>受領予定額:</span>
+                          <span style={{ color: T.accent }}>¥{netPayout.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ padding: "10px 12px", backgroundColor: "rgba(195,167,130,0.08)", border: `1px solid ${T.accent}`, marginBottom: 16 }}>
+                    <p style={{ margin: 0, fontSize: 10, color: T.textSub, lineHeight: 1.7 }}>
+                      📌 申請後、<strong style={{ color: T.accent }}>次の出勤日の精算</strong>でお給料と一緒に支給されます。<br />
+                      📌 申請したポイントは即座に残高から差し引かれます（受領前なら取消可能）。
+                    </p>
+                  </div>
+
+                  {payoutError && (
+                    <p style={{ margin: "0 0 12px", padding: "8px 10px", fontSize: 11, color: "#c45555", backgroundColor: "rgba(196,85,85,0.08)", border: "1px solid #c4555533" }}>
+                      {payoutError}
+                    </p>
+                  )}
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => !payoutSubmitting && setPayoutModalOpen(false)}
+                      disabled={payoutSubmitting}
+                      style={{
+                        flex: 1,
+                        padding: "12px 16px",
+                        backgroundColor: "transparent",
+                        color: T.textSub,
+                        border: `1px solid ${T.border}`,
+                        fontSize: 12,
+                        cursor: payoutSubmitting ? "not-allowed" : "pointer",
+                        fontFamily: FONT_SERIF,
+                      }}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!validAmount || payoutSubmitting) return;
+                        setPayoutSubmitting(true);
+                        setPayoutError(null);
+                        try {
+                          const res = await fetch("/api/therapist/gift-payout", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ therapistId: therapist.id, points: requestedNum }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            setPayoutError(data.error || "申請に失敗しました");
+                            return;
+                          }
+                          setPayoutModalOpen(false);
+                          fetchGiftSummary();
+                        } catch {
+                          setPayoutError("通信エラーが発生しました");
+                        } finally {
+                          setPayoutSubmitting(false);
+                        }
+                      }}
+                      disabled={!validAmount || payoutSubmitting}
+                      style={{
+                        flex: 2,
+                        padding: "12px 16px",
+                        backgroundColor: validAmount ? T.accent : T.border,
+                        color: "#fff",
+                        border: "none",
+                        fontSize: 12,
+                        cursor: validAmount && !payoutSubmitting ? "pointer" : "not-allowed",
+                        fontFamily: FONT_SERIF,
+                        letterSpacing: "0.1em",
+                        fontWeight: 500,
+                        opacity: validAmount ? 1 : 0.4,
+                      }}
+                    >
+                      {payoutSubmitting ? "申請中..." : `${requestedNum.toLocaleString()}pt 申請する`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
