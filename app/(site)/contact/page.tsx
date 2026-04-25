@@ -176,7 +176,7 @@ export default function ContactPage() {
                       href={c.subHref}
                       style={{
                         fontFamily: SITE.font.display,
-                        fontSize: "12px",
+                        fontSize: "16px",
                         color: SITE.color.textSub,
                         textDecoration: "none",
                         letterSpacing: SITE.ls.loose,
