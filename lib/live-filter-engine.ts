@@ -42,7 +42,11 @@ import {
 
 export type FilterMode = "none" | "beauty" | "stamp" | "mosaic";
 
-export type StampKind = "sakura" | "heart" | "usagi" | "cat" | "ribbon" | "blackbar" | "fullblur";
+export type StampKind =
+  // 既存 7 種
+  | "sakura" | "heart" | "usagi" | "cat" | "ribbon" | "blackbar" | "fullblur"
+  // 新規 8 種
+  | "star" | "crown" | "sunglasses" | "mask" | "kira" | "flower" | "kiss" | "halo";
 
 export type MosaicTarget = "face" | "eyes";
 
@@ -285,6 +289,92 @@ function applyStamp(
       ctx.fillStyle = "#000";
       ctx.fillRect(x1, y - barH / 2, x2 - x1, barH);
     }
+  } else if (stamp === "star") {
+    // ⭐ 顔全体に大きな星（キラキラ系・人気）
+    ctx.save();
+    ctx.font = `${Math.round(faceWidth * 1.3)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⭐", cx, cy);
+    ctx.restore();
+  } else if (stamp === "crown") {
+    // 👑 頭の上に王冠 + 顔は隠さない（華やか系）
+    ctx.save();
+    ctx.font = `${Math.round(faceWidth * 0.7)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    // 王冠は額より少し上
+    ctx.fillText("👑", forehead.x * w, forehead.y * h - faceHeight * 0.25);
+    ctx.restore();
+  } else if (stamp === "sunglasses") {
+    // 😎 目元にサングラス（顔下半分は見える）
+    const leftEyeOuter = landmarks[FACE_LANDMARK_INDICES.leftEyeOuter];
+    const rightEyeOuter = landmarks[FACE_LANDMARK_INDICES.rightEyeOuter];
+    if (leftEyeOuter && rightEyeOuter) {
+      const eyeCx = ((leftEyeOuter.x + rightEyeOuter.x) / 2) * w;
+      const eyeCy = ((leftEyeOuter.y + rightEyeOuter.y) / 2) * h;
+      ctx.save();
+      ctx.font = `${Math.round(faceWidth * 0.85)}px serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🕶", eyeCx, eyeCy);
+      ctx.restore();
+    }
+  } else if (stamp === "mask") {
+    // 😷 マスクで口元を隠す（実用系）
+    const mouthLeft = landmarks[FACE_LANDMARK_INDICES.mouthLeft];
+    const mouthRight = landmarks[FACE_LANDMARK_INDICES.mouthRight];
+    if (mouthLeft && mouthRight) {
+      const mouthCx = ((mouthLeft.x + mouthRight.x) / 2) * w;
+      const mouthCy = ((mouthLeft.y + mouthRight.y) / 2) * h;
+      ctx.save();
+      ctx.font = `${Math.round(faceWidth * 0.9)}px serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("😷", cx, (cy + mouthCy) / 2 + faceHeight * 0.05);
+      ctx.restore();
+    }
+  } else if (stamp === "kira") {
+    // ✨ 顔の周りに複数のキラキラ（顔は見える、装飾のみ）
+    ctx.save();
+    const decoSize = faceWidth * 0.25;
+    ctx.font = `${Math.round(decoSize)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    // 頬とこめかみに散らす
+    ctx.fillText("✨", leftCheek.x * w - decoSize * 0.3, leftCheek.y * h - decoSize * 0.3);
+    ctx.fillText("✨", rightCheek.x * w + decoSize * 0.3, rightCheek.y * h - decoSize * 0.3);
+    ctx.fillText("⭐", forehead.x * w - faceWidth * 0.3, forehead.y * h);
+    ctx.fillText("⭐", forehead.x * w + faceWidth * 0.3, forehead.y * h);
+    ctx.fillText("💫", chin.x * w, chin.y * h + decoSize * 0.3);
+    ctx.restore();
+  } else if (stamp === "flower") {
+    // 🌷 顔全体をチューリップで覆う（桜の代替）
+    ctx.save();
+    ctx.font = `${Math.round(faceWidth * 1.4)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🌷", cx, cy);
+    ctx.restore();
+  } else if (stamp === "kiss") {
+    // 💋 頬にキスマーク（装飾のみ、顔は見える）
+    ctx.save();
+    const kissSize = faceWidth * 0.28;
+    ctx.font = `${Math.round(kissSize)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("💋", leftCheek.x * w + kissSize * 0.3, leftCheek.y * h);
+    ctx.fillText("💋", rightCheek.x * w - kissSize * 0.3, rightCheek.y * h);
+    ctx.restore();
+  } else if (stamp === "halo") {
+    // 😇 頭の上に天使の輪（華やか・癒し系）
+    ctx.save();
+    ctx.font = `${Math.round(faceWidth * 0.55)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    // 輪は額のさらに上
+    ctx.fillText("😇", forehead.x * w, forehead.y * h - faceHeight * 0.35);
+    ctx.restore();
   } else if (stamp === "fullblur") {
     // 顔全体ぼかし (スタンプとして提供、mosaicの顔モードと等価)
     applyMosaic(ctx, video, landmarks, "face");
@@ -384,11 +474,24 @@ export function canvasToMediaStream(canvas: HTMLCanvasElement, fps = 30): MediaS
 // スタンプ一覧 (UI表示用)
 // ─────────────────────────────────────────────────────────────
 export const STAMP_OPTIONS: { kind: StampKind; label: string; emoji: string; description: string }[] = [
-  { kind: "sakura",    label: "桜",        emoji: "🌸", description: "顔全体を桜の花でカバー" },
-  { kind: "heart",     label: "ハート",    emoji: "💗", description: "両目の上にハート" },
-  { kind: "usagi",     label: "うさぎ",    emoji: "🐰", description: "顔全体うさぎ + 耳" },
-  { kind: "cat",       label: "猫",        emoji: "😺", description: "鼻〜口を猫マスクで隠す" },
-  { kind: "ribbon",    label: "リボン",    emoji: "🎀", description: "装飾のみ (顔は見える)" },
-  { kind: "blackbar",  label: "黒帯",      emoji: "⬛", description: "目元のみ黒帯" },
-  { kind: "fullblur",  label: "全面ぼかし", emoji: "🌫", description: "顔全体ぼかし" },
+  // ─── 顔を隠すタイプ ───
+  { kind: "sakura",     label: "桜",        emoji: "🌸", description: "顔全体を桜の花でカバー" },
+  { kind: "flower",     label: "チューリップ", emoji: "🌷", description: "顔全体をチューリップでカバー" },
+  { kind: "star",       label: "星",        emoji: "⭐", description: "顔全体を星でカバー" },
+  { kind: "usagi",      label: "うさぎ",     emoji: "🐰", description: "顔全体うさぎ + 耳" },
+  { kind: "fullblur",   label: "全面ぼかし", emoji: "🌫", description: "顔全体ぼかし" },
+
+  // ─── 部分隠しタイプ ───
+  { kind: "blackbar",   label: "黒帯",      emoji: "⬛", description: "目元のみ黒帯" },
+  { kind: "sunglasses", label: "サングラス", emoji: "🕶", description: "目元にサングラス" },
+  { kind: "mask",       label: "マスク",     emoji: "😷", description: "口元にマスク" },
+  { kind: "cat",        label: "猫マスク",   emoji: "😺", description: "鼻〜口を猫マスクで隠す" },
+
+  // ─── 装飾タイプ (顔は見える) ───
+  { kind: "heart",      label: "ハート",     emoji: "💗", description: "両目の上にハート" },
+  { kind: "ribbon",     label: "リボン",     emoji: "🎀", description: "頬に星 + 頭にリボン" },
+  { kind: "crown",      label: "王冠",       emoji: "👑", description: "頭の上に王冠" },
+  { kind: "halo",       label: "天使の輪",   emoji: "😇", description: "頭の上に天使" },
+  { kind: "kira",       label: "キラキラ",   emoji: "✨", description: "顔の周りにキラキラ散布" },
+  { kind: "kiss",       label: "キスマーク", emoji: "💋", description: "両頬にキスマーク" },
 ];

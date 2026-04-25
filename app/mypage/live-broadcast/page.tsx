@@ -809,23 +809,24 @@ export default function LiveBroadcastPage() {
               </div>
             )}
 
-            {/* スタンプ選択 */}
+            {/* スタンプ選択 (15種、5列×3行グリッド) */}
             {filterMode === "stamp" && (
               <div style={{ marginBottom: 12 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 5 }}>
                   {STAMP_OPTIONS.map((s) => (
                     <button
                       key={s.kind}
                       onClick={() => setStampKind(s.kind)}
                       title={s.description}
                       style={{
-                        padding: "10px 4px",
-                        fontSize: 10,
+                        padding: "8px 2px",
+                        fontSize: 9,
                         cursor: "pointer",
                         backgroundColor: stampKind === s.kind ? C.accentBg : C.card,
                         color: stampKind === s.kind ? C.accentDeep : C.textSub,
                         border: `1px solid ${stampKind === s.kind ? C.accent : C.border}`,
                         fontFamily: FONT_SERIF,
+                        lineHeight: 1.2,
                       }}
                     >
                       <div style={{ fontSize: 18, marginBottom: 2 }}>{s.emoji}</div>
