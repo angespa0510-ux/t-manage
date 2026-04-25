@@ -97,10 +97,10 @@ export default function TherapistMyPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "chat" | "diary">("home");
+  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "gift" | "chat" | "diary">("home");
   // ワーク / マネー / ラーン タブ内のサブセグメント
   const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers" | "diary">("schedule");
-  const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax">("salary");
+  const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax" | "gift">("salary");
   const [learnSub, setLearnSub] = useState<"notifications" | "manual">("notifications");
   // ボトムナビ→実タブへのディスパッチ
   const clickMain = (m: MainTab) => {
@@ -115,7 +115,7 @@ export default function TherapistMyPage() {
     if (t === "home") return "home";
     if (t === "chat") return "chat";
     if (t === "shift" || t === "schedule" || t === "customers" || t === "work") return "work";
-    if (t === "salary" || t === "cert" || t === "tax" || t === "money") return "money";
+    if (t === "salary" || t === "cert" || t === "tax" || t === "gift" || t === "money") return "money";
     return "learn";
   };
   const mainTab = getMainTab(tab);
@@ -195,6 +195,36 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const chatDragRef = useRef<{ dragging: boolean; startX: number; startY: number; origX: number; origY: number }>({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
   const [aiListening, setAiListening] = useState(false);
   const [aiSessionCount, setAiSessionCount] = useState(0);
+
+  // ─── 投げ銭 (受領ポイント) ────────────────────────
+  type GiftSummary = {
+    totalReceivedPoints: number;
+    totalReceivedCount: number;
+    currentBalancePoints: number;
+    thisMonthReceived: number;
+    thisYearReceived: number;
+    lastReceivedAt: string | null;
+    firstReceivedAt: string | null;
+  };
+  type GiftTx = {
+    id: number;
+    senderName: string;
+    sourceType: string;
+    sourceId: number | null;
+    giftKind: string;
+    giftLabel: string | null;
+    giftEmoji: string | null;
+    pointAmount: number;
+    message: string | null;
+    createdAt: string;
+  };
+  type GiftKindAgg = { kind: string; emoji: string; label: string; count: number; points: number };
+  type GiftMonthlyAgg = { yearMonth: string; points: number; count: number };
+  const [giftSummary, setGiftSummary] = useState<GiftSummary | null>(null);
+  const [giftTransactions, setGiftTransactions] = useState<GiftTx[]>([]);
+  const [giftKindBreakdown, setGiftKindBreakdown] = useState<GiftKindAgg[]>([]);
+  const [giftMonthlyBreakdown, setGiftMonthlyBreakdown] = useState<GiftMonthlyAgg[]>([]);
+  const [giftLoading, setGiftLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
@@ -301,6 +331,33 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   }, [therapist, salaryMonth, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // 受領ポイント取得 (gift タブを開いた時 + therapist 切替時)
+  const fetchGiftSummary = useCallback(async () => {
+    if (!therapist) return;
+    setGiftLoading(true);
+    try {
+      const res = await fetch(`/api/therapist/gift-summary?therapistId=${therapist.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setGiftSummary(data.summary || null);
+        setGiftTransactions(data.transactions || []);
+        setGiftKindBreakdown(data.kindBreakdown || []);
+        setGiftMonthlyBreakdown(data.monthlyBreakdown || []);
+      }
+    } catch (e) {
+      console.error("gift summary fetch error:", e);
+    } finally {
+      setGiftLoading(false);
+    }
+  }, [therapist]);
+
+  useEffect(() => {
+    if (tab === "gift" && therapist) {
+      fetchGiftSummary();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, therapist?.id]);
 
   // 年間清算データ取得
   useEffect(() => {
@@ -1238,6 +1295,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           } else if (mainTab === "money") {
             items = [
               { key: "salary", emoji: "💰", label: "給料明細" },
+              { key: "gift",   emoji: "🎁", label: "投げ銭" },
               { key: "cert",   emoji: "📄", label: "証明書" },
               { key: "tax",    emoji: "📊", label: "確定申告" },
             ];
@@ -1250,7 +1308,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           const clickSub = (k: typeof tab) => {
             setTab(k);
             if (k === "shift" || k === "schedule" || k === "customers" || k === "diary") setWorkSub(k);
-            else if (k === "salary" || k === "cert" || k === "tax") setMoneySub(k);
+            else if (k === "salary" || k === "cert" || k === "tax" || k === "gift") setMoneySub(k);
             else if (k === "notifications" || k === "manual") setLearnSub(k);
           };
           const sectionLabel = mainTab === "work" ? "WORK" : mainTab === "money" ? "MONEY" : "LEARN";
@@ -2610,6 +2668,211 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── 投げ銭タブ (受領ポイント) ── */}
+      {tab === "gift" && therapist && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>GIFT POINTS</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🎁 もらった投げ銭</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+          </div>
+
+          {giftLoading && !giftSummary ? (
+            <div style={{ textAlign: "center", padding: 60, color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
+          ) : !giftSummary || giftSummary.totalReceivedCount === 0 ? (
+            // ── まだ投げ銭をもらっていない ──
+            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "40px 20px", textAlign: "center" }}>
+              <p style={{ fontSize: 32, marginBottom: 14 }}>🎁</p>
+              <p style={{ fontSize: 13, color: T.text, marginBottom: 8, fontWeight: 500 }}>まだ投げ銭をもらっていません</p>
+              <p style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.8 }}>
+                ライブ配信や写メ日記を投稿すると、<br />
+                お客様から「桜」や「ハート」などの<br />
+                投げ銭を受け取れることがあります 🌸
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* メイン残高カード */}
+              <div style={{
+                backgroundColor: T.card,
+                border: `2px solid ${T.accent}`,
+                padding: "26px 22px",
+                position: "relative",
+                overflow: "hidden",
+              }}>
+                <div style={{ position: "absolute", top: -10, right: -10, fontSize: 80, opacity: 0.05 }}>🎁</div>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 10 }}>CURRENT BALANCE</p>
+                <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 4, letterSpacing: "0.05em" }}>現在の換金可能ポイント</p>
+                <p style={{ fontSize: 32, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums", margin: "0 0 4px" }}>
+                  {(giftSummary.currentBalancePoints || 0).toLocaleString()}<span style={{ fontSize: 16, color: T.textSub, marginLeft: 6 }}>pt</span>
+                </p>
+                <p style={{ fontSize: 11, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
+                  ≒ ¥{(giftSummary.currentBalancePoints || 0).toLocaleString()} 相当
+                </p>
+
+                {/* 換金申請ボタン (今は未実装、設計確定後に有効化) */}
+                <div style={{ marginTop: 18, padding: "10px 14px", backgroundColor: "rgba(195,167,130,0.08)", border: `1px dashed ${T.accent}`, borderRadius: 4 }}>
+                  <p style={{ fontSize: 10, color: T.textSub, lineHeight: 1.7 }}>
+                    💡 換金フローは現在準備中です。<br />
+                    詳細はスタッフからご案内します。
+                  </p>
+                </div>
+              </div>
+
+              {/* 期間別サマリー */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "12px 10px", textAlign: "center" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.accent, marginBottom: 4 }}>THIS MONTH</p>
+                  <p style={{ fontSize: 9, color: T.textMuted, marginBottom: 4 }}>今月</p>
+                  <p style={{ fontSize: 16, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                    {(giftSummary.thisMonthReceived || 0).toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
+                  </p>
+                </div>
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "12px 10px", textAlign: "center" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.accent, marginBottom: 4 }}>THIS YEAR</p>
+                  <p style={{ fontSize: 9, color: T.textMuted, marginBottom: 4 }}>今年</p>
+                  <p style={{ fontSize: 16, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                    {(giftSummary.thisYearReceived || 0).toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
+                  </p>
+                </div>
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "12px 10px", textAlign: "center" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.accent, marginBottom: 4 }}>TOTAL</p>
+                  <p style={{ fontSize: 9, color: T.textMuted, marginBottom: 4 }}>累計</p>
+                  <p style={{ fontSize: 16, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                    {(giftSummary.totalReceivedPoints || 0).toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
+                  </p>
+                  <p style={{ fontSize: 9, color: T.textMuted, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+                    {giftSummary.totalReceivedCount}回
+                  </p>
+                </div>
+              </div>
+
+              {/* 月別グラフ (棒グラフ) */}
+              {giftMonthlyBreakdown.length > 0 && giftMonthlyBreakdown.some((m) => m.points > 0) && (
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>MONTHLY (LAST 6 MONTHS)</p>
+                  <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>📊 月別推移（直近6ヶ月）</p>
+                  {(() => {
+                    const max = Math.max(...giftMonthlyBreakdown.map((m) => m.points), 1);
+                    return (
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100, marginBottom: 6 }}>
+                        {giftMonthlyBreakdown.map((m) => {
+                          const heightPct = (m.points / max) * 100;
+                          const [y, mo] = m.yearMonth.split("-");
+                          return (
+                            <div key={m.yearMonth} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                              <div style={{
+                                width: "100%",
+                                height: m.points > 0 ? `${Math.max(heightPct, 5)}%` : "2px",
+                                backgroundColor: m.points > 0 ? T.accent : T.border,
+                                position: "relative",
+                              }}>
+                                {m.points > 0 && (
+                                  <span style={{
+                                    position: "absolute",
+                                    top: -16,
+                                    left: "50%",
+                                    transform: "translateX(-50%)",
+                                    fontSize: 9,
+                                    color: T.textSub,
+                                    fontVariantNumeric: "tabular-nums",
+                                    whiteSpace: "nowrap",
+                                  }}>
+                                    {m.points >= 1000 ? `${Math.round(m.points / 100) / 10}k` : m.points}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {giftMonthlyBreakdown.map((m) => {
+                      const [y, mo] = m.yearMonth.split("-");
+                      return (
+                        <div key={m.yearMonth} style={{ flex: 1, textAlign: "center", fontSize: 9, color: T.textMuted, letterSpacing: "0.02em" }}>
+                          {parseInt(mo)}月
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 種類別ランキング */}
+              {giftKindBreakdown.length > 0 && (
+                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>BY TYPE (LAST 6 MONTHS)</p>
+                  <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>🎁 種類別（直近6ヶ月）</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {giftKindBreakdown.map((k) => (
+                      <div key={k.kind} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                        <span style={{ fontSize: 22 }}>{k.emoji}</span>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: 0, fontSize: 11, color: T.text, fontWeight: 500 }}>{k.label}</p>
+                          <p style={{ margin: "2px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
+                            {k.count}回 受領
+                          </p>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 13, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
+                          {k.points.toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 履歴 */}
+              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>HISTORY</p>
+                <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>📜 履歴（直近30件）</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {giftTransactions.map((t) => {
+                    const date = new Date(t.createdAt);
+                    const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+                    const sourceLabel = t.sourceType === "live" ? "ライブ" : t.sourceType === "diary" ? "日記" : "ストーリー";
+                    return (
+                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 10px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                        <span style={{ fontSize: 24 }}>{t.giftEmoji || "🎁"}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 11, color: T.text }}>
+                            <span style={{ color: T.accent, fontWeight: 500 }}>{t.senderName}</span>
+                            <span style={{ color: T.textMuted, fontSize: 10, marginLeft: 6 }}>から</span>
+                          </p>
+                          {t.message && (
+                            <p style={{ margin: "3px 0 0", fontSize: 10, color: T.textSub, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              「{t.message}」
+                            </p>
+                          )}
+                          <p style={{ margin: "3px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
+                            {dateStr} · {sourceLabel}
+                          </p>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 13, color: T.accent, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                          +{t.pointAmount}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 注意書き */}
+              <div style={{ padding: "12px 14px", backgroundColor: "rgba(195,167,130,0.05)", border: `1px solid ${T.border}` }}>
+                <p style={{ fontSize: 10, color: T.textSub, lineHeight: 1.8, margin: 0 }}>
+                  💡 投げ銭ポイントは換金可能です。詳細な換金フロー（最低額・換金方法）は、運営からご案内します。<br />
+                  ※ お客様のお名前は最初の1文字だけ表示されます（プライバシー保護）。
+                </p>
+              </div>
+            </>
+          )}
         </div>
       )}
 
