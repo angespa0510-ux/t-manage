@@ -49,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "📸", label: "写メ日記管理",         path: "/diary-moderation",             category: "セラピスト", requiresManager: true },
   { icon: "📡", label: "ストーリー監視",       path: "/story-moderation",             category: "セラピスト", requiresManager: true },
   { icon: "🦋", label: "Bluesky連携",          path: "/bluesky-admin",                category: "セラピスト", requiresManager: true },
+  { icon: "🎬", label: "ライブ配信管理",        path: "/live-admin",                   category: "セラピスト", requiresManager: true },
   { icon: "📧", label: "駅ちか設定",           path: "/ekichika-settings",            category: "セラピスト", requiresManager: true },
   { icon: "📨", label: "通知ダッシュボード",    path: "/notification-dashboard",       category: "セラピスト", requiresManager: true },
 

@@ -98,6 +98,9 @@ export default function TherapistDiaryTab({
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
+  // ライブ配信許可
+  const [liveStreamingEnabled, setLiveStreamingEnabled] = useState(false);
+
   // 投稿モーダル
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
@@ -198,6 +201,27 @@ export default function TherapistDiaryTab({
     fetchPopularTags();
   }, [fetchMyEntries, fetchPopularTags]);
 
+  // ライブ配信許可フラグ取得
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { supabase } = await import("../lib/supabase");
+        const { data } = await supabase
+          .from("therapists")
+          .select("live_streaming_enabled")
+          .eq("id", therapistId)
+          .maybeSingle();
+        if (!cancelled && data) {
+          setLiveStreamingEnabled(!!data.live_streaming_enabled);
+        }
+      } catch (e) {
+        console.error("fetch live_streaming_enabled:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [therapistId]);
+
   // ═══════════════════════════════════════════════════════════
   // 統計値計算
   // ═══════════════════════════════════════════════════════════
@@ -252,7 +276,7 @@ export default function TherapistDiaryTab({
       return;
     }
 
-    const filesToProcess = Array.from(files).slice(0, remaining);
+    const filesToProcess = (Array.from(files) as File[]).slice(0, remaining);
     const newImages: ImageInput[] = [];
 
     for (const file of filesToProcess) {
@@ -617,6 +641,43 @@ export default function TherapistDiaryTab({
           <p style={{ fontSize: 9, color: C.textMuted, fontFamily: FONT_SERIF, marginTop: 2 }}>今月のいいね</p>
         </div>
       </div>
+
+      {/* ライブ配信ボタン (許可されたセラピストのみ表示) */}
+      {liveStreamingEnabled && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ textAlign: "center", marginBottom: 8 }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, marginBottom: 6, fontWeight: 500 }}>
+              LIVE BROADCAST
+            </p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", color: C.text, fontWeight: 500, marginBottom: 8 }}>
+              🔴 ライブ配信
+            </p>
+            <div style={{ width: 24, height: 1, backgroundColor: C.accent, margin: "0 auto 12px" }} />
+          </div>
+          <a
+            href={`/mypage/live-broadcast?therapistId=${therapistId}&authToken=${encodeURIComponent(authToken)}`}
+            style={{
+              display: "block",
+              padding: "12px",
+              fontSize: 13,
+              textAlign: "center",
+              cursor: "pointer",
+              background: "linear-gradient(135deg, #fef0f4 0%, #fde8ef 100%)",
+              color: "#dc3250",
+              border: `1px solid #dc3250`,
+              fontFamily: FONT_SERIF,
+              letterSpacing: "0.1em",
+              fontWeight: 500,
+              textDecoration: "none",
+            }}
+          >
+            🎬 ライブ配信を始める
+          </a>
+          <p style={{ fontSize: 9, color: C.textMuted, marginTop: 4, textAlign: "center", fontFamily: FONT_SERIF, lineHeight: 1.5 }}>
+            美顔・スタンプ・モザイクのフィルター付き♡ 別画面が開きます
+          </p>
+        </div>
+      )}
 
       {/* ストーリーズ セクション (24時間で消える) */}
       <TherapistStorySection

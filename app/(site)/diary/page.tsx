@@ -201,6 +201,27 @@ export default function DiaryTimelinePage() {
         {/* ストーリーリング (24時間限定、公開中の投稿があるときだけ表示) */}
         <StoryRing />
 
+        {/* ライブ配信導線 */}
+        <div style={{ marginBottom: 20, textAlign: "center" }}>
+          <a
+            href="/diary/live"
+            style={{
+              display: "inline-block",
+              padding: "10px 24px",
+              fontSize: 12,
+              color: "#fff",
+              background: "linear-gradient(135deg, #dc3250 0%, #e8849a 100%)",
+              textDecoration: "none",
+              fontFamily: "'Noto Serif JP', serif",
+              letterSpacing: "0.1em",
+              fontWeight: 500,
+              boxShadow: "0 2px 8px rgba(220, 50, 80, 0.25)",
+            }}
+          >
+            🔴 LIVE 配信中のセラピストを見る →
+          </a>
+        </div>
+
         {/* 公開/会員限定タブ */}
         <div
           style={{
