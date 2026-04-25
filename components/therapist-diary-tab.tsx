@@ -121,6 +121,25 @@ export default function TherapistDiaryTab({
   // 削除確認
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
+  // AIチェック
+  type AICheckIssue = {
+    type: string;
+    location: string;
+    original: string;
+    reason: string;
+    suggestion: string;
+  };
+  type AICheckResult = {
+    severity: "ok" | "warn" | "ng";
+    ok: boolean;
+    issues: AICheckIssue[];
+    advice: string;
+    improvedTitle?: string | null;
+    improvedBody?: string | null;
+  };
+  const [aiChecking, setAiChecking] = useState(false);
+  const [aiCheckResult, setAiCheckResult] = useState<AICheckResult | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ═══════════════════════════════════════════════════════════
@@ -185,6 +204,7 @@ export default function TherapistDiaryTab({
     setSendToEkichika(true);
     setEditingEntryId(null);
     setErrorMsg(null);
+    setAiCheckResult(null);
   };
 
   const openComposer = () => {
@@ -280,6 +300,53 @@ export default function TherapistDiaryTab({
     }
     setSelectedTags([...selectedTags, clean]);
     setCustomTagInput("");
+  };
+
+  // ═══════════════════════════════════════════════════════════
+  // AIチェック (投稿前にAIに内容確認してもらう)
+  // ═══════════════════════════════════════════════════════════
+  const handleAICheck = async () => {
+    setErrorMsg(null);
+    if (!title.trim()) {
+      setErrorMsg("タイトルを入力してください");
+      return;
+    }
+    if (!body.trim()) {
+      setErrorMsg("本文を入力してください");
+      return;
+    }
+    setAiChecking(true);
+    setAiCheckResult(null);
+    try {
+      const res = await fetch("/api/diary/ai-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          body: body.trim(),
+          sendToEkichika: visibility === "public" && sendToEkichika,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || "AIチェックに失敗しました");
+      } else {
+        setAiCheckResult(data);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "通信エラー";
+      setErrorMsg(msg);
+    } finally {
+      setAiChecking(false);
+    }
+  };
+
+  // 改善版を採用
+  const applyAISuggestion = () => {
+    if (!aiCheckResult) return;
+    if (aiCheckResult.improvedTitle) setTitle(aiCheckResult.improvedTitle);
+    if (aiCheckResult.improvedBody) setBody(aiCheckResult.improvedBody);
+    setAiCheckResult(null); // 再チェック促す
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -635,7 +702,7 @@ export default function TherapistDiaryTab({
               <input
                 type="text"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => { setTitle(e.target.value); if (aiCheckResult) setAiCheckResult(null); }}
                 placeholder="例: 久しぶりの出勤です♪"
                 maxLength={MAX_TITLE + 10}
                 style={{ width: "100%", padding: "10px 12px", fontSize: 13, border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text, fontFamily: FONT_SERIF, outline: "none" }}
@@ -650,7 +717,7 @@ export default function TherapistDiaryTab({
               </div>
               <textarea
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e) => { setBody(e.target.value); if (aiCheckResult) setAiCheckResult(null); }}
                 placeholder="今日のお話を書いてみましょう♡"
                 rows={8}
                 style={{ width: "100%", padding: "10px 12px", fontSize: 13, border: `1px solid ${C.border}`, backgroundColor: C.card, color: C.text, fontFamily: FONT_SERIF, outline: "none", resize: "vertical", lineHeight: 1.6 }}
@@ -767,25 +834,149 @@ export default function TherapistDiaryTab({
               </div>
             )}
 
+            {/* AIチェック結果 */}
+            {aiCheckResult && (
+              <div
+                style={{
+                  padding: 12,
+                  marginBottom: 14,
+                  border: `1px solid ${aiCheckResult.severity === "ng" ? "#c45555" : aiCheckResult.severity === "warn" ? "#b38419" : "#6b9b7e"}`,
+                  backgroundColor: aiCheckResult.severity === "ng" ? "#fef2f2" : aiCheckResult.severity === "warn" ? "#fef7d4" : "#f0f7f1",
+                  fontFamily: FONT_SERIF,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    marginBottom: 8,
+                    color: aiCheckResult.severity === "ng" ? "#7a2929" : aiCheckResult.severity === "warn" ? "#7a5a0e" : "#3d6149",
+                  }}
+                >
+                  {aiCheckResult.severity === "ng"
+                    ? "🚨 投稿前に修正が必要です"
+                    : aiCheckResult.severity === "warn"
+                    ? "⚠️ 注意点があります"
+                    : "✅ チェック完了"}
+                </p>
+
+                {/* 個別の指摘 */}
+                {aiCheckResult.issues.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+                    {aiCheckResult.issues.map((issue, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          padding: 8,
+                          backgroundColor: "rgba(255,255,255,0.7)",
+                          border: `1px solid ${C.border}`,
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              padding: "2px 6px",
+                              backgroundColor: issue.type === "個人情報" || issue.type === "NGワード" ? "#c45555" : issue.type === "改善提案" ? "#6b8ba8" : "#b38419",
+                              color: "#fff",
+                              fontFamily: FONT_DISPLAY,
+                              letterSpacing: "0.05em",
+                            }}
+                          >
+                            {issue.type}
+                          </span>
+                          <span style={{ fontSize: 9, color: C.textMuted }}>{issue.location}</span>
+                        </div>
+                        {issue.original && (
+                          <p style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>
+                            「<span style={{ backgroundColor: "#fef2f2", padding: "0 4px" }}>{issue.original}</span>」
+                          </p>
+                        )}
+                        <p style={{ fontSize: 10, color: C.textSub, lineHeight: 1.6, marginBottom: 4 }}>
+                          {issue.reason}
+                        </p>
+                        <p style={{ fontSize: 11, color: C.text, lineHeight: 1.6 }}>
+                          💡 <span style={{ color: C.accent, fontWeight: 500 }}>{issue.suggestion}</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 全体アドバイス */}
+                {aiCheckResult.advice && (
+                  <p style={{ fontSize: 11, color: C.text, marginBottom: 10, lineHeight: 1.6, padding: "8px 10px", backgroundColor: "rgba(255,255,255,0.5)" }}>
+                    {aiCheckResult.advice}
+                  </p>
+                )}
+
+                {/* 改善版採用ボタン */}
+                {(aiCheckResult.improvedTitle || aiCheckResult.improvedBody) && (
+                  <button
+                    onClick={applyAISuggestion}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      backgroundColor: C.accent,
+                      color: "#fff",
+                      border: "none",
+                      fontFamily: FONT_SERIF,
+                      letterSpacing: "0.1em",
+                      fontWeight: 500,
+                    }}
+                  >
+                    ✨ AI提案の改善版を採用する
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* AIチェックボタン */}
+            <button
+              onClick={handleAICheck}
+              disabled={aiChecking || !title.trim() || !body.trim()}
+              style={{
+                width: "100%",
+                padding: "12px",
+                fontSize: 12,
+                cursor: aiChecking || !title.trim() || !body.trim() ? "not-allowed" : "pointer",
+                backgroundColor: "transparent",
+                color: C.accent,
+                border: `1px solid ${C.accent}`,
+                fontFamily: FONT_SERIF,
+                letterSpacing: "0.1em",
+                marginBottom: 8,
+                opacity: aiChecking || !title.trim() || !body.trim() ? 0.5 : 1,
+              }}
+            >
+              {aiChecking ? "AIチェック中..." : "🤖 投稿前にAIチェック"}
+            </button>
+
             {/* 投稿ボタン */}
             <button
               onClick={handleSubmit}
-              disabled={submitting || images.length === 0 || !title.trim() || !body.trim()}
+              disabled={submitting || images.length === 0 || !title.trim() || !body.trim() || (aiCheckResult?.severity === "ng")}
               style={{
                 width: "100%",
                 padding: "16px 12px",
                 fontSize: 13,
-                cursor: submitting || images.length === 0 || !title.trim() || !body.trim() ? "not-allowed" : "pointer",
-                backgroundColor: C.accent,
+                cursor: submitting || images.length === 0 || !title.trim() || !body.trim() || aiCheckResult?.severity === "ng" ? "not-allowed" : "pointer",
+                backgroundColor: aiCheckResult?.severity === "ng" ? C.textMuted : C.accent,
                 color: "#fff",
                 border: "none",
                 fontFamily: FONT_SERIF,
                 letterSpacing: "0.1em",
                 fontWeight: 500,
-                opacity: submitting || images.length === 0 || !title.trim() || !body.trim() ? 0.5 : 1,
+                opacity: submitting || images.length === 0 || !title.trim() || !body.trim() || aiCheckResult?.severity === "ng" ? 0.5 : 1,
               }}
             >
-              {submitting ? "投稿中..." : "📤 投稿する"}
+              {submitting
+                ? "投稿中..."
+                : aiCheckResult?.severity === "ng"
+                ? "🚨 NG項目を修正してください"
+                : "📤 投稿する"}
             </button>
           </div>
         </div>
