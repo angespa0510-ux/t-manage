@@ -2821,7 +2821,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                           {p.status === "pending" && (
                             <button
                               onClick={async () => {
-                                if (!confirm(`${p.requested_points}pt の申請を取り消しますか？`)) return;
+                                if (!window.confirm(`${p.requested_points}pt の申請を取り消しますか？`)) return;
                                 try {
                                   const res = await fetch("/api/therapist/gift-payout", {
                                     method: "DELETE",
