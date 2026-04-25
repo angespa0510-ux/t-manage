@@ -863,97 +863,169 @@ export default function LiveBroadcastPage() {
             )}
 
             {/* スタンプ調整 (サイズ・位置)。fullblur は調整不要なので除外 */}
-            {filterMode === "stamp" && stampKind !== "fullblur" && (
-              <div style={{
-                marginBottom: 12,
-                padding: 10,
-                backgroundColor: C.cardAlt,
+            {filterMode === "stamp" && stampKind !== "fullblur" && (() => {
+              // タップ刻み (1回押したらどれだけ動くか)
+              const SIZE_STEP = 0.1;       // サイズ ±10%
+              const SIZE_MIN = 0.5;
+              const SIZE_MAX = 2.0;
+              const POS_STEP = 0.05;       // 位置 ±5%
+              const POS_MIN = -0.5;
+              const POS_MAX = 0.5;
+
+              // 共通ボタンスタイル
+              const btnBase: React.CSSProperties = {
+                width: 38,
+                height: 38,
+                fontSize: 16,
+                cursor: "pointer",
+                backgroundColor: C.card,
+                color: C.text,
                 border: `1px solid ${C.border}`,
-                borderRadius: 6,
-              }}>
+                borderRadius: 8,
+                fontFamily: FONT_SERIF,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+                touchAction: "manipulation",
+              };
+
+              const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+              return (
                 <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 8,
-                  fontSize: 10,
-                  color: C.textSub,
-                  fontFamily: FONT_SERIF,
+                  marginBottom: 12,
+                  padding: 12,
+                  backgroundColor: C.cardAlt,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
                 }}>
-                  <span>✨ {STAMP_OPTIONS.find((s) => s.kind === stampKind)?.label} の調整</span>
-                  <button
-                    onClick={resetAdjust}
-                    style={{
-                      padding: "3px 8px",
-                      fontSize: 9,
-                      cursor: "pointer",
-                      backgroundColor: "transparent",
-                      color: C.textSub,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 4,
+                  {/* ヘッダー */}
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 12,
+                    fontSize: 11,
+                    color: C.textSub,
+                    fontFamily: FONT_SERIF,
+                  }}>
+                    <span>✨ {STAMP_OPTIONS.find((s) => s.kind === stampKind)?.label} の調整</span>
+                    <button
+                      onClick={resetAdjust}
+                      style={{
+                        padding: "4px 10px",
+                        fontSize: 10,
+                        cursor: "pointer",
+                        backgroundColor: "transparent",
+                        color: C.textSub,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 4,
+                        fontFamily: FONT_SERIF,
+                      }}
+                    >
+                      🔄 リセット
+                    </button>
+                  </div>
+
+                  {/* サイズ調整 (±) */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 14 }}>
+                    <span style={{ fontSize: 10, color: C.textSub, fontFamily: FONT_SERIF, minWidth: 36 }}>サイズ</span>
+                    <button
+                      onClick={() => updateAdjust({ size: clamp(currentAdjust.size - SIZE_STEP, SIZE_MIN, SIZE_MAX) })}
+                      style={btnBase}
+                      aria-label="サイズを小さく"
+                    >−</button>
+                    <span style={{
+                      fontSize: 13,
                       fontFamily: FONT_SERIF,
-                    }}
-                  >
-                    🔄 リセット
-                  </button>
+                      color: C.text,
+                      fontVariantNumeric: "tabular-nums",
+                      minWidth: 50,
+                      textAlign: "center",
+                    }}>
+                      {Math.round(currentAdjust.size * 100)}%
+                    </span>
+                    <button
+                      onClick={() => updateAdjust({ size: clamp(currentAdjust.size + SIZE_STEP, SIZE_MIN, SIZE_MAX) })}
+                      style={btnBase}
+                      aria-label="サイズを大きく"
+                    >＋</button>
+                  </div>
+
+                  {/* 位置調整 (十字キー) */}
+                  <div>
+                    <div style={{
+                      fontSize: 10,
+                      color: C.textSub,
+                      fontFamily: FONT_SERIF,
+                      textAlign: "center",
+                      marginBottom: 6,
+                    }}>
+                      位置を動かす
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "38px 60px 38px",
+                        gridTemplateRows: "38px 38px 38px",
+                        gap: 4,
+                        alignItems: "center",
+                        justifyItems: "center",
+                      }}>
+                        {/* 1行目: 空 / 上 / 空 */}
+                        <div></div>
+                        <button
+                          onClick={() => updateAdjust({ offsetY: clamp(currentAdjust.offsetY - POS_STEP, POS_MIN, POS_MAX) })}
+                          style={btnBase}
+                          aria-label="上へ"
+                        >↑</button>
+                        <div></div>
+
+                        {/* 2行目: 左 / 中央表示 / 右 */}
+                        <button
+                          onClick={() => updateAdjust({ offsetX: clamp(currentAdjust.offsetX - POS_STEP, POS_MIN, POS_MAX) })}
+                          style={btnBase}
+                          aria-label="左へ"
+                        >←</button>
+                        <div style={{
+                          fontSize: 9,
+                          fontFamily: FONT_SERIF,
+                          color: C.textSub,
+                          textAlign: "center",
+                          lineHeight: 1.4,
+                          fontVariantNumeric: "tabular-nums",
+                        }}>
+                          {currentAdjust.offsetX === 0 && currentAdjust.offsetY === 0 ? (
+                            "中央"
+                          ) : (
+                            <>
+                              <div>X: {currentAdjust.offsetX > 0 ? "+" : ""}{Math.round(currentAdjust.offsetX * 100)}%</div>
+                              <div>Y: {currentAdjust.offsetY > 0 ? "+" : ""}{Math.round(currentAdjust.offsetY * 100)}%</div>
+                            </>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => updateAdjust({ offsetX: clamp(currentAdjust.offsetX + POS_STEP, POS_MIN, POS_MAX) })}
+                          style={btnBase}
+                          aria-label="右へ"
+                        >→</button>
+
+                        {/* 3行目: 空 / 下 / 空 */}
+                        <div></div>
+                        <button
+                          onClick={() => updateAdjust({ offsetY: clamp(currentAdjust.offsetY + POS_STEP, POS_MIN, POS_MAX) })}
+                          style={btnBase}
+                          aria-label="下へ"
+                        >↓</button>
+                        <div></div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                {/* サイズスライダー */}
-                <label style={{ display: "block", marginBottom: 6, fontSize: 9, color: C.textSub, fontFamily: FONT_SERIF }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                    <span>サイズ</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{Math.round(currentAdjust.size * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2.0"
-                    step="0.05"
-                    value={currentAdjust.size}
-                    onChange={(e) => updateAdjust({ size: parseFloat(e.target.value) })}
-                    style={{ width: "100%" }}
-                  />
-                </label>
-
-                {/* 横位置スライダー */}
-                <label style={{ display: "block", marginBottom: 6, fontSize: 9, color: C.textSub, fontFamily: FONT_SERIF }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                    <span>左右</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                      {currentAdjust.offsetX === 0 ? "中央" : (currentAdjust.offsetX > 0 ? "→ " : "← ") + Math.abs(Math.round(currentAdjust.offsetX * 100)) + "%"}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-0.5"
-                    max="0.5"
-                    step="0.02"
-                    value={currentAdjust.offsetX}
-                    onChange={(e) => updateAdjust({ offsetX: parseFloat(e.target.value) })}
-                    style={{ width: "100%" }}
-                  />
-                </label>
-
-                {/* 縦位置スライダー */}
-                <label style={{ display: "block", marginBottom: 0, fontSize: 9, color: C.textSub, fontFamily: FONT_SERIF }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                    <span>上下</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                      {currentAdjust.offsetY === 0 ? "中央" : (currentAdjust.offsetY > 0 ? "↓ " : "↑ ") + Math.abs(Math.round(currentAdjust.offsetY * 100)) + "%"}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-0.5"
-                    max="0.5"
-                    step="0.02"
-                    value={currentAdjust.offsetY}
-                    onChange={(e) => updateAdjust({ offsetY: parseFloat(e.target.value) })}
-                    style={{ width: "100%" }}
-                  />
-                </label>
-              </div>
-            )}
+              );
+            })()}
 
             {/* モザイク対象 */}
             {filterMode === "mosaic" && (
