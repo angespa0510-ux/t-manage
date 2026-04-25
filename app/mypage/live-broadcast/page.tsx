@@ -205,6 +205,10 @@ export default function LiveBroadcastPage() {
             await new Promise(r => setTimeout(r, 200));
           }
         }
+      } else {
+        // ここに来るのはバグ。phase=preview になって video 要素が DOM にあるはず
+        console.error("videoRef.current が null です。DOM レンダリング順序を確認してください。");
+        throw new Error("video要素が見つかりません (DOM レンダリング待機失敗)");
       }
 
       // Face Landmarker 初期化 (失敗してもフィルター無しで配信可能)
@@ -309,23 +313,43 @@ export default function LiveBroadcastPage() {
 
   // ─────────────────────────────────────────────────────────
   // 設定 → プレビュー
+  //
+  // 重要: 先に setPhase("preview") して video/canvas を DOM に出してから
+  // useEffect 経由で startCamera() を呼ぶ。
+  // 旧実装では DOM レンダリング前に videoRef.current にアクセスしていたため
+  // null チェックで弾かれて srcObject が設定されない不具合があった
+  // (vw=0 vh=0 rs=0 だが frames だけカウントされる症状の原因)。
   // ─────────────────────────────────────────────────────────
-  const proceedToPreview = async () => {
+  const proceedToPreview = () => {
     setErrorMsg(null);
     if (!title.trim()) {
       setErrorMsg("タイトルを入力してください");
       return;
     }
-    setSubmitting(true);
-    try {
-      await startCamera();
-      setPhase("preview");
-    } catch {
-      // startCameraでエラー設定済み
-    } finally {
-      setSubmitting(false);
-    }
+    setPhase("preview");
   };
+
+  // phase が preview に変わったら video/canvas が DOM に出ているので
+  // そこで初めて startCamera を実行する
+  useEffect(() => {
+    if (phase !== "preview") return;
+    if (cameraStreamRef.current) return; // 既に起動済みなら何もしない
+    setSubmitting(true);
+    // 次のフレームを待ってから (DOM 反映を確実に)
+    const timer = setTimeout(() => {
+      startCamera()
+        .catch((e) => {
+          console.error("startCamera failed:", e);
+          // エラー時は setup に戻す (errorMsg は startCamera 内で設定済み)
+          setPhase("setup");
+        })
+        .finally(() => {
+          setSubmitting(false);
+        });
+    }, 50);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // ─────────────────────────────────────────────────────────
   // プレビュー → 配信開始 (LiveKit接続 + publish)
