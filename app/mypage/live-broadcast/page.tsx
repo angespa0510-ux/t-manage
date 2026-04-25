@@ -151,13 +151,41 @@ export default function LiveBroadcastPage() {
       audioStreamRef.current = audioStream;
 
       if (videoRef.current) {
-        videoRef.current.srcObject = cameraStream;
-        await videoRef.current.play();
+        const v = videoRef.current;
+        v.srcObject = cameraStream;
+        v.muted = true; // iOS Safari の自動再生に必須
+        // メタデータ読み込み完了を待つ
+        await new Promise<void>((resolve) => {
+          if (v.readyState >= 1) {
+            resolve();
+            return;
+          }
+          const onLoaded = () => {
+            v.removeEventListener("loadedmetadata", onLoaded);
+            resolve();
+          };
+          v.addEventListener("loadedmetadata", onLoaded);
+          // タイムアウト保険 (5秒)
+          setTimeout(resolve, 5000);
+        });
+        try {
+          await v.play();
+        } catch (playErr) {
+          console.warn("video.play() failed, retrying:", playErr);
+          // 再試行
+          await new Promise(r => setTimeout(r, 100));
+          await v.play().catch(() => {});
+        }
       }
 
-      // Face Landmarker 初期化
-      if (!faceLandmarkerRef.current) {
-        faceLandmarkerRef.current = await initFaceLandmarker();
+      // Face Landmarker 初期化 (失敗してもフィルター無しで配信可能)
+      try {
+        if (!faceLandmarkerRef.current) {
+          faceLandmarkerRef.current = await initFaceLandmarker();
+        }
+      } catch (mpErr) {
+        console.warn("Face Landmarker初期化失敗 (フィルターは使えませんが配信は可能):", mpErr);
+        // 続行 (フィルターなしで配信可能)
       }
 
       // 描画ループ開始
@@ -177,15 +205,22 @@ export default function LiveBroadcastPage() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const fl = faceLandmarkerRef.current;
-      if (!video || !canvas || video.readyState < 2) {
+      if (!video || !canvas) {
+        animationFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      // video の videoWidth が 0 = まだ準備できていない
+      // (readyState はブラウザ依存でブレるので、videoWidth でチェック)
+      if (!video.videoWidth || !video.videoHeight) {
         animationFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 
       // canvas サイズを video に合わせる (一度だけ)
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth || 720;
-        canvas.height = video.videoHeight || 1280;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
       }
 
       const ctx = canvas.getContext("2d");
@@ -205,8 +240,13 @@ export default function LiveBroadcastPage() {
         }
       }
 
-      // フィルター適用
-      applyFilter(ctx, video, result, filterOptionsRef.current);
+      // フィルター適用 (Face Landmarker無しでも素のvideoが描画される)
+      try {
+        applyFilter(ctx, video, result, filterOptionsRef.current);
+      } catch {
+        // フィルター失敗時は素のvideoを描画
+        try { ctx.drawImage(video, 0, 0, canvas.width, canvas.height); } catch {}
+      }
 
       animationFrameRef.current = requestAnimationFrame(tick);
     };
@@ -322,8 +362,9 @@ export default function LiveBroadcastPage() {
 
       setPhase("live");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "配信開始エラー";
-      setErrorMsg(msg);
+      const msg = e instanceof Error ? `${e.name}: ${e.message}` : "配信開始エラー";
+      console.error("startBroadcast error:", e);
+      setErrorMsg(`配信開始失敗: ${msg}`);
       // クリーンアップ
       try { await roomRef.current?.disconnect(); } catch {}
       roomRef.current = null;
@@ -567,7 +608,23 @@ export default function LiveBroadcastPage() {
         <div>
           {/* 映像 */}
           <div style={{ position: "relative", backgroundColor: "#000", maxWidth: 540, margin: "0 auto" }}>
-            <video ref={videoRef} muted playsInline style={{ display: "none" }} />
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              autoPlay
+              webkit-playsinline="true"
+              x-webkit-airplay="deny"
+              style={{
+                position: "absolute",
+                left: "-9999px",
+                top: "-9999px",
+                width: 1,
+                height: 1,
+                opacity: 0,
+                pointerEvents: "none",
+              }}
+            />
             <canvas
               ref={canvasRef}
               style={{
