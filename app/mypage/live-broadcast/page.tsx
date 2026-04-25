@@ -661,7 +661,7 @@ export default function LiveBroadcastPage() {
       {(phase === "preview" || phase === "live") && (
         <div>
           {/* 映像 */}
-          <div style={{ position: "relative", backgroundColor: "#000", maxWidth: 540, margin: "0 auto" }}>
+          <div style={{ position: "relative", backgroundColor: "#000", maxWidth: 540, margin: "0 auto", aspectRatio: "9 / 16", overflow: "hidden" }}>
             <video
               ref={videoRef}
               muted
@@ -677,20 +677,27 @@ export default function LiveBroadcastPage() {
                 height: "100%",
                 objectFit: "cover",
                 zIndex: 0,
-                opacity: 0.001, // ほぼ透明だが描画は維持される
+                // opacity を 0 にしない (iOS Safari が再生を停止する)
+                // 代わりに canvas を上に重ねて視覚的に隠す
                 pointerEvents: "none",
+                backgroundColor: "#000",
               }}
             />
             <canvas
               ref={canvasRef}
               style={{
-                position: "relative",
+                position: "absolute",
+                top: 0,
+                left: 0,
                 display: "block",
                 width: "100%",
-                aspectRatio: "9 / 16",
+                height: "100%",
                 objectFit: "cover",
-                backgroundColor: "#000",
-                zIndex: 1,
+                backgroundColor: "transparent", // canvas未描画時は video が見える
+                zIndex: 2,
+                // canvas に何も描かれていない時は video が透けて見えるよう
+                // pointer-events: none で操作も透過
+                pointerEvents: "none",
               }}
             />
             {/* デバッグ情報 (iOS Safari 動作確認用) */}
