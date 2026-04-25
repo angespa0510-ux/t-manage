@@ -356,22 +356,21 @@ export default function HomePage() {
               href="tel:070-1675-5900"
               style={{
                 display: "block",
-                padding: "16px 24px",
-                backgroundColor: "rgba(255,255,255,0.7)",
-                backdropFilter: "blur(8px)",
-                WebkitBackdropFilter: "blur(8px)",
+                padding: "18px 24px",
+                backgroundColor: "rgba(252,228,233,0.95)",
                 border: `1px solid ${SITE.color.pink}`,
                 color: SITE.color.pink,
                 fontFamily: SITE.font.display,
-                fontSize: "14px",
-                letterSpacing: SITE.ls.loose,
+                fontSize: "20px",
+                fontWeight: 600,
+                letterSpacing: SITE.ls.normal,
                 textDecoration: "none",
                 textAlign: "center",
                 transition: SITE.transition.base,
               }}
               className="site-cta-secondary"
             >
-              電話 070-1675-5900
+              📞 070-1675-5900
             </a>
           </div>
 
