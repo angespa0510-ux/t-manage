@@ -84,8 +84,8 @@ function shiftDate(dateStr: string, days: number): string {
 
 export default function InsightsPage() {
   const { T } = useTheme();
-  const { toast } = useToast();
-  const { staff } = useStaffSession();
+  const { show: toast } = useToast();
+  const { activeStaff: staff, isManager } = useStaffSession();
   const router = useRouter();
 
   const [date, setDate] = useState(yesterdayStr());
@@ -95,11 +95,11 @@ export default function InsightsPage() {
 
   // 権限チェック（社長・経営責任者のみ）
   useEffect(() => {
-    if (staff && !["owner", "manager"].includes(staff.role || "")) {
+    if (staff && !isManager) {
       toast("アクセス解析は社長・経営責任者のみ閲覧可能です", "error");
       router.push("/admin/dashboard");
     }
-  }, [staff, router, toast]);
+  }, [staff, isManager, router, toast]);
 
   const loadData = useCallback(async (targetDate: string) => {
     setLoading(true);

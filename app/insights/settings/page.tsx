@@ -24,8 +24,8 @@ type Settings = {
 
 export default function InsightsSettingsPage() {
   const { T } = useTheme();
-  const { toast } = useToast();
-  const { staff } = useStaffSession();
+  const { show: toast } = useToast();
+  const { activeStaff: staff, isManager } = useStaffSession();
   const router = useRouter();
 
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -34,11 +34,11 @@ export default function InsightsSettingsPage() {
   const [emailsText, setEmailsText] = useState("");
 
   useEffect(() => {
-    if (staff && !["owner", "manager"].includes(staff.role || "")) {
+    if (staff && !isManager) {
       toast("社長・経営責任者のみ設定可能です", "error");
       router.push("/admin/dashboard");
     }
-  }, [staff, router, toast]);
+  }, [staff, isManager, router, toast]);
 
   const load = useCallback(async () => {
     setLoading(true);
