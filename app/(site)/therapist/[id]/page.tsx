@@ -122,6 +122,55 @@ export default function TherapistDetailPage({
       .finally(() => setReviewsLoading(false));
   }, [therapistId]);
 
+  // ページ表示時の最初の写真ビュー記録（重複防止のため初回のみ）
+  const [didLogInitialView, setDidLogInitialView] = useState(false);
+  useEffect(() => {
+    if (!therapistId || !therapist || didLogInitialView) return;
+    const photoCount = (therapist.sub_photo_urls || []).length || (therapist.photo_url ? 1 : 0);
+    if (photoCount === 0) return;
+    setDidLogInitialView(true);
+    // セッションIDを取得 or 生成
+    let sessionId = "";
+    try {
+      sessionId = sessionStorage.getItem("hp_session_id") || "";
+      if (!sessionId) {
+        sessionId = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+        sessionStorage.setItem("hp_session_id", sessionId);
+      }
+    } catch {}
+    fetch("/api/therapist-photo-view", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        therapist_id: therapistId,
+        photo_index: 0,
+        view_type: "view",
+        is_member: isMember,
+        customer_id: customer?.id || null,
+        session_id: sessionId,
+      }),
+    }).catch(() => {});
+  }, [therapistId, therapist, isMember, customer, didLogInitialView]);
+
+  // 写真クリック時のログ送信ヘルパー
+  const logPhotoView = (photoIndex: number, viewType: "view" | "thumb_click" | "cta_clicked") => {
+    if (!therapistId) return;
+    let sessionId = "";
+    try { sessionId = sessionStorage.getItem("hp_session_id") || ""; } catch {}
+    fetch("/api/therapist-photo-view", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        therapist_id: therapistId,
+        photo_index: photoIndex,
+        view_type: viewType,
+        is_member: isMember,
+        customer_id: customer?.id || null,
+        session_id: sessionId,
+      }),
+    }).catch(() => {});
+  };
+
   useEffect(() => {
     (async () => {
       if (!therapistId) {
@@ -351,7 +400,9 @@ export default function TherapistDetailPage({
                             textDecoration: "none",
                           }}
                           onClick={() => {
-                            // CTAクリック計測（既存APIを再利用、photo_id は 0 = sub_photo_urls 5枚目を意味する目印）
+                            // 写真アクセス分析（sub_photo_urls の通し index = 4）
+                            logPhotoView(i, "cta_clicked");
+                            // 既存のチャットボット計測（後方互換）
                             fetch("/api/hp-chatbot-event", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
@@ -408,7 +459,10 @@ export default function TherapistDetailPage({
                     return (
                       <button
                         key={i}
-                        onClick={() => setMainImage(p.url)}
+                        onClick={() => {
+                          setMainImage(p.url);
+                          logPhotoView(i, "thumb_click");
+                        }}
                         style={{
                           padding: 0,
                           border: active

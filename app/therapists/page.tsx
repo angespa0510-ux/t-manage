@@ -106,6 +106,16 @@ const [addLoginPassword, setAddLoginPassword] = useState("");
   const [editVideoUrl, setEditVideoUrl] = useState("");
   const [editVideoFile, setEditVideoFile] = useState<File | null>(null);
   const [editVideoUploading, setEditVideoUploading] = useState(false);
+  // 写真アクセス分析（編集モーダルで表示）
+  const [photoViewCounts, setPhotoViewCounts] = useState<Array<{
+    photo_index: number;
+    view_count: number;
+    view_count_member: number;
+    view_count_public: number;
+    thumb_click_count: number;
+    cta_click_count: number;
+    last_viewed_at: string | null;
+  }>>([]);
   const [editPublicSortOrder, setEditPublicSortOrder] = useState("0");
   const [editIsPickup, setEditIsPickup] = useState(false);
   const [editIsNewcomer, setEditIsNewcomer] = useState(false);
@@ -493,6 +503,14 @@ const generatePassword = () => {
     setEditInstagramUrl(t.instagram_url || "");
     setEditVideoUrl(t.video_url || "");
     setEditVideoFile(null);
+    // 写真アクセス分析データを取得
+    setPhotoViewCounts([]);
+    fetch(`/api/therapist-photo-view?therapist_id=${t.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.counts) setPhotoViewCounts(data.counts);
+      })
+      .catch(() => {});
     setEditPublicSortOrder(String(t.public_sort_order ?? 0));
     setEditIsPickup(t.is_pickup || false);
     setEditIsNewcomer(t.is_newcomer || false);
@@ -1321,7 +1339,7 @@ const generatePassword = () => {
                 {/* サブ写真ギャラリー（最大5枚 / 1枚目=アイコン / 5枚目=会員限定） */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-[11px]" style={{ color: T.textSub }}>📸 公開HP写真 <span className="text-[9px]" style={{ color: T.textMuted }}>（最大5枚・1枚目がアイコン・5枚目は会員限定）</span></label>
+                    <label className="block text-[11px]" style={{ color: T.textSub }}>📸 公開HP写真 <span className="text-[9px]" style={{ color: T.textMuted }}>（最大5枚・1枚目がアイコン・5枚目は会員限定・👁️=閲覧数）</span></label>
                     <span className="text-[9px]" style={{ color: T.textMuted }}>{editSubPhotoUrls.length + editSubPhotoFiles.length} / 5</span>
                   </div>
                   <div className="grid grid-cols-5 gap-2 mb-2">
@@ -1329,6 +1347,8 @@ const generatePassword = () => {
                       const idx = i; // 既存写真の通し番号
                       const isIcon = idx === 0;
                       const isMembers = idx === 4;
+                      const stat = photoViewCounts.find((c) => c.photo_index === idx);
+                      const totalViews = (stat?.view_count || 0) + (stat?.thumb_click_count || 0);
                       return (
                         <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden border" style={{ borderColor: isIcon ? T.accent : isMembers ? "#e8849a88" : T.border }}>
                           <img src={url} alt={`sub-${i}`} className="w-full h-full object-cover" />
@@ -1337,6 +1357,12 @@ const generatePassword = () => {
                           )}
                           {isMembers && (
                             <span className="absolute top-1 left-1 text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#e8849a", color: "#fff", fontWeight: 600 }}>🔒 会員限定</span>
+                          )}
+                          {/* 閲覧数バッジ（左下） */}
+                          {totalViews > 0 && (
+                            <span className="absolute bottom-1 left-1 text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(0,0,0,0.65)", color: "#fff", fontWeight: 600, letterSpacing: 0 }}>
+                              👁️ {totalViews >= 1000 ? `${(totalViews / 1000).toFixed(1)}k` : totalViews}
+                            </span>
                           )}
                           <button type="button" onClick={() => setEditSubPhotoUrls(editSubPhotoUrls.filter((_, k) => k !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
                         </div>
@@ -1376,6 +1402,27 @@ const generatePassword = () => {
                   </div>
                   {editSubPhotoFiles.length > 0 && <p className="text-[9px]" style={{ color: "#e8849a" }}>📸 {editSubPhotoFiles.length}件が「更新する」押下時にアップロードされます</p>}
                   {editSubPhotoUrls.length + editSubPhotoFiles.length >= 5 && <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>5枚に達しました。新しい写真を追加するには、既存の写真を削除してください。</p>}
+                  {/* 写真ごとアクセス分析サマリー */}
+                  {photoViewCounts.length > 0 && (
+                    <div className="mt-3 p-2.5 rounded-lg" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                      <p className="text-[10px] mb-1.5 font-medium" style={{ color: T.textSub }}>📊 写真アクセス分析</p>
+                      <div className="grid grid-cols-5 gap-1 text-center">
+                        {[0, 1, 2, 3, 4].map((idx) => {
+                          const stat = photoViewCounts.find((c) => c.photo_index === idx);
+                          const total = (stat?.view_count || 0) + (stat?.thumb_click_count || 0);
+                          const cta = stat?.cta_click_count || 0;
+                          return (
+                            <div key={idx} className="px-1 py-1 rounded" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                              <p className="text-[8px]" style={{ color: T.textMuted }}>{idx + 1}枚目{idx === 4 ? "🔒" : ""}</p>
+                              <p className="text-[12px] font-medium" style={{ color: T.text }}>{total}</p>
+                              {idx === 4 && cta > 0 && <p className="text-[8px]" style={{ color: "#e8849a" }}>CTA {cta}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[8px] mt-1.5" style={{ color: T.textMuted, lineHeight: 1.5 }}>※ 数字は表示・サムネクリックの合計。5枚目は会員登録ボタンへの誘導クリック数(CTA)も併記。</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* SNS・ブログリンク */}

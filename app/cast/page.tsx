@@ -13,6 +13,7 @@ import InstallPrompt from "../../components/InstallPrompt";
 import TherapistChatTab from "../../components/therapist-chat-tab";
 import TherapistDiaryTab from "../../components/therapist-diary-tab";
 import CastReviewsTab from "../../components/cast/CastReviewsTab";
+import CastPhotoAnalyticsCard from "../../components/cast/CastPhotoAnalyticsCard";
 
 /* ─────────────────────────────────────────────────────────────
  * セラピストマイページ デザインシステム (Session 60 Phase 1)
@@ -57,6 +58,7 @@ type Therapist = {
   id: number; name: string; login_email: string; login_password: string;
   has_invoice: boolean; has_withholding: boolean; transport_fee: number;
   real_name: string; notes: string; status: string;
+  photo_url?: string; sub_photo_urls?: string[];
 };
 type Shift = { id: number; therapist_id: number; date: string; start_time: string; end_time: string; store_id: number; status: string };
 type ShiftRequest = { id: number; therapist_id: number; week_start: string; date: string; start_time: string; end_time: string; store_id: number; status: string; notes: string };
@@ -1298,6 +1300,19 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                 ))}
               </div>
             </section>
+          )}
+
+          {/* ═══ ブロック6.5 — 写真アクセス分析 ═══ */}
+          {therapist && (
+            <CastPhotoAnalyticsCard
+              therapistId={therapist.id}
+              subPhotoUrls={Array.isArray(therapist.sub_photo_urls)
+                ? therapist.sub_photo_urls
+                : (therapist.photo_url ? [therapist.photo_url] : [])}
+              C={T}
+              FONT_SERIF={FONT_SERIF}
+              FONT_DISPLAY={FONT_DISPLAY}
+            />
           )}
 
           {/* ═══ ブロック7 — プッシュ通知設定 ═══ */}
