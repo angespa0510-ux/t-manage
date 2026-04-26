@@ -389,15 +389,6 @@ function ResultView({
   backLinkLabel: string;
   extra?: React.ReactNode;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  const copyCode = async () => {
-    if (!result.couponCode) return;
-    await navigator.clipboard.writeText(result.couponCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div>
       <div style={{ textAlign: "center", marginBottom: 24 }}>
@@ -413,45 +404,30 @@ function ResultView({
       {/* クーポン */}
       {result.couponCode && (
         <div style={{ ...cardStyle, marginBottom: 16, backgroundColor: C.accentBg, borderColor: C.borderPink }}>
-          <p style={{ fontSize: 11, color: C.accentDark, textAlign: "center", marginBottom: 8 }}>
-            🎁 次回使える 1,000円OFFクーポン
+          <p style={{ fontSize: 13, color: C.accentDark, textAlign: "center", marginBottom: 8, fontWeight: 500 }}>
+            🎁 次回ご来店時に <strong>1,000円OFF</strong> を自動適用
           </p>
-          <p
+          <p style={{ fontSize: 11, color: C.textSub, textAlign: "center", marginBottom: 12, lineHeight: 1.7 }}>
+            お電話番号でお客様を特定しますので、<br />
+            ご予約・ご来店時に何もお伝えいただく必要はございません ✨
+          </p>
+          <div
             style={{
-              fontSize: 26,
-              fontFamily: "monospace",
+              padding: "8px 12px",
+              backgroundColor: "#fff",
+              border: `1px dashed ${C.borderPink}`,
+              fontSize: 10,
+              color: C.textMuted,
               textAlign: "center",
-              color: C.text,
-              letterSpacing: 4,
-              margin: "8px 0",
-              fontWeight: 600,
+              lineHeight: 1.6,
             }}
           >
-            {result.couponCode}
-          </p>
-          <p style={{ fontSize: 10, color: C.textMuted, textAlign: "center", marginBottom: 12 }}>
-            有効期限: {new Date(result.couponExpiresAt).toLocaleDateString("ja-JP")} まで・他の割引と併用可
-          </p>
-          <button
-            onClick={copyCode}
-            style={{
-              width: "100%",
-              padding: 12,
-              fontSize: 12,
-              backgroundColor: copied ? C.green : C.accent,
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              fontFamily: FONT_SERIF,
-              transition: "background 0.2s",
-            }}
-          >
-            {copied ? "✓ コピーしました" : "📋 コードをコピー"}
-          </button>
-          <p style={{ fontSize: 10, color: C.textMuted, textAlign: "center", marginTop: 12, lineHeight: 1.6 }}>
-            ※ 次回ご予約時に「アンケートクーポンあります」とお伝えいただくか、<br />
-            このコードを画面で見せてください。スクリーンショットを保存しておくと安心です。
-          </p>
+            ご利用詳細: 1,000円OFF・有効期限{" "}
+            <strong style={{ color: C.text }}>
+              {new Date(result.couponExpiresAt).toLocaleDateString("ja-JP")}
+            </strong>{" "}
+            まで・他の割引と併用可
+          </div>
         </div>
       )}
 

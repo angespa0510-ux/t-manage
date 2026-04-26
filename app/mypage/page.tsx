@@ -87,6 +87,19 @@ export default function CustomerMypage() {
     discountAmount: number;
     expiresAt: string;
   }>>([]);
+  // アンケート履歴（既回答 + クーポン使用状況）
+  const [completedSurveys, setCompletedSurveys] = useState<Array<{
+    surveyId: number;
+    reservationId: number;
+    therapistName: string;
+    ratingOverall: number;
+    submittedAt: string;
+    couponCode: string | null;
+    couponUsed: boolean;
+    couponUsedAt: string | null;
+    couponExpiresAt: string | null;
+    couponDiscountAmount: number;
+  }>>([]);
   const [authMode, setAuthMode] = useState<"login" | "register" | "reset">("login");
   const [authEmail, setAuthEmail] = useState(""); const [authPw, setAuthPw] = useState(""); const [authName, setAuthName] = useState(""); const [authPhone, setAuthPhone] = useState(""); const [authError, setAuthError] = useState(""); const [authLoading, setAuthLoading] = useState(false); const [showPw, setShowPw] = useState(false);
   const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
@@ -205,6 +218,7 @@ export default function CustomerMypage() {
         const sd = await sr.json();
         setPendingSurveys(sd.pending || []);
         setSurveyCoupons(sd.coupons || []);
+        setCompletedSurveys(sd.completed || []);
       }
     } catch { /* 取得失敗は静かに無視 */ }
     // お客様セラピストメモ取得
@@ -734,40 +748,128 @@ export default function CustomerMypage() {
             backgroundColor: "#fff",
             padding: 16,
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <span style={{ fontSize: 16 }}>🎟</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 16 }}>🎁</span>
               <p style={{ fontSize: 13, color: C.text, margin: 0, fontWeight: 500 }}>
-                お持ちのアンケートクーポン
+                次回ご来店時に1,000円OFFを自動適用
               </p>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ fontSize: 11, color: C.textSub, lineHeight: 1.6, marginBottom: 12 }}>
+              アンケートご回答ありがとうございました🌸<br />
+              ご予約・ご来店時に何もお伝えいただく必要はございません。
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {surveyCoupons.map((c) => (
                 <div
                   key={c.id}
                   style={{
-                    padding: 12,
-                    backgroundColor: C.accentBg,
-                    border: `1px dashed ${C.accent}`,
+                    padding: "10px 12px",
+                    backgroundColor: C.cardAlt,
+                    border: `1px dashed ${C.borderPink}`,
                   }}
                 >
-                  <p style={{ fontSize: 10, color: C.accentDark, margin: 0, marginBottom: 4 }}>
-                    {c.discountAmount.toLocaleString()}円OFF
-                  </p>
-                  <p style={{
-                    fontSize: 18,
-                    fontFamily: "monospace",
-                    fontWeight: 600,
-                    letterSpacing: 2,
-                    color: C.text,
-                    margin: "4px 0",
-                  }}>
-                    {c.code}
-                  </p>
-                  <p style={{ fontSize: 10, color: C.textMuted, margin: 0 }}>
-                    有効期限: {new Date(c.expiresAt).toLocaleDateString("ja-JP")} まで・他の割引と併用可
+                  <p style={{ fontSize: 11, color: C.textSub, margin: 0, lineHeight: 1.6 }}>
+                    🎟 {c.discountAmount.toLocaleString()}円OFF・有効期限{" "}
+                    <strong style={{ color: C.text }}>
+                      {new Date(c.expiresAt).toLocaleDateString("ja-JP")}
+                    </strong>{" "}
+                    まで
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ アンケート履歴（Phase 1B-2 改修版） ═══ */}
+        {completedSurveys.length > 0 && (
+          <div style={{
+            border: `1px solid ${C.border}`,
+            backgroundColor: "#fff",
+            padding: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 16 }}>📝</span>
+              <p style={{ fontSize: 13, color: C.text, margin: 0, fontWeight: 500 }}>
+                ご回答いただいたアンケート
+              </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {completedSurveys.slice(0, 6).map((s) => {
+                const used = s.couponUsed;
+                const expired = s.couponExpiresAt && new Date(s.couponExpiresAt) < new Date();
+                return (
+                  <div
+                    key={s.surveyId}
+                    style={{
+                      padding: "10px 12px",
+                      backgroundColor: used ? C.cardAlt : "#fff",
+                      border: `1px solid ${used ? C.border : C.borderPink}`,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 11, color: C.textMuted, margin: 0, marginBottom: 2 }}>
+                          {new Date(s.submittedAt).toLocaleDateString("ja-JP")} ご回答
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                          <span style={{ color: C.accent, fontSize: 13, letterSpacing: 1 }}>
+                            {"★".repeat(s.ratingOverall)}
+                          </span>
+                          {s.therapistName && (
+                            <span style={{ fontSize: 10, color: C.accentDark }}>
+                              担当: {s.therapistName}
+                            </span>
+                          )}
+                        </div>
+                        {s.couponCode && (
+                          <p style={{ fontSize: 10, color: C.textSub, margin: 0, lineHeight: 1.5 }}>
+                            {used ? (
+                              <>
+                                ✓ {s.couponDiscountAmount.toLocaleString()}円OFF を{" "}
+                                <strong style={{ color: C.green }}>
+                                  {s.couponUsedAt && new Date(s.couponUsedAt).toLocaleDateString("ja-JP")}
+                                </strong>{" "}
+                                にご利用いただきました
+                              </>
+                            ) : expired ? (
+                              <span style={{ color: C.textMuted }}>
+                                有効期限切れ（{s.couponExpiresAt && new Date(s.couponExpiresAt).toLocaleDateString("ja-JP")}）
+                              </span>
+                            ) : (
+                              <>
+                                🎁 次回ご来店時に自動適用 ・有効期限{" "}
+                                <strong style={{ color: C.text }}>
+                                  {s.couponExpiresAt && new Date(s.couponExpiresAt).toLocaleDateString("ja-JP")}
+                                </strong>{" "}
+                                まで
+                              </>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          padding: "2px 8px",
+                          backgroundColor: used ? C.textMuted : (expired ? C.textFaint : C.accent),
+                          color: "#fff",
+                          letterSpacing: 0.5,
+                          flexShrink: 0,
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        {used ? "使用済" : expired ? "期限切れ" : "未使用"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {completedSurveys.length > 6 && (
+                <p style={{ fontSize: 10, color: C.textMuted, textAlign: "center", margin: 0 }}>
+                  他 {completedSurveys.length - 6} 件のアンケート履歴
+                </p>
+              )}
             </div>
           </div>
         )}

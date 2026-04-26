@@ -57,6 +57,7 @@ export async function GET(req: Request) {
         rating_overall,
         submitted_at,
         coupon_issued,
+        coupon_id,
         hp_publish_consent,
         hp_published
       `)
@@ -109,8 +110,45 @@ export async function GET(req: Request) {
     }
 
     // ─────────────────────────────────────
-    // 3. 未使用のクーポン
+    // 3. アンケート紐付けクーポン取得（使用/未使用すべて）
     // ─────────────────────────────────────
+    const surveyCouponIds = (completedSurveys || [])
+      .map((s) => s.coupon_id)
+      .filter((id): id is number => Boolean(id));
+
+    let couponMap: Record<number, {
+      code: string;
+      discountAmount: number;
+      issuedAt: string;
+      expiresAt: string;
+      usedAt: string | null;
+      usedReservationId: number | null;
+    }> = {};
+
+    if (surveyCouponIds.length > 0) {
+      const { data: surveyCoupons } = await supabase
+        .from("survey_coupons")
+        .select("id, code, discount_amount, issued_at, expires_at, used_at, used_reservation_id")
+        .in("id", surveyCouponIds);
+
+      if (surveyCoupons) {
+        couponMap = Object.fromEntries(
+          surveyCoupons.map((c) => [
+            c.id,
+            {
+              code: c.code,
+              discountAmount: c.discount_amount,
+              issuedAt: c.issued_at,
+              expiresAt: c.expires_at,
+              usedAt: c.used_at,
+              usedReservationId: c.used_reservation_id,
+            },
+          ])
+        );
+      }
+    }
+
+    // 未使用のクーポン一覧（ホーム表示用）
     const { data: coupons } = await supabase
       .from("survey_coupons")
       .select("id, code, discount_amount, issued_at, expires_at, used_at")
@@ -131,17 +169,26 @@ export async function GET(req: Request) {
         therapistId: r.therapist_id,
         therapistName: r.therapist_id ? therapistMap[r.therapist_id] || "" : "",
       })),
-      completed: (completedSurveys || []).map((s) => ({
-        surveyId: s.id,
-        reservationId: s.reservation_id,
-        therapistId: s.therapist_id,
-        therapistName: s.therapist_id ? therapistMap[s.therapist_id] || "" : "",
-        ratingOverall: s.rating_overall,
-        submittedAt: s.submitted_at,
-        couponIssued: s.coupon_issued,
-        hpPublishConsent: s.hp_publish_consent,
-        hpPublished: s.hp_published,
-      })),
+      completed: (completedSurveys || []).map((s) => {
+        const cInfo = s.coupon_id ? couponMap[s.coupon_id] : null;
+        return {
+          surveyId: s.id,
+          reservationId: s.reservation_id,
+          therapistId: s.therapist_id,
+          therapistName: s.therapist_id ? therapistMap[s.therapist_id] || "" : "",
+          ratingOverall: s.rating_overall,
+          submittedAt: s.submitted_at,
+          couponIssued: s.coupon_issued,
+          hpPublishConsent: s.hp_publish_consent,
+          hpPublished: s.hp_published,
+          // クーポン情報（使用状況を含む）
+          couponCode: cInfo?.code || null,
+          couponExpiresAt: cInfo?.expiresAt || null,
+          couponUsedAt: cInfo?.usedAt || null,
+          couponUsed: !!cInfo?.usedAt,
+          couponDiscountAmount: cInfo?.discountAmount || 0,
+        };
+      }),
       coupons: (coupons || []).map((c) => ({
         id: c.id,
         code: c.code,
