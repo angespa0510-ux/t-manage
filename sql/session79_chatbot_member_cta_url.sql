@@ -10,16 +10,16 @@
 --
 -- 影響:
 --   - 既存 hp_chatbot_settings レコードに member_cta_url が追加される
---   - デフォルト値は /customer-mypage (新お客様マイページのURL)
+--   - デフォルト値は /mypage (新お客様マイページのURL)
 -- ==========================================================================
 
 -- カラム追加 (デフォルト値付き)
 ALTER TABLE hp_chatbot_settings
-ADD COLUMN IF NOT EXISTS member_cta_url TEXT DEFAULT '/customer-mypage';
+ADD COLUMN IF NOT EXISTS member_cta_url TEXT DEFAULT '/mypage';
 
 -- 既存レコードに値を入れる (NULL の場合のみ)
 UPDATE hp_chatbot_settings
-SET member_cta_url = '/customer-mypage'
+SET member_cta_url = '/mypage'
 WHERE member_cta_url IS NULL OR member_cta_url = '';
 
 -- 確認

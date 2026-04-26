@@ -579,11 +579,11 @@ export default function HpChatbotAdminPage() {
               <input
                 value={settings.member_cta_url || ""}
                 onChange={(e) => setSettings({ ...settings, member_cta_url: e.target.value })}
-                placeholder="/customer-mypage"
+                placeholder="/mypage"
                 style={inputStyle(T)}
               />
               <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
-                💡 ボタンをタップしたときの遷移先。<code style={{ fontSize: 11 }}>/customer-mypage</code> や外部URL <code style={{ fontSize: 11 }}>https://...</code> も可
+                💡 ボタンをタップしたときの遷移先。<code style={{ fontSize: 11 }}>/mypage</code> や外部URL <code style={{ fontSize: 11 }}>https://...</code> も可
               </p>
             </Field>
 
