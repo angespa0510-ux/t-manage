@@ -14,7 +14,7 @@ import {
 } from "../../components/mypage/Icon";
 import CustomerDiaryTab from "../../components/mypage/CustomerDiaryTab";
 
-type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
+type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string; survey_opt_out?: boolean };
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number; point_used?: number };
 type Therapist = { id: number; name: string; age: number; height_cm: number; bust: number; waist: number; hip: number; cup: string; photo_url: string; status: string };
 type Course = { id: number; name: string; duration: number; price: number; description: string };
@@ -1565,6 +1565,64 @@ export default function CustomerMypage() {
           <h3 style={{ margin: "6px 0 4px", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>プッシュ通知</h3>
           <p style={{ margin: "0 0 14px", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>予約前日のリマインダーやお得なキャンペーン情報を受け取れます。</p>
           <PushToggle userType="customer" userId={customer.id} className="w-full" />
+        </div>
+
+        {/* ═══ アンケート通知設定（オプトアウト） ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Survey Settings</p>
+          <h3 style={{ margin: "6px 0 4px", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>🌸 アンケート通知</h3>
+          <p style={{ margin: "0 0 14px", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>
+            ご来店後のアンケートご回答のお願いをお知らせします。<br />
+            ご回答いただくと、次回ご来店時に1,000円OFFを自動適用します。
+          </p>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 14px",
+              backgroundColor: C.cardAlt,
+              border: `1px solid ${C.border}`,
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 500 }}>
+                アンケートのお願いを受け取る
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: 10, color: C.textMuted, lineHeight: 1.6 }}>
+                {customer.survey_opt_out
+                  ? "現在オフ：アンケートのお知らせは届きません"
+                  : "現在オン：施術後のアンケートお知らせが届きます"}
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={!customer.survey_opt_out}
+              onChange={async (e) => {
+                const optOut = !e.target.checked;
+                await supabase
+                  .from("customers")
+                  .update({ survey_opt_out: optOut })
+                  .eq("id", customer.id);
+                setCustomer({ ...customer, survey_opt_out: optOut });
+              }}
+              style={{
+                width: 44,
+                height: 24,
+                accentColor: C.accent,
+                cursor: "pointer",
+                marginLeft: 12,
+                flexShrink: 0,
+              }}
+            />
+          </label>
+
+          <p style={{ margin: "10px 0 0", fontSize: 10, color: C.textFaint, lineHeight: 1.6 }}>
+            ※ オフにしてもアンケートご回答は引き続き可能です。クーポンも問題なく発行されます。
+          </p>
         </div>
 
         {/* ═══ カード情報登録（API連携待ち・UI非表示） ═══

@@ -46,6 +46,7 @@ const LEGACY_REDIRECTS: Record<string, string> = {
   "/inventory": "/admin/inventory",
   "/room-assignments": "/admin/room-assignments",
   "/notification-dashboard": "/admin/notification-dashboard",
+  "/survey-dashboard": "/admin/survey-dashboard",
   "/diary-moderation": "/admin/diary-moderation",
   "/story-moderation": "/admin/story-moderation",
   "/bluesky-admin": "/admin/bluesky-admin",

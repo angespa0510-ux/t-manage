@@ -37,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { icon: "👥", label: "顧客一覧",       path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },
   { icon: "📝", label: "顧客登録",       path: "DASHBOARD_PAGE:顧客登録",    category: "顧客" },
   { icon: "🎁", label: "ポイント管理",    path: "DASHBOARD_PAGE:ポイント管理", category: "顧客" },
+  { icon: "🌸", label: "アンケート管理",  path: "/admin/survey-dashboard",          category: "顧客" },
   { icon: "🔔", label: "会員お知らせ投稿", path: "/admin/notification-post",         category: "顧客" },
   { icon: "📱", label: "お客様マイページ", path: "/mypage",           category: "顧客" },
 
