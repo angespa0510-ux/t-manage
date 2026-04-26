@@ -10,6 +10,7 @@ import { useToast } from "../../lib/toast";
 import { useConfirm } from "../../components/useConfirm";
 import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { useStaffSession } from "../../lib/staff-session";
+import { effectiveIsManager } from "../../lib/staff-permissions";
 
 const TherapistImportPanel = lazy(() => import("../../lib/therapist-import-panel"));
 
@@ -1019,8 +1020,12 @@ const generatePassword = () => {
                       if (next.length > 4) return;
                       setEditPinInput(next); setEditPinError("");
                       if (next.length === 4) {
-                        const { data } = await supabase.from("staff").select("role").eq("pin", next).eq("status", "active").maybeSingle();
-                        if (data && (data.role === "owner" || data.role === "manager")) { setEditPinAuthed(true); }
+                        // 健康診断レポート 2026-04-26 Fix #7: 旧式は role の生文字列を直比較していた。
+                        // lib/staff-permissions.ts の SSOT を経由して権限判定の一貫性を確保。
+                        const { data } = await supabase.from("staff")
+                          .select("role,company_position,override_is_manager")
+                          .eq("pin", next).eq("status", "active").maybeSingle();
+                        if (data && effectiveIsManager(data)) { setEditPinAuthed(true); }
                         else { setEditPinError("管理者PINが一致しません"); setEditPinInput(""); }
                       }
                     }} data-pin-key={n === "del" ? "del" : String(n)} className="h-12 rounded-xl text-[16px] font-medium cursor-pointer" style={{ backgroundColor: T.cardAlt, color: n === "del" ? "#c45555" : T.text, border: `1px solid ${T.border}` }}>{n === "del" ? "⌫" : n}</button>);

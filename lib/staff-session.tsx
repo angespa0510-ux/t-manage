@@ -1,6 +1,12 @@
 "use client";
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
+import {
+  effectiveIsManager,
+  effectiveCanTaxPortal,
+  effectiveCanCashDashboard,
+  effectiveCanCallAssistant,
+} from "./staff-permissions";
 
 type ActiveStaff = {
   id: number;
@@ -303,30 +309,13 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   // 各権限は「個別上書き (override_*) が設定されていればそれを優先、
   // NULL ならロール/法人ポジションベースのデフォルト判定」で決まる。
 
-  // 管理系操作: デフォルトで全ログインスタッフが有効 (基本みんなできる)
-  const defaultIsManager = !!activeStaff;
-
-  // 税理士ポータル: 社長/経営責任者/税理士、または responsible(supervisor) ロール
-  const defaultCanTaxPortal =
-    activeStaff?.company_position === "社長" ||
-    activeStaff?.company_position === "経営責任者" ||
-    activeStaff?.company_position === "税理士" ||
-    activeStaff?.role === "supervisor";
-
-  // 資金管理: 社長/経営責任者のみ (税理士は除外)
-  const defaultCanCashDashboard =
-    activeStaff?.company_position === "社長" ||
-    activeStaff?.company_position === "経営責任者";
-
-  // 通話AIアシスタント: 社長/経営責任者のみ（最も厳しい設定）
-  const defaultCanCallAssistant =
-    activeStaff?.company_position === "社長" ||
-    activeStaff?.company_position === "経営責任者";
-
-  const isManager = activeStaff?.override_is_manager ?? defaultIsManager;
-  const canAccessTaxPortal = activeStaff?.override_can_tax_portal ?? defaultCanTaxPortal;
-  const canAccessCashDashboard = activeStaff?.override_can_cash_dashboard ?? defaultCanCashDashboard;
-  const canAccessCallAssistant = defaultCanCallAssistant;
+  // 権限判定: lib/staff-permissions.ts の SSOT を使用
+  // (旧式は同じロジックが app/staff/page.tsx と本ファイルの2箇所に重複しており、
+  //  仕様変更時の同期漏れリスクがあった。Fix #7 で SSOT 化)
+  const isManager = activeStaff ? effectiveIsManager(activeStaff) : false;
+  const canAccessTaxPortal = activeStaff ? effectiveCanTaxPortal(activeStaff) : false;
+  const canAccessCashDashboard = activeStaff ? effectiveCanCashDashboard(activeStaff) : false;
+  const canAccessCallAssistant = activeStaff ? effectiveCanCallAssistant(activeStaff) : false;
 
   // PIN 未変更 = pin_updated_at が NULL（初期 PIN のまま）
   const needsPinChange = !!activeStaff && !activeStaff.pin_updated_at && !pinChangeDismissed;
