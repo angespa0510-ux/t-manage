@@ -8,6 +8,7 @@ import { CtiPopupProvider } from "../lib/cti-popup";
 import PinChangeModal from "../components/PinChangeModal";
 import PwaRegister from "../components/PwaRegister";
 import { VercelAnalyticsGate } from "../components/VercelAnalyticsGate";
+import { ClarityScript } from "../components/ClarityScript";
 import { METADATA_BASE_URL } from "../lib/site-urls";
 
 const geistSans = Geist({
@@ -64,6 +65,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col" style={{ margin: 0 }}>
         <ThemeProvider><ToastProvider><StaffSessionProvider><CtiPopupProvider>{children}<PinChangeModal /><PwaRegister /></CtiPopupProvider></StaffSessionProvider></ToastProvider></ThemeProvider>
         <VercelAnalyticsGate />
+        <ClarityScript />
       </body>
     </html>
   );
