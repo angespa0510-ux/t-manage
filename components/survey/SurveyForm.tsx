@@ -413,20 +413,40 @@ function ResultView({
           </p>
           <div
             style={{
-              padding: "8px 12px",
+              padding: "10px 12px",
               backgroundColor: "#fff",
               border: `1px dashed ${C.borderPink}`,
+              fontSize: 11,
+              color: C.textSub,
+              textAlign: "center",
+              lineHeight: 1.7,
+              marginBottom: 8,
+            }}
+          >
+            <p style={{ margin: 0, marginBottom: 4, color: C.accentDark, fontWeight: 500 }}>
+              ⚠️ ご利用条件
+            </p>
+            <p style={{ margin: 0, fontSize: 10 }}>
+              <strong style={{ color: C.text }}>90分以上のコース</strong>でのご利用に限ります<br />
+              1回のご予約につき1枚のみご利用可能・他の割引と併用可
+            </p>
+          </div>
+          <div
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#fff",
+              border: `1px solid ${C.border}`,
               fontSize: 10,
               color: C.textMuted,
               textAlign: "center",
               lineHeight: 1.6,
             }}
           >
-            ご利用詳細: 1,000円OFF・有効期限{" "}
+            有効期限{" "}
             <strong style={{ color: C.text }}>
               {new Date(result.couponExpiresAt).toLocaleDateString("ja-JP")}
             </strong>{" "}
-            まで・他の割引と併用可
+            まで
           </div>
         </div>
       )}

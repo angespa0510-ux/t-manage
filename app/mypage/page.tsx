@@ -758,6 +758,17 @@ export default function CustomerMypage() {
               アンケートご回答ありがとうございました🌸<br />
               ご予約・ご来店時に何もお伝えいただく必要はございません。
             </p>
+            <div style={{
+              padding: "8px 10px",
+              backgroundColor: C.accentBg,
+              border: `1px solid ${C.borderPink}`,
+              fontSize: 10,
+              color: C.accentDark,
+              lineHeight: 1.5,
+              marginBottom: 10,
+            }}>
+              ⚠️ <strong>90分以上のコース</strong>でのご利用に限ります（1回のご予約につき1枚のみ）
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {surveyCoupons.map((c) => (
                 <div
@@ -838,11 +849,14 @@ export default function CustomerMypage() {
                               </span>
                             ) : (
                               <>
-                                🎁 次回ご来店時に自動適用 ・有効期限{" "}
-                                <strong style={{ color: C.text }}>
-                                  {s.couponExpiresAt && new Date(s.couponExpiresAt).toLocaleDateString("ja-JP")}
-                                </strong>{" "}
-                                まで
+                                🎁 90分以上のコースで次回ご来店時に自動適用<br />
+                                <span style={{ fontSize: 9 }}>
+                                  有効期限{" "}
+                                  <strong style={{ color: C.text }}>
+                                    {s.couponExpiresAt && new Date(s.couponExpiresAt).toLocaleDateString("ja-JP")}
+                                  </strong>{" "}
+                                  まで
+                                </span>
                               </>
                             )}
                           </p>
