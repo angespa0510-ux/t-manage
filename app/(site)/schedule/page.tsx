@@ -162,7 +162,8 @@ export default function SchedulePage() {
         label="SCHEDULE"
         title="出勤スケジュール"
         subtitle="本日から1週間分のセラピスト出勤スケジュールをご確認いただけます。"
-        bgImage="/images/placeholder/schedule.jpg"
+        bgVideo="/videos/schedule.mp4"
+        bgVideoPoster="/videos/schedule-poster.jpg"
       />
 
       {/* 日付タブ */}
