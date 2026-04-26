@@ -1,3556 +1,1635 @@
 "use client";
-
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
-import TaxSupportWizard from "../../components/TaxSupportWizard";
-import TaxBookkeeping from "../../components/TaxBookkeeping";
-import { SITE, MARBLE } from "../../lib/site-theme";
-import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
 import InstallPrompt from "../../components/InstallPrompt";
-import TherapistChatTab from "../../components/therapist-chat-tab";
-import TherapistDiaryTab from "../../components/therapist-diary-tab";
+import { fetchActiveEvents, formatEventPeriod, type Event as EventItem } from "../../lib/events";
+import {
+  IconHome, IconCalendar, IconHeart, IconBell, IconSettings,
+  IconUser, IconPhone, IconClock, IconMapPin, IconCheck, IconClose,
+  IconEdit, IconWarning, IconLogout, IconArrowRight, IconSparkle,
+  IconCard, IconCamera,
+  StarRating, BellWithBadge,
+} from "../../components/mypage/Icon";
+import CustomerDiaryTab from "../../components/mypage/CustomerDiaryTab";
 
-/* ─────────────────────────────────────────────────────────────
- * セラピストマイページ デザインシステム (Session 60 Phase 1)
- *
- * 方針: HP (/app/(site)) の世界観を踏襲
- *  - 白基調 + ピンクアクセント + 明朝体
- *  - 大きな数字はサンセリフ(Inter/Geist系)で可読性重視
- *  - ダークモード廃止・ライト固定
- *  - 絵文字は機能識別のため残す（タブ/ステータス/カテゴリ）
- * ───────────────────────────────────────────────────────────── */
-const FONT_SERIF   = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
-const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
-const FONT_SANS    = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Geist', system-ui, sans-serif";
-
-// HP風のカラーパレット (既存コードの T.* 互換 shape)
-const T = {
-  bg:         SITE.color.bg,         // #ffffff
-  card:       SITE.color.surface,    // #ffffff
-  cardAlt:    SITE.color.surfaceAlt, // #faf6f1
-  border:     SITE.color.border,     // #e5ded6
-  text:       SITE.color.text,       // #2b2b2b
-  textSub:    SITE.color.textSub,    // #555555
-  textMuted:  SITE.color.textMuted,  // #8a8a8a
-  textFaint:  SITE.color.textFaint,  // #b5b5b5
-  accent:     SITE.color.pink,       // #e8849a
-  accentBg:   SITE.color.pinkSoft,   // #f7e3e7
-  accentDeep: SITE.color.pinkDeep,   // #c96b83
-} as const;
-
-// メインタブ（ボトムナビ5つ: 中央にチャット） / サブセグメント
-type MainTab = "home" | "work" | "chat" | "money" | "learn";
-const MAIN_TABS: { key: MainTab; emoji: string; label: string }[] = [
-  { key: "home",  emoji: "🏠", label: "ホーム" },
-  { key: "work",  emoji: "💼", label: "ワーク" },
-  { key: "chat",  emoji: "💬", label: "チャット" },
-  { key: "money", emoji: "💰", label: "マネー" },
-  { key: "learn", emoji: "📖", label: "ラーン" },
-];
-
-/* ───────── 型定義 ───────── */
-type Therapist = {
-  id: number; name: string; login_email: string; login_password: string;
-  has_invoice: boolean; has_withholding: boolean; transport_fee: number;
-  real_name: string; notes: string; status: string;
-};
-type Shift = { id: number; therapist_id: number; date: string; start_time: string; end_time: string; store_id: number; status: string };
-type ShiftRequest = { id: number; therapist_id: number; week_start: string; date: string; start_time: string; end_time: string; store_id: number; status: string; notes: string };
-type Settlement = {
-  id: number; therapist_id: number; date: string; total_sales: number; total_back: number;
-  order_count: number; adjustment: number; adjustment_note: string; invoice_deduction: number;
-  withholding_tax: number; welfare_fee: number; transport_fee: number; final_payment: number;
-  total_card: number; total_paypay: number; total_cash: number; is_settled: boolean;
-  gift_bonus_amount?: number;
-};
-type Reservation = {
-  id: number; customer_name: string; therapist_id: number; date: string; start_time: string;
-  end_time: string; course: string; notes: string; total_price: number; status: string;
-  nomination: string; nomination_fee: number; options_text: string; extension_name: string;
-};
-type CustomerNote = { id: number; therapist_id: number; customer_name: string; note: string; is_ng: boolean; ng_reason: string; rating: number; reservation_id?: number; updated_at?: string };
+type Customer = { id: number; name: string; self_name: string; phone: string; phone2: string; phone3: string; email: string; notes: string; rank: string; login_email: string; login_password: string; created_at: string; birthday: string };
+type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; total_price: number; status: string; nomination: string; nomination_fee: number; options_text: string; extension_name: string; extension_price: number; discount_name: string; discount_amount: number; card_base: number; paypay_amount: number; cash_amount: number; free_building_id?: number; point_used?: number };
+type Therapist = { id: number; name: string; age: number; height_cm: number; bust: number; waist: number; hip: number; cup: string; photo_url: string; status: string };
+type Course = { id: number; name: string; duration: number; price: number; description: string };
 type Store = { id: number; name: string };
+type Shift = { id: number; therapist_id: number; date: string; start_time: string; end_time: string; store_id: number; status: string };
+type Favorite = { id: number; customer_id: number; type: string; item_id: number; created_at: string };
+type PointRecord = { id: number; customer_id: number; amount: number; type: string; description: string; expires_at: string; created_at: string };
+type Notification = { id: number; title: string; body: string; type: string; image_url: string; target_customer_id: number | null; created_at: string };
+type CardInfo = { id: number; customer_id: number; brand: string; last4: string; holder_name: string; exp_month: number; exp_year: number; is_default: boolean; created_at: string };
+type Nomination = { id: number; name: string; price: number };
+type Discount = { id: number; name: string; amount: number; type: string };
+type Extension = { id: number; name: string; duration: number; price: number };
+type Option = { id: number; name: string; price: number };
+type Building = { id: number; store_id: number; name: string };
+type Room = { id: number; store_id: number; building_id: number; name: string };
+type CustomerTherapistMemo = { id: number; customer_id: number; therapist_id: number; reservation_id: number; rating: number; memo: string; created_at: string; updated_at: string };
 
 const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
-const TIMES: string[] = [];
-for (let h = 9; h <= 27; h++) { for (let m = 0; m < 60; m += 30) { const dh = h >= 24 ? h - 24 : h; TIMES.push(`${String(dh).padStart(2, "0")}:${String(m).padStart(2, "0")}`); } }
+const normPhone = (p: string) => p.replace(/[-\s\u3000()（）\u2010-\u2015\uff0d]/g, "");
+// HP（site-theme）と統一感を持たせたカラーパレット
+// ピンク基調 + ホワイト背景 + 明朝見出し
+const C = {
+  bg:         "#ffffff",   // ベース白
+  card:       "#ffffff",   // カード白
+  cardAlt:    "#faf6f1",   // サブカード（ごく淡いクリーム）
+  border:     "#e5ded6",   // HP罫線と同じ
+  borderPink: "#ead3da",   // ピンク寄りの罫線
+  accent:     "#e8849a",   // ブランドピンク（HPと同じ）
+  accentDark: "#c96b83",   // 濃ピンク
+  accentBg:   "#f7e3e7",   // 淡ピンク（HPのpinkSoft）
+  text:       "#2b2b2b",   // HPのtext
+  textSub:    "#555555",
+  textMuted:  "#8a8a8a",
+  textFaint:  "#b5b5b5",
+  green:      "#6b9b7e",   // 成功（少し落ち着いた緑）
+  red:        "#c96b83",   // 警告もピンク系に寄せる
+  blue:       "#6b8ba8",   // 補助情報
+};
+const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
+const NOTI_ICONS: Record<string, string> = { news: "📢", new_therapist: "🌟", campaign: "🎉" };
+const NOTI_LABELS: Record<string, string> = { news: "お知らせ", new_therapist: "新人紹介", campaign: "キャンペーン" };
+const timeToMin = (t: string) => { const [h, m] = t.split(":").map(Number); return (h < 9 ? h + 24 : h) * 60 + m; };
+const minToTime = (m: number) => { const h = Math.floor(m / 60); const mi = m % 60; return `${String(h >= 24 ? h - 24 : h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`; };
+const dateFmt = (d: string) => { const dt = new Date(d + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"]; return `${dt.getMonth() + 1}/${dt.getDate()}(${days[dt.getDay()]})`; };
+const dateNav = (d: string, offset: number) => { const dt = new Date(d + "T00:00:00"); dt.setDate(dt.getDate() + offset); return dt.toISOString().split("T")[0]; };
+const getWeekDates = (d: string) => { const dt = new Date(d + "T00:00:00"); const w = dt.getDay(); const mon = new Date(dt); mon.setDate(dt.getDate() - (w === 0 ? 6 : w - 1)); return Array.from({ length: 7 }, (_, i) => { const dd = new Date(mon); dd.setDate(mon.getDate() + i); return dd.toISOString().split("T")[0]; }); };
+const timeAgo = (d: string) => { const diff = Date.now() - new Date(d).getTime(); const mins = Math.floor(diff / 60000); if (mins < 60) return `${mins}分前`; const hrs = Math.floor(mins / 60); if (hrs < 24) return `${hrs}時間前`; const ds = Math.floor(hrs / 24); if (ds < 30) return `${ds}日前`; return new Date(d).toLocaleDateString("ja-JP"); };
 
-function getWeekStart(date: Date): string {
-  const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  return d.toISOString().split("T")[0];
-}
-function getWeekDates(weekStart: string): string[] {
-  const dates: string[] = []; const d = new Date(weekStart + "T00:00:00");
-  for (let i = 0; i < 7; i++) { const dd = new Date(d); dd.setDate(dd.getDate() + i); dates.push(dd.toISOString().split("T")[0]); }
-  return dates;
-}
-function formatDate(d: string): string {
-  const dt = new Date(d + "T00:00:00"); const days = ["日", "月", "火", "水", "木", "金", "土"];
-  return `${dt.getMonth() + 1}/${dt.getDate()}(${days[dt.getDay()]})`;
-}
+const linkify = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) => urlRegex.test(part) ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: "#6b8ba8", textDecoration: "underline" }}>{part}</a> : part);
+};
 
-export default function TherapistMyPage() {
+export default function CustomerMypage() {
   const { confirm, ConfirmModalNode } = useConfirm();
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [therapist, setTherapist] = useState<Therapist | null>(null);
-  const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
-  const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "gift" | "chat" | "diary">("home");
-  // ワーク / マネー / ラーン タブ内のサブセグメント
-  const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers" | "diary">("schedule");
-  const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax" | "gift">("salary");
-  const [learnSub, setLearnSub] = useState<"notifications" | "manual">("notifications");
-  // ボトムナビ→実タブへのディスパッチ
-  const clickMain = (m: MainTab) => {
-    if (m === "home") setTab("home");
-    else if (m === "work") setTab(workSub);
-    else if (m === "chat") setTab("chat");
-    else if (m === "money") setTab(moneySub);
-    else setTab(learnSub);
-  };
-  // 現在の実タブから メインタブを逆引き
-  const getMainTab = (t: string): MainTab => {
-    if (t === "home") return "home";
-    if (t === "chat") return "chat";
-    if (t === "shift" || t === "schedule" || t === "customers" || t === "work") return "work";
-    if (t === "salary" || t === "cert" || t === "tax" || t === "gift" || t === "money") return "money";
-    return "learn";
-  };
-  const mainTab = getMainTab(tab);
-  const [shifts, setShifts] = useState<Shift[]>([]); const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
-  const [settlements, setSettlements] = useState<Settlement[]>([]); const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [allReservations, setAllReservations] = useState<Reservation[]>([]); const [customerNotes, setCustomerNotes] = useState<CustomerNote[]>([]);
-  const [todayOrders, setTodayOrders] = useState<Reservation[]>([]);
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "register" | "reset">("login");
+  const [authEmail, setAuthEmail] = useState(""); const [authPw, setAuthPw] = useState(""); const [authName, setAuthName] = useState(""); const [authPhone, setAuthPhone] = useState(""); const [authError, setAuthError] = useState(""); const [authLoading, setAuthLoading] = useState(false); const [showPw, setShowPw] = useState(false);
+  const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
+  const [tab, setTab] = useState<"home" | "schedule" | "favorites" | "notifications" | "settings" | "diary">("home");
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
-  const [allRooms, setAllRooms] = useState<{id:number;name:string;store_id:number;building_id:number;key_number?:string}[]>([]);
-  const [buildings, setBuildings] = useState<{id:number;name:string}[]>([]);
-  const [roomAssigns, setRoomAssigns] = useState<{therapist_id:number;room_id:number;date:string}[]>([]);
-  const [coursesMaster, setCoursesMaster] = useState<{ id: number; name: string; therapist_back: number }[]>([]);
-const [nomsMaster, setNomsMaster] = useState<{ id: number; name: string; back_amount: number }[]>([]);
-const [extsMaster, setExtsMaster] = useState<{ id: number; name: string; therapist_back: number }[]>([]);
-const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapist_back: number }[]>([]);
-  const [weekOffset, setWeekOffset] = useState(1);
-  const [reqDrafts, setReqDrafts] = useState<Record<string, { enabled: boolean; start: string; end: string; store_id: number; notes: string }>>({});
-  const [reqSaving, setReqSaving] = useState(false); const [reqMsg, setReqMsg] = useState(""); const [copiedShift, setCopiedShift] = useState(false);
-  const [salaryMonth, setSalaryMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
-  const [salaryViewMode, setSalaryViewMode] = useState<"monthly" | "annual">("monthly");
-  const [salaryYear, setSalaryYear] = useState(() => new Date().getFullYear());
-  const [annualSettlements, setAnnualSettlements] = useState<Settlement[]>([]);
-  const [annualLoading, setAnnualLoading] = useState(false);
-  const [storeInfo, setStoreInfo] = useState<{ company_name?: string; company_address?: string; company_phone?: string; invoice_number?: string } | null>(null);
-  const [certChecks, setCertChecks] = useState<{ label: string; ok: boolean }[]>([]);
-  const [certEligible, setCertEligible] = useState(false);
-  const [noteSearch, setNoteSearch] = useState(""); const [showAddNote, setShowAddNote] = useState(false);
-  const [noteForm, setNoteForm] = useState({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 })
-  const [noteViewTarget, setNoteViewTarget] = useState<CustomerNote | null>(null);
-  const [noteHistoryCustomer, setNoteHistoryCustomer] = useState("");
-  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
-　const [calShifts, setCalShifts] = useState<Shift[]>([]);
-　const [calSettlements, setCalSettlements] = useState<Settlement[]>([]);
-　const [calReservations, setCalReservations] = useState<Reservation[]>([]);
-　const [calDetailDate, setCalDetailDate] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [points, setPoints] = useState<PointRecord[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [readNotifIds, setReadNotifIds] = useState<number[]>([]);
+  const [cards, setCards] = useState<CardInfo[]>([]);
+  const [setEmail, setSetEmail] = useState(""); const [setPw, setSetPw] = useState(""); const [setPwConfirm, setSetPwConfirm] = useState(""); const [settingMsg, setSettingMsg] = useState(""); const [settingSaving, setSettingSaving] = useState(false); const [setBday, setSetBday] = useState(""); const [setSelfN, setSetSelfN] = useState("");
+  const [showAddCard, setShowAddCard] = useState(false); const [cardBrand, setCardBrand] = useState("visa"); const [cardLast4, setCardLast4] = useState(""); const [cardHolder, setCardHolder] = useState(""); const [cardExpMonth, setCardExpMonth] = useState(1); const [cardExpYear, setCardExpYear] = useState(new Date().getFullYear());
 
-  // ── セラピストお知らせ関連 (セッション㊸) ──
-  type TherapistNotification = { id: number; title: string; body: string; type: string; target_therapist_id: number | null; created_at: string };
-  const [notifications, setNotifications] = useState<TherapistNotification[]>([]);
-  const [notifReadIds, setNotifReadIds] = useState<number[]>([]);
-  const [notifDetail, setNotifDetail] = useState<TherapistNotification | null>(null);
+  // スケジュール
+  const [schedDate, setSchedDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [schedView, setSchedView] = useState<"day" | "weekly" | "form" | "history">("day");
+  const [schedShifts, setSchedShifts] = useState<Shift[]>([]);
+  const [schedRes, setSchedRes] = useState<Reservation[]>([]);
+  // 週間
+  const [weeklyTid, setWeeklyTid] = useState(0);
+  const [weekShifts, setWeekShifts] = useState<Shift[]>([]);
+  const [weekRes, setWeekRes] = useState<Reservation[]>([]);
+  // 予約フォーム
+  const [bookTherapistId, setBookTherapistId] = useState(0);
+  const [bookDate, setBookDate] = useState("");
+  const [bookTime, setBookTime] = useState("12:00");
+  const [bookCourseId, setBookCourseId] = useState(0);
+  const [bookStoreId, setBookStoreId] = useState(0);
+  const [bookNotes, setBookNotes] = useState("");
+  const [bookSaving, setBookSaving] = useState(false);
+  const [bookMsg, setBookMsg] = useState("");
+  const [bookDiscountId, setBookDiscountId] = useState(0);
+  const [bookOptions, setBookOptions] = useState<number[]>([]);
+  const [bookExtId, setBookExtId] = useState(0);
+  const [bookPointUse, setBookPointUse] = useState(0);
+  const [bookDone, setBookDone] = useState(false);
+  const [nominations, setNominations] = useState<Nomination[]>([]);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [extensions, setExtensions] = useState<Extension[]>([]);
+  const [optionsList, setOptionsList] = useState<Option[]>([]);
+  // ポイント
+  const [showPoints, setShowPoints] = useState(false);
+  const [rankRules, setRankRules] = useState<{rank_name:string;multiplier:number;min_visits_in_period:number;period_months:number;min_total_visits:number}[]>([]);
+  const [recentVisitCount, setRecentVisitCount] = useState(0);
+  const [tickerMsgs, setTickerMsgs] = useState<string[]>([]);
+  const [ngTherapistIdsForMe, setNgTherapistIdsForMe] = useState<Set<number>>(new Set());
+  const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null);
+  const [cancelMsg, setCancelMsg] = useState("");
+  const [cancelPhone, setCancelPhone] = useState("070-1675-5900");
+  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [freeMode, setFreeMode] = useState(false); // フリー予約モード
+  const [bookFreeBuildingId, setBookFreeBuildingId] = useState<number | null>(null);
+  // セラピストメモ（1接客ごと）
+  const [customerMemos, setCustomerMemos] = useState<CustomerTherapistMemo[]>([]);
+  const [editMemoResId, setEditMemoResId] = useState(0);
+  const [editMemoTherapistId, setEditMemoTherapistId] = useState(0);
+  const [editMemoRating, setEditMemoRating] = useState(0);
+  const [editMemoText, setEditMemoText] = useState("");
+  const [memoSaving, setMemoSaving] = useState(false);
+  const [showMemoModal, setShowMemoModal] = useState(false);
 
-  // ── マニュアル関連 ──
-  type ManualCategory = { id: number; name: string; icon: string; color: string; description: string; sort_order: number };
-  type ManualArticle = { id: number; title: string; category_id: number | null; content: string; cover_image: string; tags: string[]; is_published: boolean; is_pinned: boolean; view_count: number; sort_order: number; created_at: string; updated_at: string };
-  type ManualQA = { id: number; article_id: number; question: string; answer: string; sort_order: number };
-  type ManualUpdate = { id: number; article_id: number; summary: string; updated_by: string; created_at: string };
-  const [manualCats, setManualCats] = useState<ManualCategory[]>([]);
-  const [manualArticles, setManualArticles] = useState<ManualArticle[]>([]);
-  const [manualReads, setManualReads] = useState<number[]>([]);
-  // チャット（未読数・最新メッセージ）
-  const [chatUnread, setChatUnread] = useState(0);
-  const [chatLatestPreview, setChatLatestPreview] = useState<{
-    title: string;
-    preview: string;
-    at: string;
-    convId: number;
-  } | null>(null);
-  const [manualUpdates, setManualUpdates] = useState<ManualUpdate[]>([]);
-  const [manualSelCat, setManualSelCat] = useState<number | null>(null);
-  const [manualSearch, setManualSearch] = useState("");
-  const [manualFilterTag, setManualFilterTag] = useState("");
-  const [manualViewArticle, setManualViewArticle] = useState<ManualArticle | null>(null);
-  const [manualViewQAs, setManualViewQAs] = useState<ManualQA[]>([]);
-  const [manualOpenQA, setManualOpenQA] = useState<number | null>(null);
-  const [manualHistory, setManualHistory] = useState<ManualArticle[]>([]);
-  const [aiChatOpen, setAiChatOpen] = useState(false);
-  const [aiChatMessages, setAiChatMessages] = useState<{ role: "user" | "ai"; content: string; logId?: number; rating?: number }[]>([]);
-  const [aiChatInput, setAiChatInput] = useState("");
-  const [aiChatLoading, setAiChatLoading] = useState(false);
-  const [taxSubTab, setTaxSubTab] = useState<"support" | "ledger">("support");
-  const [aiChatOpenG, setAiChatOpenG] = useState(false);
-  const [aiChatMsgsG, setAiChatMsgsG] = useState<{ role: "user" | "ai"; text: string; cached?: boolean }[]>([]);
-  const [aiChatInputG, setAiChatInputG] = useState("");
-  const [aiChatLoadingG, setAiChatLoadingG] = useState(false);
-  const [chatBtnPos, setChatBtnPos] = useState({ x: -1, y: -1 });
-  const chatDragRef = useRef<{ dragging: boolean; startX: number; startY: number; origX: number; origY: number }>({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
-  const [aiListening, setAiListening] = useState(false);
-  const [aiSessionCount, setAiSessionCount] = useState(0);
+  // イベント（マイページ用に取得・Session 56）
+  const [customerEvents, setCustomerEvents] = useState<EventItem[]>([]);
 
-  // ─── 情報配信報酬 (受領ポイント) ────────────────────────
-  type GiftSummary = {
-    totalReceivedPoints: number;
-    totalReceivedCount: number;
-    currentBalancePoints: number;
-    thisMonthReceived: number;
-    thisYearReceived: number;
-    lastReceivedAt: string | null;
-    firstReceivedAt: string | null;
-  };
-  type GiftTx = {
-    id: number;
-    senderName: string;
-    sourceType: string;
-    sourceId: number | null;
-    giftKind: string;
-    giftLabel: string | null;
-    giftEmoji: string | null;
-    pointAmount: number;
-    message: string | null;
-    createdAt: string;
-  };
-  type GiftKindAgg = { kind: string; emoji: string; label: string; count: number; points: number };
-  type GiftMonthlyAgg = { yearMonth: string; points: number; count: number };
-  const [giftSummary, setGiftSummary] = useState<GiftSummary | null>(null);
-  const [giftTransactions, setGiftTransactions] = useState<GiftTx[]>([]);
-  const [giftKindBreakdown, setGiftKindBreakdown] = useState<GiftKindAgg[]>([]);
-  const [giftMonthlyBreakdown, setGiftMonthlyBreakdown] = useState<GiftMonthlyAgg[]>([]);
-  const [giftLoading, setGiftLoading] = useState(false);
+  useEffect(() => { const saved = localStorage.getItem("customer_mypage_id"); if (saved) { supabase.from("customers").select("*").eq("id", Number(saved)).single().then(({ data }) => { if (data) { setCustomer(data); setSetEmail(data.login_email || ""); setSetBday(data.birthday || ""); setSetSelfN(data.self_name || data.name || ""); } }); } }, []);
 
-  // 換金申請関連
-  type GiftPayout = {
-    id: number;
-    therapist_id: number;
-    requested_points: number;
-    requested_amount_yen: number;
-    store_fee_amount: number;
-    invoice_deduction: number;
-    withholding_tax: number;
-    net_payout_amount: number;
-    has_invoice_at_request: boolean;
-    has_withholding_at_request: boolean;
-    status: "pending" | "paid" | "cancelled";
-    requested_at: string;
-    settlement_date: string | null;
-    paid_at: string | null;
-    cancelled_at: string | null;
-  };
-  const [giftPayouts, setGiftPayouts] = useState<GiftPayout[]>([]);
-  const [payoutModalOpen, setPayoutModalOpen] = useState(false);
-  const [payoutAmountInput, setPayoutAmountInput] = useState("1000");
-  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
-  const [payoutError, setPayoutError] = useState<string | null>(null);
+  // URLパラメータ ?register=1 で登録モードで開く（HPからの会員登録導線）
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("register") === "1") {
+      setAuthMode("register");
+    }
+  }, []);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
-    setLoginLoading(true); setLoginError("");
-    const { data } = await supabase.from("therapists").select("*").eq("login_email", email.trim()).eq("login_password", password.trim()).maybeSingle();
-    setLoginLoading(false);
-    if (data) { setTherapist(data); setLoggedIn(true); localStorage.setItem("therapist_session", JSON.stringify({ id: data.id, email: data.login_email })); }
-    else { setLoginError("メールアドレスまたはパスワードが間違っています"); }
+  // イベント取得（ログイン中のみ）
+  useEffect(() => {
+    if (!customer) return;
+    fetchActiveEvents("mypage").then((es) => {
+      // members_only を含む形で取得済み。ログイン中なので全部見せてOK
+      setCustomerEvents(es);
+    });
+  }, [customer]);
+  useEffect(() => { supabase.from("store_settings").select("value").eq("key", "cancel_phone").maybeSingle().then(({ data }) => { if (data?.value) setCancelPhone(data.value); }); }, []);
+
+  const fetchData = useCallback(async () => {
+    if (!customer) return;
+    const { data: r } = await supabase.from("reservations").select("*").eq("customer_name", customer.name).order("date", { ascending: false }); if (r) setReservations(r);
+    const { data: t } = await supabase.from("therapists").select("id,name,age,height_cm,bust,waist,hip,cup,photo_url,status").eq("status", "active").order("sort_order"); if (t) setTherapists(t);
+    const { data: c } = await supabase.from("courses").select("id,name,duration,price,description").order("id"); if (c) setCourses(c);
+    const { data: s } = await supabase.from("stores").select("*").order("id"); if (s) setStores(s);
+    const { data: f } = await supabase.from("customer_favorites").select("*").eq("customer_id", customer.id).order("created_at", { ascending: false }); if (f) setFavorites(f);
+    const { data: rr } = await supabase.from("rank_point_multipliers").select("*").order("min_total_visits", { ascending: true }); if (rr) setRankRules(rr);
+    const since3m = new Date(); since3m.setMonth(since3m.getMonth() - 3);
+    const { count: rc } = await supabase.from("reservations").select("*", { count: "exact", head: true }).eq("customer_name", customer.name).eq("status", "completed").gte("date", since3m.toISOString().split("T")[0]);
+    setRecentVisitCount(rc || 0);
+    const { data: p } = await supabase.from("customer_points").select("*").eq("customer_id", customer.id).order("created_at", { ascending: false }); if (p) { setPoints(p); /* 期限切れ間近ポイント通知 */ const { data: ps } = await supabase.from("point_settings").select("expiry_notify_days").limit(1).single(); const notifyDays = ps?.expiry_notify_days || 30; const now = new Date(); const warnDate = new Date(); warnDate.setDate(warnDate.getDate() + notifyDays); const expiringPts = p.filter(pt => pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= warnDate); if (expiringPts.length > 0) { const totalExpiring = expiringPts.reduce((s, pt) => s + pt.amount, 0); const nearestExpiry = expiringPts.sort((a, b) => new Date(a.expires_at).getTime() - new Date(b.expires_at).getTime())[0]; const expiryStr = new Date(nearestExpiry.expires_at).toLocaleDateString("ja-JP"); const descKey = `ポイント期限通知_${expiryStr}`; const { data: existNotify } = await supabase.from("customer_notifications").select("id").eq("target_customer_id", customer.id).eq("title", "⏰ ポイント有効期限のお知らせ").like("body", `%${expiryStr}%`).maybeSingle(); if (!existNotify) { await supabase.from("customer_notifications").insert({ title: "⏰ ポイント有効期限のお知らせ", body: `${totalExpiring.toLocaleString()}ptが${expiryStr}までに期限切れになります。お早めにご利用ください！`, type: "campaign", target_customer_id: customer.id }); } } }
+    const { data: n } = await supabase.from("customer_notifications").select("*").or(`target_customer_id.is.null,target_customer_id.eq.${customer.id}`).order("created_at", { ascending: false }); if (n) setNotifications(n);
+    const { data: nr } = await supabase.from("customer_notification_reads").select("notification_id").eq("customer_id", customer.id); if (nr) setReadNotifIds(nr.map((x: { notification_id: number }) => x.notification_id));
+    const { data: cd } = await supabase.from("customer_cards").select("*").eq("customer_id", customer.id).order("is_default", { ascending: false }); if (cd) setCards(cd);
+    const { data: nom } = await supabase.from("nominations").select("id,name,price").order("id"); if (nom) setNominations(nom);
+    const { data: disc } = await supabase.from("discounts").select("id,name,amount,type,web_available,newcomer_only,valid_from,valid_until,combinable").order("id"); if (disc) setDiscounts(disc.filter(d => d.web_available !== false));
+    const { data: ext } = await supabase.from("extensions").select("id,name,duration,price").order("duration"); if (ext) setExtensions(ext);
+    const { data: opts } = await supabase.from("options").select("id,name,price").order("id"); if (opts) setOptionsList(opts);
+    const { data: bl } = await supabase.from("buildings").select("*"); if (bl) setBuildings(bl);
+    // NGセラピスト取得（このお客様をNGにしたセラピスト）
+    const { data: ngNotes } = await supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", customer.name).eq("is_ng", true);
+    if (ngNotes) setNgTherapistIdsForMe(new Set(ngNotes.map(n => n.therapist_id)));
+    // お客様セラピストメモ取得
+    try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer.id); if (memos) setCustomerMemos(memos); } catch {}
+  }, [customer]);
+  useEffect(() => { if (customer) fetchData(); }, [customer, fetchData]);
+
+  // 当日スケジュール取得
+  const fetchDaySchedule = useCallback(async (date: string) => {
+    const { data: sh } = await supabase.from("shifts").select("*").eq("date", date).eq("status", "confirmed").order("start_time"); if (sh) setSchedShifts(sh);
+    const { data: res } = await supabase.from("reservations").select("*").eq("date", date).not("status", "eq", "cancelled").order("start_time"); if (res) setSchedRes(res);
+  }, []);
+  useEffect(() => { if (customer && tab === "schedule") { fetchDaySchedule(schedDate); } }, [schedDate, tab, customer, fetchDaySchedule]);
+
+  // 週間スケジュール取得
+  const fetchWeekSchedule = useCallback(async (tid: number, baseDate: string) => {
+    const dates = getWeekDates(baseDate);
+    const s = dates[0]; const e = dates[6];
+    const { data: sh } = await supabase.from("shifts").select("*").eq("therapist_id", tid).gte("date", s).lte("date", e).eq("status", "confirmed").order("date"); if (sh) setWeekShifts(sh);
+    const { data: res } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", s).lte("date", e).not("status", "eq", "cancelled").order("start_time"); if (res) setWeekRes(res);
+  }, []);
+
+  const openBookForm = (date: string, time: string, tid: number) => {
+    const shift = schedShifts.find(s => s.therapist_id === tid && s.date === date) || weekShifts.find(s => s.therapist_id === tid && s.date === date);
+    setBookDate(date); setBookTime(time); setBookTherapistId(tid); setBookCourseId(0);
+    setBookStoreId(shift?.store_id || (stores.length > 0 ? stores[0].id : 0));
+    setBookNotes(""); setBookMsg(""); setBookDiscountId(0); setBookOptions([]); setBookExtId(0); setBookPointUse(0); setBookDone(false); setFreeMode(false); setBookFreeBuildingId(null); setSchedView("form");
   };
 
+  // 指名判定
+  const getNominationType = (tid: number): { name: string; label: string; price: number } => {
+    if (tid === 0) return { name: "フリー", label: "🎲 おまかせフリー", price: 0 };
+    const pastWithTherapist = reservations.some(r => r.therapist_id === tid && r.status === "completed");
+    if (pastWithTherapist) { const n = nominations.find(n => n.name.includes("本指名")); return { name: n?.name || "本指名", label: "⭐ 本指名（リピーター）", price: n?.price || 0 }; }
+    else { const n = nominations.find(n => n.name.includes("P指名") || n.name.includes("パネル")); return { name: n?.name || "P指名", label: "✨ P指名（初めて）", price: n?.price || 0 }; }
+  };
+
+  // 認証
+  const handleLogin = async () => { setAuthError(""); setAuthLoading(true); const { data, error } = await supabase.from("customers").select("*").eq("login_email", authEmail.trim()).eq("login_password", authPw).single(); setAuthLoading(false); if (error || !data) { setAuthError("メールアドレスまたはパスワードが正しくありません"); return; } setCustomer(data); localStorage.setItem("customer_mypage_id", String(data.id)); setSetEmail(data.login_email || ""); setSetBday(data.birthday || ""); setSetSelfN(data.self_name || data.name || ""); };
+  const handleRegister = async () => { setAuthError(""); setAuthLoading(true); if (!authName.trim() || !authEmail.trim() || !authPw) { setAuthError("すべての項目を入力してください"); setAuthLoading(false); return; } if (authPw.length < 6) { setAuthError("パスワードは6文字以上にしてください"); setAuthLoading(false); return; } const { data: dup } = await supabase.from("customers").select("id").eq("login_email", authEmail.trim()); if (dup && dup.length > 0) { setAuthError("このメールアドレスは既に登録されています"); setAuthLoading(false); return; } let custId = 0; const ph = normPhone(authPhone); if (ph) { const { data: existing } = await supabase.from("customers").select("*").or(`phone.eq.${ph},phone2.eq.${ph},phone3.eq.${ph}`); if (existing && existing.length > 0) { await supabase.from("customers").update({ self_name: authName.trim(), login_email: authEmail.trim(), login_password: authPw }).eq("id", existing[0].id); custId = existing[0].id; } } if (custId === 0) { const { data: newCust, error: insErr } = await supabase.from("customers").insert({ name: authName.trim(), self_name: authName.trim(), phone: ph, email: authEmail.trim(), login_email: authEmail.trim(), login_password: authPw, rank: "normal" }).select().single(); if (insErr) { setAuthError("登録に失敗しました: " + insErr.message); setAuthLoading(false); return; } if (newCust) custId = newCust.id; } setAuthLoading(false); const { data: loginData } = await supabase.from("customers").select("*").eq("id", custId).single(); if (loginData) { setCustomer(loginData); localStorage.setItem("customer_mypage_id", String(loginData.id)); setSetEmail(loginData.login_email || ""); setSetBday(loginData.birthday || ""); setSetSelfN(loginData.self_name || loginData.name || ""); /* 初回登録ボーナス */ const { data: ps } = await supabase.from("point_settings").select("registration_bonus,expiry_months").limit(1).single(); if (ps && ps.registration_bonus > 0) { const { data: existBonus } = await supabase.from("customer_points").select("id").eq("customer_id", custId).eq("description", "🎉 初回会員登録ボーナス").maybeSingle(); if (!existBonus) { const expAt = new Date(); expAt.setMonth(expAt.getMonth() + (ps.expiry_months || 12)); await supabase.from("customer_points").insert({ customer_id: custId, amount: ps.registration_bonus, type: "earn", description: "🎉 初回会員登録ボーナス", expires_at: expAt.toISOString() }); await supabase.from("customer_notifications").insert({ title: "🎉 ようこそ！登録ボーナスをプレゼント", body: `会員登録ありがとうございます！${ps.registration_bonus}ptをプレゼントしました。ぜひご利用ください♪`, type: "campaign", target_customer_id: custId }); } } } };
+  const handleLogout = () => { setCustomer(null); localStorage.removeItem("customer_mypage_id"); setTab("home"); };
   const handleResetPassword = async () => {
-    setResetMsg(""); setLoginLoading(true);
+    setResetMsg(""); setAuthLoading(true);
     try {
       const res = await fetch("/api/password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: resetPhone, type: "therapist" }),
+        body: JSON.stringify({ phone: resetPhone }),
       });
       const data = await res.json();
       if (data.success) {
         setResetDone(true);
-        setResetMsg(data.emailSent ? `✅ 新しいパスワードを ${data.maskedEmail} に送信しました` : "✅ パスワードを再発行しました。オーナーにお問い合わせください。");
+        setResetMsg(data.emailSent ? `✅ 新しいパスワードを ${data.maskedEmail} に送信しました` : `✅ パスワードを再発行しました。お店にお問い合わせください。`);
       } else {
         setResetMsg(data.error || "エラーが発生しました");
       }
     } catch { setResetMsg("通信エラーが発生しました"); }
-    setLoginLoading(false);
+    setAuthLoading(false);
   };
+  const isFav = (type: string, itemId: number) => favorites.some(f => f.type === type && f.item_id === itemId);
+  const toggleFav = async (type: string, itemId: number) => { if (!customer) return; const ex = favorites.find(f => f.type === type && f.item_id === itemId); if (ex) { await supabase.from("customer_favorites").delete().eq("id", ex.id); } else { await supabase.from("customer_favorites").insert({ customer_id: customer.id, type, item_id: itemId }); } fetchData(); };
+  const pointBalance = points.reduce((sum, p) => sum + p.amount, 0);
 
+  // テロップ: リアルタイム予約速報
   useEffect(() => {
-    const session = localStorage.getItem("therapist_session");
-    if (session) { const { id } = JSON.parse(session); supabase.from("therapists").select("*").eq("id", id).maybeSingle().then(({ data }) => { if (data) { setTherapist(data); setLoggedIn(true); } else localStorage.removeItem("therapist_session"); }); }
-    // URLクエリパラメータから初期タブを設定（例: /mypage?tab=tax）
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const t = params.get("tab");
-      if (t && ["home", "shift", "schedule", "salary", "customers", "manual", "tax", "cert"].includes(t)) {
-        setTab(t as typeof tab);
-      }
-    }
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    if (!therapist) return; const tid = therapist.id;
-    const { data: st } = await supabase.from("stores").select("*"); if (st) setStores(st);
-    const { data: rms } = await supabase.from("rooms").select("id,name,store_id,building_id,key_number"); if (rms) setAllRooms(rms);
-    const { data: blds } = await supabase.from("buildings").select("id,name"); if (blds) setBuildings(blds);
-    const todayStr2 = new Date().toISOString().split("T")[0];
-    const { data: ras } = await supabase.from("room_assignments").select("therapist_id,room_id,date").eq("therapist_id", tid).gte("date", todayStr2); if (ras) setRoomAssigns(ras);
-    const { data: crsM } = await supabase.from("courses").select("id,name,therapist_back"); if (crsM) setCoursesMaster(crsM);
-    const { data: nm } = await supabase.from("nominations").select("id,name,back_amount"); if (nm) setNomsMaster(nm);
-    const { data: em } = await supabase.from("extensions").select("id,name,therapist_back"); if (em) setExtsMaster(em);
-    const { data: om } = await supabase.from("options").select("id,name,therapist_back"); if (om) setOptsMaster(om);
-    const now = new Date(); const m1 = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-    const m2end = new Date(now.getFullYear(), now.getMonth() + 2, 0); const m2 = m2end.toISOString().split("T")[0];
-    const { data: sh } = await supabase.from("shifts").select("*").eq("therapist_id", tid).gte("date", m1).lte("date", m2).eq("status", "confirmed").order("date"); if (sh) setShifts(sh);
-    const { data: sr } = await supabase.from("shift_requests").select("*").eq("therapist_id", tid).order("date"); if (sr) setShiftRequests(sr);
-    const [sy, sm] = salaryMonth.split("-").map(Number); const dim = new Date(sy, sm, 0).getDate();
-    const { data: stl } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", tid).gte("date", `${salaryMonth}-01`).lte("date", `${salaryMonth}-${String(dim).padStart(2, "0")}`).eq("is_settled", true).order("date"); if (stl) setSettlements(stl);
-    const d30 = new Date(); d30.setDate(d30.getDate() - 30);
-    const { data: res } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", d30.toISOString().split("T")[0]).eq("status", "completed").order("date", { ascending: false }); if (res) setReservations(res);
-    const { data: allRes } = await supabase.from("reservations").select("*").eq("therapist_id", tid).eq("status", "completed").order("date", { ascending: false }); if (allRes) setAllReservations(allRes);
-    // 本日の全オーダー（キャンセル以外）
-    const todayStr = new Date().toISOString().split("T")[0];
-    const { data: todayR } = await supabase.from("reservations").select("*").eq("therapist_id", tid).eq("date", todayStr).neq("status", "cancelled").order("start_time"); if (todayR) setTodayOrders(todayR);
-    const { data: cn } = await supabase.from("therapist_customer_notes").select("*").eq("therapist_id", tid).order("customer_name"); if (cn) setCustomerNotes(cn);
-    const [cy, cm] = calMonth.split("-").map(Number);
-    const calDim = new Date(cy, cm, 0).getDate();
-    const calStart = `${calMonth}-01`; const calEnd = `${calMonth}-${String(calDim).padStart(2, "0")}`;
-    const { data: csh } = await supabase.from("shifts").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("status", "confirmed"); if (csh) setCalShifts(csh);
-    const { data: cstl } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("is_settled", true); if (cstl) setCalSettlements(cstl);
-    const { data: cres } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).neq("status", "cancelled"); if (cres) setCalReservations(cres);
-    // マニュアルデータ
-    const { data: mc } = await supabase.from("manual_categories").select("*").order("sort_order"); if (mc) setManualCats(mc);
-    const { data: ma } = await supabase.from("manual_articles").select("*").eq("is_published", true).order("sort_order").order("created_at", { ascending: false }); if (ma) setManualArticles(ma);
-    const { data: mr } = await supabase.from("manual_reads").select("article_id").eq("therapist_id", tid); if (mr) setManualReads(mr.map((r: any) => r.article_id));
-    const { data: mu } = await supabase.from("manual_updates").select("*").order("created_at", { ascending: false }).limit(10); if (mu) setManualUpdates(mu);
-    const { data: storeD } = await supabase.from("stores").select("company_name,company_address,company_phone,invoice_number"); if (storeD?.[0]) setStoreInfo(storeD[0]);
-    // 証明書発行条件チェック
-    const th = therapist as any;
-    const { data: ct } = await supabase.from("contracts").select("status").eq("therapist_id", tid).eq("status", "signed").maybeSingle();
-    const { data: allSett } = await supabase.from("therapist_daily_settlements").select("id").eq("therapist_id", tid).eq("is_settled", true);
-    const totalDays = allSett?.length || 0;
-    const checks = [
-      { label: "身分証が提出済み", ok: !!th.license_photo_url },
-      { label: "業務委託契約に署名済み", ok: !!ct },
-      { label: "本名が登録済み", ok: !!(th.real_name && th.real_name.trim()) },
-      { label: "住所が登録済み", ok: !!(th.address && th.address.trim()) },
-      { label: `総出勤30日以上（現在${totalDays}日）`, ok: totalDays >= 30 },
-    ];
-    setCertChecks(checks);
-    setCertEligible(checks.every(c => c.ok));
-
-    // 🔔 お知らせ: 全体向け(target_therapist_id=null) + 自分宛のみ
-    const { data: notifs } = await supabase.from("therapist_notifications")
-      .select("*")
-      .or(`target_therapist_id.is.null,target_therapist_id.eq.${tid}`)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (notifs) setNotifications(notifs);
-    const { data: notifReads } = await supabase.from("therapist_notification_reads")
-      .select("notification_id").eq("therapist_id", tid);
-    if (notifReads) setNotifReadIds(notifReads.map((r: { notification_id: number }) => r.notification_id));
-  }, [therapist, salaryMonth, calMonth]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // 受領ポイント取得 (gift タブを開いた時 + therapist 切替時)
-  const fetchGiftSummary = useCallback(async () => {
-    if (!therapist) return;
-    setGiftLoading(true);
-    try {
-      const [sumRes, payRes] = await Promise.all([
-        fetch(`/api/therapist/gift-summary?therapistId=${therapist.id}`),
-        fetch(`/api/therapist/gift-payout?therapistId=${therapist.id}`),
-      ]);
-      if (sumRes.ok) {
-        const data = await sumRes.json();
-        setGiftSummary(data.summary || null);
-        setGiftTransactions(data.transactions || []);
-        setGiftKindBreakdown(data.kindBreakdown || []);
-        setGiftMonthlyBreakdown(data.monthlyBreakdown || []);
-      }
-      if (payRes.ok) {
-        const pdata = await payRes.json();
-        setGiftPayouts(pdata.payouts || []);
-      }
-    } catch (e) {
-      console.error("gift summary fetch error:", e);
-    } finally {
-      setGiftLoading(false);
-    }
-  }, [therapist]);
-
-  useEffect(() => {
-    if (tab === "gift" && therapist) {
-      fetchGiftSummary();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, therapist?.id]);
-
-  // 年間清算データ取得
-  useEffect(() => {
-    if (!therapist || salaryViewMode !== "annual") return;
-    const fetchAnnual = async () => {
-      setAnnualLoading(true);
-      const { data } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", therapist.id).gte("date", `${salaryYear}-01-01`).lte("date", `${salaryYear}-12-31`).eq("is_settled", true).order("date");
-      if (data) setAnnualSettlements(data);
-      setAnnualLoading(false);
-    };
-    fetchAnnual();
-  }, [therapist, salaryYear, salaryViewMode]);
-
-  // ─────────────────────────────────────
-  // チャット未読・最新プレビュー取得（ホームカード + ボトムナビバッジ用）
-  // ─────────────────────────────────────
-  useEffect(() => {
-    if (!therapist) return;
-    let cancelled = false;
-    const loadChatStatus = async () => {
-      // 自分が参加している会話の participants を取得
-      const { data: myParts } = await supabase
-        .from("chat_participants")
-        .select("conversation_id, last_read_message_id")
-        .eq("participant_type", "therapist")
-        .eq("participant_id", therapist.id);
-      if (cancelled || !myParts || myParts.length === 0) {
-        if (!cancelled) {
-          setChatUnread(0);
-          setChatLatestPreview(null);
-        }
-        return;
-      }
-      const convIds = myParts.map((p) => p.conversation_id);
-      // 会話メタ
-      const { data: convs } = await supabase
-        .from("chat_conversations")
-        .select("id, name, type, last_message_at, last_message_preview")
-        .in("id", convIds)
-        .eq("is_archived", false)
-        .order("last_message_at", { ascending: false, nullsFirst: false });
-      if (cancelled) return;
-      // 未読数: 各会話で「自分以外からのメッセージ」かつ「自分の last_read_message_id より新しい」ものをカウント
-      let totalUnread = 0;
-      for (const part of myParts) {
-        const { count } = await supabase
-          .from("chat_messages")
-          .select("id", { count: "exact", head: true })
-          .eq("conversation_id", part.conversation_id)
-          .eq("is_deleted", false)
-          .gt("id", part.last_read_message_id || 0)
-          .not("sender_type", "eq", "therapist");
-        totalUnread += count || 0;
-      }
-      if (cancelled) return;
-      setChatUnread(totalUnread);
-      // 最新プレビュー（一番新しい会話）
-      const latest = convs?.[0];
-      if (latest) {
-        // 会話タイトル解決
-        let title = latest.name || "";
-        if (!title) {
-          if (latest.type === "broadcast") title = "📢 スタッフ一斉通知";
-          else {
-            // 相手の participant を取得
-            const { data: otherParts } = await supabase
-              .from("chat_participants")
-              .select("participant_type, participant_id, display_name")
-              .eq("conversation_id", latest.id);
-            const other = otherParts?.find(
-              (p) => !(p.participant_type === "therapist" && p.participant_id === therapist.id),
-            );
-            if (other) {
-              if (other.display_name) {
-                title = other.display_name;
-              } else if (other.participant_type === "staff") {
-                const { data: s } = await supabase
-                  .from("staff")
-                  .select("name")
-                  .eq("id", other.participant_id)
-                  .maybeSingle();
-                title = s?.name || "スタッフ";
-              } else {
-                title = "メンバー";
-              }
-            } else {
-              title = latest.type === "group" ? "グループ" : "メッセージ";
-            }
-          }
-        }
-        setChatLatestPreview({
-          title,
-          preview: latest.last_message_preview || "",
-          at: latest.last_message_at,
-          convId: latest.id,
+    if (!customer) return;
+    // 直近3時間の予約を取得してテロップ初期化
+    const loadRecent = async () => {
+      const since = new Date(); since.setHours(since.getHours() - 10);
+      const { data: recent } = await supabase.from("reservations").select("therapist_id,course,created_at").gte("created_at", since.toISOString()).order("created_at", { ascending: false }).limit(30);
+      const { data: thAll } = await supabase.from("therapists").select("id,name");
+      if (recent && thAll) {
+        const msgs = recent.map(r => {
+          const th = thAll.find(t => t.id === r.therapist_id);
+          const ago = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60000);
+          const agoText = ago < 1 ? "たった今" : ago < 60 ? `${ago}分前` : `${Math.floor(ago / 60)}時間前`;
+          return `🔥 ${agoText} ${th?.name || "セラピスト"}さん ${r.course || "コース"}の予約が入りました！`;
         });
-      } else {
-        setChatLatestPreview(null);
+        setTickerMsgs(msgs);
       }
     };
-    loadChatStatus();
-
-    // Realtime で再取得
-    const ch = supabase
-      .channel(`mypage-chat-${therapist.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => loadChatStatus())
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_conversations" }, () => loadChatStatus())
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_participants" }, () => loadChatStatus())
-      .subscribe();
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(ch);
-    };
-  }, [therapist]);
-  // リアルタイム同期
-  useEffect(() => {
-    const ch = supabase.channel("mypage-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "room_assignments" }, () => fetchData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, () => fetchData())
-      .subscribe();
+    loadRecent();
+    // リアルタイム購読
+    const ch = supabase.channel("ticker-reservations").on("postgres_changes", { event: "INSERT", schema: "public", table: "reservations" }, async (payload) => {
+      const r = payload.new as { therapist_id: number; course: string };
+      const { data: th } = await supabase.from("therapists").select("name").eq("id", r.therapist_id).maybeSingle();
+      const msg = `🔥 たった今 ${th?.name || "セラピスト"}さん ${r.course || "コース"}の予約が入りました！`;
+      setTickerMsgs(prev => [msg, ...prev].slice(0, 15));
+    }).subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [fetchData]);
-
-  const targetWeekStart = getWeekStart(new Date(Date.now() + weekOffset * 7 * 86400000));
-  const weekDates = getWeekDates(targetWeekStart);
-
-  useEffect(() => {
-    const drafts: Record<string, { enabled: boolean; start: string; end: string; store_id: number; notes: string }> = {};
-    for (const d of weekDates) { const existing = shiftRequests.find(r => r.date === d); drafts[d] = existing ? { enabled: true, start: existing.start_time, end: existing.end_time, store_id: existing.store_id || 0, notes: existing.notes || "" } : { enabled: false, start: "12:00", end: "03:00", store_id: stores[0]?.id || 0, notes: "" }; }
-    setReqDrafts(drafts);
-  }, [weekOffset, shiftRequests, targetWeekStart, stores]);
-
-  const submitShiftRequests = async () => {
-    if (!therapist) return; setReqSaving(true); setReqMsg("");
-    for (const d of weekDates) { const draft = reqDrafts[d]; if (!draft) continue; if (draft.enabled) { await supabase.from("shift_requests").upsert({ therapist_id: therapist.id, week_start: targetWeekStart, date: d, start_time: draft.start, end_time: draft.end, store_id: draft.store_id, notes: draft.notes, status: "pending", updated_at: new Date().toISOString() }, { onConflict: "therapist_id,date" }); } else { await supabase.from("shift_requests").delete().eq("therapist_id", therapist.id).eq("date", d); } }
-    setReqSaving(false); setReqMsg("✅ シフト希望を提出しました！"); fetchData(); setTimeout(() => setReqMsg(""), 2000);
+  }, [customer]);
+  const unreadCount = notifications.filter(n => !readNotifIds.includes(n.id)).length;
+  const markRead = async (nid: number) => { if (!customer || readNotifIds.includes(nid)) return; await supabase.from("customer_notification_reads").insert({ customer_id: customer.id, notification_id: nid }); setReadNotifIds(prev => [...prev, nid]); };
+  const markAllRead = async () => { if (!customer) return; for (const n of notifications.filter(n => !readNotifIds.includes(n.id))) { try { await supabase.from("customer_notification_reads").insert({ customer_id: customer.id, notification_id: n.id }); } catch {} } setReadNotifIds(notifications.map(n => n.id)); };
+  const addCard = async () => { if (!customer || !cardLast4 || cardLast4.length !== 4) return; await supabase.from("customer_cards").insert({ customer_id: customer.id, brand: cardBrand, last4: cardLast4, holder_name: cardHolder, exp_month: cardExpMonth, exp_year: cardExpYear, is_default: cards.length === 0 }); setShowAddCard(false); setCardLast4(""); setCardHolder(""); fetchData(); };
+  const removeCard = async (id: number) => { const ok = await confirm({ title: "このカードを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (!ok) return; await supabase.from("customer_cards").delete().eq("id", id); fetchData(); };
+  const setDefaultCard = async (id: number) => { if (!customer) return; await supabase.from("customer_cards").update({ is_default: false }).eq("customer_id", customer.id); await supabase.from("customer_cards").update({ is_default: true }).eq("id", id); fetchData(); };
+  const submitBooking = async () => {
+    if (!customer || !bookDate) { setBookMsg("日付を選択してください"); return; }
+    if (!bookCourseId) { setBookMsg("コースを選択してください"); return; }
+    setBookSaving(true); setBookMsg("");
+    const course = courses.find(c => c.id === bookCourseId);
+    const ext = extensions.find(e => e.id === bookExtId);
+    const dur = (course?.duration || 60) + (ext?.duration || 0);
+    const endTime = minToTime(timeToMin(bookTime) + dur);
+    const nom = getNominationType(bookTherapistId);
+    const disc = discounts.find(d => d.id === bookDiscountId);
+    const selOpts = optionsList.filter(o => bookOptions.includes(o.id));
+    const optText = selOpts.map(o => o.name).join(",");
+    const optTotal = selOpts.reduce((s, o) => s + o.price, 0);
+    const totalPrice = Math.max(0, (course?.price || 0) + nom.price + optTotal + (ext?.price || 0) - (disc?.amount || 0) - bookPointUse);
+    if (bookPointUse > 0 && bookPointUse < 1000) { alert("ポイントは1,000pt以上からご利用いただけます"); setBookSaving(false); return; }
+    const { data: newRes, error } = await supabase.from("reservations").insert({ customer_name: customer.name, therapist_id: bookTherapistId || 0, date: bookDate, start_time: bookTime, end_time: endTime, course: course?.name || "", total_price: totalPrice, status: "unprocessed", customer_status: "web_reservation", notes: bookNotes, nomination: nom.name, nomination_fee: nom.price, options_text: optText, options_total: optTotal, extension_name: ext?.name || "", extension_price: ext?.price || 0, extension_duration: ext?.duration || 0, discount_name: disc?.name || "", discount_amount: disc?.amount || 0, point_used: bookPointUse, ...(freeMode && bookFreeBuildingId ? { free_building_id: bookFreeBuildingId } : {}) }).select("id").single();
+    setBookSaving(false);
+    if (error) { setBookMsg("予約に失敗しました: " + error.message); } else { if (bookPointUse > 0 && newRes) { await supabase.from("customer_points").insert({ customer_id: customer.id, amount: -bookPointUse, type: "use", description: `予約利用（仮押さえ）${dateFmt(bookDate)}`, status: "pending", reservation_id: newRes.id }); } setBookDone(true); fetchData(); fetchDaySchedule(bookDate); }
   };
+  const saveSettings = async () => { if (!customer) return; setSettingMsg(""); setSettingSaving(true); const updates: Record<string, string | null> = {}; if (setSelfN.trim() && setSelfN.trim() !== (customer.self_name || customer.name)) updates.self_name = setSelfN.trim(); if (setEmail.trim() && setEmail.trim() !== customer.login_email) updates.login_email = setEmail.trim(); if ((setBday || "") !== (customer.birthday || "")) updates.birthday = setBday || null; if (setPw) { if (setPw.length < 6) { setSettingMsg("パスワードは6文字以上にしてください"); setSettingSaving(false); return; } if (setPw !== setPwConfirm) { setSettingMsg("パスワードが一致しません"); setSettingSaving(false); return; } updates.login_password = setPw; } if (Object.keys(updates).length === 0) { setSettingMsg("変更がありません"); setSettingSaving(false); return; } const { error } = await supabase.from("customers").update(updates).eq("id", customer.id); setSettingSaving(false); if (error) setSettingMsg("保存に失敗しました"); else { setSettingMsg("保存しました！"); setSetPw(""); setSetPwConfirm(""); const { data } = await supabase.from("customers").select("*").eq("id", customer.id).single(); if (data) { setCustomer(data); setSetBday(data.birthday || ""); setSetSelfN(data.self_name || data.name || ""); } setTimeout(() => setSettingMsg(""), 2000); } };
 
-  const generateShiftCopyText = () => {
-    if (!therapist) return ""; const enabledDays = weekDates.filter(d => reqDrafts[d]?.enabled);
-    if (enabledDays.length === 0) return `【シフト希望】${therapist.name}\n${formatDate(weekDates[0])}〜${formatDate(weekDates[6])}\n\n出勤希望なし`;
-    let text = `【シフト希望】${therapist.name}\n${formatDate(weekDates[0])}〜${formatDate(weekDates[6])}\n\n`;
-    for (const d of enabledDays) { const draft = reqDrafts[d]; const store = stores.find(s => s.id === draft.store_id); const sn = store?.name?.replace(/ルーム$/, "") || ""; text += `${formatDate(d)} ${draft.start}〜${draft.end}${sn ? ` [${sn}]` : ""}${draft.notes ? ` ※${draft.notes}` : ""}\n`; }
-    return text.trim();
+  const getTherapistName = (id: number) => therapists.find(t => t.id === id)?.name || "—";
+  const getStoreName = (sid: number) => stores.find(s => s.id === sid)?.name || "";
+  const getReservationPointsEarned = (r: Reservation) => {
+    return points.filter(p => p.amount > 0 && p.description && p.description.includes(dateFmt(r.date))).reduce((s, p) => s + p.amount, 0);
   };
-  const copyShiftToClipboard = () => { navigator.clipboard.writeText(generateShiftCopyText()); setCopiedShift(true); setTimeout(() => setCopiedShift(false), 2000); };
-
-  const deleteCustomerNote = async (id: number) => {
-    const ok = await confirm({
-      title: "このメモを削除しますか？",
-      variant: "danger",
-      confirmLabel: "削除する",
-    });
-    if (!ok) return;
-    await supabase.from("therapist_customer_notes").delete().eq("id", id);
-    const returnDate = calDetailDate; setShowAddNote(false); setNoteViewTarget(null); await fetchData(); if (returnDate) setCalDetailDate(returnDate);
+  const getPaymentInfo = (r: Reservation) => {
+    const parts: string[] = [];
+    if (r.card_base > 0) parts.push(`💳${fmt(r.card_base)}`);
+    if (r.paypay_amount > 0) parts.push(`📱${fmt(r.paypay_amount)}`);
+    if (r.cash_amount > 0) parts.push(`💵${fmt(r.cash_amount)}`);
+    return parts.length > 0 ? parts.join(" ") : "";
   };
-
-  const saveCustomerNote = async () => {
-    if (!therapist || !noteForm.customer_name.trim()) return;
-    if (noteForm.reservation_id > 0) {
-      // 接客単位メモ: reservation_idで検索
-      const existing = customerNotes.find(n => n.reservation_id === noteForm.reservation_id);
-      if (existing) {
-        await supabase.from("therapist_customer_notes").update({ note: noteForm.note, rating: noteForm.rating, is_ng: noteForm.is_ng, ng_reason: noteForm.ng_reason, updated_at: new Date().toISOString() }).eq("id", existing.id);
-      } else {
-        await supabase.from("therapist_customer_notes").insert({ therapist_id: therapist.id, customer_name: noteForm.customer_name.trim(), note: noteForm.note, is_ng: noteForm.is_ng, ng_reason: noteForm.ng_reason, rating: noteForm.rating, reservation_id: noteForm.reservation_id });
-      }
+  const getMemo = (resId: number) => customerMemos.find(m => m.reservation_id === resId);
+  const getMemosForTherapist = (tid: number) => customerMemos.filter(m => m.therapist_id === tid).sort((a, b) => b.id - a.id);
+  const openMemoEdit = (resId: number, therapistId: number) => {
+    const existing = getMemo(resId);
+    setEditMemoResId(resId);
+    setEditMemoTherapistId(therapistId);
+    setEditMemoRating(existing?.rating || 0);
+    setEditMemoText(existing?.memo || "");
+    setShowMemoModal(true);
+  };
+  const saveMemo = async () => {
+    if (!customer || !editMemoResId) return;
+    setMemoSaving(true);
+    const existing = getMemo(editMemoResId);
+    if (existing) {
+      await supabase.from("customer_therapist_memos").update({ rating: editMemoRating, memo: editMemoText, updated_at: new Date().toISOString() }).eq("id", existing.id);
     } else {
-      // 旧式: customer_nameでreservation_id無しのものを検索
-      const existing = customerNotes.find(n => n.customer_name === noteForm.customer_name.trim() && !n.reservation_id);
-      if (existing) {
-        await supabase.from("therapist_customer_notes").update({ note: noteForm.note, is_ng: noteForm.is_ng, ng_reason: noteForm.ng_reason, rating: noteForm.rating, updated_at: new Date().toISOString() }).eq("id", existing.id);
-      } else {
-        await supabase.from("therapist_customer_notes").insert({ therapist_id: therapist.id, customer_name: noteForm.customer_name.trim(), note: noteForm.note, is_ng: noteForm.is_ng, ng_reason: noteForm.ng_reason, rating: noteForm.rating });
-      }
+      await supabase.from("customer_therapist_memos").insert({ customer_id: customer.id, therapist_id: editMemoTherapistId, reservation_id: editMemoResId, rating: editMemoRating, memo: editMemoText });
     }
-    const returnDate = calDetailDate; setShowAddNote(false); setNoteViewTarget(null); setNoteForm({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 }); await fetchData(); if (returnDate) setCalDetailDate(returnDate);
+    setMemoSaving(false);
+    setShowMemoModal(false);
+    try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer.id); if (memos) setCustomerMemos(memos); } catch {}
   };
-
-  const logout = () => { localStorage.removeItem("therapist_session"); setLoggedIn(false); setTherapist(null); setTab("home"); };
-
-  // 🔔 お知らせ既読操作
-  const markNotifRead = async (notifId: number) => {
-    if (!therapist || notifReadIds.includes(notifId)) return;
-    await supabase.from("therapist_notification_reads").insert({ therapist_id: therapist.id, notification_id: notifId });
-    setNotifReadIds(prev => [...prev, notifId]);
-  };
-  const markAllNotifRead = async () => {
-    if (!therapist) return;
-    const unread = notifications.filter(n => !notifReadIds.includes(n.id));
-    for (const n of unread) {
-      try { await supabase.from("therapist_notification_reads").insert({ therapist_id: therapist.id, notification_id: n.id }); } catch {}
-    }
-    setNotifReadIds(notifications.map(n => n.id));
-  };
-  const openNotif = (n: TherapistNotification) => {
-    setNotifDetail(n);
-    markNotifRead(n.id);
-  };
-  const chipStyle = (active: boolean, color: string) => ({ backgroundColor: active ? color + "20" : "transparent", color: active ? color : T.textMuted, borderColor: active ? color : T.border });
-
-  // マニュアル記事を開く（fromLink=true のとき履歴に追加）
-  const openManualArticle = async (article: ManualArticle, fromLink = false) => {
-    if (fromLink && manualViewArticle) {
-      setManualHistory(prev => [...prev, manualViewArticle]);
-    } else if (!fromLink) {
-      setManualHistory([]);
-    }
-    setManualViewArticle(article); setManualOpenQA(null);
-    // ブラウザ履歴に追加（スワイプバック対応）
-    window.history.pushState({ manualArticleId: article.id, fromLink }, "");
-    // Q&A取得
-    const { data: qa } = await supabase.from("manual_qa").select("*").eq("article_id", article.id).order("sort_order");
-    if (qa) setManualViewQAs(qa);
-    // 既読記録
-    if (therapist && !manualReads.includes(article.id)) {
-      await supabase.from("manual_reads").upsert({ article_id: article.id, therapist_id: therapist.id }, { onConflict: "article_id,therapist_id" });
-      setManualReads(prev => [...prev, article.id]);
-      // view_count++
-      await supabase.from("manual_articles").update({ view_count: (article.view_count || 0) + 1 }).eq("id", article.id);
+  const getStatusBadge = (status: string): { label: string; color: string; bg: string } => {
+    switch (status) {
+      case "unprocessed": return { label: "🟡 リクエスト中", color: "#b38419", bg: "#b3841918" };
+      case "email_sent": return { label: "🔵 確認メール送信済", color: "#6b8ba8", bg: "#6b8ba818" };
+      case "customer_confirmed": return { label: "🟢 お客様確定", color: "#6b9b7e", bg: "#6b9b7e18" };
+      case "completed": return { label: "✅ 完了", color: "#c3a782", bg: "#c3a78218" };
+      case "serving": return { label: "💆 接客中", color: "#6b9b7e", bg: "#6b9b7e18" };
+      case "cancelled": return { label: "❌ キャンセル", color: "#c96b83", bg: "#c96b8318" };
+      default: return { label: status || "未処理", color: "#888780", bg: "#88878018" };
     }
   };
-
-  // 1つ前の記事に戻る（ボタン用）
-  const goBackManual = () => {
-    // ブラウザ履歴を戻す → popstateで処理される
-    window.history.back();
+  const today = new Date().toISOString().split("T")[0];
+  const upcomingRes = reservations.filter(r => r.date >= today && r.status !== "cancelled").sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
+  const canCancelDirectly = (r: Reservation) => r.status === "unprocessed";
+  const handleCancelClick = (r: Reservation) => { setCancelTarget(r); setCancelMsg(""); };
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    const { error } = await supabase.from("reservations").update({ status: "cancelled" }).eq("id", cancelTarget.id);
+    if (error) { setCancelMsg("キャンセルに失敗しました"); return; }
+    setCancelTarget(null); fetchData();
   };
+  const pastRes = reservations.filter(r => r.date < today || r.status === "completed");
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const monthTotal = reservations.filter(r => r.date.startsWith(thisMonth) && r.status === "completed").reduce((s, r) => s + (r.total_price || 0), 0);
+  const totalVisits = reservations.filter(r => r.status === "completed").length;
+  const inputStyle = { backgroundColor: C.cardAlt, borderColor: C.border, color: C.text };
 
-  // ブラウザのスワイプバック・戻るボタン対応
-  const manualHistoryRef = useRef(manualHistory);
-  manualHistoryRef.current = manualHistory;
-  const manualViewRef = useRef(manualViewArticle);
-  manualViewRef.current = manualViewArticle;
-  const manualArticlesRef = useRef(manualArticles);
-  manualArticlesRef.current = manualArticles;
-  const tabRef = useRef(tab);
-  tabRef.current = tab;
-
-  // タブ切替時にブラウザ履歴ガード追加
-  useEffect(() => {
-    if (tab === "manual") {
-      window.history.pushState({ manualTab: true }, "");
+  // スロット生成
+  const makeSlots = (shift: Shift, resForTherapist: Reservation[]) => {
+    const ss = timeToMin(shift.start_time); const se = timeToMin(shift.end_time);
+    const slots: { time: string; available: boolean; resInfo?: string }[] = [];
+    for (let m = ss; m < se; m += 15) {
+      const t = minToTime(m);
+      const busy = resForTherapist.find(r => { const rs = timeToMin(r.start_time); const re = timeToMin(r.end_time); return m >= rs && m < re; });
+      slots.push({ time: t, available: !busy, resInfo: busy ? `${busy.start_time}〜${busy.end_time} ${busy.course}` : undefined });
     }
-  }, [tab]);
-
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      // マニュアル記事を表示中の場合
-      if (manualViewRef.current) {
-        const history = manualHistoryRef.current;
-        if (history.length > 0) {
-          // 前の記事に戻る
-          const prev = history[history.length - 1];
-          setManualHistory(h => h.slice(0, -1));
-          setManualViewArticle(prev); setManualOpenQA(null);
-          supabase.from("manual_qa").select("*").eq("article_id", prev.id).order("sort_order").then(({ data }) => { if (data) setManualViewQAs(data); });
-        } else {
-          // 記事一覧に戻る
-          setManualViewArticle(null);
-          // 一覧に戻った後のガード
-          window.history.pushState({ manualTab: true }, "");
-        }
-        return;
-      }
-      // マニュアルタブ（一覧表示中）からスワイプバック → ホームタブへ
-      if (tabRef.current === "manual" && !manualViewRef.current) {
-        setTab("home");
-        window.history.pushState({ homeTab: true }, "");
-        return;
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── 記事内リンク処理 ──
-  const renderInlineLinks = (text: string): React.ReactNode => {
-    // [link:記事タイトル] [catlink:カテゴリ名] [page:パス:表示テキスト] [button:パス:ボタンテキスト] をパース
-    const parts = text.split(/(\[link:[^\]]+\]|\[catlink:[^\]]+\]|\[page:[^\]]+\]|\[button:[^\]]+\])/g);
-    if (parts.length === 1) return text;
-    return parts.map((part, idx) => {
-      const linkMatch = part.match(/^\[link:(.+)\]$/);
-      if (linkMatch) {
-        const title = linkMatch[1];
-        const target = manualArticles.find(a => a.title === title || a.title.includes(title));
-        if (target) {
-          return <span key={idx} onClick={(e) => { e.stopPropagation(); openManualArticle(target, true); }}
-            style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>📖 {title}</span>;
-        }
-        return <span key={idx} style={{ color: "#e8849a" }}>📖 {title}</span>;
-      }
-      const catMatch = part.match(/^\[catlink:(.+)\]$/);
-      if (catMatch) {
-        const catName = catMatch[1];
-        const target = manualCats.find(c => c.name === catName || c.name.includes(catName));
-        if (target) {
-          return <span key={idx} onClick={(e) => { e.stopPropagation(); setManualViewArticle(null); setManualHistory([]); setManualSelCat(target.id); }}
-            style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{target.icon} {target.name}</span>;
-        }
-        return <span key={idx} style={{ color: "#e8849a" }}>{catName}</span>;
-      }
-      // [page:/mypage/tax-guide:📖 詳しい手順はこちら] — 内部ページへの通常リンク
-      const pageMatch = part.match(/^\[page:([^:]+):(.+)\]$/);
-      if (pageMatch) {
-        const [, path, label] = pageMatch;
-        const isExternal = /^https?:\/\//.test(path);
-        return <a key={idx} href={path} {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-          onClick={(e) => e.stopPropagation()}
-          style={{ color: "#e8849a", fontWeight: 600, cursor: "pointer", borderBottom: "1px dashed #e8849a", paddingBottom: 1 }}>{label}</a>;
-      }
-      // [button:/mypage/tax-guide:詳しい手順はこちら] — 目立つボタン
-      const btnMatch = part.match(/^\[button:([^:]+):(.+)\]$/);
-      if (btnMatch) {
-        const [, path, label] = btnMatch;
-        const isExternal = /^https?:\/\//.test(path);
-        return <a key={idx} href={path} {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            display: "inline-block", background: "linear-gradient(135deg, #e8849a, #d4687e)", color: "#fff",
-            fontWeight: 600, fontSize: 12, padding: "8px 16px", borderRadius: 999, textDecoration: "none",
-            boxShadow: "0 2px 6px rgba(232,132,154,0.25)", margin: "4px 2px", cursor: "pointer",
-          }}>{label} →</a>;
-      }
-      return <span key={idx}>{part}</span>;
-    });
+    return slots;
   };
 
-  // テキスト行のインライン処理（太字+リンク）
-  const renderInlineContent = (text: string): React.ReactNode => {
-    // まず太字を処理、その結果をリンク処理
-    if (text.match(/\*\*(.*?)\*\*/)) {
-      const parts = text.split(/(\*\*.*?\*\*)/g);
-      return parts.map((p, j) => {
-        if (p.startsWith("**") && p.endsWith("**")) return <strong key={j} style={{ color: "#e8849a" }}>{renderInlineLinks(p.slice(2, -2))}</strong>;
-        return <span key={j}>{renderInlineLinks(p)}</span>;
-      });
-    }
-    return renderInlineLinks(text);
-  };
-  const getStoreName = (id: number) => stores.find(s => s.id === id)?.name || "";
-  const getBuildingForDate = (date: string) => {
-    const ra = roomAssigns.find(a => a.date === date);
-    if (!ra) return "";
-    const rm = allRooms.find(r => r.id === ra.room_id);
-    if (!rm) return "";
-    const bl = buildings.find(b => b.id === rm.building_id);
-    return bl?.name || "";
-  };
-  const getRoomForDate = (date: string) => {
-    const ra = roomAssigns.find(a => a.date === date);
-    if (!ra) return "";
-    const rm = allRooms.find(r => r.id === ra.room_id);
-    return rm?.name || "";
-  };
-  const getKeyNumberForDate = (date: string) => {
-    const ra = roomAssigns.find(a => a.date === date);
-    if (!ra) return "";
-    const rm = allRooms.find(r => r.id === ra.room_id);
-    return rm?.key_number || "";
-  };
-  const getStoreShort = (id: number) => stores.find(s => s.id === id)?.name?.replace(/ルーム$/, "") || "";
+  // ログイン画面
+  if (!customer) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: C.bg, position: "relative", fontFamily: FONT_SERIF }}>
+        {/* ヒーロー画像（/public/mypage/hero-login.jpg） */}
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "45vh",
+          overflow: "hidden",
+          backgroundColor: C.accentBg,
+        }}>
+          <img
+            src="/mypage/hero-login.jpg"
+            alt=""
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center left",
+              transform: "scale(1.08)",
+              transformOrigin: "center left",
+            }}
+          />
+          {/* 白いフェード */}
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.7) 70%, rgba(255,255,255,1) 100%)",
+          }} />
+        </div>
 
-  if (!loggedIn) return (
-    <div style={{ minHeight: "100vh", backgroundColor: T.bg, fontFamily: FONT_SERIF, position: "relative", overflow: "hidden" }}>
-      {/* 大理石pink背景 */}
-      <div style={{ ...MARBLE.pink, position: "absolute", inset: 0, zIndex: 0, opacity: 0.5 }} />
-      <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
-        <div style={{ width: "100%", maxWidth: 400 }}>
-          {/* ヒーロー見出し */}
-          <div style={{ textAlign: "center", marginBottom: 36 }}>
-            <div style={{ width: 1, height: 40, backgroundColor: T.accent, margin: "0 auto 20px" }} />
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>THERAPIST</p>
-            <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 42, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 8, lineHeight: 1.2 }}>Ange Spa</h1>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 11, letterSpacing: "0.4em", color: T.textSub, fontWeight: 400 }}>マイページ</p>
-            <div style={{ width: 40, height: 1, backgroundColor: T.accent, margin: "20px auto 0" }} />
-          </div>
+        {/* コンテンツ */}
+        <div style={{
+          position: "relative",
+          zIndex: 1,
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px 20px 48px",
+        }}>
+          <div style={{ width: "100%", maxWidth: 420, marginTop: "20vh" }}>
+            {/* ブランドヘッダー */}
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <p style={{
+                margin: 0,
+                fontFamily: FONT_DISPLAY,
+                fontSize: 11,
+                letterSpacing: "0.3em",
+                color: C.accent,
+                textTransform: "uppercase",
+              }}>Member Page</p>
+              <h1 style={{
+                margin: "10px 0 6px",
+                fontFamily: FONT_DISPLAY,
+                fontSize: 32,
+                fontWeight: 400,
+                letterSpacing: "0.15em",
+                color: C.text,
+              }}>Ange Spa</h1>
+              <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+              <p style={{
+                margin: 0,
+                fontSize: 12,
+                letterSpacing: "0.08em",
+                color: C.textSub,
+              }}>会員の皆さまへ</p>
+            </div>
 
-          {/* ログインカード */}
-          <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "36px 28px" }}>
-            {showReset ? (
-              <>
-                <div style={{ textAlign: "center", marginBottom: 28 }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>PASSWORD RESET</p>
-                  <p style={{ fontFamily: FONT_SERIF, fontSize: 13, color: T.text, letterSpacing: "0.05em", fontWeight: 500 }}>パスワード再発行</p>
-                  <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "14px auto 0" }} />
-                </div>
-                {!resetDone ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {/* カード */}
+            <div style={{
+              backgroundColor: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: 28,
+              boxShadow: "0 2px 20px rgba(0,0,0,0.04)",
+            }}>
+              {authMode === "reset" ? (
+                <>
+                  <div style={{ textAlign: "center", marginBottom: 24 }}>
+                    <p style={{
+                      margin: 0,
+                      fontFamily: FONT_DISPLAY,
+                      fontSize: 18,
+                      letterSpacing: "0.08em",
+                      color: C.text,
+                    }}>パスワード再発行</p>
+                    <p style={{ margin: "8px 0 0", fontSize: 11, color: C.textMuted, letterSpacing: "0.05em" }}>ご登録の電話番号を入力してください</p>
+                  </div>
+                  {!resetDone ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>電話番号</label>
+                        <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)} placeholder="090-1234-5678" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        <p style={{ margin: "6px 0 0", fontSize: 10, color: C.textFaint }}>マイページに紐づいた電話番号を入力してください</p>
+                      </div>
+                      {resetMsg && <div style={{ padding: "12px 14px", backgroundColor: C.accentBg, color: C.accentDark, fontSize: 12, borderRadius: 4 }}>{resetMsg}</div>}
+                      <button onClick={handleResetPassword} disabled={authLoading || !resetPhone.trim()} style={{ width: "100%", padding: "14px", backgroundColor: C.accent, color: "#fff", border: "none", borderRadius: 4, cursor: authLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.1em", opacity: authLoading || !resetPhone.trim() ? 0.5 : 1 }}>{authLoading ? "送信中..." : "パスワードを再発行"}</button>
+                      <button onClick={() => { setAuthMode("login"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "10px", backgroundColor: "transparent", color: C.textMuted, border: `1px solid ${C.border}`, borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 12 }}>ログインに戻る</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div style={{ padding: 20, backgroundColor: C.accentBg, border: `1px solid ${C.accent}30`, borderRadius: 6, textAlign: "center" }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: C.accentDark }}>{resetMsg}</p>
+                        <p style={{ margin: "10px 0 0", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>メールに記載された新しいパスワードでログインしてください。ログイン後、設定画面からパスワードを変更できます。</p>
+                      </div>
+                      <button onClick={() => { setAuthMode("login"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "14px", backgroundColor: C.accent, color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.1em" }}>ログイン画面に戻る</button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* タブ */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
+                    <button onClick={() => { setAuthMode("login"); setAuthError(""); }} style={{ padding: "12px 0", backgroundColor: "transparent", color: authMode === "login" ? C.accent : C.textMuted, border: "none", borderBottom: authMode === "login" ? `2px solid ${C.accent}` : "2px solid transparent", cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", fontWeight: authMode === "login" ? 500 : 400 }}>ログイン</button>
+                    <button onClick={() => { setAuthMode("register"); setAuthError(""); }} style={{ padding: "12px 0", backgroundColor: "transparent", color: authMode === "register" ? C.accent : C.textMuted, border: "none", borderBottom: authMode === "register" ? `2px solid ${C.accent}` : "2px solid transparent", cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", fontWeight: authMode === "register" ? 500 : 400 }}>新規会員登録</button>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {authMode === "register" && (
+                      <>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>お名前</label>
+                          <input type="text" value={authName} onChange={e => setAuthName(e.target.value)} placeholder="山田 太郎" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>電話番号 <span style={{ fontSize: 9, color: C.textMuted, marginLeft: 4 }}>（既存データと紐付け）</span></label>
+                          <input type="tel" value={authPhone} onChange={e => setAuthPhone(e.target.value)} placeholder="090-1234-5678" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        </div>
+                      </>
+                    )}
                     <div>
-                      <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>電話番号</label>
-                      <input type="tel" value={resetPhone} onChange={e => setResetPhone(e.target.value)} placeholder="090-1234-5678" style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
-                      <p style={{ margin: "6px 0 0", fontSize: 10, color: T.textFaint, letterSpacing: "0.05em" }}>セラピスト登録時の電話番号を入力してください</p>
+                      <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>メールアドレス</label>
+                      <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="example@email.com" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
                     </div>
-                    {resetMsg && <div style={{ padding: "12px 14px", backgroundColor: T.accentBg, color: SITE.color.pinkDeep, fontSize: 12, letterSpacing: "0.05em" }}>{resetMsg}</div>}
-                    <button onClick={handleResetPassword} disabled={loginLoading || !resetPhone.trim()} style={{ width: "100%", padding: "14px", backgroundColor: T.accent, color: "#fff", border: "none", cursor: loginLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.15em", opacity: loginLoading || !resetPhone.trim() ? 0.5 : 1 }}>{loginLoading ? "送信中..." : "パスワードを再発行"}</button>
-                    <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "11px", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.08em" }}>ログインに戻る</button>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                    <div style={{ padding: 20, backgroundColor: T.accentBg, textAlign: "center" }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: SITE.color.pinkDeep, letterSpacing: "0.05em" }}>{resetMsg}</p>
-                      <p style={{ margin: "10px 0 0", fontSize: 11, color: T.textMuted, lineHeight: 1.7, letterSpacing: "0.03em" }}>メールに記載された新しいパスワードでログインしてください</p>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: C.textSub, marginBottom: 6 }}>パスワード</label>
+                      <div style={{ position: "relative" }}>
+                        <input type={showPw ? "text" : "password"} value={authPw} onChange={e => setAuthPw(e.target.value)} placeholder="6文字以上" style={{ width: "100%", padding: "12px 44px 12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+                        <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 11 }}>{showPw ? "非表示" : "表示"}</button>
+                      </div>
                     </div>
-                    <button onClick={() => { setShowReset(false); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ width: "100%", padding: "14px", backgroundColor: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.15em" }}>ログイン画面に戻る</button>
+                    {authError && <div style={{ padding: "12px 14px", backgroundColor: C.accentBg, color: C.accentDark, fontSize: 12, borderRadius: 4 }}>{authError}</div>}
+                    <button onClick={authMode === "login" ? handleLogin : handleRegister} disabled={authLoading} style={{ width: "100%", padding: "14px", backgroundColor: C.accent, color: "#fff", border: "none", borderRadius: 4, cursor: authLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.1em", opacity: authLoading ? 0.5 : 1, marginTop: 4 }}>{authLoading ? "処理中..." : authMode === "login" ? "ログイン" : "会員登録"}</button>
                   </div>
-                )}
-              </>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>メールアドレス</label>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" onKeyDown={(e) => e.key === "Enter" && handleLogin()} style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>パスワード</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" onKeyDown={(e) => e.key === "Enter" && handleLogin()} style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
-                </div>
-                {loginError && <div style={{ padding: "12px 14px", backgroundColor: T.accentBg, color: SITE.color.pinkDeep, fontSize: 12, letterSpacing: "0.05em" }}>{loginError}</div>}
-                <button onClick={handleLogin} disabled={loginLoading} style={{ width: "100%", padding: "14px", backgroundColor: T.accent, color: "#fff", border: "none", cursor: loginLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.15em", opacity: loginLoading ? 0.5 : 1, marginTop: 4 }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
-              </div>
-            )}
-          </div>
+                </>
+              )}
+            </div>
 
-          {!showReset && (
-            <p style={{ textAlign: "center", marginTop: 20 }}>
-              <button onClick={() => { setShowReset(true); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ fontSize: 11, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.08em", borderBottom: `1px solid ${T.accent}`, paddingBottom: 2 }}>パスワードを忘れた方はこちら</button>
+            {authMode !== "reset" && (
+              <p style={{ textAlign: "center", marginTop: 20, fontSize: 11 }}>
+                <button onClick={() => { setAuthMode("reset"); setResetMsg(""); setResetPhone(""); setResetDone(false); }} style={{ color: C.accent, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>パスワードを忘れた方はこちら</button>
+              </p>
+            )}
+
+            {/* フッター：HPに戻る */}
+            <div style={{ textAlign: "center", marginTop: 32 }}>
+              <a href="/" style={{ fontSize: 10, color: C.textFaint, letterSpacing: "0.15em", textDecoration: "none", fontFamily: FONT_DISPLAY, textTransform: "uppercase" }}>← Back to Home</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs: { key: typeof tab; label: string; Icon: React.ComponentType<{ size?: number; color?: string }> }[] = [
+    { key: "home", label: "ホーム", Icon: IconHome },
+    { key: "schedule", label: "予約", Icon: IconCalendar },
+    { key: "diary", label: "日記", Icon: IconCamera },
+    { key: "favorites", label: "お気に入り", Icon: IconHeart },
+    { key: "notifications", label: "お知らせ", Icon: IconBell },
+    { key: "settings", label: "設定", Icon: IconSettings },
+  ];
+
+  return (<div className="min-h-screen pb-24" style={{ backgroundColor: C.bg, color: C.text, fontFamily: FONT_SERIF }}>
+    {ConfirmModalNode}
+    <InstallPrompt dismissKey="customer" />
+
+    {/* ═══ ヘッダー（HP風・明朝ブランド） ═══ */}
+    <div style={{
+      position: "sticky",
+      top: 0,
+      zIndex: 30,
+      backgroundColor: "rgba(255,255,255,0.95)",
+      backdropFilter: "blur(12px)",
+      borderBottom: `1px solid ${C.border}`,
+    }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        {/* 左：ブランドロゴ＋会員情報 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+          <a href="/" style={{ textDecoration: "none" }}>
+            <span style={{
+              fontFamily: FONT_DISPLAY,
+              fontSize: 18,
+              letterSpacing: "0.1em",
+              color: C.text,
+              fontWeight: 400,
+            }}>Ange Spa</span>
+          </a>
+          <div style={{ height: 20, width: 1, backgroundColor: C.border }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 12, color: C.text, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {customer.self_name || customer.name} 様
             </p>
-          )}
+            <p style={{ margin: "1px 0 0", fontSize: 10, color: C.textMuted, letterSpacing: "0.05em" }}>
+              {(() => {
+                const r = customer.rank || "normal";
+                const label = r === "platinum" ? "PLATINUM" : r === "gold" ? "GOLD" : r === "silver" ? "SILVER" : null;
+                return (
+                  <>
+                    {label && <span style={{ fontFamily: FONT_DISPLAY, color: r === "platinum" ? "#9b7cb6" : r === "gold" ? "#b8945a" : "#888", letterSpacing: "0.15em", marginRight: 8 }}>{label}</span>}
+                    <span style={{ color: C.accent, fontWeight: 500 }}>{pointBalance.toLocaleString()}</span>
+                    <span style={{ marginLeft: 2, color: C.textMuted }}>pt</span>
+                  </>
+                );
+              })()}
+            </p>
+          </div>
+        </div>
+
+        {/* 右：ベル + ログアウト */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button
+            onClick={() => setTab("notifications")}
+            aria-label="お知らせ"
+            style={{ padding: 8, background: "none", border: "none", cursor: "pointer", color: C.textSub }}
+          >
+            <BellWithBadge count={unreadCount} size={18} color={C.textSub} badgeColor={C.accent} />
+          </button>
+          <button
+            onClick={handleLogout}
+            aria-label="ログアウト"
+            title="ログアウト"
+            style={{ padding: 8, background: "none", border: "none", cursor: "pointer", color: C.textMuted }}
+          >
+            <IconLogout size={16} color={C.textMuted} />
+          </button>
         </div>
       </div>
     </div>
-  );
 
-  const today = new Date().toISOString().split("T")[0]; const todayShift = shifts.find(s => s.date === today);
-  const upcomingShifts = shifts.filter(s => s.date >= today).slice(0, 7);
-  const monthTotal = settlements.reduce((s, stl) => s + stl.final_payment, 0);
-  const monthOrders = settlements.reduce((s, stl) => s + stl.order_count, 0); const monthDays = settlements.length;
-  const [smY, smM] = salaryMonth.split("-").map(Number);
-  const customerVisitsAll = allReservations.reduce((acc, r) => { if (!acc[r.customer_name]) acc[r.customer_name] = { count: 0, lastDate: r.date }; acc[r.customer_name].count++; if (r.date > acc[r.customer_name].lastDate) acc[r.customer_name].lastDate = r.date; return acc; }, {} as Record<string, { count: number; lastDate: string }>);
-  const uniqueCustomers = Object.entries(customerVisitsAll).sort((a, b) => b[1].count - a[1].count);
-
-  return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
-      {ConfirmModalNode}
-      <InstallPrompt dismissKey="therapist" />
-      {/* ═══ HP風ヘッダー ═══ */}
-      <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0, backgroundColor: T.card, borderBottom: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#fff", fontWeight: 500, backgroundColor: T.accent, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{therapist?.name?.charAt(0) || "?"}</div>
-          <div>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{therapist?.name}</p>
-            <p style={{ margin: 0, fontSize: 9, color: T.textMuted, fontFamily: FONT_DISPLAY, letterSpacing: "0.25em", marginTop: 1 }}>THERAPIST</p>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={() => fetchData()} title="更新" style={{ padding: "6px 10px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>🔄</button>
-          <button onClick={logout} style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.accent}`, backgroundColor: "transparent", color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>ログアウト</button>
+    {/* 予約速報テロップ */}
+    {tickerMsgs.length > 0 && (
+      <div style={{ overflow: "hidden", borderBottom: `1px solid ${C.border}`, backgroundColor: C.accentBg, height: 30 }}>
+        <div className="ticker-scroll" style={{ display: "flex", alignItems: "center", gap: 64, whiteSpace: "nowrap", height: "100%", fontSize: 11, color: C.accentDark, letterSpacing: "0.05em" }}>
+          {tickerMsgs.map((m, i) => <span key={i} style={{ display: "inline-block", padding: "0 16px" }}>{m}</span>)}
+          {tickerMsgs.map((m, i) => <span key={`dup-${i}`} style={{ display: "inline-block", padding: "0 16px" }}>{m}</span>)}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: 76 }}><div className="max-w-[600px] mx-auto p-4">
+    )}
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "20px 16px" }}>
 
-        {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: FONT_SERIF }}>
+      {/* ═══ ホーム ═══ */}
+      {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="animate-[fadeIn_0.3s]">
+        {unreadCount > 0 && (
+          <button onClick={() => setTab("notifications")} style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 16px",
+            backgroundColor: C.accentBg,
+            border: `1px solid ${C.accent}40`,
+            borderRadius: 6,
+            cursor: "pointer",
+            fontFamily: FONT_SERIF,
+            textAlign: "left",
+          }}>
+            <IconBell size={18} color={C.accentDark} />
+            <span style={{ flex: 1, fontSize: 12, color: C.accentDark, letterSpacing: "0.03em" }}>未読のお知らせが {unreadCount} 件あります</span>
+            <IconArrowRight size={14} color={C.accentDark} />
+          </button>
+        )}
 
-          {/* ═══ ブロック0 — 💬 チャット入口（最上部・未読があれば目立つ） ═══ */}
-          {(() => {
-            const fmtRel = (iso?: string) => {
-              if (!iso) return "";
-              const d = new Date(iso);
-              const diffMin = Math.floor((Date.now() - d.getTime()) / 60000);
-              if (diffMin < 1) return "たった今";
-              if (diffMin < 60) return `${diffMin}分前`;
-              const diffH = Math.floor(diffMin / 60);
-              if (diffH < 24) return `${diffH}時間前`;
-              const diffD = Math.floor(diffH / 24);
-              if (diffD < 7) return `${diffD}日前`;
-              return `${d.getMonth() + 1}/${d.getDate()}`;
-            };
-            const hasUnread = chatUnread > 0;
-            const hasHistory = chatLatestPreview !== null;
-            return (
-              <button
-                onClick={() => setTab("chat")}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "18px 18px 16px",
-                  backgroundColor: hasUnread ? T.accentBg : T.card,
-                  border: `1px solid ${hasUnread ? T.accent : T.border}`,
-                  borderLeftWidth: 3,
-                  borderLeftColor: T.accentDeep,
-                  cursor: "pointer",
-                  fontFamily: FONT_SERIF,
-                  position: "relative",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                {/* ヘッダー行 */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: hasHistory ? 10 : 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 22, lineHeight: 1 }}>💬</span>
-                    <div>
-                      <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, fontWeight: 500, marginBottom: 2 }}>MESSAGES</p>
-                      <p style={{ fontFamily: FONT_SERIF, fontSize: 14, letterSpacing: "0.08em", color: T.text, fontWeight: 600 }}>
-                        スタッフとのチャット
-                      </p>
+        {/* ═══ ヒーロー ═══ */}
+        <div style={{
+          position: "relative",
+          width: "calc(100% + 32px)",
+          marginLeft: -16,
+          marginRight: -16,
+          height: 200,
+          overflow: "hidden",
+          backgroundColor: C.accentBg,
+        }}>
+          <img
+            src="/mypage/hero-home.jpg"
+            alt=""
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 50%" }}
+          />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.9) 100%)" }} />
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 20 }}>
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: C.accent, textTransform: "uppercase" }}>Welcome back</p>
+            <h1 style={{ margin: "10px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.08em", color: C.text }}>{customer.self_name || customer.name} 様</h1>
+            <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto 0" }} />
+          </div>
+        </div>
+
+        {/* ═══ 予約ボタン（大CTA） ═══ */}
+        <button
+          onClick={() => { setTab("schedule"); setSchedView("day"); setSchedDate(today); }}
+          style={{
+            width: "100%",
+            padding: "16px 24px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            backgroundColor: C.accent,
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontFamily: FONT_SERIF,
+            fontSize: 13,
+            letterSpacing: "0.2em",
+            fontWeight: 400,
+          }}
+        >
+          <IconCalendar size={16} color="#fff" />
+          ご予約する
+        </button>
+
+        {/* ═══ 開催中のイベント ═══ */}
+        {customerEvents.length > 0 && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+              <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Events</span>
+            </div>
+            <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8, margin: "0 -16px", padding: "0 16px 8px", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+              {customerEvents.map(ev => {
+                const hasLink = !!ev.cta_url;
+                const accent = ev.accent_color || C.accent;
+                const period = formatEventPeriod(ev);
+                const inner = (
+                  <div key={ev.id} style={{ flexShrink: 0, width: 280, scrollSnapAlign: "start", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6, overflow: "hidden" }}>
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "16/10", backgroundColor: ev.image_url ? C.cardAlt : accent + "20", backgroundImage: ev.image_url ? `url(${ev.image_url})` : undefined, backgroundSize: "cover", backgroundPosition: "center" }}>
+                      {ev.badge_label && <span style={{ position: "absolute", top: 8, left: 8, padding: "3px 10px", fontSize: 9, color: "#fff", backgroundColor: accent, borderRadius: 2, letterSpacing: "0.1em", fontFamily: FONT_SERIF }}>{ev.badge_label}</span>}
+                      {period && <span style={{ position: "absolute", bottom: 8, right: 8, padding: "3px 10px", fontSize: 9, backgroundColor: "rgba(255,255,255,0.92)", color: C.text, borderRadius: 999, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{period}</span>}
                     </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {hasUnread && (
-                      <span style={{
-                        minWidth: 22,
-                        height: 22,
-                        padding: "0 7px",
-                        borderRadius: 999,
-                        backgroundColor: "#e74c5e",
-                        color: "#fff",
-                        fontFamily: FONT_SANS,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 1px 3px rgba(231,76,94,0.4)",
-                      }}>
-                        {chatUnread > 99 ? "99+" : chatUnread}
-                      </span>
-                    )}
-                    <span style={{ fontSize: 14, color: T.textMuted }}>›</span>
-                  </div>
-                </div>
-
-                {/* プレビュー */}
-                {hasHistory && chatLatestPreview && (
-                  <div style={{
-                    marginTop: 6,
-                    paddingTop: 10,
-                    borderTop: `1px dashed ${T.border}`,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: 10,
-                  }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        fontSize: 11,
-                        color: T.textSub,
-                        fontWeight: 600,
-                        marginBottom: 2,
-                        letterSpacing: "0.02em",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}>
-                        {chatLatestPreview.title}
-                      </p>
-                      <p style={{
-                        fontSize: 12,
-                        color: T.textMuted,
-                        lineHeight: 1.5,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}>
-                        {chatLatestPreview.preview || "（メッセージなし）"}
-                      </p>
-                    </div>
-                    <span style={{ fontSize: 10, color: T.textFaint, flexShrink: 0, marginTop: 2 }}>
-                      {fmtRel(chatLatestPreview.at)}
-                    </span>
-                  </div>
-                )}
-
-                {!hasHistory && (
-                  <p style={{
-                    marginTop: 10,
-                    paddingTop: 10,
-                    borderTop: `1px dashed ${T.border}`,
-                    fontSize: 11,
-                    color: T.textMuted,
-                    lineHeight: 1.6,
-                  }}>
-                    スタッフからの連絡はここに届きます
-                  </p>
-                )}
-              </button>
-            );
-          })()}
-
-          {/* ═══ ブロック1 — 本日のヒーロー ═══ */}
-          {(() => {
-            const bldName = getBuildingForDate(today);
-            const rmName = getRoomForDate(today);
-            const keyNum = getKeyNumberForDate(today);
-            const d = new Date(today + "T00:00:00");
-            const days = ["日", "月", "火", "水", "木", "金", "土"];
-            const dateLabel = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
-            const dowLabel = days[d.getDay()];
-            return (
-              <section style={{ ...MARBLE.pink, padding: "40px 24px 48px", marginLeft: -16, marginRight: -16, marginTop: -16, position: "relative" }}>
-                <div style={{ width: 1, height: 36, backgroundColor: T.accent, marginBottom: 18 }} />
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TODAY</p>
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 4 }}>{dateLabel}</p>
-                <p style={{ fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.15em", color: T.textSub, marginBottom: 24 }}>{dowLabel}曜日</p>
-                {todayShift ? (
-                  <>
-                    <p style={{ fontFamily: FONT_SANS, fontSize: 32, letterSpacing: "0.02em", color: T.text, fontWeight: 300, marginBottom: 16, lineHeight: 1.1 }}>
-                      {todayShift.start_time?.slice(0,5)}<span style={{ fontSize: 16, color: T.textMuted, margin: "0 8px" }}>—</span>{todayShift.end_time?.slice(0,5)}
-                    </p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px", fontSize: 12, color: T.textSub, letterSpacing: "0.05em" }}>
-                      {todayShift.store_id > 0 && <span>🏠 {getStoreName(todayShift.store_id)}</span>}
-                      {bldName && <span>🏢 {bldName}</span>}
-                      {rmName && <span>🚪 {rmName}</span>}
-                      {keyNum && <span style={{ color: T.accent, fontWeight: 500 }}>🔑 {keyNum}</span>}
-                    </div>
-                  </>
-                ) : (
-                  <p style={{ fontFamily: FONT_SERIF, fontSize: 13, color: T.textMuted, letterSpacing: "0.05em" }}>本日の出勤予定はありません</p>
-                )}
-              </section>
-            );
-          })()}
-
-          {/* ═══ ブロック2 — 今月のサマリー ═══ */}
-          <section>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>THIS MONTH</p>
-              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>今月の実績</p>
-              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              {[
-                { l: "REWARD",   subL: "報酬",     v: monthTotal.toLocaleString(),   unit: "¥", primary: true },
-                { l: "ORDERS",   subL: "接客数",   v: String(monthOrders),            unit: "件", primary: false },
-                { l: "DAYS",     subL: "出勤日数", v: String(monthDays),              unit: "日", primary: false },
-              ].map(s => (
-                <div key={s.l} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 12px", textAlign: "center" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.textMuted, marginBottom: 4, fontWeight: 500 }}>{s.l}</p>
-                  <p style={{ fontFamily: FONT_SANS, fontSize: s.primary ? 20 : 22, color: s.primary ? T.accent : T.text, fontWeight: s.primary ? 500 : 300, letterSpacing: "0em", lineHeight: 1.1, marginBottom: 2 }}>
-                    {s.unit === "¥" && <span style={{ fontSize: 13, marginRight: 1 }}>¥</span>}{s.v}{s.unit !== "¥" && <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 2, fontWeight: 400 }}>{s.unit}</span>}
-                  </p>
-                  <p style={{ fontFamily: FONT_SERIF, fontSize: 10, color: T.textMuted, letterSpacing: "0.08em" }}>{s.subL}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* ═══ ブロック3 — 本日のオーダー ═══ */}
-          <section>
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>TODAY&apos;S ORDERS</p>
-              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12, display: "inline-flex", gap: 12, alignItems: "center" }}>
-                本日のオーダー
-                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 11, color: T.accent, padding: "2px 12px", border: `1px solid ${T.accent}44`, fontWeight: 400 }}>{todayOrders.length}件</span>
-              </p>
-              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-            </div>
-
-            <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "12px 14px", marginBottom: 14 }}>
-              <p style={{ margin: 0, fontSize: 10, color: T.textMuted, lineHeight: 1.8, letterSpacing: "0.03em" }}>
-                🔔 お客様が来店されたら <strong style={{ color: T.text }}>「入室」</strong>ボタンを<br />
-                🚪 お客様が退室されたら <strong style={{ color: T.text }}>「退室」</strong>ボタンを<br />
-                <span style={{ color: T.textFaint }}>※ 間違えた場合は「取消」で元に戻せます。</span>
-              </p>
-            </div>
-
-            {todayOrders.length === 0 ? (
-              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "32px 16px", textAlign: "center" }}>
-                <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>本日のオーダーはありません</p>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {todayOrders.map(r => {
-                  const custSt = (r as any).customer_status || "unsent";
-                  const isServing = custSt === "serving";
-                  const isCompleted = custSt === "completed" || (r as any).status === "completed";
-                  const statusLabel = isCompleted ? "終了" : isServing ? "接客中" : "予約済";
-                  const statusIcon = isCompleted ? "✅" : isServing ? "💆" : "⏳";
-                  const statusColor = isCompleted ? SITE.color.text : isServing ? T.accent : T.textMuted;
-                  const accentBorder = isServing ? T.accent : isCompleted ? "#6b9b7e" : T.border;
-                  return (
-                    <div key={r.id} style={{ backgroundColor: T.card, border: `1px solid ${accentBorder}`, padding: "14px 16px", position: "relative" }}>
-                      {isServing && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, backgroundColor: T.accent }} />}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontFamily: FONT_SANS, fontSize: 16, fontWeight: 400, letterSpacing: "0.02em", color: T.text, margin: 0 }}>
-                            {r.start_time?.slice(0,5)} <span style={{ color: T.textMuted, margin: "0 4px" }}>—</span> {r.end_time?.slice(0,5)}
-                          </p>
-                          <p style={{ margin: "6px 0 0", fontSize: 12, color: T.textSub, letterSpacing: "0.03em" }}>👤 {r.customer_name}</p>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 4, fontSize: 10, color: T.textMuted }}>
-                            <span>📋 {r.course}</span>
-                            {(r as any).nomination && (r as any).nomination !== "フリー" && <span>⭐ {(r as any).nomination}</span>}
-                            {(r as any).extension_name && <span>⏱ +{(r as any).extension_name}</span>}
-                            {(r as any).options_text && <span>🎁 {(r as any).options_text}</span>}
-                          </div>
-                          {r.notes && <p style={{ margin: "6px 0 0", fontSize: 10, color: "#b38419", letterSpacing: "0.03em" }}>📝 {r.notes.split("\n")[0]}</p>}
+                    <div style={{ padding: 14 }}>
+                      {ev.subtitle && <p style={{ margin: 0, fontSize: 10, color: accent, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: FONT_DISPLAY }}>{ev.subtitle}</p>}
+                      <h3 style={{ margin: "6px 0 0", fontSize: 14, fontFamily: FONT_DISPLAY, fontWeight: 400, color: C.text, letterSpacing: "0.05em" }}>{ev.title}</h3>
+                      {ev.description && <p style={{ margin: "6px 0 0", fontSize: 11, color: C.textSub, lineHeight: 1.7, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{ev.description}</p>}
+                      {ev.cta_label && hasLink && (
+                        <div style={{ marginTop: 10, paddingTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${C.border}` }}>
+                          <span style={{ fontSize: 11, color: accent, letterSpacing: "0.05em" }}>{ev.cta_label}</span>
+                          <IconArrowRight size={12} color={accent} />
                         </div>
-                        <span style={{ fontFamily: FONT_SERIF, fontSize: 10, padding: "4px 10px", color: statusColor, border: `1px solid ${statusColor}33`, backgroundColor: statusColor + "10", letterSpacing: "0.08em", whiteSpace: "nowrap", marginLeft: 8 }}>{statusIcon} {statusLabel}</span>
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        {!isServing && !isCompleted && (
-                          <button onClick={async () => {
-                            await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving" }).eq("id", r.id);
-                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving" } as any : o));
-                          }} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-                            🔔 入室（接客開始）
-                          </button>
-                        )}
-                        {isServing && (<>
-                          <button onClick={async () => {
-                            await supabase.from("reservations").update({ customer_status: "completed", therapist_status: "completed", status: "completed" }).eq("id", r.id);
-                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "completed", therapist_status: "completed", status: "completed" } as any : o));
-                            fetchData();
-                          }} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: "#6b9b7e", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-                            🚪 退室（接客終了）
-                          </button>
-                          <button onClick={async () => {
-                            await supabase.from("reservations").update({ customer_status: "detail_read", therapist_status: "detail_sent" }).eq("id", r.id);
-                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "detail_read", therapist_status: "detail_sent" } as any : o));
-                          }} style={{ padding: "11px 14px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-                            ↩ 取消
-                          </button>
-                        </>)}
-                        {isCompleted && (
-                          <button onClick={async () => {
-                            await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving", status: "unprocessed" }).eq("id", r.id);
-                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving", status: "unprocessed" } as any : o));
-                            fetchData();
-                          }} style={{ padding: "9px 14px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-                            ↩ 退室を取り消す
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          {/* ═══ ブロック4 — アラートセンター (お知らせ・マニュアル未読) ═══ */}
-          {(() => {
-            const unreadNotifs = notifications.filter(n => !notifReadIds.includes(n.id));
-            const unreadArticles = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id));
-            const recentUpdates = manualUpdates.slice(0, 2);
-            if (unreadNotifs.length === 0 && unreadArticles.length === 0 && recentUpdates.length === 0) return null;
-            return (
-              <section style={{ ...MARBLE.beige, padding: "36px 20px", marginLeft: -16, marginRight: -16 }}>
-                <div style={{ textAlign: "center", marginBottom: 20 }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>NOTICE</p>
-                  <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>未確認のお知らせ</p>
-                  <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-                </div>
-
-                {unreadNotifs.length > 0 && (
-                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, marginBottom: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", color: T.text }}>📣 お知らせ <span style={{ fontFamily: FONT_DISPLAY, color: T.accent, marginLeft: 4 }}>{unreadNotifs.length}</span></p>
-                      <button onClick={() => { setLearnSub("notifications"); setTab("notifications"); }} style={{ fontSize: 10, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>すべて見る →</button>
-                    </div>
-                    <div>
-                      {unreadNotifs.slice(0, 3).map(n => {
-                        const icon = n.type === "schedule" ? "📅" : n.type === "warning" ? "⚠️" : "📢";
-                        return (
-                          <div key={n.id} onClick={() => openNotif(n)} style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start" }}>
-                            <span style={{ fontSize: 14 }}>{icon}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</p>
-                              <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.body}</p>
-                            </div>
-                            <span style={{ fontSize: 9, color: T.textFaint, whiteSpace: "nowrap" }}>{new Date(n.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {(unreadArticles.length > 0 || recentUpdates.length > 0) && (
-                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, cursor: "pointer" }} onClick={() => { setLearnSub("manual"); setTab("manual"); }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.08em", color: T.text }}>📖 マニュアル {unreadArticles.length > 0 && <span style={{ fontFamily: FONT_DISPLAY, color: T.accent, marginLeft: 4 }}>{unreadArticles.length}件未読</span>}</p>
-                      <span style={{ fontSize: 10, color: T.accent, letterSpacing: "0.08em" }}>開く →</span>
-                    </div>
-                    {recentUpdates.length > 0 && (
-                      <div style={{ padding: "10px 16px" }}>
-                        {recentUpdates.map(u => {
-                          const art = manualArticles.find(a => a.id === u.article_id);
-                          return <p key={u.id} style={{ margin: "2px 0", fontSize: 10, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✏️ {art?.title}: {u.summary}</p>;
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-            );
-          })()}
-
-          {/* ═══ ブロック5 — カレンダー ═══ */}
-          {(() => {
-            const [cy, cm] = calMonth.split("-").map(Number);
-            const calDim = new Date(cy, cm, 0).getDate();
-            const firstDow = new Date(cy, cm - 1, 1).getDay();
-            const cells: (string | null)[] = [];
-            for (let i = 0; i < firstDow; i++) cells.push(null);
-            for (let d = 1; d <= calDim; d++) cells.push(`${calMonth}-${String(d).padStart(2, "0")}`);
-            while (cells.length % 7 !== 0) cells.push(null);
-            const calTotal = calSettlements.reduce((s, stl) => s + stl.final_payment, 0);
-            const calOrders = calReservations.length;
-            const calDays = calSettlements.length;
-
-            return (
-              <section>
-                <div style={{ textAlign: "center", marginBottom: 16 }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>CALENDAR</p>
-                  <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>月別カレンダー</p>
-                  <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-                </div>
-
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                    <button onClick={() => { const d = new Date(cy, cm - 2, 1); setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }}
-                      style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
-                    <div style={{ textAlign: "center" }}>
-                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 20, color: T.text, letterSpacing: "0.05em" }}>{cy}.{String(cm).padStart(2, "0")}</p>
-                      <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 4, fontSize: 9, letterSpacing: "0.05em" }}>
-                        <span style={{ color: T.accent, fontFamily: FONT_SANS }}>{fmt(calTotal)}</span>
-                        <span style={{ color: T.textMuted }}>{calOrders}件</span>
-                        <span style={{ color: T.textMuted }}>{calDays}日出勤</span>
-                      </div>
-                    </div>
-                    <button onClick={() => { const d = new Date(cy, cm, 1); setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }}
-                      style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
-                    {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
-                      <div key={d} style={{ textAlign: "center", fontSize: 9, padding: "6px 0", fontFamily: FONT_SERIF, letterSpacing: "0.05em", color: i === 0 ? "#c96b83" : i === 6 ? "#6b8ba8" : T.textMuted }}>{d}</div>
-                    ))}
-                    {cells.map((date, i) => {
-                      if (!date) return <div key={`e-${i}`} style={{ padding: 2 }} />;
-                      const dt = new Date(date + "T00:00:00");
-                      const dayNum = dt.getDate();
-                      const dow = dt.getDay();
-                      const isToday2 = date === today;
-                      const shift = calShifts.find(s => s.date === date);
-                      const settlement = calSettlements.find(s => s.date === date);
-                      const dayRes = calReservations.filter(r => r.date === date);
-                      const hasWork = !!shift;
-                      const hasSettled = !!settlement;
-                      const custCount = dayRes.length;
-                      const uniqueCust = new Set(dayRes.map(r => r.customer_name)).size;
-
-                      return (
-                        <div key={date} onClick={() => setCalDetailDate(date)} style={{
-                          padding: 3, textAlign: "center", minHeight: 58, display: "flex", flexDirection: "column", cursor: "pointer",
-                          backgroundColor: isToday2 ? T.accentBg : hasSettled ? "rgba(107,155,126,0.06)" : hasWork ? "rgba(232,132,154,0.04)" : "transparent",
-                          border: isToday2 ? `1.5px solid ${T.accent}` : hasWork ? `1px solid ${T.border}` : "1px solid transparent",
-                        }}>
-                          <span style={{ fontFamily: FONT_SANS, fontSize: 12, fontWeight: 500, color: dow === 0 ? "#c96b83" : dow === 6 ? "#6b8ba8" : T.text }}>{dayNum}</span>
-                          {hasWork && <span style={{ fontSize: 7, marginTop: 1, color: T.accent, fontFamily: FONT_SANS, letterSpacing: "0.02em" }}>{shift.start_time?.slice(0,5)}〜</span>}
-                          {hasSettled && <span style={{ fontSize: 7, fontWeight: 500, color: T.accent, fontFamily: FONT_SANS }}>{fmt(settlement.final_payment)}</span>}
-                          {custCount > 0 && <span style={{ fontSize: 7, color: "#6b9b7e", fontFamily: FONT_SANS }}>👤{uniqueCust}名{custCount > uniqueCust ? `(${custCount})` : ""}</span>}
-                          {hasWork && !hasSettled && date < today && <span style={{ fontSize: 6, color: "#b38419", letterSpacing: "0.05em" }}>未清算</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div style={{ display: "flex", gap: 14, marginTop: 12, paddingTop: 10, justifyContent: "center", flexWrap: "wrap", borderTop: `1px solid ${T.border}`, fontSize: 9, letterSpacing: "0.03em" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.textMuted }}><span style={{ width: 8, height: 8, backgroundColor: "rgba(232,132,154,0.15)", border: `1px solid ${T.accent}` }} />出勤</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.textMuted }}><span style={{ width: 8, height: 8, backgroundColor: "rgba(107,155,126,0.15)" }} />清算済</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.accent }}><span style={{ width: 8, height: 8, backgroundColor: T.accentBg, border: `1.5px solid ${T.accent}` }} />今日</span>
-                    <span style={{ color: "#b38419" }}>⚠ 未清算</span>
-                  </div>
-                </div>
-              </section>
-            );
-          })()}
-
-          {/* ═══ ブロック6 — 直近の出勤予定 ═══ */}
-          {upcomingShifts.length > 0 && (
-            <section>
-              <div style={{ textAlign: "center", marginBottom: 16 }}>
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, marginBottom: 8, fontWeight: 500 }}>UPCOMING</p>
-                <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 12 }}>直近の出勤予定</p>
-                <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-              </div>
-              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                {upcomingShifts.map((s, idx) => (
-                  <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: idx < upcomingShifts.length - 1 ? `1px solid ${T.border}` : "none" }}>
-                    <span style={{ fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.05em", color: T.text }}>{formatDate(s.date)}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {s.store_id > 0 && <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${T.border}`, color: T.textSub, letterSpacing: "0.03em" }}>{getStoreShort(s.store_id)}</span>}
-                      <span style={{ fontFamily: FONT_SANS, fontSize: 13, fontWeight: 400, letterSpacing: "0.02em", color: T.text }}>{s.start_time?.slice(0,5)} — {s.end_time?.slice(0,5)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* ═══ ブロック7 — プッシュ通知設定 ═══ */}
-          {therapist && (
-            <section style={{ ...MARBLE.soft, padding: "28px 20px", marginLeft: -16, marginRight: -16 }}>
-              <div style={{ textAlign: "center", marginBottom: 14 }}>
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 6, fontWeight: 500 }}>NOTIFICATION</p>
-                <p style={{ fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", color: T.text, fontWeight: 500 }}>🔔 プッシュ通知設定</p>
-              </div>
-              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
-                <p style={{ margin: "0 0 10px", fontSize: 10, color: T.textMuted, textAlign: "center", letterSpacing: "0.03em" }}>シフト確定・お知らせをリアルタイムで受け取れます</p>
-                <PushToggle userType="therapist" userId={therapist.id} className="w-full" />
-              </div>
-            </section>
-          )}
-
-        </div>)}
-
-        {/* ═══ サブセグメント（ワーク/マネー/ラーン） ═══ */}
-        {(mainTab === "work" || mainTab === "money" || mainTab === "learn") && (() => {
-          type SubItem = { key: typeof tab; emoji: string; label: string; badge?: number };
-          let items: SubItem[] = [];
-          const notifUnread = notifications.filter(n => !notifReadIds.includes(n.id)).length;
-          const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
-          if (mainTab === "work") {
-            items = [
-              { key: "schedule",  emoji: "📅", label: "出勤予定" },
-              { key: "shift",     emoji: "📝", label: "シフト希望" },
-              { key: "diary",     emoji: "📸", label: "写メ日記" },
-              { key: "customers", emoji: "👤", label: "お客様" },
-            ];
-          } else if (mainTab === "money") {
-            items = [
-              { key: "salary", emoji: "💰", label: "給料明細" },
-              { key: "gift",   emoji: "💝", label: "配信報酬" },
-              { key: "cert",   emoji: "📄", label: "証明書" },
-              { key: "tax",    emoji: "📊", label: "確定申告" },
-            ];
-          } else {
-            items = [
-              { key: "notifications", emoji: "🔔", label: "お知らせ",   badge: notifUnread },
-              { key: "manual",        emoji: "📖", label: "マニュアル", badge: manualUnread },
-            ];
-          }
-          const clickSub = (k: typeof tab) => {
-            setTab(k);
-            if (k === "shift" || k === "schedule" || k === "customers" || k === "diary") setWorkSub(k);
-            else if (k === "salary" || k === "cert" || k === "tax" || k === "gift") setMoneySub(k);
-            else if (k === "notifications" || k === "manual") setLearnSub(k);
-          };
-          const sectionLabel = mainTab === "work" ? "WORK" : mainTab === "money" ? "MONEY" : "LEARN";
-          const sectionTitle = mainTab === "work" ? "仕事" : mainTab === "money" ? "報酬・税務" : "情報・お知らせ";
-          return (
-            <div style={{ marginBottom: 20, fontFamily: FONT_SERIF }}>
-              <div style={{ textAlign: "center", marginBottom: 18 }}>
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>{sectionLabel}</p>
-                <p style={{ fontFamily: FONT_SERIF, fontSize: 14, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>{sectionTitle}</p>
-                <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: 0, border: `1px solid ${T.border}`, backgroundColor: T.card }}>
-                {items.map((it, idx) => {
-                  const active = tab === it.key;
-                  return (
-                    <button key={it.key} onClick={() => clickSub(it.key)}
-                      style={{
-                        padding: "10px 4px",
-                        fontSize: 11,
-                        fontFamily: FONT_SERIF,
-                        letterSpacing: "0.05em",
-                        cursor: "pointer",
-                        border: "none",
-                        borderLeft: idx > 0 ? `1px solid ${T.border}` : "none",
-                        backgroundColor: active ? T.accent : "transparent",
-                        color: active ? "#fff" : T.textSub,
-                        fontWeight: active ? 500 : 400,
-                        transition: "all 0.2s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 4,
-                      }}>
-                      <span style={{ fontSize: 12 }}>{it.emoji}</span>
-                      <span>{it.label}</span>
-                      {it.badge !== undefined && it.badge > 0 && (
-                        <span style={{ fontFamily: FONT_SANS, fontSize: 9, padding: "1px 5px", backgroundColor: active ? "#fff" : T.accent, color: active ? T.accent : "#fff", borderRadius: 999, marginLeft: 2, fontWeight: 500, letterSpacing: 0 }}>{it.badge}</span>
                       )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
-
-
-        {/* 🔔 お知らせタブ (セッション㊸) */}
-        {tab === "notifications" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
-            {/* セクション見出し */}
-            <div style={{ textAlign: "center" }}>
-              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>NOTIFICATIONS</p>
-              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🔔 お知らせ</p>
-              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-            </div>
-
-            {notifications.filter(n => !notifReadIds.includes(n.id)).length > 0 && (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button onClick={markAllNotifRead} style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.accent}`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
-                  ✅ すべて既読にする
-                </button>
-              </div>
-            )}
-
-            {notifications.length === 0 ? (
-              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "48px 16px", textAlign: "center" }}>
-                <p style={{ fontSize: 28, margin: "0 0 12px" }}>📭</p>
-                <p style={{ margin: 0, fontSize: 12, color: T.textMuted, letterSpacing: "0.05em" }}>まだお知らせはありません</p>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 0, backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                {notifications.map((n, idx) => {
-                  const isRead = notifReadIds.includes(n.id);
-                  const icon = n.type === "schedule" ? "📅" : n.type === "warning" ? "⚠️" : "📢";
-                  const accentColor = n.type === "warning" ? "#c96b83" : n.type === "schedule" ? "#6b8ba8" : T.accent;
-                  return (
-                    <div key={n.id} onClick={() => openNotif(n)}
-                      style={{
-                        padding: "16px 18px",
-                        cursor: "pointer",
-                        borderBottom: idx < notifications.length - 1 ? `1px solid ${T.border}` : "none",
-                        backgroundColor: isRead ? "transparent" : "rgba(232,132,154,0.03)",
-                        display: "flex",
-                        gap: 12,
-                        alignItems: "flex-start",
-                        position: "relative",
-                      }}>
-                      {!isRead && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, backgroundColor: accentColor }} />}
-                      <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0, marginTop: 2 }}>{icon}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: isRead ? T.textSub : T.text, flex: 1, minWidth: 0 }}>{n.title}</p>
-                          {!isRead && <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 8px", color: "#fff", backgroundColor: accentColor, letterSpacing: "0.15em", fontWeight: 500, flexShrink: 0 }}>NEW</span>}
-                          {n.target_therapist_id && <span style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${T.border}`, color: T.textMuted, letterSpacing: "0.08em", flexShrink: 0 }}>個別</span>}
-                        </div>
-                        <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textMuted, lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-wrap" }}>{n.body}</p>
-                        <p style={{ margin: 0, fontFamily: FONT_SANS, fontSize: 10, color: T.textFaint, letterSpacing: "0.02em" }}>
-                          {new Date(n.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </p>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 📖 お知らせ詳細モーダル */}
-        {notifDetail && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)" }} onClick={() => setNotifDetail(null)}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 500, padding: 32, backgroundColor: T.card, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${T.border}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 26 }}>{notifDetail.type === "schedule" ? "📅" : notifDetail.type === "warning" ? "⚠️" : "📢"}</span>
-                  <div>
-                    <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, margin: 0, fontWeight: 500 }}>NOTICE</p>
-                    <p style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textFaint, margin: "2px 0 0", letterSpacing: "0.03em" }}>
-                      {new Date(notifDetail.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </p>
                   </div>
-                </div>
-                <button onClick={() => setNotifDetail(null)} style={{ width: 30, height: 30, cursor: "pointer", fontSize: 14, backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
-              </div>
-              <h3 style={{ fontFamily: FONT_SERIF, fontSize: 17, fontWeight: 500, letterSpacing: "0.05em", color: T.text, margin: "0 0 16px" }}>{notifDetail.title}</h3>
-              <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "16px 18px" }}>
-                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", whiteSpace: "pre-wrap", color: T.text }}>{notifDetail.body}</p>
-              </div>
-              <button onClick={() => setNotifDetail(null)} style={{ width: "100%", marginTop: 20, padding: 14, fontSize: 13, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>
-                閉じる
-              </button>
+                );
+                if (hasLink) {
+                  const isExternal = /^https?:\/\//.test(ev.cta_url);
+                  if (isExternal) return <a key={ev.id} href={ev.cta_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", display: "contents" }}>{inner}</a>;
+                  return <a key={ev.id} href={ev.cta_url} style={{ textDecoration: "none", display: "contents" }}>{inner}</a>;
+                }
+                return inner;
+              })}
             </div>
           </div>
         )}
 
-        {tab === "chat" && therapist && (<div style={{ display: "flex", flexDirection: "column", gap: 14, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CHAT</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>💬 スタッフとのチャット</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
+        {/* ═══ 次回のご予約 ═══ */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Next Reservation</span>
           </div>
-          <TherapistChatTab
-            therapistId={therapist.id}
-            therapistName={therapist.name}
-            C={T}
-            FONT_SERIF={FONT_SERIF}
-          />
-        </div>)}
-
-        {tab === "diary" && therapist && (
-          <TherapistDiaryTab
-            therapistId={therapist.id}
-            therapistName={therapist.name}
-            authToken={therapist.login_password}
-            C={T}
-            FONT_SERIF={FONT_SERIF}
-            FONT_DISPLAY={FONT_DISPLAY}
-            FONT_SANS={FONT_SANS}
-          />
-        )}
-
-        {tab === "shift" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>SHIFT REQUEST</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📝 シフト希望提出</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-          </div>
-
-          {/* 週ナビゲーション */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            <button onClick={() => setWeekOffset(Math.max(1, weekOffset - 1))} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
-            <div style={{ padding: "6px 16px", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, fontSize: 12, fontFamily: FONT_SANS, letterSpacing: "0.02em", color: T.text, minWidth: 180, textAlign: "center" }}>
-              {formatDate(weekDates[0])} <span style={{ color: T.textMuted, margin: "0 4px" }}>—</span> {formatDate(weekDates[6])}
-            </div>
-            <button onClick={() => setWeekOffset(weekOffset + 1)} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
-          </div>
-
-          {/* 説明テキスト */}
-          <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
-            <p style={{ margin: 0, fontSize: 11, color: T.textMuted, lineHeight: 1.9, letterSpacing: "0.03em" }}>
-              出勤希望の日にチェックを入れ、時間と店舗を選択してください。<br />
-              希望シフトが決まったら <strong style={{ color: T.text }}>「シフト希望を提出」</strong> ボタンを押してお店に提出してください。<br />
-              提出後、<strong style={{ color: T.accent }}>LINEでお店にもご報告をお願いします</strong>（📋 LINE用コピーで簡単に送れます）。
-            </p>
-          </div>
-
-          {/* 日付カード */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {weekDates.map(d => {
-              const draft = reqDrafts[d];
-              if (!draft) return null;
-              const dt = new Date(d + "T00:00:00");
-              const dow = ["日","月","火","水","木","金","土"][dt.getDay()];
-              const isSun = dt.getDay() === 0;
-              const isSat = dt.getDay() === 6;
-              const existing = shiftRequests.find(r => r.date === d);
-              return (
-                <div key={d} style={{ backgroundColor: draft.enabled ? T.accentBg : T.card, border: `1px solid ${draft.enabled ? T.accent : T.border}`, padding: "12px 14px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: draft.enabled ? 10 : 0 }}>
-                    <button onClick={() => setReqDrafts({ ...reqDrafts, [d]: { ...draft, enabled: !draft.enabled } })} style={{ fontSize: 16, cursor: "pointer", background: "none", border: "none", padding: 0, lineHeight: 1 }}>{draft.enabled ? "✅" : "⬜"}</button>
-                    <span style={{ fontFamily: FONT_SANS, fontSize: 14, fontWeight: 500, letterSpacing: "0.02em", minWidth: 72, color: isSun ? "#c96b83" : isSat ? "#6b8ba8" : T.text }}>
-                      {dt.getDate()}<span style={{ fontSize: 11, color: T.textMuted, marginLeft: 2 }}>日</span> ({dow})
-                    </span>
-                    {existing && (
-                      <span style={{ marginLeft: "auto", fontSize: 9, padding: "3px 8px", letterSpacing: "0.08em", fontFamily: FONT_SERIF,
-                        color: existing.status === "approved" ? "#6b9b7e" : existing.status === "rejected" ? "#c96b83" : "#b38419",
-                        border: `1px solid ${existing.status === "approved" ? "#6b9b7e" : existing.status === "rejected" ? "#c96b83" : "#b38419"}44`,
-                        backgroundColor: existing.status === "approved" ? "rgba(107,155,126,0.08)" : existing.status === "rejected" ? "rgba(201,107,131,0.08)" : "rgba(179,132,25,0.08)" }}>
-                        {existing.status === "approved" ? "承認済" : existing.status === "rejected" ? "却下" : "提出済"}
-                      </span>
-                    )}
-                  </div>
-                  {draft.enabled && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", paddingLeft: 28 }}>
-                      <select value={draft.store_id} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, store_id: Number(e.target.value) } })} style={{ padding: "6px 10px", fontSize: 10, cursor: "pointer", border: `1px solid ${T.accent}44`, backgroundColor: T.card, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.05em", fontWeight: 500, outline: "none" }}>
-                        <option value={0}>店舗未選択</option>
-                        {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                      <select value={draft.start} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, start: e.target.value } })} style={{ padding: "6px 8px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: T.card, color: T.text, fontFamily: FONT_SANS, outline: "none" }}>
-                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <span style={{ fontSize: 11, color: T.textMuted }}>—</span>
-                      <select value={draft.end} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, end: e.target.value } })} style={{ padding: "6px 8px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: T.card, color: T.text, fontFamily: FONT_SANS, outline: "none" }}>
-                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <input type="text" value={draft.notes} onChange={(e) => setReqDrafts({ ...reqDrafts, [d]: { ...draft, notes: e.target.value } })} placeholder="備考" style={{ flex: 1, minWidth: 70, padding: "6px 10px", fontSize: 10, border: `1px solid ${T.border}`, backgroundColor: T.card, color: T.text, fontFamily: FONT_SERIF, outline: "none" }} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {reqMsg && (
-            <div style={{ padding: "10px 14px", backgroundColor: "rgba(107,155,126,0.08)", border: `1px solid #6b9b7e44`, color: "#6b9b7e", fontSize: 12, textAlign: "center", letterSpacing: "0.05em" }}>{reqMsg}</div>
-          )}
-
-          {/* 送信ボタン */}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={submitShiftRequests} disabled={reqSaving} style={{ flex: 1, padding: "14px", fontSize: 13, cursor: reqSaving ? "not-allowed" : "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500, opacity: reqSaving ? 0.5 : 1 }}>
-              {reqSaving ? "送信中..." : "シフト希望を提出"}
-            </button>
-            <button onClick={copyShiftToClipboard} style={{ padding: "14px 18px", fontSize: 11, cursor: "pointer", border: `1px solid ${copiedShift ? "#6b9b7e" : T.accent}`, color: copiedShift ? "#6b9b7e" : T.accent, backgroundColor: copiedShift ? "rgba(107,155,126,0.08)" : "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-              {copiedShift ? "✅ コピー済" : "📋 LINE用コピー"}
-            </button>
-          </div>
-
-          {weekDates.some(d => reqDrafts[d]?.enabled) && (
-            <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "12px 14px" }}>
-              <p style={{ margin: "0 0 6px", fontFamily: FONT_DISPLAY, fontSize: 10, fontWeight: 500, letterSpacing: "0.2em", color: T.textMuted }}>PREVIEW</p>
-              <pre style={{ margin: 0, fontSize: 11, whiteSpace: "pre-wrap", color: T.textSub, fontFamily: FONT_SANS, lineHeight: 1.7 }}>{generateShiftCopyText()}</pre>
-            </div>
-          )}
-        </div>)}
-
-        {tab === "schedule" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CONFIRMED SHIFT</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📅 確定シフト</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-          </div>
-
-          {shifts.length === 0 ? (
-            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "40px 16px", textAlign: "center" }}>
-              <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>確定シフトがありません</p>
+          {upcomingRes.length === 0 ? (
+            <div style={{ padding: "32px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <img src="/mypage/empty-reservation.jpg" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", maxWidth: 240, aspectRatio: "4/3", objectFit: "cover", borderRadius: 4, marginBottom: 20, opacity: 0.9 }} />
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: "0.08em", color: C.text }}>現在ご予約はありません</p>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: C.textMuted }}>次のご来店を心よりお待ちしております</p>
             </div>
           ) : (
-            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-              {shifts.map((s, idx) => {
-                const bld = getBuildingForDate(s.date);
-                const isToday2 = s.date === today;
-                return (
-                  <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: idx < shifts.length - 1 ? `1px solid ${T.border}` : "none", backgroundColor: isToday2 ? T.accentBg : "transparent" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", minWidth: 76, color: T.text }}>{formatDate(s.date)}</span>
-                      {s.store_id > 0 && <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${T.accent}44`, color: T.accent, letterSpacing: "0.03em" }}>{getStoreShort(s.store_id)}</span>}
-                      {bld && <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${T.border}`, color: T.textSub, letterSpacing: "0.03em" }}>🏢 {bld}</span>}
-                      <span style={{ fontFamily: FONT_SANS, fontSize: 13, letterSpacing: "0.02em", color: T.text }}>{s.start_time?.slice(0,5)} — {s.end_time?.slice(0,5)}</span>
-                    </div>
-                    {isToday2 && <span style={{ fontSize: 9, padding: "3px 10px", color: "#fff", backgroundColor: T.accent, letterSpacing: "0.15em", fontFamily: FONT_DISPLAY, fontWeight: 500 }}>TODAY</span>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {upcomingRes.slice(0, 3).map(r => (
+                <div key={r.id} style={{ padding: 18, backgroundColor: C.accentBg, border: `1px solid ${C.accent}30`, borderRadius: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: "0.05em", color: C.accentDark }}>{dateFmt(r.date)}</span>
+                    <span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 999, backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color, letterSpacing: "0.05em" }}>{getStatusBadge(r.status).label}</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {shiftRequests.filter(r => r.status === "pending").length > 0 && (
-            <div>
-              <div style={{ textAlign: "center", marginBottom: 14 }}>
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#b38419", marginBottom: 4, fontWeight: 500 }}>PENDING</p>
-                <p style={{ fontFamily: FONT_SERIF, fontSize: 12, letterSpacing: "0.08em", color: T.text, fontWeight: 500 }}>⏳ 承認待ちのシフト希望</p>
-              </div>
-              <div style={{ backgroundColor: "rgba(179,132,25,0.04)", border: `1px solid #b3841944` }}>
-                {shiftRequests.filter(r => r.status === "pending").map((r, idx, arr) => (
-                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: idx < arr.length - 1 ? `1px solid #b3841922` : "none", fontSize: 12 }}>
-                    <span style={{ fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{formatDate(r.date)}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {r.store_id > 0 && <span style={{ fontSize: 10, color: T.accent, letterSpacing: "0.03em" }}>{getStoreShort(r.store_id)}</span>}
-                      <span style={{ fontFamily: FONT_SANS, fontSize: 12 }}>{r.start_time} — {r.end_time}</span>
-                    </div>
+                  <p style={{ margin: 0, fontSize: 14, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em", color: C.text }}>{r.start_time}〜{r.end_time}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, fontSize: 11, color: C.textSub }}>
+                    {r.course && <span>{r.course}</span>}
+                    {r.therapist_id > 0 && <span>{getTherapistName(r.therapist_id)}</span>}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>)}
-
-        {tab === "salary" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>PAYSLIP</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>💰 給料明細</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-          </div>
-
-          {/* モード切替セグメント */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: `1px solid ${T.border}` }}>
-            {([["monthly","📅","月別"],["annual","📊","年間"]] as const).map(([k, emoji, l], idx) => {
-              const active = salaryViewMode === k;
-              return (
-                <button key={k} onClick={() => setSalaryViewMode(k)}
-                  style={{ padding: "10px", fontSize: 12, cursor: "pointer", border: "none", borderLeft: idx > 0 ? `1px solid ${T.border}` : "none", backgroundColor: active ? T.accent : "transparent", color: active ? "#fff" : T.textSub, fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: active ? 500 : 400, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <span>{emoji}</span><span>{l}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 月別ビュー */}
-          {salaryViewMode === "monthly" && (<>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-              <button onClick={() => { const d = new Date(smY, smM - 2, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
-              <div style={{ padding: "6px 20px", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, fontFamily: FONT_DISPLAY, fontSize: 16, letterSpacing: "0.05em", color: T.text, minWidth: 120, textAlign: "center" }}>{smY}.{String(smM).padStart(2, "0")}</div>
-              <button onClick={() => { const d = new Date(smY, smM, 1); setSalaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
-            </div>
-
-            {/* 月サマリー3カード */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              {[
-                { label: "MONTHLY", jp: "月合計", v: monthTotal.toLocaleString(), unit: "¥", primary: true },
-                { label: "ORDERS",  jp: "接客数", v: String(monthOrders),           unit: "件", primary: false },
-                { label: "DAYS",    jp: "出勤日数", v: String(monthDays),           unit: "日", primary: false },
-              ].map(s => (
-                <div key={s.label} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 10px", textAlign: "center" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.textMuted, marginBottom: 4, fontWeight: 500 }}>{s.label}</p>
-                  <p style={{ fontFamily: FONT_SANS, fontSize: s.primary ? 19 : 22, color: s.primary ? T.accent : T.text, fontWeight: s.primary ? 500 : 300, letterSpacing: "0em", lineHeight: 1.1, marginBottom: 2 }}>
-                    {s.unit === "¥" && <span style={{ fontSize: 13 }}>¥</span>}{s.v}{s.unit !== "¥" && <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 2, fontWeight: 400 }}>{s.unit}</span>}
-                  </p>
-                  <p style={{ fontFamily: FONT_SERIF, fontSize: 10, color: T.textMuted, letterSpacing: "0.08em" }}>{s.jp}</p>
+                  {r.total_price > 0 && <p style={{ margin: "10px 0 0", fontSize: 13, fontFamily: FONT_DISPLAY, color: C.accentDark, letterSpacing: "0.05em" }}>{fmt(r.total_price)}</p>}
+                  {r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && (
+                    <div style={{ marginTop: 12, padding: 12, backgroundColor: "#ffffff", border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                      <p style={{ margin: "0 0 6px", fontSize: 10, color: C.textSub, letterSpacing: "0.05em" }}>カード決済額（税10%込）: <strong style={{ color: C.text, fontFamily: FONT_DISPLAY }}>{fmt(Math.round(r.total_price * 1.1))}</strong></p>
+                      <button onClick={(e) => { e.stopPropagation(); window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank"); }} style={{ width: "100%", padding: "8px 0", fontSize: 11, color: "#fff", backgroundColor: C.text, border: "none", borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.12em" }}>クレジットカードで支払う</button>
+                    </div>
+                  )}
+                  {/* キャンセルボタン */}
+                  <button onClick={() => handleCancelClick(r)} style={{ width: "100%", marginTop: 10, padding: "8px 0", fontSize: 10, backgroundColor: "transparent", color: canCancelDirectly(r) ? C.accentDark : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? C.accent + "40" : C.border}`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
+                    {canCancelDirectly(r) ? "この予約をキャンセル" : "キャンセル・変更について"}
+                  </button>
                 </div>
               ))}
             </div>
-
-            {/* 日別清算リスト */}
-            {settlements.length === 0 ? (
-              <div style={{ padding: "40px 16px", textAlign: "center", backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>清算データがありません</p>
-              </div>
-            ) : (
-              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                {settlements.map((stl, idx) => (
-                  <div key={stl.id} style={{ padding: "14px 16px", borderBottom: idx < settlements.length - 1 ? `1px solid ${T.border}` : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: T.text }}>{formatDate(stl.date)}</span>
-                      <span style={{ fontFamily: FONT_SANS, fontSize: 16, fontWeight: 500, color: T.accent, letterSpacing: "0.02em" }}><span style={{ fontSize: 11 }}>¥</span>{(stl.final_payment || 0).toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px 12px", fontSize: 10, flexWrap: "wrap", color: T.textMuted, letterSpacing: "0.02em" }}>
-                      <span>{stl.order_count}件</span>
-                      <span>売上 <span style={{ fontFamily: FONT_SANS }}>{fmt(stl.total_sales)}</span></span>
-                      <span>バック <span style={{ fontFamily: FONT_SANS }}>{fmt(stl.total_back)}</span></span>
-                      {(stl.gift_bonus_amount || 0) > 0 && <span style={{ color: "#c96b83" }}>💝 情報配信 <span style={{ fontFamily: FONT_SANS }}>+{fmt(stl.gift_bonus_amount || 0)}</span></span>}
-                      {stl.invoice_deduction > 0 && <span style={{ color: "#c96b83" }}>INV <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.invoice_deduction)}</span></span>}
-                      {stl.withholding_tax > 0 && <span style={{ color: "#c96b83" }}>源泉 <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.withholding_tax)}</span></span>}
-                      {stl.welfare_fee > 0 && <span style={{ color: "#c96b83" }}>備品 <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.welfare_fee)}</span></span>}
-                      {stl.transport_fee > 0 && <span style={{ color: "#6b9b7e" }}>交通 <span style={{ fontFamily: FONT_SANS }}>+{fmt(stl.transport_fee)}</span></span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>)}
-
-          {/* 年間ビュー */}
-          {salaryViewMode === "annual" && (() => {
-            // 業務委託報酬総額: total_back + 調整金 + 情報配信報酬 (gift_bonus_amount)
-            const aGross = annualSettlements.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0) + (r.gift_bonus_amount || 0), 0);
-            const aGiftBonus = annualSettlements.reduce((s, r) => s + (r.gift_bonus_amount || 0), 0);
-            const aInvDed = annualSettlements.reduce((s, r) => s + (r.invoice_deduction || 0), 0);
-            const aTax = annualSettlements.reduce((s, r) => s + (r.withholding_tax || 0), 0);
-            const aWelfare = annualSettlements.reduce((s, r) => s + (r.welfare_fee || 0), 0);
-            const aTransport = annualSettlements.reduce((s, r) => s + (r.transport_fee || 0), 0);
-            const aFinal = annualSettlements.reduce((s, r) => s + (r.final_payment || 0), 0);
-            const aDays = annualSettlements.length;
-            const aOrders = annualSettlements.reduce((s, r) => s + (r.order_count || 0), 0);
-            const monthlyData: { month: string; gross: number; final: number; days: number }[] = [];
-            for (let m = 1; m <= 12; m++) {
-              const key = `${salaryYear}-${String(m).padStart(2, "0")}`;
-              const ms = annualSettlements.filter(s => s.date.startsWith(key));
-              if (ms.length > 0) monthlyData.push({ month: `${m}月`, gross: ms.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0) + (r.gift_bonus_amount || 0), 0), final: ms.reduce((s, r) => s + (r.final_payment || 0), 0), days: ms.length });
-            }
-            const openPayslip = () => {
-              if (!therapist) return;
-              const th = therapist as any;
-              const realName = th.real_name || th.name;
-              const hasInv = th.has_invoice || false;
-              const invNum = th.therapist_invoice_number || "";
-              const store = storeInfo;
-              const w = window.open("", "_blank"); if (!w) return;
-              w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払調書_${salaryYear}_${realName}</title>
-<style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:750px;margin:40px auto;padding:30px;color:#333}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #ccc;padding:9px 14px;font-size:12px}th{background:#f5f0e8;text-align:left;width:38%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:14px}.section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}.doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}.stamp-area{display:flex;justify-content:space-between;margin-top:40px}.stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:10px;color:#888}@media print{body{margin:0;padding:20px}}</style></head><body>
-<p class="doc-title">報酬、料金、契約金及び賞金の支払調書</p><h1>支　払　調　書</h1><h2>対象期間：${salaryYear}年1月1日 〜 ${salaryYear}年12月31日</h2>
-<table><tr><th>支払を受ける者（氏名）</th><td>${realName}</td></tr>${realName !== th.name ? `<tr><th>業務上の名称</th><td>${th.name}</td></tr>` : ""}<tr><th>支払を受ける者（住所）</th><td>${th.address || '<span style="color:#c45555">※未登録</span>'}</td></tr>${th.birth_date ? `<tr><th>生年月日</th><td>${th.birth_date}</td></tr>` : ""}<tr><th>区分</th><td>${th.has_withholding ? "報酬（所得税法第204条第1項第6号）" : "報酬（所得税法第204条第1項第1号）"}</td></tr><tr><th>細目</th><td>${th.has_withholding ? "ホステス等の業務に関する報酬" : "マッサージ施術業務"}</td></tr><tr><th>適格請求書発行事業者</th><td>${hasInv ? `登録あり（登録番号：${invNum}）` : "未登録"}</td></tr></table>
-<table><tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
-<tr><td>稼働日数</td><td class="right">${aDays}日</td><td style="font-size:10px;color:#888">年間清算回数</td></tr>
-<tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${aGross.toLocaleString()}</strong></td><td style="font-size:10px;color:#888">業務委託報酬の年間合計${aGiftBonus > 0 ? `<br>（うち情報配信報酬 &yen;${aGiftBonus.toLocaleString()}）` : ""}</td></tr>
-${aInvDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${aInvDed.toLocaleString()}</td><td style="font-size:10px;color:#888">報酬額の10%を控除</td></tr><tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(aGross - aInvDed).toLocaleString()}</td><td style="font-size:10px;color:#888">支払金額 − 仕入税額控除</td></tr>` : ""}
-${aTax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="right" style="color:#c45555">-&yen;${aTax.toLocaleString()}</td><td style="font-size:10px;color:#888">所得税及び復興特別所得税</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
-${aWelfare > 0 ? `<tr><td style="color:#c45555">備品代・リネン代</td><td class="right" style="color:#c45555">-&yen;${aWelfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${aDays > 0 ? Math.round(aWelfare / aDays).toLocaleString() : 0}/日 × ${aDays}日</td></tr>` : ""}
-${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right">&yen;${aTransport.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${aDays > 0 ? Math.round(aTransport / aDays).toLocaleString() : 0}/日 × ${aDays}日</td></tr>` : ""}
-<tr class="total-row"><td>差引支払額</td><td class="right">&yen;${aFinal.toLocaleString()}</td><td style="font-size:10px;color:#888">年間支給額合計</td></tr></table>
-<div style="margin-top:15px"><p class="note">※ 支払金額は全て税込（内税方式）で記載。</p><p class="note">※ 源泉徴収税額は所得税法第204条第1項${th.has_withholding ? "第6号" : "第1号"}に基づき日次清算時に控除済み。</p>${aTransport > 0 ? `<p class="note">※ 交通費（実費精算分）は立替精算のため、支払金額・源泉徴収の対象外です（所得税基本通達204-2）。</p>` : ""}${aWelfare > 0 ? `<p class="note">※ 備品・リネン代は業務使用の備品・消耗品に対する実費控除です。確定申告時に必要経費として計上可能です。</p>` : ""}<p class="note">※ 本書は所得税法第225条第1項に基づく支払調書に準じて作成。</p></div>
-<div class="section"><p style="font-size:11px;color:#888;margin-bottom:8px">支払者</p><div class="company"><p><strong>${store?.company_name || ""}</strong></p><p>${store?.company_address || ""}</p><p>TEL: ${store?.company_phone || ""}</p>${store?.invoice_number ? `<p>適格請求書発行事業者登録番号: ${store.invoice_number}</p>` : ""}</div></div>
-<div class="stamp-area"><div class="stamp-box">支払者（${store?.company_name || ""}）</div><div class="stamp-box">支払を受ける者（${realName} 様）</div></div></body></html>`);
-              w.document.close();
-            };
-            return (<>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                <button onClick={() => setSalaryYear(salaryYear - 1)} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>◀</button>
-                <div style={{ padding: "6px 24px", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: "0.05em", color: T.text, minWidth: 100, textAlign: "center" }}>{salaryYear}</div>
-                <button onClick={() => setSalaryYear(salaryYear + 1)} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: `1px solid ${T.border}`, backgroundColor: "transparent", color: T.textSub, fontFamily: FONT_SERIF }}>▶</button>
-              </div>
-
-              {annualLoading ? (
-                <p style={{ fontSize: 12, textAlign: "center", padding: "40px 0", color: T.textFaint }}>読み込み中...</p>
-              ) : (<>
-                {/* 年間サマリー2x2 */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  {[
-                    { label: "ANNUAL",   jp: "年間報酬（税込）", v: aGross.toLocaleString(), unit: "¥", color: T.accent, primary: true },
-                    { label: "NET",      jp: "差引支払額",       v: aFinal.toLocaleString(), unit: "¥", color: "#b38419", primary: true },
-                    { label: "TAX",      jp: "源泉徴収",         v: aTax > 0 ? `-${aTax.toLocaleString()}` : "0", unit: aTax > 0 ? "¥" : "—", color: aTax > 0 ? "#c96b83" : T.textMuted, primary: false },
-                    { label: "WORKDAYS", jp: "出勤日数",         v: `${aDays}`, unit: `日 / ${aOrders}件`, color: T.text, primary: false },
-                  ].map(s => (
-                    <div key={s.label} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "20px 14px", textAlign: "center" }}>
-                      <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 6, fontWeight: 500 }}>{s.label}</p>
-                      <p style={{ fontFamily: FONT_SANS, fontSize: s.primary ? 22 : 20, color: s.color, fontWeight: s.primary ? 500 : 300, letterSpacing: "0em", lineHeight: 1.1, marginBottom: 4 }}>
-                        {s.unit === "¥" && <span style={{ fontSize: 13 }}>¥</span>}{s.v}{s.unit !== "¥" && <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 3, fontWeight: 400 }}>{s.unit}</span>}
-                      </p>
-                      <p style={{ fontFamily: FONT_SERIF, fontSize: 10, color: T.textMuted, letterSpacing: "0.08em" }}>{s.jp}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 控除内訳 */}
-                {(aInvDed > 0 || aWelfare > 0 || aTransport > 0 || aGiftBonus > 0) && (
-                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 18px" }}>
-                    <p style={{ margin: "0 0 12px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>CALCULATION — 控除・加算の内訳</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>報酬額（税込）</span><span style={{ fontFamily: FONT_SANS, fontWeight: 500 }}>{fmt(aGross)}</span></div>
-                      {aGiftBonus > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", paddingLeft: 16, fontSize: 11 }}><span>　└ うち 💝 情報配信報酬</span><span style={{ fontFamily: FONT_SANS }}>{fmt(aGiftBonus)}</span></div>}
-                      {aInvDed > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− インボイス控除（10%）</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aInvDed)}</span></div>}
-                      {aTax > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− 源泉徴収（10.21%）</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aTax)}</span></div>}
-                      {aWelfare > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− 備品・リネン代</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aWelfare)}</span></div>}
-                      {aTransport > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#6b9b7e" }}><span>+ 交通費（実費精算・非課税）</span><span style={{ fontFamily: FONT_SANS }}>+{fmt(aTransport)}</span></div>}
-                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, marginTop: 4, borderTop: `1px dashed ${T.border}`, fontWeight: 600, color: "#b38419" }}>
-                        <span>差引支払額（お手取り）</span>
-                        <span style={{ fontFamily: FONT_SANS, fontSize: 15 }}>{fmt(aFinal)}</span>
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px dashed ${T.border}`, fontSize: 10, color: T.textMuted, lineHeight: 1.8, letterSpacing: "0.02em" }}>
-                      <p style={{ margin: "0 0 4px", fontWeight: 500, color: T.textSub }}>💡 確定申告のヒント</p>
-                      <p style={{ margin: 0 }}>・上の「報酬額（税込）」が税務署に報告される<strong>支払金額</strong>です（収入）</p>
-                      {aGiftBonus > 0 && <p style={{ margin: 0 }}>・<strong>情報配信報酬</strong>（{fmt(aGiftBonus)}）も業務委託報酬の一部として支払金額に含まれます</p>}
-                      {aWelfare > 0 && <p style={{ margin: 0 }}>・<strong>備品・リネン代</strong>（{fmt(aWelfare)}）は必要経費として計上できます（消耗品費など）</p>}
-                      {aTransport > 0 && <p style={{ margin: 0 }}>・<strong>交通費（実費精算分）</strong>（{fmt(aTransport)}）は立替精算なので<span style={{ color: "#c96b83" }}>収入にも経費にもなりません</span>（課税対象外）</p>}
-                      {aTax > 0 && <p style={{ margin: 0 }}>・<strong>源泉徴収税額</strong>（{fmt(aTax)}）は確定申告で還付または納税調整の対象になります</p>}
-                    </div>
-                  </div>
-                )}
-
-                {/* 支払調書・証明書ボタン */}
-                {aDays > 0 && (
-                  <button onClick={openPayslip} style={{ width: "100%", padding: 14, fontSize: 13, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>
-                    📄 {salaryYear}年 支払調書を表示
-                  </button>
-                )}
-                <button onClick={() => { setMoneySub("cert"); setTab("cert"); window.location.hash = "cert"; }} style={{ width: "100%", padding: 13, fontSize: 12, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.accent}`, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.1em", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  📄 証明書を発行する →
-                </button>
-
-                {/* 月別内訳 */}
-                {monthlyData.length > 0 && (
-                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                    <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
-                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>MONTHLY BREAKDOWN</p>
-                    </div>
-                    {monthlyData.map(md => (
-                      <div key={md.month} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
-                        <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em" }}>{md.month}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          <span style={{ fontSize: 10, color: T.textMuted, fontFamily: FONT_SANS }}>{md.days}日</span>
-                          <span style={{ fontSize: 10, color: T.textMuted }}>報酬 <span style={{ fontFamily: FONT_SANS }}>{fmt(md.gross)}</span></span>
-                          <span style={{ fontFamily: FONT_SANS, fontSize: 14, fontWeight: 500, color: T.accent }}>{fmt(md.final)}</span>
-                        </div>
-                      </div>
-                    ))}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", backgroundColor: T.cardAlt }}>
-                      <span style={{ fontFamily: FONT_SERIF, fontSize: 13, fontWeight: 600, letterSpacing: "0.08em" }}>合計</span>
-                      <span style={{ fontFamily: FONT_SANS, fontSize: 16, fontWeight: 600, color: T.accent }}>{fmt(aFinal)}</span>
-                    </div>
-                  </div>
-                )}
-                {aDays === 0 && (
-                  <div style={{ padding: "40px 16px", textAlign: "center", backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                    <p style={{ margin: 0, fontSize: 12, color: T.textFaint, letterSpacing: "0.05em" }}>{salaryYear}年の清算データがありません</p>
-                  </div>
-                )}
-              </>)}
-            </>);
-          })()}
-        </div>)}
-
-
-        {tab === "customers" && (<div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CUSTOMER MEMO</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>👤 お客様メモ・NG</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button onClick={() => { setShowAddNote(true); setNoteForm({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 }); }}
-              style={{ padding: "8px 16px", fontSize: 11, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-              + メモ追加
-            </button>
-          </div>
-
-          {/* NG案内 */}
-          <div style={{ backgroundColor: "rgba(107,139,168,0.04)", border: `1px solid #6b8ba844`, padding: "14px 16px" }}>
-            <p style={{ margin: "0 0 6px", fontFamily: FONT_SERIF, fontSize: 12, fontWeight: 500, letterSpacing: "0.05em", color: "#6b8ba8" }}>🛡️ NG登録について</p>
-            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.9, color: T.textSub, letterSpacing: "0.03em" }}>
-              NGに登録されたお客様がネット予約をする際は、あなたの出勤枠が<span style={{ color: "#c96b83", fontWeight: 600 }}>「お休み」として表示</span>されるため、予約が入ることはありません。お電話でのご予約の場合も、受付スタッフが事前に確認しお断りいたしますのでご安心ください。
-            </p>
-          </div>
-
-          {/* 検索 */}
-          <input type="text" value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="お客様名で検索..."
-            style={{ width: "100%", padding: "11px 14px", fontSize: 12, outline: "none", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, color: T.text, fontFamily: FONT_SERIF, boxSizing: "border-box" }} />
-
-          {/* お客様チップ一覧 */}
-          {uniqueCustomers.length > 0 && (
-            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
-              <p style={{ margin: "0 0 10px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>
-                接客したお客様 <span style={{ fontFamily: FONT_SANS, color: T.accent, letterSpacing: 0, marginLeft: 4 }}>{uniqueCustomers.length}名</span>
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => {
-                  const notes = customerNotes.filter(n => n.customer_name === name);
-                  const isNg = notes.some(n => n.is_ng);
-                  const hasNote = notes.length > 0;
-                  return (
-                    <button key={name} onClick={() => setNoteHistoryCustomer(name)}
-                      style={{
-                        padding: "6px 11px",
-                        fontSize: 11,
-                        cursor: "pointer",
-                        border: `1px solid ${isNg ? "#c96b83" : hasNote ? T.accent : T.border}`,
-                        backgroundColor: isNg ? "rgba(201,107,131,0.08)" : hasNote ? T.accentBg : T.cardAlt,
-                        color: isNg ? "#c96b83" : T.text,
-                        fontFamily: FONT_SERIF,
-                        letterSpacing: "0.03em",
-                      }}>
-                      {isNg && "🚫 "}{name}
-                      <span style={{ fontFamily: FONT_SANS, marginLeft: 4, color: T.textMuted, fontSize: 10 }}>({info.count})</span>
-                      {notes.length > 0 && <span style={{ marginLeft: 3 }}>📝{notes.length > 1 ? notes.length : ""}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           )}
-
-          {/* 登録済みメモ */}
-          <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}` }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>
-                登録済みメモ <span style={{ fontFamily: FONT_SANS, color: T.accent, marginLeft: 4 }}>{customerNotes.length}件</span>
-              </p>
-              <p style={{ margin: "3px 0 0", fontSize: 9, color: T.textFaint, letterSpacing: "0.03em" }}>※ メモの削除はスタッフにお申し付けください</p>
-            </div>
-            {customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).length === 0 ? (
-              <p style={{ fontSize: 12, textAlign: "center", padding: "32px 0", color: T.textFaint, margin: 0 }}>メモがありません</p>
-            ) : (
-              customerNotes.filter(n => !noteSearch || n.customer_name.includes(noteSearch)).map((n, idx, arr) => {
-                const res = n.reservation_id ? allReservations.find(r => r.id === n.reservation_id) : null;
-                return (
-                  <div key={n.id} style={{ padding: "12px 16px", cursor: "pointer", borderBottom: idx < arr.length - 1 ? `1px solid ${T.border}` : "none" }} onClick={() => setNoteHistoryCustomer(n.customer_name)}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.03em" }}>{n.customer_name}</span>
-                      {n.is_ng && <span style={{ fontSize: 9, padding: "2px 7px", color: "#c96b83", border: `1px solid #c96b8344`, backgroundColor: "rgba(201,107,131,0.06)", letterSpacing: "0.05em" }}>🚫 NG</span>}
-                      {n.rating > 0 && <span style={{ fontSize: 10, color: "#b38419", letterSpacing: "0.05em" }}>{"★".repeat(n.rating)}</span>}
-                      {res && <span style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>{formatDate(res.date)}</span>}
-                    </div>
-                    {n.note && <p style={{ margin: "4px 0 0", fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "0.02em" }}>{n.note}</p>}
-                  </div>
-                );
-              })
-            )}
+          {/* キャンセルポリシー */}
+          <div style={{ marginTop: 12, padding: "12px 14px", backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 4 }}>
+            <p style={{ margin: "0 0 4px", fontSize: 10, letterSpacing: "0.08em", color: C.textSub, fontFamily: FONT_DISPLAY }}>CANCELLATION POLICY</p>
+            <p style={{ margin: 0, fontSize: 10, color: C.textMuted, lineHeight: 1.8 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。当日のキャンセルは<strong style={{ color: C.accentDark }}>100％キャンセル料</strong>を頂戴いたします。</p>
+            <a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 11, color: C.accent, textDecoration: "none", letterSpacing: "0.05em" }}>
+              <IconPhone size={12} color={C.accent} />
+              {cancelPhone}
+            </a>
           </div>
-        </div>)}
+        </div>
 
-        {tab === "manual" && (<div className="space-y-4">
-          {/* マニュアル詳細表示 */}
-          {manualViewArticle ? (() => {
-            const cat = manualCats.find(c => c.id === manualViewArticle.category_id);
-            const latestUpd = manualUpdates.find(u => u.article_id === manualViewArticle.id);
-            return (
-              <div style={{ fontFamily: FONT_SERIF }}>
-                {/* 戻るボタン */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-                  <button onClick={goBackManual} style={{ padding: "8px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-                    {manualHistory.length > 0 ? `← ${manualHistory[manualHistory.length - 1].title.slice(0, 12)}${manualHistory[manualHistory.length - 1].title.length > 12 ? '...' : ''} に戻る` : '← 一覧に戻る'}
-                  </button>
-                  {manualHistory.length > 0 && (
-                    <button onClick={() => { setManualViewArticle(null); setManualHistory([]); }} style={{ padding: "8px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textMuted, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-                      📋 一覧へ
-                    </button>
-                  )}
-                </div>
-
-                {/* カバー画像 */}
-                {manualViewArticle.cover_image && (
-                  <div style={{ overflow: "hidden", marginBottom: 18, maxHeight: 220 }}>
-                    <img src={manualViewArticle.cover_image} alt="" style={{ width: "100%", objectFit: "cover" }} />
-                  </div>
-                )}
-
-                {/* カテゴリ英文ラベル */}
-                {cat && (
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: T.accent, fontWeight: 500, marginBottom: 6 }}>
-                    ARTICLE
-                  </p>
-                )}
-
-                {/* タイトル */}
-                <h2 style={{ fontFamily: FONT_SERIF, fontSize: 20, fontWeight: 500, letterSpacing: "0.05em", color: T.text, lineHeight: 1.5, marginBottom: 10 }}>
-                  {manualViewArticle.title}
-                </h2>
-
-                {/* ピンク細罫線 */}
-                <div style={{ width: 30, height: 1, backgroundColor: T.accent, marginBottom: 14 }} />
-
-                {/* カテゴリ・タグ */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-                  {cat && <span style={{ fontSize: 10, padding: "3px 10px", backgroundColor: cat.color, color: "#333", letterSpacing: "0.03em" }}>{cat.icon} {cat.name}</span>}
-                  {manualViewArticle.tags.map(t => <span key={t} style={{ fontSize: 10, padding: "3px 10px", backgroundColor: T.cardAlt, color: T.textSub, letterSpacing: "0.03em" }}>{t}</span>)}
-                </div>
-
-                {/* 更新通知 */}
-                {latestUpd && (
-                  <div style={{ padding: "10px 14px", marginBottom: 16, backgroundColor: "rgba(179,132,25,0.06)", border: `1px solid #b3841944`, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>✏️</span>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: "#b38419", fontWeight: 500 }}>UPDATED {new Date(latestUpd.created_at).toLocaleDateString("ja")}</p>
-                      <p style={{ margin: "2px 0 0", fontSize: 11, color: "#b38419", letterSpacing: "0.02em" }}>{latestUpd.summary}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 本文 */}
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 20px", marginBottom: 16 }}>
-                  {manualViewArticle.content.split("\n").map((line, i) => {
-                    if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 15, fontWeight: 500, marginTop: 16, marginBottom: 8, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>{renderInlineLinks(line.slice(3))}</h3>;
-                    if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 13, fontWeight: 500, marginTop: 12, marginBottom: 6, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{renderInlineLinks(line.slice(4))}</h4>;
-                    if (line.startsWith("- ")) return <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, lineHeight: 1.9, marginLeft: 6, letterSpacing: "0.02em" }}><span style={{ color: T.accent }}>●</span><span>{renderInlineContent(line.slice(2))}</span></div>;
-                    if (line.match(/^\d+\.\s/)) return <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, lineHeight: 1.9, marginLeft: 6, letterSpacing: "0.02em" }}><span style={{ color: T.accent, fontWeight: 600, minWidth: 18, fontFamily: FONT_SANS }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{renderInlineContent(line.replace(/^\d+\.\s/, ""))}</span></div>;
-                    if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: `2px solid ${T.accent}`, paddingLeft: 14, margin: "8px 0", fontSize: 12, color: T.textSub, fontStyle: "italic", letterSpacing: "0.02em", lineHeight: 1.9 }}>{renderInlineContent(line.slice(2))}</div>;
-                    if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "14px 0" }} />;
-                    if (line.startsWith("![")) { const m = line.match(/!\[.*?\]\((.*?)\)/); if (m) return <img key={i} src={m[1]} alt="" style={{ margin: "10px 0", maxWidth: "100%" }} />; }
-                    if (line.match(/^\[youtube:([\w-]+)\]$/)) { const vid = line.match(/^\[youtube:([\w-]+)\]$/)?.[1]; return <div key={i} style={{ position: "relative", paddingBottom: "56.25%", height: 0, margin: "10px 0", overflow: "hidden" }}><iframe src={`https://www.youtube.com/embed/${vid}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allowFullScreen /></div>; }
-                    if (line.match(/^\[gdrive:([\w-]+)(:.*)?\]$/)) { const gm = line.match(/^\[gdrive:([\w-]+)(?::(.+))?\]$/); const fid = gm?.[1]; const gdesc = gm?.[2] || ""; return <div key={i} style={{ margin: "14px 0" }}><div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden" }}><iframe src={`https://drive.google.com/file/d/${fid}/preview`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} allow="autoplay" /></div>{gdesc && <p style={{ fontSize: 11, fontWeight: 500, marginTop: 6, textAlign: "center", color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>🎬 {gdesc}</p>}</div>; }
-                    if (line.match(/\*\*(.*?)\*\*/)) { return <p key={i} style={{ fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", margin: "4px 0" }}>{renderInlineContent(line)}</p>; }
-                    if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
-                    return <p key={i} style={{ fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", margin: "4px 0" }}>{renderInlineContent(line)}</p>;
-                  })}
-                </div>
-
-                {/* Q&A */}
-                {manualViewQAs.length > 0 && (
-                  <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 20px" }}>
-                    <p style={{ margin: "0 0 4px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>FAQ</p>
-                    <h3 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>❓ よくある質問 <span style={{ fontFamily: FONT_DISPLAY, color: T.accent, marginLeft: 4 }}>{manualViewQAs.length}</span></h3>
-                    {manualViewQAs.map((qa, i) => (
-                      <div key={i} style={{ border: `1px solid ${T.border}`, marginBottom: 6, overflow: "hidden" }}>
-                        <button style={{ width: "100%", textAlign: "left", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 12, fontWeight: 500, cursor: "pointer", backgroundColor: manualOpenQA === i ? T.accentBg : "transparent", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.03em" }} onClick={() => setManualOpenQA(manualOpenQA === i ? null : i)}>
-                          <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, padding: "2px 8px", backgroundColor: T.accent, color: "#fff", letterSpacing: "0.1em", fontWeight: 500 }}>Q</span>
-                          <span style={{ flex: 1, color: T.text }}>{qa.question}</span>
-                          <span style={{ color: T.textMuted, fontSize: 10, transition: "transform 0.2s", transform: manualOpenQA === i ? "rotate(90deg)" : "none" }}>▶</span>
-                        </button>
-                        {manualOpenQA === i && (
-                          <div style={{ padding: "10px 14px 14px", fontSize: 12, lineHeight: 1.9, color: T.textSub, borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, alignItems: "flex-start", letterSpacing: "0.02em" }}>
-                            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, padding: "2px 8px", backgroundColor: "#6b9b7e", color: "#fff", letterSpacing: "0.1em", fontWeight: 500, flexShrink: 0, marginTop: 2 }}>A</span>
-                            <span>{qa.answer}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })() : (<div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: FONT_SERIF }}>
-            {/* セクション見出し */}
-            <div style={{ textAlign: "center" }}>
-              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>MANUAL</p>
-              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📖 業務マニュアル</p>
-              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-            </div>
-
-            {/* 更新タイムライン */}
-            {manualUpdates.length > 0 && (
-              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
-                <p style={{ margin: "0 0 10px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>📝 RECENT UPDATES</p>
-                {manualUpdates.slice(0, 3).map((u, idx, arr) => {
-                  const art = manualArticles.find(a => a.id === u.article_id);
-                  return (
-                    <div key={u.id} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: idx < arr.length - 1 ? `1px solid ${T.border}` : "none" }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.accent, marginTop: 6, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500, cursor: "pointer", color: T.accent, letterSpacing: "0.03em" }} onClick={() => { if (art) openManualArticle(art); }}>{art?.title || "?"}</span>
-                        <span style={{ fontSize: 11, marginLeft: 6, color: T.textMuted }}>{u.summary}</span>
-                        <div style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textFaint, marginTop: 2 }}>{new Date(u.created_at).toLocaleDateString("ja")}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* 検索 */}
-            <input type="text" value={manualSearch} onChange={e => setManualSearch(e.target.value)} placeholder="🔍 マニュアルを検索..."
-              style={{ width: "100%", padding: "11px 14px", fontSize: 12, outline: "none", border: `1px solid ${T.border}`, backgroundColor: T.cardAlt, color: T.text, fontFamily: FONT_SERIF, boxSizing: "border-box" }} />
-
-            {/* カテゴリフィルタ */}
-            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
-              <button onClick={() => setManualSelCat(null)}
-                style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${manualSelCat === null ? T.accent : T.border}`, backgroundColor: manualSelCat === null ? T.accent : "transparent", color: manualSelCat === null ? "#fff" : T.textSub, whiteSpace: "nowrap", fontFamily: FONT_SERIF, letterSpacing: "0.05em", fontWeight: manualSelCat === null ? 500 : 400 }}>
-                すべて
-              </button>
-              {manualCats.map(c => {
-                const active = manualSelCat === c.id;
-                return (
-                  <button key={c.id} onClick={() => setManualSelCat(c.id)}
-                    style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${active ? T.accent : T.border}`, backgroundColor: active ? T.accent : "transparent", color: active ? "#fff" : T.textSub, whiteSpace: "nowrap", fontFamily: FONT_SERIF, letterSpacing: "0.03em", fontWeight: active ? 500 : 400 }}>
-                    {c.icon} {c.name}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* タグフィルタ */}
-            {(() => {
-              const allT = Array.from(new Set(manualArticles.flatMap(a => a.tags))).sort();
-              return allT.length > 0 ? (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 10, color: T.textMuted, marginRight: 2, letterSpacing: "0.05em" }}>🏷️</span>
-                  {manualFilterTag && <button onClick={() => setManualFilterTag("")} style={{ fontSize: 10, padding: "3px 8px", cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF }}>× クリア</button>}
-                  {allT.map(t => (
-                    <button key={t} onClick={() => setManualFilterTag(manualFilterTag === t ? "" : t)}
-                      style={{ fontSize: 10, padding: "3px 10px", cursor: "pointer", backgroundColor: manualFilterTag === t ? T.accent : T.cardAlt, color: manualFilterTag === t ? "#fff" : T.textSub, border: `1px solid ${manualFilterTag === t ? T.accent : T.border}`, opacity: manualFilterTag && manualFilterTag !== t ? 0.4 : 1, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              ) : null;
-            })()}
-            {/* 記事一覧 */}
-            {(() => {
-              const filtered = manualArticles.filter(a => {
-                if (manualSelCat !== null && a.category_id !== manualSelCat) return false;
-                if (manualSearch) { const q = manualSearch.toLowerCase(); if (!a.title.toLowerCase().includes(q) && !a.tags.some(t => t.toLowerCase().includes(q))) return false; }
-                if (manualFilterTag && !a.tags.includes(manualFilterTag)) return false;
-                return true;
-              });
-              const pinned = filtered.filter(a => a.is_pinned);
-              const unpinned = filtered.filter(a => !a.is_pinned);
-              const renderCard = (a: ManualArticle) => {
-                const cat = manualCats.find(c => c.id === a.category_id);
-                const isRead = manualReads.includes(a.id);
-                const latestUpd = manualUpdates.find(u => u.article_id === a.id);
-                const isNew = (Date.now() - new Date(a.created_at).getTime()) < 7 * 86400000;
-                const isUpdated = latestUpd && !isRead;
-                return (
-                  <div key={a.id} style={{ backgroundColor: T.card, border: `1px solid ${isNew && !isRead ? T.accent : T.border}`, padding: 12, cursor: "pointer", position: "relative" }} onClick={() => openManualArticle(a)}>
-                    {isNew && !isRead && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, backgroundColor: T.accent }} />}
-                    <div style={{ display: "flex", gap: 12 }}>
-                      {a.cover_image ? (
-                        <div style={{ width: 64, height: 64, overflow: "hidden", flexShrink: 0 }}>
-                          <img src={a.cover_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        </div>
-                      ) : (
-                        <div style={{ width: 64, height: 64, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, backgroundColor: cat?.color || T.cardAlt }}>
-                          {cat?.icon || "📄"}
-                        </div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-                          {a.is_pinned && <span style={{ fontSize: 9, padding: "2px 7px", color: "#b38419", border: `1px solid #b3841944`, letterSpacing: "0.05em" }}>📌 ピン</span>}
-                          {isNew && !isRead && <span className="manual-new-badge" style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 8px", backgroundColor: T.accent, color: "#fff", letterSpacing: "0.15em", fontWeight: 500 }}>NEW</span>}
-                          {isUpdated && <span className="manual-updated-badge" style={{ fontSize: 9, padding: "2px 7px", color: "#b38419", border: `1px solid #b3841944`, letterSpacing: "0.05em" }}>✏️ 更新</span>}
-                          {isRead && <span style={{ fontSize: 10, color: "#6b9b7e" }}>✅</span>}
-                        </div>
-                        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.03em", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</h4>
-                        {a.tags.length > 0 && (
-                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-                            {a.tags.slice(0, 3).map(t => <span key={t} style={{ fontSize: 9, padding: "1px 6px", backgroundColor: T.cardAlt, color: T.textSub, letterSpacing: "0.03em" }}>{t}</span>)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              };
-              return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {pinned.map(renderCard)}
-                  {unpinned.map(renderCard)}
-                  {filtered.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 16px", backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                      <div style={{ fontSize: 28, marginBottom: 8 }}>📖</div>
-                      <p style={{ margin: 0, fontSize: 12, color: T.textMuted, letterSpacing: "0.05em" }}>該当する記事がありません</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>)}
-
-          {/* 🤖 AIチャット */}
-          {!manualViewArticle && (
-            <div>
-              {!aiChatOpen ? (
-                <button onClick={() => setAiChatOpen(true)}
-                  style={{ width: "100%", padding: "14px", fontSize: 12, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}`, fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>🤖</span>
-                  <span>マニュアルAIに質問する</span>
-                </button>
-              ) : (
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.accent}`, overflow: "hidden", fontFamily: FONT_SERIF }}>
-                  {/* ヘッダー */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: `1px solid ${T.border}`, backgroundColor: T.accentBg }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 15 }}>🤖</span>
-                      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>MANUAL AI</span>
-                      <span style={{ fontSize: 9, padding: "2px 7px", color: "#6b9b7e", border: `1px solid #6b9b7e44`, letterSpacing: "0.05em", fontFamily: FONT_SERIF }}>● online</span>
-                      {aiSessionCount > 0 && <span style={{ fontSize: 9, padding: "2px 7px", color: aiSessionCount >= 4 ? "#c96b83" : "#b38419", border: `1px solid ${aiSessionCount >= 4 ? "#c96b83" : "#b38419"}44`, letterSpacing: "0.03em", fontFamily: FONT_SERIF }}>{aiSessionCount >= 4 ? "質問上限" : `残り${4 - aiSessionCount}回`}</span>}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {aiChatMessages.length > 0 && (
-                        <button onClick={() => { setAiChatMessages([]); setAiSessionCount(0); }} style={{ fontSize: 9, padding: "2px 7px", cursor: "pointer", color: T.textMuted, backgroundColor: "transparent", border: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>🗑️ クリア</button>
-                      )}
-                      <button onClick={() => setAiChatOpen(false)} style={{ fontSize: 10, padding: "2px 7px", cursor: "pointer", color: T.textMuted, backgroundColor: "transparent", border: "none", fontFamily: FONT_SERIF }}>✕ 閉じる</button>
-                    </div>
-                  </div>
-                  {/* メッセージエリア */}
-                  <div style={{ maxHeight: 350, overflowY: "auto", padding: 14 }}>
-                    {aiChatMessages.length === 0 && (
-                      <div style={{ textAlign: "center", padding: "24px 0" }}>
-                        <div style={{ fontSize: 32, marginBottom: 10 }}>🤖</div>
-                        <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.05em" }}>マニュアルAIアシスタント</p>
-                        <p style={{ margin: 0, fontSize: 10, color: T.textMuted, letterSpacing: "0.03em" }}>マニュアルの内容について何でも聞いてね！</p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, justifyContent: "center", marginTop: 16 }}>
-                          {["掃除の手順を教えて", "精算方法は？", "シフトの出し方", "LAST勤務とは？", "お給料について"].map(q => (
-                            <button key={q} onClick={() => { setAiChatInput(q); }}
-                              style={{ fontSize: 10, padding: "5px 11px", cursor: "pointer", border: `1px solid ${T.accent}44`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{q}</button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {aiChatMessages.map((m, i) => (
-                      <div key={i} style={{ display: "flex", marginBottom: 12, justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                        {m.role === "ai" && <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 8, marginTop: 2, backgroundColor: T.accentBg, fontSize: 11 }}>🤖</div>}
-                        <div style={{ maxWidth: "80%" }}>
-                          <div style={{
-                            padding: "10px 14px",
-                            fontSize: 12,
-                            lineHeight: 1.8,
-                            letterSpacing: "0.02em",
-                            backgroundColor: m.role === "user" ? T.accent : T.cardAlt,
-                            color: m.role === "user" ? "#fff" : T.text,
-                            fontFamily: FONT_SERIF,
-                          }}>
-                            {m.role === "ai" ? renderInlineContent(m.content) : m.content}
-                          </div>
-                          {m.role === "ai" && m.logId && (
-                            <div style={{ display: "flex", gap: 6, marginTop: 5, marginLeft: 3 }}>
-                              <button onClick={async () => {
-                                if (m.rating) return;
-                                try {
-                                  await fetch("/api/manual-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rate", logId: m.logId, rating: 1 }) });
-                                  setAiChatMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, rating: 1 } : msg));
-                                } catch {}
-                              }} style={{ fontSize: 11, padding: "2px 9px", cursor: "pointer", backgroundColor: m.rating === 1 ? "rgba(107,155,126,0.15)" : "transparent", border: `1px solid ${m.rating === 1 ? "#6b9b7e" : T.border}`, color: m.rating === 1 ? "#6b9b7e" : T.textMuted, opacity: m.rating && m.rating !== 1 ? 0.3 : 1, fontFamily: FONT_SERIF }}>👍</button>
-                              <button onClick={async () => {
-                                if (m.rating) return;
-                                try {
-                                  await fetch("/api/manual-ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rate", logId: m.logId, rating: -1 }) });
-                                  setAiChatMessages(prev => prev.map((msg, idx) => idx === i ? { ...msg, rating: -1 } : msg));
-                                } catch {}
-                              }} style={{ fontSize: 11, padding: "2px 9px", cursor: "pointer", backgroundColor: m.rating === -1 ? "rgba(201,107,131,0.15)" : "transparent", border: `1px solid ${m.rating === -1 ? "#c96b83" : T.border}`, color: m.rating === -1 ? "#c96b83" : T.textMuted,
-                                opacity: m.rating && m.rating !== -1 ? 0.3 : 1,
-                              }}>👎</button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {aiChatLoading && (
-                      <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
-                        <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 8, marginTop: 2, backgroundColor: T.accentBg, fontSize: 11 }}>🤖</div>
-                        <div style={{ padding: "10px 14px", fontSize: 12, display: "flex", alignItems: "center", gap: 8, backgroundColor: T.cardAlt, color: T.textMuted, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-                          <span style={{ display: "inline-block", animation: "pulse 1.5s ease-in-out infinite" }}>💭</span>
-                          考え中...
-                          <style>{`@keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {/* 入力エリア */}
-                  <div style={{ display: "flex", gap: 6, padding: 12, borderTop: `1px solid ${T.border}`, alignItems: "center", backgroundColor: T.cardAlt }}>
-                    <input type="text" value={aiChatInput} onChange={e => setAiChatInput(e.target.value)}
-                      onKeyDown={async (e) => {
-                        if (e.key === "Enter" && aiChatInput.trim() && !aiChatLoading) {
-                          const q = aiChatInput.trim();
-                          setAiChatInput("");
-                          setAiChatMessages(prev => [...prev, { role: "user", content: q }]);
-                          setAiChatLoading(true);
-                          const newCount = aiSessionCount + 1;
-                          setAiSessionCount(newCount);
-                          if (newCount > 4) {
-                            setAiChatMessages(prev => [...prev, { role: "ai", content: "😊 この質問はスタッフに直接お問い合わせください！\n\n何度も質問していただきありがとうございます。より正確にお答えするため、スタッフに聞いていただく方が早いかと思います📞\n\n🗑️「クリア」で会話をリセットすると、また質問できますよ！" }]);
-                            setAiChatLoading(false);
-                            return;
-                          }
-                          try {
-                            const res = await fetch("/api/manual-ai", {
-                              method: "POST", headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages, therapistName: therapist?.name || "" }),
-                            });
-                            const data = await res.json();
-                            setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー", logId: data.logId || undefined }]);
-                          } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
-                          setAiChatLoading(false);
-                        }
-                      }}
-                      placeholder={aiListening ? "🎤 話してください..." : "質問を入力..."}
-                      style={{ flex: 1, padding: "10px 14px", fontSize: 12, outline: "none", backgroundColor: T.card, color: T.text, border: `1px solid ${aiListening ? T.accent : T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.02em" }} />
-                    <button
-                      onClick={() => {
-                        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-                        if (!SpeechRecognition) { alert("お使いのブラウザは音声入力に対応していません"); return; }
-                        if (aiListening) return;
-                        const recognition = new SpeechRecognition();
-                        recognition.lang = "ja-JP";
-                        recognition.interimResults = false;
-                        recognition.maxAlternatives = 1;
-                        setAiListening(true);
-                        recognition.onresult = (event: any) => {
-                          const text = event.results[0][0].transcript;
-                          setAiChatInput(prev => prev + text);
-                          setAiListening(false);
-                        };
-                        recognition.onerror = () => setAiListening(false);
-                        recognition.onend = () => setAiListening(false);
-                        recognition.start();
-                      }}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                        backgroundColor: aiListening ? T.accent : "transparent",
-                        border: `1px solid ${aiListening ? T.accent : T.border}`,
-                        color: aiListening ? "#fff" : T.accent,
-                        fontSize: 15,
-                        animation: aiListening ? "pulse 1s ease-in-out infinite" : "none",
-                      }}
-                      title="音声入力">
-                      🎤
-                    </button>
-                    <button disabled={!aiChatInput.trim() || aiChatLoading}
-                      onClick={async () => {
-                        const q = aiChatInput.trim();
-                        if (!q) return;
-                        setAiChatInput("");
-                        setAiChatMessages(prev => [...prev, { role: "user", content: q }]);
-                        setAiChatLoading(true);
-                        const newCount = aiSessionCount + 1;
-                        setAiSessionCount(newCount);
-                        if (newCount > 4) {
-                          setAiChatMessages(prev => [...prev, { role: "ai", content: "😊 この質問はスタッフに直接お問い合わせください！\n\n何度も質問していただきありがとうございます。より正確にお答えするため、スタッフに聞いていただく方が早いかと思います📞\n\n🗑️「クリア」で会話をリセットすると、また質問できますよ！" }]);
-                          setAiChatLoading(false);
-                          return;
-                        }
-                        try {
-                          const res = await fetch("/api/manual-ai", {
-                            method: "POST", headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ action: "chat", question: q, chatHistory: aiChatMessages, therapistName: therapist?.name || "" }),
-                          });
-                          const data = await res.json();
-                          setAiChatMessages(prev => [...prev, { role: "ai", content: data.answer || "応答エラー", logId: data.logId || undefined }]);
-                        } catch { setAiChatMessages(prev => [...prev, { role: "ai", content: "⚠️ 通信エラーが発生しました" }]); }
-                        setAiChatLoading(false);
-                      }}
-                      style={{ padding: "10px 18px", fontSize: 11, color: "#fff", cursor: "pointer", backgroundColor: T.accent, border: "none", opacity: !aiChatInput.trim() || aiChatLoading ? 0.4 : 1, fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>送信</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>)}
-
-      </div></div>
-
-      {/* ═══ ボトムナビ（4タブ・絵文字のみ・画面下部固定） ═══ */}
-      <nav style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 64,
-        backgroundColor: T.card,
-        borderTop: `1px solid ${T.border}`,
-        display: "grid",
-        gridTemplateColumns: "repeat(5, 1fr)",
-        zIndex: 30,
-        fontFamily: FONT_SERIF,
-        boxShadow: "0 -1px 8px rgba(0,0,0,0.03)",
-      }}>
-        {(() => {
-          const notifUnread = notifications.filter(n => !notifReadIds.includes(n.id)).length;
-          const manualUnread = manualArticles.filter(a => a.is_published && !manualReads.includes(a.id)).length;
-          const learnUnread = notifUnread + manualUnread;
-          return MAIN_TABS.map((m) => {
-            const active = mainTab === m.key;
-            const badgeCount =
-              m.key === "learn" ? learnUnread :
-              m.key === "chat" ? chatUnread :
-              0;
-            const showBadge = badgeCount > 0;
-            const isChatTab = m.key === "chat";
-            return (
-              <button key={m.key} onClick={() => clickMain(m.key)}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 4,
-                  border: "none",
-                  backgroundColor: "transparent",
-                  cursor: "pointer",
-                  padding: "6px 4px",
-                  position: "relative",
-                  color: active ? T.accent : T.textMuted,
-                  transition: "color 0.2s ease",
-                }}>
-                <span style={{
-                  fontSize: isChatTab ? 26 : 20,
-                  lineHeight: 1,
-                  // 中央チャットは少し浮かせる
-                  transform: isChatTab ? "translateY(-4px)" : "none",
-                  filter: isChatTab && active ? "drop-shadow(0 2px 6px rgba(201,107,131,0.35))" : "none",
-                }}>{m.emoji}</span>
-                <span style={{
-                  fontSize: 9,
-                  letterSpacing: "0.15em",
-                  fontFamily: FONT_DISPLAY,
-                  fontWeight: 500,
-                  textTransform: "uppercase",
-                  marginTop: isChatTab ? -3 : 0,
-                }}>{m.key}</span>
-                {active && <span style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2, backgroundColor: T.accent }} />}
-                {showBadge && (
-                  <span style={{
-                    position: "absolute",
-                    top: isChatTab ? 0 : 6,
-                    right: isChatTab ? "22%" : "28%",
-                    fontFamily: FONT_SANS,
-                    fontSize: 9,
-                    fontWeight: 600,
-                    minWidth: 16,
-                    height: 16,
-                    padding: "0 4px",
-                    borderRadius: 999,
-                    backgroundColor: "#e74c5e",
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    letterSpacing: 0,
-                    boxShadow: "0 1px 3px rgba(231,76,94,0.4)",
-                  }}>{badgeCount > 99 ? "99+" : badgeCount}</span>
-                )}
-              </button>
-            );
-          });
-        })()}
-      </nav>
-
-{/* カレンダー日付詳細モーダル */}
-      {calDetailDate && (() => {
-        const dShift = calShifts.find(s => s.date === calDetailDate);
-        const dSettlement = calSettlements.find(s => s.date === calDetailDate);
-        const dRes = calReservations.filter(r => r.date === calDetailDate);
-        const dNotes = dRes.map(r => customerNotes.find(n => n.customer_name === r.customer_name)).filter(Boolean);
-        const dt = new Date(calDetailDate + "T00:00:00");
-        const days = ["日", "月", "火", "水", "木", "金", "土"];
-        const dateLabel = `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日（${days[dt.getDay()]}）`;
-
-        return (
-          <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setCalDetailDate(null)}>
-            <div style={{ width: "100%", maxWidth: 460, maxHeight: "85vh", overflowY: "auto", padding: 22, backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
-              {/* ヘッダー */}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${T.border}` }}>
-                <div>
-                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>DAILY DETAIL</p>
-                  <h3 style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>📅 {dateLabel}</h3>
-                </div>
-                <button onClick={() => setCalDetailDate(null)} style={{ width: 28, height: 28, fontSize: 13, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
-              </div>
-
-              {/* 出勤情報 */}
-              {dShift ? (
-                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.accentBg, border: `1px solid ${T.accent}44` }}>
-                  <p style={{ margin: "0 0 4px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>⏰ SHIFT</p>
-                  <p style={{ margin: 0, fontFamily: FONT_SANS, fontSize: 16, fontWeight: 500, color: T.text }}>{dShift.start_time?.slice(0,5)} — {dShift.end_time?.slice(0,5)}</p>
-                  {dShift.store_id > 0 && <p style={{ margin: "3px 0 0", fontSize: 11, color: T.textMuted, letterSpacing: "0.03em" }}>{getStoreName(dShift.store_id)}</p>}
-                </div>
-              ) : (
-                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textFaint, letterSpacing: "0.05em" }}>出勤予定なし</p>
-                </div>
-              )}
-
-              {/* 給料明細 */}
-              {dSettlement ? (
-                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.card, border: `1px solid ${T.accent}44` }}>
-                  <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>💰 SETTLEMENT</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>接客数</span><span style={{ fontFamily: FONT_SANS, fontWeight: 500 }}>{dSettlement.order_count} 件</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>売上合計</span><span style={{ fontFamily: FONT_SANS }}>{fmt(dSettlement.total_sales)}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>バック合計</span><span style={{ fontFamily: FONT_SANS }}>{fmt(dSettlement.total_back)}</span></div>
-                    {dSettlement.adjustment !== 0 && <div style={{ display: "flex", justifyContent: "space-between", color: dSettlement.adjustment > 0 ? "#6b9b7e" : "#c96b83", letterSpacing: "0.02em" }}><span>調整金{dSettlement.adjustment_note ? `（${dSettlement.adjustment_note}）` : ""}</span><span style={{ fontFamily: FONT_SANS }}>{dSettlement.adjustment > 0 ? "+" : ""}{fmt(dSettlement.adjustment)}</span></div>}
-                    {dSettlement.invoice_deduction > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", letterSpacing: "0.02em" }}><span>インボイス控除</span><span style={{ fontFamily: FONT_SANS }}>−{fmt(dSettlement.invoice_deduction)}</span></div>}
-                    {dSettlement.withholding_tax > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", letterSpacing: "0.02em" }}><span>源泉徴収</span><span style={{ fontFamily: FONT_SANS }}>−{fmt(dSettlement.withholding_tax)}</span></div>}
-                    {dSettlement.welfare_fee > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", letterSpacing: "0.02em" }}><span>備品・リネン代</span><span style={{ fontFamily: FONT_SANS }}>−{fmt(dSettlement.welfare_fee)}</span></div>}
-                    {dSettlement.transport_fee > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#6b9b7e", letterSpacing: "0.02em" }}><span>交通費（実費精算）</span><span style={{ fontFamily: FONT_SANS }}>+{fmt(dSettlement.transport_fee)}</span></div>}
-                    <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, marginTop: 4, borderTop: `1px solid ${T.accent}44`, color: T.accent }}>
-                      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", fontWeight: 500, alignSelf: "center" }}>PAYMENT</span>
-                      <span style={{ fontFamily: FONT_SANS, fontSize: 18, fontWeight: 500 }}>{fmt(dSettlement.final_payment)}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 4, fontSize: 9, color: T.textMuted, letterSpacing: "0.02em", fontFamily: FONT_SANS }}>
-                      <span>💴 現金 {fmt(dSettlement.total_cash)}</span>
-                      {dSettlement.total_card > 0 && <span>💳 カード {fmt(dSettlement.total_card)}</span>}
-                      {dSettlement.total_paypay > 0 && <span>📱 PayPay {fmt(dSettlement.total_paypay)}</span>}
-                    </div>
-                  </div>
-                </div>
-              ) : dShift && calDetailDate < today ? (
-                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: "rgba(179,132,25,0.06)", border: `1px solid #b3841944` }}>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: "#b38419", letterSpacing: "0.05em" }}>⚠ 未清算</p>
-                </div>
-              ) : null}
-
-              {/* お客様情報 */}
-              {dRes.length > 0 ? (
-                <div style={{ border: `1px solid ${T.border}`, overflow: "hidden", marginBottom: 12 }}>
-                  <div style={{ padding: "8px 14px", backgroundColor: T.cardAlt, borderBottom: `1px solid ${T.border}` }}>
-                    <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#6b9b7e", fontWeight: 500 }}>👤 CUSTOMERS <span style={{ fontFamily: FONT_SANS, letterSpacing: 0, marginLeft: 4 }}>{dRes.length} 件</span></p>
-                  </div>
-                  {dRes.map((r, i) => {
-                    const note = customerNotes.find(n => n.reservation_id === r.id) || customerNotes.find(n => n.customer_name === r.customer_name && !n.reservation_id);
-                    const isNg = customerNotes.some(n => n.customer_name === r.customer_name && n.is_ng);
-                    return (
-                      <div key={r.id} style={{ padding: "10px 14px", borderTop: i > 0 ? `1px solid ${T.border}` : "none" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.03em" }}>{r.customer_name}</span>
-                            {isNg && <span style={{ fontSize: 8, padding: "1px 6px", color: "#c96b83", border: `1px solid #c96b8344`, letterSpacing: "0.03em" }}>🚫 NG</span>}
-                            {note && note.rating > 0 && <span style={{ fontSize: 9, color: "#b38419" }}>{"★".repeat(note.rating)}{"☆".repeat(5 - note.rating)}</span>}
-                          </div>
-                          <span style={{ fontFamily: FONT_SANS, fontSize: 12, fontWeight: 500, color: T.accent }}>{fmt(r.total_price)}</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 10, color: T.textSub, letterSpacing: "0.02em" }}>
-                          <span style={{ fontFamily: FONT_SANS }}>🕐 {r.start_time?.slice(0,5)} — {r.end_time?.slice(0,5)}</span>
-                          <span>📋 {r.course}</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 9, color: T.textMuted, marginTop: 2, letterSpacing: "0.02em" }}>
-                          {r.nomination && <span style={{ color: T.accent }}>指名: {r.nomination}（{fmt(r.nomination_fee)}）</span>}
-                          {r.options_text && <span style={{ color: T.accentDeep }}>OP: {r.options_text}</span>}
-                          {r.extension_name && <span style={{ color: "#8b6cb7" }}>延長: {r.extension_name}</span>}
-                          {(r as any).discount_name && <span style={{ color: "#c96b83" }}>割引: {(r as any).discount_name}</span>}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 9, color: T.textMuted, marginTop: 2, letterSpacing: "0.02em", fontFamily: FONT_SANS }}>
-                          {(r as any).card_billing > 0 && <span style={{ color: T.accentDeep }}>💳 {fmt((r as any).card_billing)}</span>}
-                          {(r as any).paypay_amount > 0 && <span style={{ color: "#6b9b7e" }}>📱 {fmt((r as any).paypay_amount)}</span>}
-                          {(r as any).cash_amount > 0 && <span>💴 {fmt((r as any).cash_amount)}</span>}
-                        </div>
-                        {(() => {
-                          const courseBack = coursesMaster.find(c => c.name === r.course)?.therapist_back || 0;
-                          const nomBack = r.nomination ? (nomsMaster.find(n => n.name === r.nomination)?.back_amount || 0) : 0;
-                          const optNames = r.options_text ? r.options_text.split(",").filter(Boolean) : [];
-                          const optBack = optNames.reduce((s, n) => s + (optsMaster.find(o => o.name === n)?.therapist_back || 0), 0);
-                          const extBack = r.extension_name ? (extsMaster.find(e => e.name === r.extension_name)?.therapist_back || 0) : 0;
-                          const totalBack = courseBack + nomBack + optBack + extBack;
-                          return (
-                            <div style={{ fontSize: 9, marginTop: 6, padding: "6px 10px", display: "flex", flexDirection: "column", gap: 2, backgroundColor: "rgba(107,155,126,0.06)", border: `1px solid #6b9b7e33` }}>
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: "#6b9b7e", fontWeight: 500 }}>💵 BACK DETAIL</span>
-                                <span style={{ fontFamily: FONT_SANS, fontWeight: 500, color: "#6b9b7e" }}>合計 {fmt(totalBack)}</span>
-                              </div>
-                              <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>コース（{r.course}）</span><span style={{ fontFamily: FONT_SANS, color: "#6b9b7e" }}>{fmt(courseBack)}</span></div>
-                              {r.nomination && <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>指名（{r.nomination}）</span><span style={{ fontFamily: FONT_SANS, color: T.accent }}>+{fmt(nomBack)}</span></div>}
-                              {optNames.length > 0 && optNames.map((n, oi) => { const ob = optsMaster.find(o => o.name === n)?.therapist_back || 0; return <div key={oi} style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>OP（{n}）</span><span style={{ fontFamily: FONT_SANS, color: T.accentDeep }}>+{fmt(ob)}</span></div>; })}
-                              {r.extension_name && <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>延長（{r.extension_name}）</span><span style={{ fontFamily: FONT_SANS, color: "#8b6cb7" }}>+{fmt(extBack)}</span></div>}
-                            </div>
-                          );
-                        })()}
-                        {note && note.note && (
-                          <div style={{ marginTop: 5, padding: "5px 10px", fontSize: 9, backgroundColor: T.accentBg, color: T.accentDeep, letterSpacing: "0.02em", lineHeight: 1.7 }}>
-                            📝 {note.note}
-                          </div>
-                        )}
-                        {note?.is_ng && note.ng_reason && (
-                          <div style={{ marginTop: 3, padding: "5px 10px", fontSize: 9, backgroundColor: "rgba(201,107,131,0.08)", color: "#c96b83", letterSpacing: "0.02em" }}>
-                            🚫 NG理由: {note.ng_reason}
-                          </div>
-                        )}
-                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                          <button onClick={(e) => { e.stopPropagation(); if (note) { setNoteForm({ customer_name: note.customer_name, note: note.note, is_ng: note.is_ng, ng_reason: note.ng_reason, rating: note.rating || 0, reservation_id: note.reservation_id || r.id }); } else { setNoteForm({ customer_name: r.customer_name, note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: r.id }); } setCalDetailDate(null); setShowAddNote(true); }}
-                            style={{ padding: "3px 9px", fontSize: 9, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}`, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>
-                            {note ? "✏️ メモ編集" : "📝 メモ追加"}
-                          </button>
-                          {note && <button onClick={(e) => { e.stopPropagation(); deleteCustomerNote(note.id); }}
-                            style={{ padding: "3px 9px", fontSize: 9, cursor: "pointer", backgroundColor: "transparent", color: "#c96b83", border: `1px solid #c96b83`, fontFamily: FONT_SERIF }}>🗑 削除</button>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : dShift ? (
-                <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textFaint, letterSpacing: "0.05em" }}>接客情報なし</p>
-                </div>
-              ) : null}
-
-              <button onClick={() => setCalDetailDate(null)}
-                style={{ width: "100%", padding: 11, fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>閉じる</button>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* お客様接客履歴モーダル */}
-      {/* ── 証明書発行タブ ── */}
-      {tab === "cert" && therapist && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>CERTIFICATE</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📄 証明書発行</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-          </div>
-          <p style={{ margin: 0, fontSize: 11, color: T.textMuted, textAlign: "center", lineHeight: 1.9, letterSpacing: "0.03em" }}>お店が公式に発行する証明書です。<br />以下の書類を PDF で即座に発行できます。</p>
-
-          {/* 証明書カード */}
+        {/* ═══ 統計（3カラム） ═══ */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {[
-            { icon: "📝", title: "業務委託契約証明書", sub: "CONTRACT", jpSub: "在籍証明", color: T.accent, type: "contract" as const,
-              uses: ["🏠 賃貸マンション・アパートの契約", "👶 保育園・学童の就労証明", "💳 クレジットカードの申込", "📱 携帯電話の分割払い契約"],
-              merit: "「どこで働いているか」を証明する書類です。フリーランスは会社員と違って在籍証明が取りにくいですが、この証明書があれば賃貸審査もスムーズに通ります。" },
-            { icon: "💰", title: "報酬支払証明書", sub: "PAYMENT", jpSub: "収入証明", color: "#6b8ba8", type: "payment" as const,
-              uses: ["🏦 住宅ローン・カーローンの審査", "💳 クレジットカードの限度額アップ", "🏥 児童手当・医療費助成の申請", "📋 奨学金の保護者収入証明"],
-              merit: "「年間いくら稼いでいるか」を月別内訳つきで証明します。収入が安定していることを金融機関に示せるので、ローン審査の通過率が上がります。" },
-            { icon: "📊", title: "取引実績証明書", sub: "TRANSACTION", jpSub: "実績証明", color: "#b38419", type: "transaction" as const,
-              uses: ["📑 確定申告の補助資料", "🏦 事業融資・小規模企業共済の申請", "💰 補助金・助成金の申請", "📋 開業届・青色申告の添付資料"],
-              merit: "「どれだけ継続的に仕事をしているか」を証明します。月平均取引額や取引月数が記載されるので、安定した事業実績のアピールに使えます。" },
-          ].map((cert, i) => (
-            <div key={i} style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-              {/* ヘッダー */}
-              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ fontSize: 22 }}>{cert.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: cert.color, fontWeight: 500 }}>{cert.sub}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 14, fontWeight: 500, letterSpacing: "0.03em", color: T.text }}>{cert.title}</p>
-                </div>
-                <span style={{ fontSize: 10, padding: "3px 10px", border: `1px solid ${cert.color}44`, color: cert.color, letterSpacing: "0.05em" }}>{cert.jpSub}</span>
-              </div>
-              <div style={{ padding: "16px 18px" }}>
-                <p style={{ margin: "0 0 14px", fontSize: 11, color: T.textSub, lineHeight: 1.9, letterSpacing: "0.02em" }}>{cert.merit}</p>
-                <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>USE CASES — こんな時に使えます</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 8px", marginBottom: 14 }}>
-                  {cert.uses.map((u, j) => <p key={j} style={{ margin: 0, fontSize: 10, color: T.textMuted, letterSpacing: "0.02em" }}>{u}</p>)}
-                </div>
-                {certEligible ? (
-                  <button onClick={async () => {
-                    if (!storeInfo || !therapist) return;
-                    const store = { company_name: storeInfo.company_name || "", company_address: storeInfo.company_address || "", company_phone: storeInfo.company_phone || "" };
-                    const th = { real_name: (therapist as any).real_name || therapist.name, name: therapist.name, address: (therapist as any).address || "", entry_date: (therapist as any).entry_date || "" };
-                    if (cert.type === "contract") { generateContractCertificate(store, th); return; }
-                    const yr = new Date().getFullYear();
-                    const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back").eq("therapist_id", therapist.id).gte("date", `${yr}-01-01`).lte("date", `${yr}-12-31`);
-                    const months: { month: number; amount: number; days: number }[] = [];
-                    for (let m = 1; m <= 12; m++) { const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m); months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0), 0), days: ms.length }); }
-                    const payment = { year: yr, totalGross: months.reduce((a, m) => a + m.amount, 0), totalDays: months.reduce((a, m) => a + m.days, 0), months };
-                    if (cert.type === "payment") generatePaymentCertificate(store, th, payment);
-                    else generateTransactionCertificate(store, th, payment);
-                  }} style={{ width: "100%", padding: 12, fontSize: 12, cursor: "pointer", backgroundColor: cert.color, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-                    {cert.icon} この証明書を発行する
-                  </button>
-                ) : (
-                  <div style={{ width: "100%", padding: 12, fontSize: 11, textAlign: "center", color: T.textMuted, border: `1px dashed ${T.border}`, backgroundColor: T.cardAlt, fontFamily: FONT_SERIF, letterSpacing: "0.05em", boxSizing: "border-box" }}>
-                    発行条件を満たすと発行できます ↓
-                  </div>
-                )}
-              </div>
+            { label: "Visits", value: String(totalVisits), unit: "回" },
+            { label: "This Month", value: fmt(monthTotal), unit: "" },
+            { label: "Points", value: pointBalance.toLocaleString(), unit: "pt" },
+          ].map((s, i) => (
+            <div key={i} style={{ padding: 16, textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+              <p style={{ margin: 0, fontSize: 9, fontFamily: FONT_DISPLAY, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>{s.label}</p>
+              <p style={{ margin: "10px 0 0", fontSize: 20, fontFamily: FONT_DISPLAY, fontWeight: 400, color: C.text, letterSpacing: "0.02em" }}>
+                {s.value}
+                <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 2, letterSpacing: 0 }}>{s.unit}</span>
+              </p>
             </div>
           ))}
+        </div>
 
-          {/* 発行条件 */}
-          <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 18px" }}>
-            <p style={{ margin: "0 0 4px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>REQUIREMENTS</p>
-            <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>✅ 発行条件</p>
-            <p style={{ margin: "0 0 14px", fontSize: 10, color: T.textMuted, lineHeight: 1.8, letterSpacing: "0.02em" }}>以下の条件をすべて満たすと、証明書を自分で発行できるようになります。</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {certChecks.map((c, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", backgroundColor: c.ok ? "rgba(107,155,126,0.05)" : "rgba(201,107,131,0.04)", border: `1px solid ${c.ok ? "#6b9b7e33" : "#c96b8333"}` }}>
-                  <span style={{ fontSize: 16 }}>{c.ok ? "✅" : "⬜"}</span>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 500, letterSpacing: "0.03em", color: c.ok ? "#6b9b7e" : T.text }}>{c.label}</p>
-                    {!c.ok && i === 0 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>身分証はスタッフに提出してください</p>}
-                    {!c.ok && i === 1 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>契約書のリンクをスタッフからもらってください</p>}
-                    {!c.ok && i === 2 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>スタッフに本名を伝えてください</p>}
-                    {!c.ok && i === 3 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>スタッフに住所を伝えてください</p>}
-                    {!c.ok && i === 4 && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.02em" }}>出勤を重ねると条件を達成できます</p>}
+        {/* ═══ 直近のご利用 ═══ */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Recent Visits</span>
+          </div>
+          {pastRes.length === 0 ? (
+            <div style={{ padding: "28px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>ご利用履歴はまだありません</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pastRes.slice(0, 5).map(r => {
+                const ptEarned = getReservationPointsEarned(r);
+                const payInfo = getPaymentInfo(r);
+                const memo = getMemo(r.id);
+                return (
+                  <div key={r.id} style={{ padding: 14, border: `1px solid ${C.border}`, backgroundColor: C.card, borderRadius: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                        <span style={{ fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: "0.05em", color: C.text }}>{dateFmt(r.date)}</span>
+                        <span style={{ fontSize: 11, color: C.textSub }}>{r.course}</span>
+                      </div>
+                      {r.total_price > 0 && <span style={{ fontSize: 12, fontFamily: FONT_DISPLAY, color: C.accentDark, letterSpacing: "0.03em" }}>{fmt(r.total_price)}</span>}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 6, fontSize: 10, color: C.textMuted }}>
+                      {r.therapist_id > 0 && <span>{getTherapistName(r.therapist_id)}</span>}
+                      {r.nomination && <span>{r.nomination}</span>}
+                      {r.options_text && <span>{r.options_text}</span>}
+                    </div>
+                    {(payInfo || ptEarned > 0) && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 4, fontSize: 9, color: C.textFaint }}>
+                        {payInfo && <span>{payInfo}</span>}
+                        {ptEarned > 0 && <span>+{ptEarned}pt 付与</span>}
+                      </div>
+                    )}
+                    {memo ? (
+                      <div style={{ marginTop: 10, padding: "8px 12px", backgroundColor: C.accentBg, borderRadius: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <StarRating rating={memo.rating} size={10} filledColor={C.accent} emptyColor={C.border} />
+                          <button onClick={() => openMemoEdit(r.id, r.therapist_id)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", padding: 2, display: "inline-flex", alignItems: "center" }}>
+                            <IconEdit size={12} color={C.accent} />
+                          </button>
+                        </div>
+                        {memo.memo && <p style={{ margin: "4px 0 0", fontSize: 10, color: C.textSub, lineHeight: 1.7 }}>{memo.memo}</p>}
+                      </div>
+                    ) : (
+                      <button onClick={() => openMemoEdit(r.id, r.therapist_id)} style={{ width: "100%", marginTop: 10, padding: "7px 0", fontSize: 10, color: C.textMuted, backgroundColor: "transparent", border: `1px dashed ${C.border}`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>ひとことメモを残す</button>
+                    )}
+                  </div>
+                );
+              })}
+              {pastRes.length > 5 && (
+                <button onClick={() => { setTab("schedule"); setSchedView("history"); }} style={{ width: "100%", padding: "10px 0", fontSize: 11, color: C.accent, backgroundColor: "transparent", border: "none", cursor: "pointer", fontFamily: FONT_DISPLAY, letterSpacing: "0.15em" }}>VIEW ALL →</button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>)}
+
+      {/* ═══ スケジュール / 予約 ═══ */}
+      {tab === "schedule" && (<div className="animate-[fadeIn_0.3s]">
+
+        {/* --- DAY: シンプル入口画面 --- */}
+        {schedView === "day" && (<div className="space-y-4">
+          {/* ヘッダー */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-[16px] font-medium">ご予約</h2>
+            <button onClick={() => setSchedView("history")} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ color: C.accent, backgroundColor: C.accentBg }}>📋 予約履歴</button>
+          </div>
+
+          {/* 次回のご予約（あれば） */}
+          {upcomingRes.length > 0 && (
+            <div className="rounded-2xl border p-4" style={{ backgroundColor: C.accentBg, borderColor: C.accent + "44" }}>
+              <p className="text-[10px] mb-2" style={{ color: C.accent, letterSpacing: "0.1em" }}>NEXT RESERVATION</p>
+              {upcomingRes.slice(0, 1).map(r => (
+                <div key={r.id}>
+                  <p className="text-[16px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)} {r.start_time}〜</p>
+                  <div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: C.textSub }}>
+                    {r.course && <span>💆 {r.course}</span>}
+                    {r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}
+                  </div>
+                </div>
+              ))}
+              {upcomingRes.length > 1 && (
+                <button onClick={() => setSchedView("history")} className="mt-2 text-[10px] cursor-pointer" style={{ color: C.accent }}>ほか {upcomingRes.length - 1} 件のご予約 →</button>
+              )}
+            </div>
+          )}
+
+          {/* お気に入りセラピストから予約（あれば） */}
+          {therapists.filter(t => isFav("therapist", t.id) && !ngTherapistIdsForMe.has(t.id)).length > 0 && (
+            <div>
+              <p className="text-[12px] font-medium mb-2 px-1" style={{ color: C.textSub }}>❤️ お気に入りから予約</p>
+              <div className="grid grid-cols-3 gap-2">
+                {therapists.filter(t => isFav("therapist", t.id) && !ngTherapistIdsForMe.has(t.id)).slice(0, 6).map(t => (
+                  <button key={t.id} onClick={() => { setWeeklyTid(t.id); setSchedView("weekly"); fetchWeekSchedule(t.id, schedDate); }} className="rounded-xl border overflow-hidden cursor-pointer text-left" style={{ backgroundColor: C.card, borderColor: C.border }}>
+                    {t.photo_url ? (
+                      <img src={t.photo_url} alt="" className="w-full aspect-square object-cover" />
+                    ) : (
+                      <div className="w-full aspect-square flex items-center justify-center text-[24px] text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{t.name.charAt(0)}</div>
+                    )}
+                    <div className="p-1.5">
+                      <p className="text-[11px] font-medium truncate text-center">{t.name}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* HPで見る導線 */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            <div>
+              <p className="text-[13px] font-medium mb-1">📅 セラピスト・スケジュールを見る</p>
+              <p className="text-[10px]" style={{ color: C.textMuted }}>出勤予定・セラピストのプロフィールは公式サイトでご覧いただけます</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <a href="/schedule" target="_blank" rel="noopener noreferrer" className="py-2.5 rounded-xl text-[12px] font-medium text-center cursor-pointer no-underline" style={{ backgroundColor: C.accentBg, color: C.accent, border: `1px solid ${C.accent}30` }}>📅 出勤スケジュール</a>
+              <a href="/therapist" target="_blank" rel="noopener noreferrer" className="py-2.5 rounded-xl text-[12px] font-medium text-center cursor-pointer no-underline" style={{ backgroundColor: C.accentBg, color: C.accent, border: `1px solid ${C.accent}30` }}>💆 セラピスト一覧</a>
+            </div>
+          </div>
+
+          {/* 直接予約フォーム（おまかせフリー） */}
+          <div className="rounded-2xl border p-5 space-y-3" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            <div>
+              <p className="text-[13px] font-medium mb-1">🕐 直接ご予約</p>
+              <p className="text-[10px]" style={{ color: C.textMuted }}>ご希望のセラピストが決まっている場合は、上の「お気に入り」からスケジュールをご確認ください</p>
+            </div>
+            <button onClick={() => { setBookTherapistId(0); setFreeMode(true); setBookDate(schedDate); setBookTime("13:00"); setBookStoreId(stores[0]?.id || 0); setSchedView("form"); }} className="w-full py-3 rounded-xl text-[12px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>🎲 おまかせフリーで予約リクエスト</button>
+            <p className="text-[9px] text-center" style={{ color: C.textFaint }}>※ セラピストはお店にて手配いたします</p>
+          </div>
+
+          {/* キャンセルポリシー */}
+          <div className="rounded-lg p-3" style={{ backgroundColor: "#c96b8306", border: `1px solid #c96b8315` }}>
+            <p className="text-[10px] font-medium mb-1" style={{ color: C.red }}>📌 キャンセル・変更について</p>
+            <p className="text-[9px] m-0" style={{ color: C.textMuted, lineHeight: 1.7 }}>ご予約のキャンセル・変更は、必ずお電話にてスタッフまでお申しつけください。<br />当日のキャンセルにつきましては、<strong style={{ color: C.red }}>100％キャンセル料</strong>を頂戴いたします。</p>
+            <a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-medium no-underline" style={{ color: C.accent }}>📞 {cancelPhone}</a>
+          </div>
+        </div>)}
+
+
+        {/* --- 週間スケジュール --- */}
+        {schedView === "weekly" && (() => {
+          const t = therapists.find(th => th.id === weeklyTid);
+          const weekDates = getWeekDates(schedDate);
+          return (<>
+            <div className="flex items-center gap-3 mb-4">
+              <button onClick={() => setSchedView("day")} className="text-[14px] cursor-pointer" style={{ color: C.textMuted }}>← 戻る</button>
+              <h2 className="text-[16px] font-medium flex-1">{t?.name || ""} の週間スケジュール</h2>
+            </div>
+            {/* メモ履歴 */}
+            {(() => { const memos = getMemosForTherapist(weeklyTid); return memos.length > 0 ? (<div className="rounded-xl px-4 py-2.5 mb-3" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78225" }}><p className="text-[10px] font-medium mb-1.5" style={{ color: C.accent }}>📝 ひとことメモ（{memos.length}件）</p><div className="space-y-1.5">{memos.slice(0, 3).map(m => (<div key={m.id} className="rounded-lg px-2 py-1" style={{ backgroundColor: "#c3a78215" }}><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(m.rating)}{"☆".repeat(5 - m.rating)}</span>{m.memo && <p className="text-[10px] mt-0.5" style={{ color: C.textSub }}>{m.memo}</p>}</div>))}{memos.length > 3 && <p className="text-[9px] mt-1" style={{ color: C.textMuted }}>{"他" + (memos.length - 3) + "件のメモ"}</p>}</div></div>) : null; })()}
+            {/* 週ナビ */}
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <button onClick={() => { const nd = dateNav(weekDates[0], -7); setSchedDate(nd); fetchWeekSchedule(weeklyTid, nd); }} className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border" style={{ borderColor: C.border, color: C.textSub }}>◀</button>
+              <span className="text-[13px] font-medium min-w-[180px] text-center">{dateFmt(weekDates[0])} 〜 {dateFmt(weekDates[6])}</span>
+              <button onClick={() => { const nd = dateNav(weekDates[0], 7); setSchedDate(nd); fetchWeekSchedule(weeklyTid, nd); }} className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border" style={{ borderColor: C.border, color: C.textSub }}>▶</button>
+            </div>
+            <div className="space-y-3">
+              {weekDates.map(date => {
+                const shift = weekShifts.find(s => s.date === date);
+                const dRes = weekRes.filter(r => r.date === date);
+                const isToday = date === today;
+                const isPast = date < today;
+                const dt = new Date(date + "T00:00:00");
+                const isSun = dt.getDay() === 0; const isSat = dt.getDay() === 6;
+                return (
+                  <div key={date} className="rounded-xl border overflow-hidden" style={{ backgroundColor: C.card, borderColor: isToday ? C.accent + "44" : C.border }}>
+                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: isToday ? C.accentBg : "transparent" }}>
+                      <span className="text-[13px] font-medium" style={{ color: isSun ? C.red : isSat ? C.blue : isToday ? C.accent : C.text }}>{dateFmt(date)}{isToday && " 📍今日"}</span>
+                      {shift ? (<span className="text-[11px]" style={{ color: C.green }}>出勤 {shift.start_time}〜{shift.end_time}</span>) : (<span className="text-[11px]" style={{ color: C.textFaint }}>休み</span>)}
+                    </div>
+                    {shift && !isPast && (
+                      <div className="px-4 py-2 space-y-1">
+                        {makeSlots(shift, dRes).map((sl, i) => (
+                          <div key={i} className="flex items-center gap-2 py-1 px-2 rounded-lg">
+                            <span className="text-[11px] font-mono w-[40px]" style={{ color: sl.available ? C.text : C.textFaint }}>{sl.time}</span>
+                            {sl.available ? (
+                              <button onClick={() => openBookForm(date, sl.time, weeklyTid)} className="flex-1 py-1 rounded text-[10px] font-medium cursor-pointer text-center" style={{ backgroundColor: "#6b9b7e10", color: C.green, border: `1px solid ${C.green}30` }}>◯ 空き</button>
+                            ) : (<span className="flex-1 py-1 rounded text-[10px] text-center" style={{ color: C.textFaint }}>✕ 予約済</span>)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {shift && isPast && (<p className="px-4 py-2 text-[10px]" style={{ color: C.textFaint }}>過去の日付です</p>)}
+                  </div>
+                );
+              })}
+            </div>
+          </>);
+        })()}
+
+        {/* --- 予約フォーム --- */}
+        {schedView === "form" && (<>
+          {!bookDone ? (<>
+          <div className="flex items-center gap-3 mb-4">
+            <button onClick={() => setSchedView("day")} className="text-[14px] cursor-pointer" style={{ color: C.textMuted }}>← 戻る</button>
+            <h2 className="text-[16px] font-medium">予約リクエスト</h2>
+          </div>
+          <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            {/* 選択済み情報 */}
+            <div className="rounded-xl p-4" style={{ backgroundColor: C.accentBg, border: `1px solid ${C.accent}30` }}>
+              <p className="text-[13px] font-medium" style={{ color: freeMode ? "#378ADD" : C.accent }}>{dateFmt(bookDate)} {bookTime}〜</p>
+              {freeMode ? <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: "#378ADD" }}>🎲 おまかせフリー</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "#378ADD20", color: "#378ADD" }}>📍 {getStoreName(bookStoreId)} ｜ 指名料なし</span></div> : bookTherapistId > 0 && <div className="flex items-center gap-2 mt-1"><span className="text-[12px]" style={{ color: C.textSub }}>👤 {getTherapistName(bookTherapistId)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getNominationType(bookTherapistId).name.includes("本") ? "#c3a78220" : "#85a8c420", color: getNominationType(bookTherapistId).name.includes("本") ? C.accent : C.blue }}>{getNominationType(bookTherapistId).label}</span></div>}
+              {!freeMode && bookTherapistId > 0 && getNominationType(bookTherapistId).price > 0 && <p className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>指名料: {fmt(getNominationType(bookTherapistId).price)}</p>}
+            </div>
+
+            {/* コース */}
+            <div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>コース <span style={{ color: C.red }}>*</span></label><select value={bookCourseId} onChange={e => setBookCourseId(Number(e.target.value))} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border cursor-pointer" style={inputStyle}><option value={0}>選択してください</option>{courses.map(c => <option key={c.id} value={c.id}>{c.name}（{c.duration}分 / {fmt(c.price)}）</option>)}</select></div>
+
+            {/* オプション */}
+            {optionsList.length > 0 && (<div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>✨ オプション</label><div className="space-y-1.5">{optionsList.map(o => { const sel = bookOptions.includes(o.id); return (<button key={o.id} onClick={() => setBookOptions(prev => sel ? prev.filter(x => x !== o.id) : [...prev, o.id])} className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: sel ? C.accentBg : C.cardAlt, border: sel ? `1px solid ${C.accent}44` : `1px solid ${C.border}`, color: sel ? C.accent : C.text }}><span>{sel ? "✅ " : ""}{o.name}</span><span style={{ color: C.textMuted }}>+{fmt(o.price)}</span></button>); })}</div></div>)}
+
+            {/* 延長 */}
+            {extensions.length > 0 && (<div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>⏰ 延長</label><select value={bookExtId} onChange={e => setBookExtId(Number(e.target.value))} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border cursor-pointer" style={inputStyle}><option value={0}>なし</option>{extensions.map(e => <option key={e.id} value={e.id}>{e.name}（{e.duration}分 / +{fmt(e.price)}）</option>)}</select></div>)}
+
+            {/* 割引 */}
+            {discounts.length > 0 && (<div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>🏷 割引</label><select value={bookDiscountId} onChange={e => setBookDiscountId(Number(e.target.value))} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border cursor-pointer" style={inputStyle}><option value={0}>なし</option>{discounts.map(d => <option key={d.id} value={d.id}>{d.name}（-{fmt(d.amount)}）</option>)}</select></div>)}
+
+            {/* ポイント利用 */}
+            {pointBalance > 0 && (<div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>🎁 ポイント利用（残高: {pointBalance.toLocaleString()}pt）</label><div className="flex items-center gap-2"><input type="number" value={bookPointUse || ""} onChange={e => { const v = Math.min(Math.max(0, parseInt(e.target.value) || 0), pointBalance); setBookPointUse(v); }} placeholder="0" min={0} max={pointBalance} className="flex-1 px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /><span className="text-[12px]" style={{ color: C.textMuted }}>pt</span><button onClick={() => setBookPointUse(pointBalance)} className="px-3 py-2 rounded-lg text-[10px] cursor-pointer" style={{ backgroundColor: C.accentBg, color: C.accent }}>全額</button></div>{bookPointUse > 0 && bookPointUse < 1000 && <p className="text-[10px] mt-1" style={{ color: C.red }}>⚠ ポイントは1,000pt以上からご利用いただけます</p>}<p className="text-[9px] mt-1" style={{ color: C.textFaint }}>※ 1,000pt単位でご利用可能（100pt = ¥100割引）</p></div>)}
+
+            {bookStoreId > 0 && <div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>🏠 ルーム</label><div className="px-4 py-3 rounded-xl text-[13px] border" style={{ backgroundColor: C.cardAlt, borderColor: C.border, color: C.text }}>{getStoreName(bookStoreId)}</div></div>}
+
+            <div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>ご要望・備考</label><textarea value={bookNotes} onChange={e => setBookNotes(e.target.value)} rows={3} placeholder="ご要望があればご記入ください" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border resize-none" style={inputStyle} /></div>
+
+            {/* 料金概算 */}
+            {bookCourseId > 0 && (() => {
+              const course = courses.find(c => c.id === bookCourseId);
+              const nom = getNominationType(bookTherapistId);
+              const ext = extensions.find(e => e.id === bookExtId);
+              const disc = discounts.find(d => d.id === bookDiscountId);
+              const optTotal = optionsList.filter(o => bookOptions.includes(o.id)).reduce((s, o) => s + o.price, 0);
+              const total = Math.max(0, (course?.price || 0) + nom.price + optTotal + (ext?.price || 0) - (disc?.amount || 0) - bookPointUse);
+              return (<div className="rounded-xl p-3" style={{ backgroundColor: C.cardAlt }}>
+                <p className="text-[10px] font-medium mb-2" style={{ color: C.textSub }}>💰 料金概算</p>
+                <div className="space-y-1 text-[11px]">
+                  <div className="flex justify-between"><span>コース: {course?.name}</span><span>{fmt(course?.price || 0)}</span></div>
+                  {nom.price > 0 && <div className="flex justify-between"><span>{nom.name}</span><span>+{fmt(nom.price)}</span></div>}
+                  {optTotal > 0 && <div className="flex justify-between"><span>オプション</span><span>+{fmt(optTotal)}</span></div>}
+                  {ext && <div className="flex justify-between"><span>{ext.name}</span><span>+{fmt(ext.price)}</span></div>}
+                  {disc && <div className="flex justify-between" style={{ color: C.red }}><span>{disc.name}</span><span>-{fmt(disc.amount)}</span></div>}
+                  {bookPointUse > 0 && <div className="flex justify-between" style={{ color: C.blue }}><span>ポイント利用</span><span>-{bookPointUse.toLocaleString()}pt</span></div>}
+                  <div className="flex justify-between pt-1.5 mt-1.5 text-[14px] font-bold" style={{ borderTop: `1px solid ${C.border}`, color: C.accent }}><span>合計</span><span>{fmt(total)}</span></div>
+                </div>
+              </div>);
+            })()}
+
+            {bookMsg && <div className="px-4 py-3 rounded-xl text-[12px]" style={{ backgroundColor: "#c96b8312", color: C.red }}>{bookMsg}</div>}
+            <button onClick={submitBooking} disabled={bookSaving || !bookCourseId} className="w-full py-3.5 rounded-xl text-[14px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>{bookSaving ? "送信中..." : "予約リクエストを送信"}</button>
+          </div>
+          </>) : (
+          /* ===== 予約完了案内 ===== */
+          <div className="animate-[fadeIn_0.3s]">
+            <div className="text-center mb-6">
+              <span className="text-[48px]">✅</span>
+              <h2 className="text-[20px] font-medium mt-3">予約リクエストを送信しました！</h2>
+              <p className="text-[12px] mt-1" style={{ color: C.textMuted }}>{dateFmt(bookDate)} {bookTime}〜 {freeMode ? "🎲 おまかせフリー" : getTherapistName(bookTherapistId)}</p>
+            </div>
+            <div className="rounded-2xl border p-5 space-y-5" style={{ backgroundColor: C.card, borderColor: C.border }}>
+              <h3 className="text-[14px] font-medium text-center" style={{ color: C.accent }}>📋 ご予約の流れ</h3>
+              <div className="space-y-4">
+                <div className="flex gap-3"><div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0" style={{ backgroundColor: C.accentBg, color: C.accent }}>1</div><div><p className="text-[13px] font-medium">スタッフが確認します</p><p className="text-[11px] mt-0.5" style={{ color: C.textSub }}>お店のスタッフがご予約内容を確認いたします。</p></div></div>
+                <div className="flex gap-3"><div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0" style={{ backgroundColor: C.accentBg, color: C.accent }}>2</div><div><p className="text-[13px] font-medium">確定メールをお送りします</p><p className="text-[11px] mt-0.5" style={{ color: C.textSub }}>ご登録のメールアドレスに確定メールを送信します。メール内のリンクを開いて詳細をご確認ください。</p><p className="text-[10px] mt-1 px-3 py-2 rounded-lg" style={{ backgroundColor: "#b3841908", color: "#b38419" }}>⚠ 迷惑メールフォルダに入っている場合がございますので、ご確認をお願いいたします。</p></div></div>
+                <div className="flex gap-3"><div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0" style={{ backgroundColor: C.accentBg, color: C.accent }}>3</div><div><p className="text-[13px] font-medium">お部屋の詳細について</p><p className="text-[11px] mt-0.5" style={{ color: C.textSub }}>翌日以降のご予約はお部屋が確定していないため、前日の夜もしくは当日の朝11時までに、ルーム詳細が載ったメールをお送りいたします。</p></div></div>
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: C.cardAlt }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: C.textSub }}>⏰ 営業時間外のリクエストについて</p>
+                <p className="text-[11px]" style={{ color: C.textMuted }}>翌日11時以降にスタッフが確認し、確定メールをお送りいたしますので、今しばらくお待ちください。</p>
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: C.cardAlt }}>
+                <p className="text-[11px] font-medium mb-2" style={{ color: C.textSub }}>📞 お電話でのご連絡について</p>
+                <p className="text-[11px]" style={{ color: C.textMuted }}>お時間の調整が必要な場合など、お電話でお客様にご連絡する場合もございますので、ご対応をお願いいたします。</p>
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#c96b8308", border: `1px solid ${C.red}20` }}>
+                <p className="text-[11px] font-medium" style={{ color: C.red }}>⚠ ご注意</p>
+                <p className="text-[11px] mt-1" style={{ color: C.textSub }}>お電話の対応・確定メールがない場合は、ご予約が確定しておりませんのでご注意ください。</p>
+              </div>
+              <button onClick={() => { setSchedView("day"); setBookDone(false); }} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>出勤一覧に戻る</button>
+            </div>
+          </div>
+          )}
+        </>)}
+
+        {/* --- 予約履歴 --- */}
+        {schedView === "history" && (<>
+          <div className="flex items-center gap-3 mb-4">
+            <button onClick={() => setSchedView("day")} className="text-[14px] cursor-pointer" style={{ color: C.textMuted }}>← 戻る</button>
+            <h2 className="text-[16px] font-medium">予約履歴</h2>
+          </div>
+          {upcomingRes.length > 0 && (<div className="mb-4"><h3 className="text-[12px] font-medium mb-2" style={{ color: C.accent }}>📅 今後の予約（{upcomingRes.length}件）</h3><div className="space-y-2">{upcomingRes.map(r => (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.accent + "44" }}><div className="flex items-center justify-between mb-1"><span className="text-[14px] font-medium" style={{ color: C.accent }}>{dateFmt(r.date)}</span><span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: getStatusBadge(r.status).bg, color: getStatusBadge(r.status).color }}>{getStatusBadge(r.status).label}</span></div><p className="text-[13px]">{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 mt-1 text-[11px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}</div>{r.total_price > 0 && <p className="text-[13px] mt-1 font-bold" style={{ color: C.accent }}>{fmt(r.total_price)}</p>}{r.total_price > 0 && (r.status === "customer_confirmed" || r.status === "email_sent") && <div className="mt-2 rounded-lg p-2.5" style={{ backgroundColor: "#6b8ba808", border: "1px solid #6b8ba820" }}><p className="text-[10px] mb-1.5" style={{ color: "#6b8ba8" }}>💳 カード決済額: <strong>{fmt(Math.round(r.total_price * 1.1))}</strong>（税10%込）</p><button onClick={() => window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank")} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer text-white flex items-center justify-center gap-1" style={{ background: "linear-gradient(135deg, #6b8ba8, #5a7897)" }}>💳 クレジットカードで支払う</button></div>}{/* キャンセルボタン */}<div className="mt-2"><button onClick={() => handleCancelClick(r)} className="w-full py-2 rounded-lg text-[10px] font-medium cursor-pointer" style={{ backgroundColor: canCancelDirectly(r) ? "#c96b8310" : "#88878010", color: canCancelDirectly(r) ? C.red : C.textMuted, border: `1px solid ${canCancelDirectly(r) ? "#c96b8325" : "#88878020"}` }}>{canCancelDirectly(r) ? "✕ この予約をキャンセル" : "📞 キャンセル・変更について"}</button></div></div>))}</div></div>)}
+          <h3 className="text-[12px] font-medium mb-2" style={{ color: C.textSub }}>🕐 過去のご利用（{pastRes.length}件）</h3>
+          {pastRes.length === 0 ? (<p className="text-[12px] text-center py-8" style={{ color: C.textFaint }}>利用履歴がありません</p>) : (<div className="space-y-2">{pastRes.map(r => { const bName = (() => { if (r.free_building_id) { const b = buildings.find(bl => bl.id === r.free_building_id); return b?.name || ""; } return ""; })(); const ptEarned = getReservationPointsEarned(r); const payInfo = getPaymentInfo(r); const memo = getMemo(r.id); return (<div key={r.id} className="rounded-xl border p-4" style={{ backgroundColor: C.card, borderColor: C.border }}><div className="flex items-center justify-between mb-1"><span className="text-[13px] font-medium">{dateFmt(r.date)}</span><span className="text-[12px] font-medium" style={{ color: C.accent }}>{fmt(r.total_price)}</span></div><p className="text-[12px]" style={{ color: C.textSub }}>{r.start_time}〜{r.end_time} {r.course}</p><div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px]" style={{ color: C.textSub }}>{r.therapist_id > 0 && <span>👤 {getTherapistName(r.therapist_id)}</span>}{r.nomination && <span>⭐ {r.nomination}</span>}{r.options_text && <span>✨ {r.options_text}</span>}{bName && <span>🏠 {bName}</span>}</div>{(payInfo || ptEarned > 0) && <div className="flex flex-wrap gap-x-3 mt-1 text-[9px]" style={{ color: C.textMuted }}>{payInfo && <span>{payInfo}</span>}{ptEarned > 0 && <span>🎁 +{ptEarned}pt付与</span>}</div>}{memo ? (<div className="mt-2 rounded-lg px-3 py-2" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78225" }}><div className="flex items-center justify-between"><div className="flex items-center gap-1"><span className="text-[9px]" style={{ color: C.accent }}>{"★".repeat(memo.rating)}{"☆".repeat(5 - memo.rating)}</span></div><button onClick={() => openMemoEdit(r.id, r.therapist_id)} className="text-[9px] cursor-pointer" style={{ color: C.accent }}>✏️ 編集</button></div>{memo.memo && <p className="text-[10px] mt-0.5" style={{ color: C.textSub }}>{memo.memo}</p>}</div>) : (<button onClick={() => openMemoEdit(r.id, r.therapist_id)} className="mt-2 w-full py-1.5 rounded-lg text-[9px] cursor-pointer" style={{ color: C.textMuted, backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}>📝 ひとことメモ</button>)}</div>); })}</div>)}
+        </>)}
+      </div>)}
+
+      {/* ═══ お気に入り ═══ */}
+      {tab === "favorites" && (<div className="animate-[fadeIn_0.3s]">
+        {/* 見出し */}
+        <div style={{ textAlign: "center", marginBottom: 28, paddingTop: 8 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, textTransform: "uppercase" }}>Favorites</p>
+          <h2 style={{ margin: "8px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.1em", color: C.text }}>お気に入り</h2>
+          <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+        </div>
+
+        {/* セラピストセクション */}
+        <div style={{ marginBottom: 36 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Therapists</span>
+          </div>
+
+          {therapists.filter(t => isFav("therapist", t.id)).length === 0 ? (
+            <div style={{ padding: "40px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <img src="/mypage/empty-favorite.jpg" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", maxWidth: 160, aspectRatio: "1/1", objectFit: "cover", borderRadius: 4, marginBottom: 20, opacity: 0.9 }} />
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 16, letterSpacing: "0.08em", color: C.text }}>お気に入りはまだありません</p>
+              <p style={{ margin: "10px 0 0", fontSize: 11, color: C.textMuted, lineHeight: 1.8 }}>公式サイトで気になるセラピストを<br />見つけてください</p>
+              <a href="/therapist" target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "10px 24px", fontSize: 11, color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 2, textDecoration: "none", letterSpacing: "0.12em", fontFamily: FONT_SERIF }}>セラピスト一覧を見る</a>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {therapists.filter(t => isFav("therapist", t.id)).map(t => {
+                const memos = getMemosForTherapist(t.id);
+                const latestMemo = memos.length > 0 ? memos[0] : null;
+                return (
+                  <div key={t.id} style={{ backgroundColor: C.card, border: `1px solid ${C.borderPink || C.border}`, borderRadius: 6, overflow: "hidden", position: "relative" }}>
+                    <button onClick={() => toggleFav("therapist", t.id)} style={{ position: "absolute", top: 8, right: 8, zIndex: 1, width: 30, height: 30, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.85)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)" }}>
+                      <IconHeart size={15} color={C.accent} fill={C.accent} />
+                    </button>
+                    {t.photo_url ? (
+                      <img src={t.photo_url} alt={t.name} style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "100%", aspectRatio: "3/4", backgroundColor: C.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontSize: 48, color: C.accent }}>{t.name.charAt(0)}</div>
+                    )}
+                    <div style={{ padding: 12 }}>
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: "0.05em", color: C.text }}>{t.name}{t.age > 0 && <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 6 }}>({t.age})</span>}</p>
+                      {(t.height_cm > 0 || t.bust > 0) && <p style={{ margin: "2px 0 0", fontSize: 10, color: C.textMuted, letterSpacing: "0.03em" }}>T{t.height_cm} B{t.bust}({t.cup}) W{t.waist}</p>}
+                      {latestMemo && (
+                        <div style={{ marginTop: 8, padding: "6px 8px", backgroundColor: C.accentBg, borderRadius: 4 }}>
+                          <StarRating rating={latestMemo.rating} size={9} filledColor={C.accent} emptyColor={C.border} />
+                          {latestMemo.memo && <p style={{ margin: "2px 0 0", fontSize: 10, color: C.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{latestMemo.memo}</p>}
+                          {memos.length > 1 && <p style={{ margin: "2px 0 0", fontSize: 9, color: C.textMuted }}>他 {memos.length - 1} 件</p>}
+                        </div>
+                      )}
+                      <button onClick={() => { setTab("schedule"); setSchedView("weekly"); setWeeklyTid(t.id); setSchedDate(today); fetchWeekSchedule(t.id, today); }} style={{ width: "100%", marginTop: 10, padding: "8px 0", fontSize: 10, color: "#fff", backgroundColor: C.accent, border: "none", borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>スケジュールを見る</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* メモセクション */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingLeft: 4 }}>
+            <div style={{ width: 20, height: 1, backgroundColor: C.accent }} />
+            <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Memories</span>
+          </div>
+          {customerMemos.length === 0 ? (
+            <div style={{ padding: "32px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: "0.05em", color: C.textSub }}>まだメモがありません</p>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: C.textMuted }}>ご来店後、予約履歴から感想を残せます</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {customerMemos.sort((a, b) => b.id - a.id).map(m => {
+                const r = reservations.find(res => res.id === m.reservation_id);
+                const tName = m.therapist_id > 0 ? getTherapistName(m.therapist_id) : "フリー";
+                return (
+                  <div key={m.id} style={{ padding: 16, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 12, fontFamily: FONT_DISPLAY, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>{tName}</span>
+                        <StarRating rating={m.rating} size={10} filledColor={C.accent} emptyColor={C.border} />
+                      </div>
+                      <button onClick={() => openMemoEdit(m.reservation_id, m.therapist_id)} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: C.accent, background: "none", border: "none", cursor: "pointer", fontFamily: FONT_SERIF }}>
+                        <IconEdit size={11} color={C.accent} />編集
+                      </button>
+                    </div>
+                    {m.memo && <p style={{ margin: 0, fontSize: 12, color: C.textSub, lineHeight: 1.8 }}>{m.memo}</p>}
+                    {r && <p style={{ margin: "8px 0 0", fontSize: 10, color: C.textMuted, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{dateFmt(r.date)} {r.start_time}〜 {r.course}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>)}
+
+      {/* ═══ お知らせ ═══ */}
+      {tab === "notifications" && (<div className="animate-[fadeIn_0.3s]">
+        {/* 見出し（HP風） */}
+        <div style={{ textAlign: "center", marginBottom: 28, paddingTop: 8 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, textTransform: "uppercase" }}>Notifications</p>
+          <h2 style={{ margin: "8px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.1em", color: C.text }}>お知らせ</h2>
+          <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+          {unreadCount > 0 && (
+            <button onClick={markAllRead} style={{
+              fontSize: 11,
+              color: C.accent,
+              background: "none",
+              border: `1px solid ${C.accent}40`,
+              borderRadius: 2,
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: FONT_SERIF,
+              letterSpacing: "0.08em",
+              marginTop: 4,
+            }}>すべて既読にする</button>
+          )}
+        </div>
+
+        {notifications.length === 0 ? (
+          <div style={{ padding: "48px 24px", textAlign: "center", backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+            <img src="/mypage/empty-notification.jpg" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} style={{ width: "100%", maxWidth: 180, aspectRatio: "1/1", objectFit: "cover", borderRadius: 4, marginBottom: 24, opacity: 0.9 }} />
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: "0.08em", color: C.text }}>新しいお知らせはありません</p>
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: C.textMuted, lineHeight: 1.8 }}>キャンペーンや新人紹介などの<br />お知らせがここに表示されます</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {notifications.map(n => {
+              const isRead = readNotifIds.includes(n.id);
+              return (
+                <div key={n.id} onClick={() => markRead(n.id)} style={{
+                  padding: 16,
+                  backgroundColor: isRead ? C.card : C.accentBg,
+                  border: `1px solid ${isRead ? C.border : C.accent + "50"}`,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        {!isRead && <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: C.accent, flexShrink: 0 }} />}
+                        <span style={{ fontSize: 14, fontFamily: FONT_DISPLAY, fontWeight: 400, letterSpacing: "0.05em", color: isRead ? C.text : C.accentDark }}>{n.title}</span>
+                      </div>
+                      {n.body && <p style={{ margin: 0, fontSize: 12, lineHeight: 1.8, color: C.textSub, whiteSpace: "pre-wrap" }}>{linkify(n.body)}</p>}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                        <span style={{ fontSize: 9, letterSpacing: "0.1em", padding: "2px 8px", borderRadius: 999, backgroundColor: "transparent", border: `1px solid ${C.border}`, color: C.textMuted }}>{NOTI_LABELS[n.type] || n.type}</span>
+                        <span style={{ fontSize: 10, color: C.textFaint, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{timeAgo(n.created_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>)}
+
+      {/* ═══ 写メ日記 ═══ */}
+      {tab === "diary" && customer && (
+        <div className="animate-[fadeIn_0.3s]">
+          <CustomerDiaryTab
+            customerId={customer.id}
+            C={C}
+            FONT_SERIF={FONT_SERIF}
+            FONT_DISPLAY={FONT_DISPLAY}
+          />
+        </div>
+      )}
+
+      {/* ═══ 設定 ═══ */}
+      {tab === "settings" && (<div className="animate-[fadeIn_0.3s]" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* 見出し */}
+        <div style={{ textAlign: "center", marginBottom: 8, paddingTop: 8 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, textTransform: "uppercase" }}>Account</p>
+          <h2 style={{ margin: "8px 0 0", fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 400, letterSpacing: "0.1em", color: C.text }}>会員情報</h2>
+          <div style={{ width: 32, height: 1, backgroundColor: C.accent, margin: "12px auto" }} />
+        </div>
+
+        {/* ═══ 会員情報フォーム ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>お名前</label>
+            <input type="text" value={setSelfN} onChange={e => setSetSelfN(e.target.value)} style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+          </div>
+          <div style={{ paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
+            <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.12em", color: C.textMuted, marginBottom: 4 }}>電話番号</p>
+            <p style={{ margin: 0, fontSize: 14, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em", color: C.text }}>{customer.phone || "—"}</p>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>メールアドレス</label>
+            <input type="email" value={setEmail} onChange={e => setSetEmail(e.target.value)} style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>お誕生日</label>
+            <input type="date" value={setBday} onChange={e => setSetBday(e.target.value)} style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+            <p style={{ margin: "6px 0 0", fontSize: 10, color: C.textFaint, letterSpacing: "0.03em" }}>誕生月にボーナスポイントをプレゼント</p>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>新しいパスワード</label>
+            <input type="password" value={setPw} onChange={e => setSetPw(e.target.value)} placeholder="変更する場合のみ入力" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+          </div>
+          {setPw && (
+            <div>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>パスワード確認</label>
+              <input type="password" value={setPwConfirm} onChange={e => setSetPwConfirm(e.target.value)} placeholder="もう一度入力" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+            </div>
+          )}
+          {settingMsg && (
+            <div style={{ padding: "12px 14px", backgroundColor: settingMsg.includes("保存しました") ? "#edf3ee" : C.accentBg, color: settingMsg.includes("保存しました") ? C.green : C.accentDark, fontSize: 12, borderRadius: 4, border: `1px solid ${settingMsg.includes("保存しました") ? "#cadbcf" : C.accent + "30"}` }}>
+              {settingMsg}
+            </div>
+          )}
+          <button onClick={saveSettings} disabled={settingSaving} style={{ width: "100%", padding: "14px", fontSize: 13, color: "#fff", backgroundColor: C.accent, border: "none", borderRadius: 4, cursor: settingSaving ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.15em", opacity: settingSaving ? 0.5 : 1 }}>
+            {settingSaving ? "保存中..." : "変更を保存"}
+          </button>
+        </div>
+
+        {/* ═══ プッシュ通知 ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Notifications</p>
+          <h3 style={{ margin: "6px 0 4px", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>プッシュ通知</h3>
+          <p style={{ margin: "0 0 14px", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>予約前日のリマインダーやお得なキャンペーン情報を受け取れます。</p>
+          <PushToggle userType="customer" userId={customer.id} className="w-full" />
+        </div>
+
+        {/* ═══ カード情報登録（API連携待ち・UI非表示） ═══
+            カード会社APIとの連携確認後にONにする。`false` を `true` に変えるだけで復活。
+            関連テーブル: customer_cards（データは保持） */}
+        {false && (
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Saved Cards</p>
+              <h3 style={{ margin: "6px 0 0", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>決済カード</h3>
+            </div>
+            <button onClick={() => setShowAddCard(true)} style={{ padding: "8px 14px", fontSize: 11, color: C.accent, backgroundColor: "transparent", border: `1px solid ${C.accent}60`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>+ 追加</button>
+          </div>
+          {cards.length === 0 ? (
+            <p style={{ margin: 0, padding: "20px 0", textAlign: "center", fontSize: 12, color: C.textMuted }}>カードが登録されていません</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {cards.map(c => (
+                <div key={c.id} style={{ padding: 14, backgroundColor: C.cardAlt, border: c.is_default ? `1px solid ${C.accent}60` : `1px solid ${C.border}`, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <IconCard size={20} color={C.textSub} />
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13, fontFamily: FONT_DISPLAY, letterSpacing: "0.08em", color: C.text }}>{c.brand.toUpperCase()} •••• {c.last4}</span>
+                        {c.is_default && <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 999, backgroundColor: C.accentBg, color: C.accentDark, letterSpacing: "0.08em", fontFamily: FONT_SERIF }}>メイン</span>}
+                      </div>
+                      <span style={{ fontSize: 10, color: C.textMuted, fontFamily: FONT_DISPLAY, letterSpacing: "0.05em" }}>{c.exp_month}/{c.exp_year}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {!c.is_default && <button onClick={() => setDefaultCard(c.id)} style={{ padding: "4px 10px", fontSize: 9, color: C.accent, backgroundColor: "transparent", border: `1px solid ${C.accent}40`, borderRadius: 2, cursor: "pointer", letterSpacing: "0.08em", fontFamily: FONT_SERIF }}>メインに</button>}
+                    <button onClick={() => removeCard(c.id)} style={{ padding: "4px 10px", fontSize: 9, color: C.textMuted, backgroundColor: "transparent", border: `1px solid ${C.border}`, borderRadius: 2, cursor: "pointer", letterSpacing: "0.08em", fontFamily: FONT_SERIF }}>削除</button>
                   </div>
                 </div>
               ))}
             </div>
-            {certEligible && (
-              <div style={{ marginTop: 14, padding: "12px 14px", textAlign: "center", backgroundColor: "rgba(107,155,126,0.08)", border: `1px solid #6b9b7e44` }}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: "#6b9b7e", letterSpacing: "0.05em" }}>🎉 すべての条件を満たしています！上の証明書を発行できます。</p>
+          )}
+        </div>
+        )}
+
+        {/* ═══ クレジットカード決済（Star Pay外部連携） ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Payment</p>
+          <h3 style={{ margin: "6px 0 4px", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>クレジットカード決済</h3>
+          <p style={{ margin: "0 0 12px", fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>事前決済で当日のお支払いがスムーズになります。</p>
+          <div style={{ padding: "10px 12px", backgroundColor: C.accentBg, border: `1px solid ${C.accent}30`, borderRadius: 4, marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 10, color: C.accentDark, lineHeight: 1.7, letterSpacing: "0.03em" }}>料金には 10% のタックスが加算されます。<br />ご予約が確定してからカード決済をお願いいたします。</p>
+          </div>
+          <button onClick={() => window.open("https://pay2.star-pay.jp/site/com/shop.php?tel=&payc=A5623&guide=", "_blank")} style={{ width: "100%", padding: "14px", fontSize: 13, color: "#fff", backgroundColor: C.text, border: "none", borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.15em" }}>
+            クレジットカードで支払う
+          </button>
+          <p style={{ margin: "8px 0 0", fontSize: 10, color: C.textFaint, textAlign: "center", letterSpacing: "0.05em" }}>※ 別サイト（Star Pay）に移動します</p>
+        </div>
+
+        {/* ═══ ポイント残高 ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Points</p>
+              <p style={{ margin: "10px 0 0", fontFamily: FONT_DISPLAY, fontSize: 30, fontWeight: 400, color: C.text, letterSpacing: "0.02em" }}>
+                {pointBalance.toLocaleString()}
+                <span style={{ fontSize: 12, marginLeft: 4, color: C.textMuted, letterSpacing: 0 }}>pt</span>
+              </p>
+            </div>
+            <button onClick={() => setShowPoints(true)} style={{ padding: "10px 16px", fontSize: 11, color: C.accent, backgroundColor: "transparent", border: `1px solid ${C.accent}60`, borderRadius: 2, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.12em" }}>
+              履歴を見る
+            </button>
+          </div>
+        </div>
+        <div className="rounded-2xl border p-5" style={{ backgroundColor: C.card, borderColor: C.border }}>
+              <p className="text-[11px] mb-3" style={{ color: C.textMuted }}>会員ランク</p>
+              {(() => {
+                const currentRank = customer.rank || "normal";
+                const rankIcon = (r: string) => r === "platinum" ? "💎" : r === "gold" ? "🥇" : r === "silver" ? "🥈" : "👤";
+                const rankLabel = (r: string) => r === "platinum" ? "プラチナ" : r === "gold" ? "ゴールド" : r === "silver" ? "シルバー" : "一般";
+                const rankColor = (r: string) => r === "platinum" ? "#9b59b6" : r === "gold" ? "#f1c40f" : r === "silver" ? "#95a5a6" : C.accent;
+                const rankOrder = ["normal", "silver", "gold", "platinum"];
+                const currentIdx = rankOrder.indexOf(currentRank);
+                const nextRank = currentIdx < rankOrder.length - 1 ? rankOrder[currentIdx + 1] : null;
+                const nextRule = nextRank ? rankRules.find(r => r.rank_name === nextRank) : null;
+                const currentRule = rankRules.find(r => r.rank_name === currentRank);
+                const currentMult = currentRule?.multiplier || 1.0;
+                const periodMonths = nextRule?.period_months || 3;
+                const needTotal = nextRule?.min_total_visits || 0;
+                const needRecent = nextRule?.min_visits_in_period || 0;
+                const totalProg = needTotal > 0 ? Math.min(100, Math.round((totalVisits / needTotal) * 100)) : 100;
+                const recentProg = needRecent > 0 ? Math.min(100, Math.round((recentVisitCount / needRecent) * 100)) : 100;
+                const totalRemain = Math.max(0, needTotal - totalVisits);
+                const recentRemain = Math.max(0, needRecent - recentVisitCount);
+                return (<>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-[32px]">{rankIcon(currentRank)}</span>
+                    <div>
+                      <p className="text-[16px] font-bold" style={{ color: rankColor(currentRank) }}>{rankLabel(currentRank)}会員</p>
+                      <p className="text-[10px]" style={{ color: C.textMuted }}>ポイント <strong style={{ color: rankColor(currentRank) }}>×{currentMult}倍</strong> ・ 累計{totalVisits}回ご来店</p>
+                    </div>
+                  </div>
+                  {/* 全ランク表示 */}
+                  <div className="flex items-center gap-1 mb-4">
+                    {rankOrder.map((r, i) => (
+                      <div key={r} className="flex items-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[16px]">{rankIcon(r)}</span>
+                          <span className="text-[8px] mt-0.5" style={{ color: r === currentRank ? rankColor(r) : C.textFaint, fontWeight: r === currentRank ? 700 : 400 }}>{rankLabel(r)}</span>
+                        </div>
+                        {i < rankOrder.length - 1 && <div className="w-8 h-[2px] mx-1 rounded" style={{ backgroundColor: i < currentIdx ? rankColor(rankOrder[i+1]) : C.border }} />}
+                      </div>
+                    ))}
+                  </div>
+                  {nextRank && nextRule ? (
+                    <div className="rounded-xl p-4" style={{ backgroundColor: C.cardAlt, border: `1px solid ${rankColor(nextRank)}30` }}>
+                      <p className="text-[11px] font-medium mb-3" style={{ color: rankColor(nextRank) }}>🎯 {rankLabel(nextRank)}会員まであと少し！</p>
+                      {/* 累計来店プログレス */}
+                      <div className="mb-3">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-[10px]" style={{ color: C.textSub }}>累計来店回数</span>
+                          <span className="text-[10px] font-medium" style={{ color: totalProg >= 100 ? "#6b9b7e" : C.text }}>{totalVisits} / {needTotal}回 {totalProg >= 100 ? "✅" : `(あと${totalRemain}回)`}</span>
+                        </div>
+                        <div className="w-full h-[6px] rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${totalProg}%`, background: totalProg >= 100 ? "#6b9b7e" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
+                        </div>
+                      </div>
+                      {/* 直近来店プログレス */}
+                      <div className="mb-3">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-[10px]" style={{ color: C.textSub }}>直近{periodMonths}ヶ月の来店</span>
+                          <span className="text-[10px] font-medium" style={{ color: recentProg >= 100 ? "#6b9b7e" : C.text }}>{recentVisitCount} / {needRecent}回 {recentProg >= 100 ? "✅" : `(あと${recentRemain}回)`}</span>
+                        </div>
+                        <div className="w-full h-[6px] rounded-full overflow-hidden" style={{ backgroundColor: C.border }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${recentProg}%`, background: recentProg >= 100 ? "#6b9b7e" : `linear-gradient(90deg, ${rankColor(nextRank)}88, ${rankColor(nextRank)})` }} />
+                        </div>
+                      </div>
+                      <p className="text-[9px]" style={{ color: C.textMuted }}>🎁 {rankLabel(nextRank)}になるとポイントが<strong style={{ color: rankColor(nextRank) }}>×{nextRule.multiplier}倍</strong>にアップ！</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl p-4 text-center" style={{ backgroundColor: C.cardAlt, border: `1px solid ${rankColor(currentRank)}30` }}>
+                      <p className="text-[11px]" style={{ color: rankColor(currentRank) }}>🏆 最高ランクに到達しました！</p>
+                      <p className="text-[9px] mt-1" style={{ color: C.textMuted }}>ポイント×{currentMult}倍の特典をお楽しみください</p>
+                    </div>
+                  )}
+                  {/* 全ランク特典一覧 */}
+                  <div className="mt-4 space-y-1.5">
+                    <p className="text-[10px] font-medium" style={{ color: C.textSub }}>📊 ランク特典一覧</p>
+                    {rankRules.filter(r => r.rank_name !== "normal").map(r => {
+                      const isCurrent = r.rank_name === currentRank;
+                      return (
+                      <div key={r.rank_name} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: isCurrent ? rankColor(r.rank_name) + "12" : "transparent", border: isCurrent ? `1px solid ${rankColor(r.rank_name)}30` : "1px solid transparent" }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px]">{rankIcon(r.rank_name)}</span>
+                          <span className="text-[11px]" style={{ color: isCurrent ? rankColor(r.rank_name) : C.textSub, fontWeight: isCurrent ? 600 : 400 }}>{rankLabel(r.rank_name)}</span>
+                        </div>
+                        <div className="text-[10px] text-right" style={{ color: C.textMuted }}>
+                          <span>直近{r.period_months}ヶ月に{r.min_visits_in_period}回 & 累計{r.min_total_visits}回</span>
+                          <span className="ml-2 font-medium" style={{ color: rankColor(r.rank_name) }}>×{r.multiplier}倍</span>
+                        </div>
+                      </div>);
+                    })}
+                  </div>
+                </>);
+              })()}
+            </div>
+      </div>)}
+    </div>
+
+    {/* Bottom Nav */}
+    <div style={{
+      position: "fixed",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 30,
+      backgroundColor: "rgba(255,255,255,0.97)",
+      backdropFilter: "blur(12px)",
+      borderTop: `1px solid ${C.border}`,
+    }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", display: "flex" }}>
+        {tabs.map(t => {
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => { setTab(t.key); if (t.key === "schedule") setSchedView("day"); }}
+              style={{
+                flex: 1,
+                padding: "10px 0 14px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                cursor: "pointer",
+                position: "relative",
+                background: "none",
+                border: "none",
+                fontFamily: FONT_SERIF,
+                color: active ? C.accent : C.textMuted,
+                borderTop: active ? `2px solid ${C.accent}` : "2px solid transparent",
+                transition: "color .15s ease",
+              }}
+            >
+              {t.key === "notifications" ? (
+                <BellWithBadge count={unreadCount} size={20} color={active ? C.accent : C.textMuted} badgeColor={C.accent} />
+              ) : (
+                <t.Icon size={20} color={active ? C.accent : C.textMuted} />
+              )}
+              <span style={{ fontSize: 9, letterSpacing: "0.08em", fontWeight: active ? 500 : 400 }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
+    {/* カード追加モーダル */}
+    {showAddCard && (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50" onClick={() => setShowAddCard(false)}><div className="rounded-t-2xl sm:rounded-2xl border w-full max-w-md animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}><div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}><h3 className="text-[16px] font-medium">💳 カード追加</h3><button onClick={() => setShowAddCard(false)} className="text-[14px] cursor-pointer p-1" style={{ color: C.textMuted }}>✕</button></div><div className="px-6 py-4 space-y-4">
+      <div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>カードブランド</label><div className="flex gap-2">{["visa", "mastercard", "amex", "jcb", "other"].map(b => (<button key={b} onClick={() => setCardBrand(b)} className="px-3 py-2 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: cardBrand === b ? C.accentBg : C.cardAlt, color: cardBrand === b ? C.accent : C.textMuted, border: cardBrand === b ? `1px solid ${C.accent}44` : `1px solid ${C.border}`, fontWeight: cardBrand === b ? 600 : 400 }}>{b.toUpperCase()}</button>))}</div></div>
+      <div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>カード番号 下4桁</label><input type="text" value={cardLast4} onChange={e => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="1234" maxLength={4} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div>
+      <div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>カード名義</label><input type="text" value={cardHolder} onChange={e => setCardHolder(e.target.value)} placeholder="TARO YAMADA" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={inputStyle} /></div>
+      <div className="grid grid-cols-2 gap-3"><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>有効期限（月）</label><select value={cardExpMonth} onChange={e => setCardExpMonth(Number(e.target.value))} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border cursor-pointer" style={inputStyle}>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{String(i + 1).padStart(2, "0")}</option>)}</select></div><div><label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>有効期限（年）</label><select value={cardExpYear} onChange={e => setCardExpYear(Number(e.target.value))} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border cursor-pointer" style={inputStyle}>{Array.from({ length: 10 }, (_, i) => <option key={i} value={new Date().getFullYear() + i}>{new Date().getFullYear() + i}</option>)}</select></div></div>
+      <button onClick={addCard} disabled={!cardLast4 || cardLast4.length !== 4} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>カードを登録</button>
+    </div></div></div>)}
+
+    {/* ポイント履歴モーダル */}
+    {showPoints && (()=>{ const now = new Date(); const expiringPts = points.filter(pt => pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= new Date(now.getTime() + 30*24*60*60*1000)); const totalExpiring = expiringPts.reduce((s,pt) => s+pt.amount, 0); return (<div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50" onClick={() => setShowPoints(false)}><div className="rounded-t-2xl sm:rounded-2xl border w-full max-w-md max-h-[80vh] overflow-y-auto animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}><div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}><h3 className="text-[16px] font-medium">🎁 ポイント履歴</h3><button onClick={() => setShowPoints(false)} className="text-[14px] cursor-pointer p-1" style={{ color: C.textMuted }}>✕</button></div><div className="px-6 py-4"><div className="text-center mb-4"><p className="text-[11px]" style={{ color: C.textMuted }}>ポイント残高</p><p className="text-[28px] font-bold" style={{ color: C.accent }}>{pointBalance.toLocaleString()}<span className="text-[12px] font-normal ml-1">pt</span></p>{customer.rank && customer.rank !== "normal" && <p className="text-[10px] mt-1" style={{ color: C.accent }}>{customer.rank === "platinum" ? "💎 プラチナ会員" : customer.rank === "gold" ? "🥇 ゴールド会員" : customer.rank === "silver" ? "🥈 シルバー会員" : ""}</p>}</div>{totalExpiring > 0 && (<div className="rounded-xl p-3 mb-3 flex items-center gap-2" style={{ backgroundColor: "#b3841912", border: "1px solid #b3841930" }}><span className="text-[14px]">⏰</span><div><p className="text-[11px] font-medium" style={{ color: "#b38419" }}>期限切れ間近: {totalExpiring.toLocaleString()}pt</p><p className="text-[9px]" style={{ color: "#b3841988" }}>30日以内に有効期限を迎えるポイントがあります</p></div></div>)}{points.length === 0 ? (<p className="text-center py-4 text-[12px]" style={{ color: C.textFaint }}>ポイント履歴がありません</p>) : (<div className="space-y-2">{points.map(pt => { const isExpiring = pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) > now && new Date(pt.expires_at) <= new Date(now.getTime() + 30*24*60*60*1000); const isExpired = pt.amount > 0 && pt.expires_at && new Date(pt.expires_at) <= now; const desc = pt.description || (pt.type === "earn" ? "ポイント付与" : "ポイント利用"); const icon = desc.includes("初回") ? "🎉" : desc.includes("誕生") ? "🎂" : desc.includes("雨") ? "☔" : desc.includes("曜日") || desc.includes("期間") ? "📅" : desc.includes("アイドル") ? "🕐" : desc.includes("ランク") ? "📈" : desc.includes("アンケート") ? "📝" : pt.amount > 0 ? "💰" : "🏷"; return (<div key={pt.id} className="rounded-xl border p-3" style={{ borderColor: C.border, opacity: isExpired ? 0.4 : 1 }}><div className="flex items-center justify-between"><div className="flex items-center gap-2 flex-1 min-w-0"><span className="text-[14px]">{icon}</span><div className="min-w-0"><p className="text-[12px] font-medium truncate">{desc}{isExpired && <span className="ml-1 text-[9px]" style={{ color: C.red }}>（期限切れ）</span>}</p><div className="flex gap-2 items-center"><span className="text-[10px]" style={{ color: C.textMuted }}>{new Date(pt.created_at).toLocaleDateString("ja-JP")}</span>{pt.expires_at && !isExpired && <span className="text-[9px]" style={{ color: isExpiring ? "#b38419" : C.textFaint }}>{isExpiring ? "⚠ " : ""}期限: {new Date(pt.expires_at).toLocaleDateString("ja-JP")}</span>}</div></div></div><span className="text-[14px] font-bold flex-shrink-0" style={{ color: isExpired ? C.textFaint : pt.amount > 0 ? C.green : C.red }}>{pt.amount > 0 ? "+" : ""}{pt.amount.toLocaleString()}pt</span></div></div>); })}</div>)}</div></div></div>); })()}
+
+    {/* セラピストメモ編集モーダル */}
+    {showMemoModal && editMemoResId > 0 && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50" onClick={() => setShowMemoModal(false)}>
+        <div className="rounded-t-2xl sm:rounded-2xl border w-full max-w-md animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}>
+          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}` }}>
+            <h3 className="text-[16px] font-medium">📝 ひとことメモ</h3>
+            <button onClick={() => setShowMemoModal(false)} className="text-[14px] cursor-pointer p-1" style={{ color: C.textMuted }}>✕</button>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            {editMemoTherapistId > 0 && <p className="text-[12px]" style={{ color: C.textSub }}>👤 {getTherapistName(editMemoTherapistId)}</p>}
+            {/* 星評価 */}
+            <div>
+              <label className="block text-[11px] mb-2" style={{ color: C.textSub }}>⭐ 評価</label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button key={star} onClick={() => setEditMemoRating(star)} className="text-[28px] cursor-pointer transition-all" style={{ color: star <= editMemoRating ? "#b38419" : C.textFaint, transform: star <= editMemoRating ? "scale(1.1)" : "scale(1)" }}>
+                    {star <= editMemoRating ? "★" : "☆"}
+                  </button>
+                ))}
               </div>
+            </div>
+            {/* メモテキスト */}
+            <div>
+              <label className="block text-[11px] mb-1.5" style={{ color: C.textSub }}>ひとことメモ</label>
+              <textarea value={editMemoText} onChange={e => setEditMemoText(e.target.value)} rows={3} placeholder="例：会話も弾んで、とっても癒された！旅行が趣味らしい。" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border resize-none" style={inputStyle} />
+            </div>
+            <button onClick={saveMemo} disabled={memoSaving || editMemoRating === 0} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer text-white disabled:opacity-60" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})` }}>
+              {memoSaving ? "保存中..." : "メモを保存"}
+            </button>
+            {getMemo(editMemoResId) && (
+              <button onClick={async () => { const m = getMemo(editMemoResId); if (!m) return; const ok = await confirm({ title: "このメモを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (!ok) return; await supabase.from("customer_therapist_memos").delete().eq("id", m.id); setShowMemoModal(false); try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer!.id); if (memos) setCustomerMemos(memos); } catch {} }} className="w-full py-2.5 rounded-xl text-[12px] cursor-pointer" style={{ color: C.red, backgroundColor: "#c96b8310", border: "1px solid #c96b8320" }}>
+                メモを削除
+              </button>
             )}
           </div>
         </div>
-      )}
+      </div>
+    )}
 
-      {/* ── 情報配信報酬タブ (受領ポイント) ── */}
-      {tab === "gift" && therapist && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>BROADCAST REWARDS</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>💝 もらった情報配信報酬</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-          </div>
-
-          {giftLoading && !giftSummary ? (
-            <div style={{ textAlign: "center", padding: 60, color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
-          ) : !giftSummary || giftSummary.totalReceivedCount === 0 ? (
-            // ── まだ情報配信報酬をもらっていない ──
-            <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "40px 20px", textAlign: "center" }}>
-              <p style={{ fontSize: 32, marginBottom: 14 }}>💝</p>
-              <p style={{ fontSize: 13, color: T.text, marginBottom: 8, fontWeight: 500 }}>まだ情報配信報酬をもらっていません</p>
-              <p style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.8 }}>
-                ライブ配信や写メ日記を投稿すると、<br />
-                お客様から「桜」や「ハート」などの<br />
-                投げ銭を受け取れることがあります 🌸
-              </p>
+    {/* キャンセル確認モーダル */}
+    {cancelTarget && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4" onClick={() => setCancelTarget(null)}>
+        <div className="rounded-2xl border w-full max-w-[400px] animate-[slideUp_0.3s]" style={{ backgroundColor: C.card, borderColor: C.border }} onClick={e => e.stopPropagation()}>
+          {canCancelDirectly(cancelTarget) ? (<>
+            <div className="px-6 py-5 text-center" style={{ borderBottom: `1px solid ${C.border}` }}>
+              <p className="text-[28px] mb-2">⚠️</p>
+              <h3 className="text-[16px] font-medium mb-1">予約をキャンセルしますか？</h3>
+              <p className="text-[12px]" style={{ color: C.textSub }}>{dateFmt(cancelTarget.date)} {cancelTarget.start_time}〜 {cancelTarget.course}</p>
             </div>
-          ) : (
-            <>
-              {/* メイン残高カード */}
-              <div style={{
-                backgroundColor: T.card,
-                border: `2px solid ${T.accent}`,
-                padding: "26px 22px",
-                position: "relative",
-                overflow: "hidden",
-              }}>
-                <div style={{ position: "absolute", top: -10, right: -10, fontSize: 80, opacity: 0.05 }}>🎁</div>
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 10 }}>CURRENT BALANCE</p>
-                <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 4, letterSpacing: "0.05em" }}>現在の換金可能ポイント</p>
-                <p style={{ fontSize: 32, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums", margin: "0 0 4px" }}>
-                  {(giftSummary.currentBalancePoints || 0).toLocaleString()}<span style={{ fontSize: 16, color: T.textSub, marginLeft: 6 }}>pt</span>
-                </p>
-                <p style={{ fontSize: 11, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
-                  ≒ ¥{(giftSummary.currentBalancePoints || 0).toLocaleString()} 相当
-                </p>
-
-                {/* 換金申請ボタン */}
-                <div style={{ marginTop: 18 }}>
-                  {giftSummary.currentBalancePoints >= 1000 ? (
-                    <button
-                      onClick={() => {
-                        setPayoutAmountInput(String(Math.floor(giftSummary.currentBalancePoints / 100) * 100));
-                        setPayoutError(null);
-                        setPayoutModalOpen(true);
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "14px 18px",
-                        backgroundColor: T.accent,
-                        color: "#fff",
-                        border: "none",
-                        fontSize: 13,
-                        fontFamily: FONT_SERIF,
-                        letterSpacing: "0.1em",
-                        cursor: "pointer",
-                        fontWeight: 500,
-                      }}
-                    >
-                      💰 換金を申請する
-                    </button>
-                  ) : (
-                    <div style={{ padding: "10px 14px", backgroundColor: "rgba(195,167,130,0.08)", border: `1px dashed ${T.accent}` }}>
-                      <p style={{ fontSize: 11, color: T.textSub, lineHeight: 1.7, margin: 0 }}>
-                        💡 1,000pt 以上で換金申請できます<br />
-                        あと <strong style={{ color: T.accent, fontVariantNumeric: "tabular-nums" }}>{(1000 - giftSummary.currentBalancePoints).toLocaleString()}pt</strong> です
-                      </p>
-                    </div>
-                  )}
-                </div>
+            <div className="px-6 py-4">
+              {cancelMsg && <p className="text-[12px] text-center mb-3" style={{ color: C.red }}>{cancelMsg}</p>}
+              <button onClick={confirmCancel} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer mb-2" style={{ backgroundColor: "#c96b8315", color: C.red, border: "1px solid #c96b8330" }}>キャンセルを確定する</button>
+              <button onClick={() => setCancelTarget(null)} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ backgroundColor: C.cardAlt, color: C.textSub, border: `1px solid ${C.border}` }}>戻る</button>
+            </div>
+          </>) : (<>
+            <div className="px-6 py-5 text-center" style={{ borderBottom: `1px solid ${C.border}` }}>
+              <p className="text-[28px] mb-2">📞</p>
+              <h3 className="text-[16px] font-medium mb-1">キャンセル・変更について</h3>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-[13px] mb-3" style={{ color: C.textSub, lineHeight: 1.8 }}>ご予約は確定しておりますので、<br /><strong style={{ color: C.text }}>キャンセル・変更はお電話にてお願いいたします。</strong></p>
+              <a href={`tel:${cancelPhone.replace(/[-\s]/g, "")}`} className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-[15px] font-bold no-underline mb-3" style={{ background: `linear-gradient(135deg, #6b9b7e, #5a8a6c)`, color: "#fff" }}>📞 {cancelPhone}</a>
+              <div className="rounded-xl p-3 mb-4" style={{ backgroundColor: "#c96b8308", border: "1px solid #c96b8320" }}>
+                <p className="text-[10px] m-0" style={{ color: C.red, lineHeight: 1.7 }}>⚠ 当日のキャンセルにつきましては、<strong>100％キャンセル料</strong>を頂戴いたします。</p>
               </div>
-
-              {/* 換金申請履歴 */}
-              {giftPayouts.length > 0 && (
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>PAYOUT REQUESTS</p>
-                  <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>💰 換金申請履歴</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {giftPayouts.map((p) => {
-                      const reqDate = new Date(p.requested_at);
-                      const reqStr = `${reqDate.getMonth() + 1}/${reqDate.getDate()} ${String(reqDate.getHours()).padStart(2, "0")}:${String(reqDate.getMinutes()).padStart(2, "0")}`;
-                      const statusColor = p.status === "paid" ? "#6b9b7e" : p.status === "pending" ? "#c96b83" : T.textMuted;
-                      const statusLabel = p.status === "paid" ? "✅ 受領済み" : p.status === "pending" ? "⏳ 出勤待ち" : "❌ 取消";
-                      return (
-                        <div key={p.id} style={{ padding: "10px 12px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                            <div>
-                              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                                {p.requested_points.toLocaleString()}pt 申請
-                              </p>
-                              <p style={{ margin: "2px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
-                                {reqStr} 申請
-                              </p>
-                            </div>
-                            <span style={{ fontSize: 10, color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, fontSize: 11, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-                            <span>{p.status === "paid" ? "上乗せ額:" : "上乗せ予定:"}</span>
-                            <span style={{ color: T.accent }}>+¥{p.requested_points.toLocaleString()}</span>
-                          </div>
-                          {p.status === "paid" && p.settlement_date && (
-                            <p style={{ margin: "4px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
-                              {p.settlement_date} の精算で受領
-                            </p>
-                          )}
-                          {p.status === "pending" && (
-                            <button
-                              onClick={async () => {
-                                if (!window.confirm(`${p.requested_points}pt の申請を取り消しますか？`)) return;
-                                try {
-                                  const res = await fetch("/api/therapist/gift-payout", {
-                                    method: "DELETE",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ therapistId: therapist.id, payoutId: p.id, reason: "セラピスト操作" }),
-                                  });
-                                  if (res.ok) {
-                                    fetchGiftSummary();
-                                  } else {
-                                    const ed = await res.json();
-                                    alert(ed.error || "キャンセルに失敗しました");
-                                  }
-                                } catch {
-                                  alert("通信エラーが発生しました");
-                                }
-                              }}
-                              style={{
-                                marginTop: 6,
-                                padding: "4px 10px",
-                                fontSize: 9,
-                                cursor: "pointer",
-                                backgroundColor: "transparent",
-                                color: T.textSub,
-                                border: `1px solid ${T.border}`,
-                                fontFamily: FONT_SERIF,
-                              }}
-                            >
-                              申請取消
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ display: "none" }}>{/* ↓ 旧「準備中」案内は換金ボタンに置換 */}</div>
-
-              {/* 期間別サマリー */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "12px 10px", textAlign: "center" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.accent, marginBottom: 4 }}>THIS MONTH</p>
-                  <p style={{ fontSize: 9, color: T.textMuted, marginBottom: 4 }}>今月</p>
-                  <p style={{ fontSize: 16, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                    {(giftSummary.thisMonthReceived || 0).toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
-                  </p>
-                </div>
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "12px 10px", textAlign: "center" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.accent, marginBottom: 4 }}>THIS YEAR</p>
-                  <p style={{ fontSize: 9, color: T.textMuted, marginBottom: 4 }}>今年</p>
-                  <p style={{ fontSize: 16, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                    {(giftSummary.thisYearReceived || 0).toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
-                  </p>
-                </div>
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "12px 10px", textAlign: "center" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.15em", color: T.accent, marginBottom: 4 }}>TOTAL</p>
-                  <p style={{ fontSize: 9, color: T.textMuted, marginBottom: 4 }}>累計</p>
-                  <p style={{ fontSize: 16, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                    {(giftSummary.totalReceivedPoints || 0).toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
-                  </p>
-                  <p style={{ fontSize: 9, color: T.textMuted, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
-                    {giftSummary.totalReceivedCount}回
-                  </p>
-                </div>
-              </div>
-
-              {/* 月別グラフ (棒グラフ) */}
-              {giftMonthlyBreakdown.length > 0 && giftMonthlyBreakdown.some((m) => m.points > 0) && (
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>MONTHLY (LAST 6 MONTHS)</p>
-                  <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>📊 月別推移（直近6ヶ月）</p>
-                  {(() => {
-                    const max = Math.max(...giftMonthlyBreakdown.map((m) => m.points), 1);
-                    return (
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100, marginBottom: 6 }}>
-                        {giftMonthlyBreakdown.map((m) => {
-                          const heightPct = (m.points / max) * 100;
-                          const [y, mo] = m.yearMonth.split("-");
-                          return (
-                            <div key={m.yearMonth} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                              <div style={{
-                                width: "100%",
-                                height: m.points > 0 ? `${Math.max(heightPct, 5)}%` : "2px",
-                                backgroundColor: m.points > 0 ? T.accent : T.border,
-                                position: "relative",
-                              }}>
-                                {m.points > 0 && (
-                                  <span style={{
-                                    position: "absolute",
-                                    top: -16,
-                                    left: "50%",
-                                    transform: "translateX(-50%)",
-                                    fontSize: 9,
-                                    color: T.textSub,
-                                    fontVariantNumeric: "tabular-nums",
-                                    whiteSpace: "nowrap",
-                                  }}>
-                                    {m.points >= 1000 ? `${Math.round(m.points / 100) / 10}k` : m.points}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {giftMonthlyBreakdown.map((m) => {
-                      const [y, mo] = m.yearMonth.split("-");
-                      return (
-                        <div key={m.yearMonth} style={{ flex: 1, textAlign: "center", fontSize: 9, color: T.textMuted, letterSpacing: "0.02em" }}>
-                          {parseInt(mo)}月
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 種類別ランキング */}
-              {giftKindBreakdown.length > 0 && (
-                <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
-                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>BY TYPE (LAST 6 MONTHS)</p>
-                  <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>🎁 種類別（直近6ヶ月）</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {giftKindBreakdown.map((k) => (
-                      <div key={k.kind} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                        <span style={{ fontSize: 22 }}>{k.emoji}</span>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ margin: 0, fontSize: 11, color: T.text, fontWeight: 500 }}>{k.label}</p>
-                          <p style={{ margin: "2px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums" }}>
-                            {k.count}回 受領
-                          </p>
-                        </div>
-                        <p style={{ margin: 0, fontSize: 13, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
-                          {k.points.toLocaleString()}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 履歴 */}
-              <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 14px" }}>
-                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500, marginBottom: 12 }}>HISTORY</p>
-                <p style={{ fontSize: 11, color: T.text, fontWeight: 500, marginBottom: 14 }}>📜 履歴（直近30件）</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {giftTransactions.map((t) => {
-                    const date = new Date(t.createdAt);
-                    const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-                    const sourceLabel = t.sourceType === "live" ? "ライブ" : t.sourceType === "diary" ? "日記" : "ストーリー";
-                    return (
-                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 10px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                        <span style={{ fontSize: 24 }}>{t.giftEmoji || "🎁"}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 11, color: T.text }}>
-                            <span style={{ color: T.accent, fontWeight: 500 }}>{t.senderName}</span>
-                            <span style={{ color: T.textMuted, fontSize: 10, marginLeft: 6 }}>から</span>
-                          </p>
-                          {t.message && (
-                            <p style={{ margin: "3px 0 0", fontSize: 10, color: T.textSub, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              「{t.message}」
-                            </p>
-                          )}
-                          <p style={{ margin: "3px 0 0", fontSize: 9, color: T.textMuted, fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>
-                            {dateStr} · {sourceLabel}
-                          </p>
-                        </div>
-                        <p style={{ margin: 0, fontSize: 13, color: T.accent, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-                          +{t.pointAmount}<span style={{ fontSize: 9, color: T.textSub, marginLeft: 2 }}>pt</span>
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 注意書き */}
-              <div style={{ padding: "12px 14px", backgroundColor: "rgba(195,167,130,0.05)", border: `1px solid ${T.border}` }}>
-                <p style={{ fontSize: 10, color: T.textSub, lineHeight: 1.8, margin: 0 }}>
-                  💡 情報配信報酬（お客様からの投げ銭）は出勤日の精算と一緒に支給されます。<br />
-                  💡 1,000pt 以上 / 100pt 単位で換金申請できます。<br />
-                  💡 申請したポイントは情報配信報酬として通常のバック額に上乗せされ、インボイス・源泉も合わせて自動計算されます。<br />
-                  ※ お客様のお名前は最初の1文字だけ表示されます（プライバシー保護）。
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* ── 換金申請モーダル ── */}
-          {payoutModalOpen && giftSummary && therapist && (() => {
-            const requestedNum = parseInt(payoutAmountInput) || 0;
-            const validAmount = requestedNum >= 1000 && requestedNum % 100 === 0 && requestedNum <= giftSummary.currentBalancePoints;
-
-            return (
-              <div
-                onClick={() => !payoutSubmitting && setPayoutModalOpen(false)}
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  backgroundColor: "rgba(0,0,0,0.5)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  zIndex: 1000,
-                  padding: 20,
-                }}
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    backgroundColor: T.card,
-                    border: `1px solid ${T.border}`,
-                    padding: 22,
-                    maxWidth: 420,
-                    width: "100%",
-                    maxHeight: "90vh",
-                    overflowY: "auto",
-                    fontFamily: FONT_SERIF,
-                  }}
-                >
-                  <div style={{ textAlign: "center", marginBottom: 18 }}>
-                    <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>PAYOUT REQUEST</p>
-                    <p style={{ fontSize: 14, color: T.text, fontWeight: 500 }}>💰 換金を申請する</p>
-                    <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "10px auto 0" }} />
-                  </div>
-
-                  <div style={{ marginBottom: 14, padding: "10px 12px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                    <p style={{ margin: 0, fontSize: 10, color: T.textMuted, marginBottom: 4 }}>現在の残高</p>
-                    <p style={{ margin: 0, fontSize: 18, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-                      {giftSummary.currentBalancePoints.toLocaleString()}<span style={{ fontSize: 10, color: T.textSub, marginLeft: 4 }}>pt</span>
-                    </p>
-                  </div>
-
-                  <label style={{ display: "block", marginBottom: 14 }}>
-                    <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub }}>申請するポイント (1,000pt以上 / 100pt単位)</p>
-                    <input
-                      type="number"
-                      step="100"
-                      min="1000"
-                      max={giftSummary.currentBalancePoints}
-                      value={payoutAmountInput}
-                      onChange={(e) => setPayoutAmountInput(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        fontSize: 16,
-                        backgroundColor: T.cardAlt,
-                        border: `1px solid ${T.border}`,
-                        color: T.text,
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    />
-                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                      {[1000, 3000, 5000].filter((v) => v <= giftSummary.currentBalancePoints).map((v) => (
-                        <button
-                          key={v}
-                          onClick={() => setPayoutAmountInput(String(v))}
-                          style={{
-                            flex: 1,
-                            padding: "6px 4px",
-                            fontSize: 10,
-                            backgroundColor: T.cardAlt,
-                            color: T.textSub,
-                            border: `1px solid ${T.border}`,
-                            cursor: "pointer",
-                            fontFamily: FONT_SERIF,
-                          }}
-                        >
-                          {v.toLocaleString()}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setPayoutAmountInput(String(Math.floor(giftSummary.currentBalancePoints / 100) * 100))}
-                        style={{
-                          flex: 1,
-                          padding: "6px 4px",
-                          fontSize: 10,
-                          backgroundColor: T.cardAlt,
-                          color: T.textSub,
-                          border: `1px solid ${T.border}`,
-                          cursor: "pointer",
-                          fontFamily: FONT_SERIF,
-                        }}
-                      >
-                        全額
-                      </button>
-                    </div>
-                  </label>
-
-                  {/* シンプル案内 (C案: 控除なし、そのままバック額に上乗せ) */}
-                  {requestedNum > 0 && (
-                    <div style={{ padding: "12px 14px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, marginBottom: 14 }}>
-                      <p style={{ margin: "0 0 8px", fontSize: 10, color: T.textMuted, letterSpacing: "0.1em" }}>申請内容</p>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-                        <span>情報配信報酬:</span>
-                        <span style={{ color: T.accent }}>+¥{requestedNum.toLocaleString()}</span>
-                      </div>
-                      <p style={{ margin: "8px 0 0", fontSize: 9, color: T.textSub, lineHeight: 1.6 }}>
-                        ※ 次の出勤日のバック額にそのまま上乗せされます。<br />
-                        ※ インボイス控除・源泉徴収は通常のバック額と同じく精算時に計算されます。
-                      </p>
-                    </div>
-                  )}
-
-                  <div style={{ padding: "10px 12px", backgroundColor: "rgba(195,167,130,0.08)", border: `1px solid ${T.accent}`, marginBottom: 16 }}>
-                    <p style={{ margin: 0, fontSize: 10, color: T.textSub, lineHeight: 1.7 }}>
-                      📌 申請後、<strong style={{ color: T.accent }}>次の出勤日の精算</strong>でお給料と一緒に支給されます。<br />
-                      📌 申請したポイントは即座に残高から差し引かれます（受領前なら取消可能）。
-                    </p>
-                  </div>
-
-                  {payoutError && (
-                    <p style={{ margin: "0 0 12px", padding: "8px 10px", fontSize: 11, color: "#c45555", backgroundColor: "rgba(196,85,85,0.08)", border: "1px solid #c4555533" }}>
-                      {payoutError}
-                    </p>
-                  )}
-
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => !payoutSubmitting && setPayoutModalOpen(false)}
-                      disabled={payoutSubmitting}
-                      style={{
-                        flex: 1,
-                        padding: "12px 16px",
-                        backgroundColor: "transparent",
-                        color: T.textSub,
-                        border: `1px solid ${T.border}`,
-                        fontSize: 12,
-                        cursor: payoutSubmitting ? "not-allowed" : "pointer",
-                        fontFamily: FONT_SERIF,
-                      }}
-                    >
-                      キャンセル
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (!validAmount || payoutSubmitting) return;
-                        setPayoutSubmitting(true);
-                        setPayoutError(null);
-                        try {
-                          const res = await fetch("/api/therapist/gift-payout", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ therapistId: therapist.id, points: requestedNum }),
-                          });
-                          const data = await res.json();
-                          if (!res.ok) {
-                            setPayoutError(data.error || "申請に失敗しました");
-                            return;
-                          }
-                          setPayoutModalOpen(false);
-                          fetchGiftSummary();
-                        } catch {
-                          setPayoutError("通信エラーが発生しました");
-                        } finally {
-                          setPayoutSubmitting(false);
-                        }
-                      }}
-                      disabled={!validAmount || payoutSubmitting}
-                      style={{
-                        flex: 2,
-                        padding: "12px 16px",
-                        backgroundColor: validAmount ? T.accent : T.border,
-                        color: "#fff",
-                        border: "none",
-                        fontSize: 12,
-                        cursor: validAmount && !payoutSubmitting ? "pointer" : "not-allowed",
-                        fontFamily: FONT_SERIF,
-                        letterSpacing: "0.1em",
-                        fontWeight: 500,
-                        opacity: validAmount ? 1 : 0.4,
-                      }}
-                    >
-                      {payoutSubmitting ? "申請中..." : `${requestedNum.toLocaleString()}pt 申請する`}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+              <button onClick={() => setCancelTarget(null)} className="w-full py-3 rounded-xl text-[13px] font-medium cursor-pointer" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.accentDark})`, color: "#fff", border: "none" }}>閉じる</button>
+            </div>
+          </>)}
         </div>
-      )}
+      </div>
+    )}
 
-      {/* ── 確定申告サポートタブ ── */}
-      {tab === "tax" && therapist && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TAX FILING</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>📊 確定申告サポート</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-          </div>
-
-          {/* 2タブ切替 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: `1px solid ${T.border}` }}>
-            <button onClick={() => setTaxSubTab("support")}
-              style={{ padding: 11, fontSize: 12, cursor: "pointer", backgroundColor: taxSubTab === "support" ? T.accent : "transparent", color: taxSubTab === "support" ? "#fff" : T.textSub, border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: taxSubTab === "support" ? 500 : 400, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <span>📊</span><span>申告サポート</span>
-            </button>
-            <button onClick={() => setTaxSubTab("ledger")}
-              style={{ padding: 11, fontSize: 12, cursor: "pointer", backgroundColor: taxSubTab === "ledger" ? "#6b9b7e" : "transparent", color: taxSubTab === "ledger" ? "#fff" : T.textSub, border: "none", borderLeft: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: taxSubTab === "ledger" ? 500 : 400, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <span>📒</span><span>帳簿・経費管理</span>
-            </button>
-          </div>
-
-          {taxSubTab === "support" && <TaxSupportWizard T={T} therapistId={therapist.id} onGoToLedger={() => setTaxSubTab("ledger")} />}
-          {taxSubTab === "ledger" && <TaxBookkeeping T={T} therapistId={therapist.id} />}
-        </div>
-      )}
-
-      {/* お客様接客履歴モーダル */}
-      {noteHistoryCustomer && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setNoteHistoryCustomer("")}>
-          <div style={{ width: "100%", maxWidth: 420, maxHeight: "85vh", backgroundColor: T.card, border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
-            {/* ヘッダー */}
-            <div style={{ padding: "16px 20px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: `1px solid ${T.border}` }}>
-              <div>
-                <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>CUSTOMER</p>
-                <h3 style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{noteHistoryCustomer}</h3>
-                <p style={{ margin: "3px 0 0", fontSize: 10, color: T.textFaint, letterSpacing: "0.03em" }}>接客を選んでメモを追加できます</p>
-              </div>
-              <button onClick={() => setNoteHistoryCustomer("")} style={{ width: 28, height: 28, fontSize: 13, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
-            </div>
-            {/* NG管理エリア */}
-            {(() => {
-              const isNg = customerNotes.some(n => n.customer_name === noteHistoryCustomer && n.is_ng);
-              return (
-                <div style={{ padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${T.border}`, backgroundColor: isNg ? "rgba(201,107,131,0.05)" : "transparent" }}>
-                  <div>
-                    {isNg && <span style={{ fontSize: 10, padding: "3px 9px", color: "#c96b83", border: `1px solid #c96b8344`, letterSpacing: "0.05em" }}>🚫 NG登録済み</span>}
-                  </div>
-                  <button onClick={() => {
-                    const ngNote = customerNotes.find(n => n.customer_name === noteHistoryCustomer && !n.reservation_id);
-                    setNoteForm({ customer_name: noteHistoryCustomer, note: ngNote?.note || "", is_ng: ngNote?.is_ng || false, ng_reason: ngNote?.ng_reason || "", rating: ngNote?.rating || 0, reservation_id: 0 });
-                    setNoteHistoryCustomer(""); setShowAddNote(true);
-                  }} style={{ fontSize: 10, padding: "5px 11px", cursor: "pointer", border: `1px solid ${isNg ? "#c96b83" : T.border}`, color: isNg ? "#c96b83" : T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-                    {isNg ? "🚫 NG編集" : "⚙️ NG管理"}
-                  </button>
-                </div>
-              );
-            })()}
-            {/* スクロール領域 */}
-            <div style={{ overflowY: "auto", flex: 1, padding: "14px 20px" }}>
-              {/* 旧形式メモ */}
-              {(() => {
-                const generalNotes = customerNotes.filter(n => n.customer_name === noteHistoryCustomer && !n.reservation_id && n.note);
-                return generalNotes.length > 0 ? (
-                  <div style={{ marginBottom: 16 }}>
-                    <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>📝 PAST MEMO — 過去のメモ</p>
-                    {generalNotes.map(n => (
-                      <div key={n.id} style={{ backgroundColor: T.accentBg, border: `1px solid ${T.accent}33`, padding: "10px 12px", marginBottom: 6 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-                          <div>{n.rating > 0 && <span style={{ fontSize: 10, color: "#b38419", letterSpacing: "0.05em" }}>{"★".repeat(n.rating)}{"☆".repeat(5 - n.rating)}</span>}</div>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => { setNoteForm({ customer_name: n.customer_name, note: n.note, is_ng: n.is_ng, ng_reason: n.ng_reason, rating: n.rating || 0, reservation_id: 0 }); setNoteHistoryCustomer(""); setShowAddNote(true); }} style={{ fontSize: 9, padding: "3px 8px", cursor: "pointer", border: `1px solid ${T.accent}`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>✏️ 編集</button>
-                            <button onClick={async () => { const ok = await confirm({ title: "このメモを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (ok) { await supabase.from("therapist_customer_notes").delete().eq("id", n.id); await fetchData(); } }} style={{ fontSize: 9, padding: "3px 8px", cursor: "pointer", border: `1px solid #c96b83`, color: "#c96b83", backgroundColor: "transparent", fontFamily: FONT_SERIF }}>🗑</button>
-                          </div>
-                        </div>
-                        <p style={{ margin: 0, fontSize: 11, whiteSpace: "pre-wrap", lineHeight: 1.7, color: T.textSub, letterSpacing: "0.02em" }}>{n.note}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null;
-              })()}
-              <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>HISTORY — 接客履歴</p>
-              {(() => {
-                const hist = allReservations.filter(r => r.customer_name === noteHistoryCustomer);
-                if (hist.length === 0) return <p style={{ fontSize: 11, textAlign: "center", padding: "32px 0", color: T.textFaint, margin: 0 }}>接客履歴がありません</p>;
-                return hist.map(r => {
-                  const dateStr = (() => { const dt = new Date(r.date + "T00:00:00"); const days = ["日","月","火","水","木","金","土"]; return `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})`; })();
-                  const resNote = customerNotes.find(n => n.reservation_id === r.id);
-                  return (
-                    <div key={r.id} style={{ border: `1px solid ${resNote ? T.accent + "44" : T.border}`, backgroundColor: resNote ? T.accentBg : T.cardAlt, padding: "10px 12px", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontFamily: FONT_SERIF, fontSize: 12, fontWeight: 500, letterSpacing: "0.03em" }}>{dateStr}</span>
-                        <span style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>{r.start_time?.slice(0,5)} — {r.end_time?.slice(0,5)}</span>
-                      </div>
-                      <p style={{ margin: 0, fontSize: 10, color: T.textSub, letterSpacing: "0.02em" }}>{r.course}{r.nomination ? ` ⭐${r.nomination}` : ""}</p>
-                      {resNote ? (
-                        <div style={{ marginTop: 8, padding: "8px 10px", backgroundColor: T.card, border: `1px solid ${T.accent}33` }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 9, fontWeight: 500, color: T.accent, letterSpacing: "0.08em", fontFamily: FONT_DISPLAY }}>📝 MEMO</span>
-                              {resNote.rating > 0 && <span style={{ fontSize: 10, color: "#b38419" }}>{"★".repeat(resNote.rating)}{"☆".repeat(5 - resNote.rating)}</span>}
-                            </div>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              <button onClick={() => { setNoteForm({ customer_name: resNote.customer_name, note: resNote.note, is_ng: resNote.is_ng, ng_reason: resNote.ng_reason, rating: resNote.rating || 0, reservation_id: r.id }); setNoteHistoryCustomer(""); setShowAddNote(true); }} style={{ fontSize: 9, padding: "2px 7px", cursor: "pointer", border: `1px solid ${T.accent}`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF }}>✏️</button>
-                              <button onClick={async () => { const ok = await confirm({ title: "このメモを削除しますか？", variant: "danger", confirmLabel: "削除する" }); if (ok) { await supabase.from("therapist_customer_notes").delete().eq("id", resNote.id); await fetchData(); } }} style={{ fontSize: 9, padding: "2px 7px", cursor: "pointer", border: `1px solid #c96b83`, color: "#c96b83", backgroundColor: "transparent", fontFamily: FONT_SERIF }}>🗑</button>
-                            </div>
-                          </div>
-                          {resNote.note && <p style={{ margin: 0, fontSize: 10, whiteSpace: "pre-wrap", lineHeight: 1.7, color: T.textSub, letterSpacing: "0.02em" }}>{resNote.note}</p>}
-                        </div>
-                      ) : (
-                        <button onClick={() => {
-                          setNoteForm({ customer_name: noteHistoryCustomer, note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: r.id });
-                          setNoteHistoryCustomer(""); setShowAddNote(true);
-                        }} style={{ marginTop: 8, width: "100%", padding: "7px", fontSize: 10, cursor: "pointer", border: `1px solid ${T.accent}`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em", fontWeight: 500 }}>
-                          📝 メモを追加
-                        </button>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-            <div style={{ padding: "12px 20px", borderTop: `1px solid ${T.border}` }}>
-              <button onClick={() => setNoteHistoryCustomer("")} style={{ width: "100%", padding: 10, fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>閉じる</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* メモ閲覧モーダル */}
-      {noteViewTarget && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setNoteViewTarget(null)}>
-          <div style={{ width: "100%", maxWidth: 380, padding: 24, backgroundColor: T.card, border: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${T.border}` }}>
-              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>CUSTOMER MEMO</p>
-              <h3 style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{noteViewTarget.customer_name}</h3>
-              {noteViewTarget.is_ng && <p style={{ margin: "6px 0 0", fontSize: 10, color: "#c96b83", letterSpacing: "0.05em" }}>🚫 NG登録済み{noteViewTarget.ng_reason ? `（${noteViewTarget.ng_reason}）` : ""}</p>}
-              {noteViewTarget.rating > 0 && <p style={{ margin: "4px 0 0", fontSize: 12, color: "#b38419" }}>{"★".repeat(noteViewTarget.rating)}{"☆".repeat(5 - noteViewTarget.rating)} <span style={{ fontFamily: FONT_SANS, fontSize: 10, marginLeft: 4 }}>{noteViewTarget.rating}/5</span></p>}
-            </div>
-            <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "12px 14px", marginBottom: 14 }}>
-              <p style={{ margin: "0 0 6px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>NOTE</p>
-              <p style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.8, letterSpacing: "0.02em" }}>{noteViewTarget.note || "メモなし"}</p>
-            </div>
-            {(() => {
-              const hist = allReservations.filter(r => r.customer_name === noteViewTarget.customer_name).slice(0, 10);
-              if (hist.length === 0) return null;
-              return (
-                <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "12px 14px", marginBottom: 14 }}>
-                  <p style={{ margin: "0 0 6px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>HISTORY <span style={{ fontFamily: FONT_SANS, letterSpacing: 0, marginLeft: 4 }}>直近 {hist.length} 件</span></p>
-                  {hist.map(r => (
-                    <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 0", fontSize: 10, borderBottom: `1px solid ${T.border}` }}>
-                      <span style={{ fontFamily: FONT_SANS }}>{formatDate(r.date)} {r.start_time?.slice(0,5)}</span>
-                      <span style={{ color: T.textSub, letterSpacing: "0.02em" }}>{r.course}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { setNoteForm({ customer_name: noteViewTarget.customer_name, note: noteViewTarget.note, is_ng: noteViewTarget.is_ng, ng_reason: noteViewTarget.ng_reason, rating: noteViewTarget.rating || 0, reservation_id: noteViewTarget.reservation_id || 0 }); setNoteViewTarget(null); setShowAddNote(true); }} style={{ flex: 1, padding: 11, fontSize: 12, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>✏️ メモ編集</button>
-              <button onClick={() => setNoteViewTarget(null)} style={{ padding: "11px 20px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>閉じる</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* メモ追加・編集モーダル */}
-      {showAddNote && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setShowAddNote(false)}>
-          <div style={{ width: "100%", maxWidth: 400, padding: 24, backgroundColor: T.card, border: `1px solid ${T.border}`, maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
-              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: T.accent, fontWeight: 500 }}>MEMO</p>
-              <h3 style={{ margin: "4px 0 6px", fontSize: 14, fontWeight: 500, letterSpacing: "0.08em", color: T.text }}>📝 お客様メモ</h3>
-              <div style={{ width: 24, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 10, letterSpacing: "0.1em", color: T.textSub, marginBottom: 6 }}>お客様名</label>
-                <input type="text" value={noteForm.customer_name} onChange={(e) => setNoteForm({ ...noteForm, customer_name: e.target.value })} readOnly={!!customerNotes.find(n => n.customer_name === noteForm.customer_name)} placeholder="お客様名" style={{ width: "100%", padding: "11px 14px", fontSize: 12, outline: "none", backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, boxSizing: "border-box" }} />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 10, letterSpacing: "0.1em", color: T.textSub, marginBottom: 6 }}>メモ</label>
-                <textarea value={noteForm.note} onChange={(e) => setNoteForm({ ...noteForm, note: e.target.value })} placeholder="お客様についてのメモ" rows={4} style={{ width: "100%", padding: "11px 14px", fontSize: 12, outline: "none", resize: "vertical", backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, boxSizing: "border-box", lineHeight: 1.7 }} />
-              </div>
-              <div>
-                <button onClick={() => { const now = new Date(); const ds = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`; setNoteForm({ ...noteForm, note: noteForm.note + (noteForm.note ? "\n" : "") + `[${ds}] ` }); }}
-                  style={{ padding: "6px 12px", fontSize: 10, cursor: "pointer", border: `1px solid ${T.accent}`, color: T.accent, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>📅 日時挿入</button>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 10, letterSpacing: "0.1em", color: T.textSub, marginBottom: 6 }}>お客様評価</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {[1, 2, 3, 4, 5].map(s => (
-                    <button key={s} onClick={() => setNoteForm({ ...noteForm, rating: noteForm.rating === s ? 0 : s })}
-                      style={{ fontSize: 22, cursor: "pointer", background: "none", border: "none", padding: 0, color: s <= noteForm.rating ? "#b38419" : T.textFaint }}>
-                      {s <= noteForm.rating ? "★" : "☆"}
-                    </button>
-                  ))}
-                  {noteForm.rating > 0 && <span style={{ fontFamily: FONT_SANS, fontSize: 11, marginLeft: 6, color: "#b38419" }}>{noteForm.rating}/5</span>}
-                </div>
-              </div>
-              <div>
-                <button onClick={() => setNoteForm({ ...noteForm, is_ng: !noteForm.is_ng })}
-                  style={{ padding: "9px 16px", fontSize: 11, cursor: "pointer", border: `1px solid ${noteForm.is_ng ? "#c96b83" : T.border}`, color: noteForm.is_ng ? "#c96b83" : T.textSub, backgroundColor: noteForm.is_ng ? "rgba(201,107,131,0.08)" : "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.05em", fontWeight: noteForm.is_ng ? 500 : 400 }}>
-                  {noteForm.is_ng ? "🚫 NG登録あり" : "NG登録なし"}
-                </button>
-              </div>
-              {noteForm.is_ng && (
-                <div>
-                  <label style={{ display: "block", fontSize: 10, letterSpacing: "0.1em", color: T.textSub, marginBottom: 6 }}>NG理由</label>
-                  <input type="text" value={noteForm.ng_reason} onChange={(e) => setNoteForm({ ...noteForm, ng_reason: e.target.value })} placeholder="理由を入力" style={{ width: "100%", padding: "11px 14px", fontSize: 12, outline: "none", backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, boxSizing: "border-box" }} />
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
-                <button onClick={saveCustomerNote} style={{ flex: 1, padding: 12, fontSize: 12, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>保存</button>
-                <button onClick={() => setShowAddNote(false)} style={{ padding: "12px 24px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.border}`, color: T.textSub, backgroundColor: "transparent", fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>キャンセル</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════
-          🤖 グローバルAIチャット（全タブ共通・ドラッグ可能）
-          ═══════════════════════════════════════════ */}
-      {loggedIn && therapist && (() => {
-        const chatApiUrl = tab === "tax" ? "/api/tax-ai" : "/api/manual-ai";
-        const chatAction = tab === "tax" ? undefined : "chat";
-        const chatTitle = tab === "tax" ? "確定申告AIアシスタント" : tab === "manual" ? "マニュアルAIアシスタント" : "AIアシスタント";
-        const chatHint = tab === "tax" ? "税金・経費・申告のこと" : tab === "manual" ? "マニュアル・業務のこと" : "お仕事のことなんでも";
-        const suggestions = tab === "tax"
-          ? ["経費にできるものは？", "青色申告って何？", "副業バレしない方法は？", "還付金って何？"]
-          : tab === "manual"
-          ? ["出勤の流れを教えて", "精算の仕方は？", "お客様対応のコツは？", "清掃の手順は？"]
-          : ["シフトの出し方は？", "給料の計算方法は？", "お客様メモの使い方は？", "マニュアルはどこ？"];
-
-        const btnX = chatBtnPos.x >= 0 ? chatBtnPos.x : (typeof window !== "undefined" ? window.innerWidth - 80 : 300);
-        const btnY = chatBtnPos.y >= 0 ? chatBtnPos.y : (typeof window !== "undefined" ? window.innerHeight - 140 : 500);
-
-        const handleDragStart = (clientX: number, clientY: number) => {
-          chatDragRef.current = { dragging: true, startX: clientX, startY: clientY, origX: btnX, origY: btnY };
-        };
-        const handleDragMove = (clientX: number, clientY: number) => {
-          if (!chatDragRef.current.dragging) return;
-          const dx = clientX - chatDragRef.current.startX;
-          const dy = clientY - chatDragRef.current.startY;
-          setChatBtnPos({ x: chatDragRef.current.origX + dx, y: chatDragRef.current.origY + dy });
-        };
-        const handleDragEnd = () => { chatDragRef.current.dragging = false; };
-
-        const sendMsg = async () => {
-          if (!aiChatInputG.trim() || aiChatLoadingG) return;
-          const q = aiChatInputG.trim(); setAiChatInputG(""); setAiChatLoadingG(true);
-          setAiChatMsgsG(prev => [...prev, { role: "user", text: q }]);
-          try {
-            const body = chatAction ? { action: chatAction, question: q, therapistName: therapist?.name } : { question: q };
-            const res = await fetch(chatApiUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-            const data = await res.json();
-            setAiChatMsgsG(prev => [...prev, { role: "ai", text: data.answer || data.error || "エラー", cached: data.cached }]);
-          } catch { setAiChatMsgsG(prev => [...prev, { role: "ai", text: "⚠️ 通信エラー" }]); }
-          setAiChatLoadingG(false);
-        };
-
-        return (<>
-          {/* フローティングボタン（ドラッグ可能） */}
-          <div style={{ position: "fixed", left: btnX, top: btnY, zIndex: 45, touchAction: "none" }}
-            onMouseDown={e => handleDragStart(e.clientX, e.clientY)}
-            onMouseMove={e => handleDragMove(e.clientX, e.clientY)}
-            onMouseUp={handleDragEnd} onMouseLeave={handleDragEnd}
-            onTouchStart={e => { const t = e.touches[0]; handleDragStart(t.clientX, t.clientY); }}
-            onTouchMove={e => { const t = e.touches[0]; handleDragMove(t.clientX, t.clientY); }}
-            onTouchEnd={handleDragEnd}>
-            <button onClick={() => { if (!chatDragRef.current.dragging || (Math.abs(chatDragRef.current.startX - chatBtnPos.x) < 5)) setAiChatOpenG(!aiChatOpenG); }}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", cursor: "pointer", backgroundColor: T.accent, boxShadow: "0 4px 18px rgba(201,107,131,0.35)", border: "none", color: "#fff", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-              <span style={{ fontSize: 15 }}>{aiChatOpenG ? "✕" : "🤖"}</span>
-              <span style={{ fontSize: 11 }}>{aiChatOpenG ? "閉じる" : "AI Chat"}</span>
-            </button>
-          </div>
-
-          {/* チャットウィンドウ */}
-          {aiChatOpenG && (
-            <div style={{ position: "fixed", bottom: 16, right: 16, width: "calc(100% - 32px)", maxWidth: 380, overflow: "hidden", zIndex: 40, display: "flex", flexDirection: "column", backgroundColor: T.card, border: `1px solid ${T.accent}`, boxShadow: "0 12px 40px rgba(0,0,0,0.18)", maxHeight: "65vh", fontFamily: FONT_SERIF }}>
-              {/* ヘッダー */}
-              <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: T.accentBg, borderBottom: `1px solid ${T.border}` }}>
-                <div>
-                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: T.accent, fontWeight: 500 }}>AI ASSISTANT</p>
-                  <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.05em" }}>🤖 {chatTitle}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 9, color: T.textMuted, letterSpacing: "0.03em" }}>{chatHint}なんでも聞いてね</p>
-                </div>
-                <button onClick={() => setAiChatOpenG(false)} style={{ width: 28, height: 28, fontSize: 14, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}`, fontFamily: FONT_SERIF }}>✕</button>
-              </div>
-
-              {/* メッセージエリア */}
-              <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8, minHeight: 200, maxHeight: "45vh" }}>
-                {aiChatMsgsG.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "12px 0" }}>
-                    <p style={{ fontSize: 24, margin: "0 0 8px" }}>🌸</p>
-                    <p style={{ margin: 0, fontSize: 11, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>{chatHint}<br />なんでも聞いてください！</p>
-                    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 5 }}>
-                      {suggestions.map((q, i) => (
-                        <button key={i} onClick={() => setAiChatInputG(q)}
-                          style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.accent, border: `1px solid ${T.accent}44`, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{q}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {aiChatMsgsG.map((m, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                    <div style={{
-                      maxWidth: "85%",
-                      padding: "9px 13px",
-                      backgroundColor: m.role === "user" ? T.accent : T.cardAlt,
-                      color: m.role === "user" ? "#fff" : T.text,
-                      fontFamily: FONT_SERIF,
-                    }}>
-                      <p style={{ margin: 0, fontSize: 11, whiteSpace: "pre-wrap", lineHeight: 1.8, letterSpacing: "0.02em" }}>{m.text}</p>
-                      {m.cached && <p style={{ margin: "2px 0 0", fontSize: 8, color: m.role === "user" ? "rgba(255,255,255,0.55)" : T.textFaint, letterSpacing: "0.05em" }}>⚡ キャッシュ回答</p>}
-                    </div>
-                  </div>
-                ))}
-                {aiChatLoadingG && (
-                  <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                    <div style={{ padding: "9px 13px", backgroundColor: T.cardAlt }}>
-                      <p style={{ margin: 0, fontSize: 10, color: T.accent, letterSpacing: "0.05em", animation: "pulse 1.5s ease-in-out infinite" }}>🤖 考え中...</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 入力エリア */}
-              <div style={{ padding: 10, display: "flex", gap: 6, borderTop: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
-                <input type="text" value={aiChatInputG} onChange={e => setAiChatInputG(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") sendMsg(); }}
-                  placeholder="質問を入力..."
-                  style={{ flex: 1, padding: "9px 13px", fontSize: 11, outline: "none", backgroundColor: T.card, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.02em" }} />
-                <button onClick={sendMsg}
-                  style={{ padding: "9px 16px", fontSize: 11, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>送信</button>
-              </div>
-            </div>
-          )}
-        </>);
-      })()}
-    </div>
-  );
+    <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .ticker-scroll { animation: tickerScroll 30s linear infinite; }
+        .ticker-scroll:hover { animation-play-state: paused; } @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }`}</style>
+  </div>);
 }

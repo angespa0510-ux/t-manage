@@ -98,7 +98,7 @@ export default function NotificationPost() {
           userType: "customer",
           title: title.trim(),
           body: body.trim(),
-          url: "/customer-mypage",
+          url: "/mypage",
           tag: `notif-${Date.now()}`,
         };
         if (pushBroadcast) {

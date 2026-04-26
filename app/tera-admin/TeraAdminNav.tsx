@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/tera-admin", label: "ダッシュボード", icon: "🏠" },
   { href: "/tera-admin/instances", label: "店舗一覧", icon: "🏢" },
   { href: "/tera-admin/instances/new", label: "新規店舗発行", icon: "➕" },
+  { href: "/tera-admin/url-structure", label: "URL構成", icon: "🌐" },
   { href: "/tera-admin/updates", label: "一斉配信", icon: "📢" },
   { href: "/tera-admin/stats", label: "横断統計", icon: "📊" },
   { href: "/tera-admin/logs", label: "アクティビティログ", icon: "📜" },
@@ -117,7 +118,7 @@ export function TeraAdminNav() {
       </button>
 
       <Link
-        href="/dashboard"
+        href="/admin/dashboard"
         style={{
           padding: "6px 14px",
           borderRadius: 8,

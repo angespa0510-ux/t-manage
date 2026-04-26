@@ -428,7 +428,7 @@ export default function LiveViewPage({ params }: { params: Promise<{ streamId: s
               {errorMsg}
             </p>
             <button
-              onClick={() => router.push("/customer-mypage")}
+              onClick={() => router.push("/mypage")}
               style={{ padding: "10px 20px", fontSize: 12, cursor: "pointer", backgroundColor: SITE.color.pink, color: "#fff", border: "none", fontFamily: FONT_SERIF, marginRight: 8 }}
             >
               マイページへ

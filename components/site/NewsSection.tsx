@@ -178,7 +178,7 @@ export default function NewsSection() {
         {/* 会員ページへの導線 */}
         <div style={{ textAlign: "center", marginTop: SITE.sp.xl }}>
           <Link
-            href="/customer-mypage"
+            href="/mypage"
             style={{
               display: "inline-block",
               padding: "10px 24px",

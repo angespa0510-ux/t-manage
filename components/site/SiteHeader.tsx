@@ -153,7 +153,7 @@ export default function SiteHeader() {
             {/* ログイン中バッジ + ポイント（デスクトップのみ） */}
             {!loading && isLoggedIn && (
               <Link
-                href="/customer-mypage"
+                href="/mypage"
                 className="site-header-user"
                 style={{
                   display: "none",
@@ -199,7 +199,7 @@ export default function SiteHeader() {
             {/* ログイン中ミニバッジ（モバイル） */}
             {!loading && isLoggedIn && (
               <Link
-                href="/customer-mypage"
+                href="/mypage"
                 className="site-header-user-sp"
                 aria-label={`${displayName(customer)}さまのマイページ（${summary.pointBalance}pt）`}
                 style={{
@@ -401,7 +401,7 @@ export default function SiteHeader() {
               {!loading && isLoggedIn ? (
                 <>
                   <Link
-                    href="/customer-mypage"
+                    href="/mypage"
                     onClick={() => setMenuOpen(false)}
                     style={{
                       ...subNavLinkStyle,
@@ -431,7 +431,7 @@ export default function SiteHeader() {
                 </>
               ) : (
                 <Link
-                  href="/customer-mypage"
+                  href="/mypage"
                   onClick={() => setMenuOpen(false)}
                   style={subNavLinkStyle}
                 >
@@ -443,7 +443,7 @@ export default function SiteHeader() {
             {/* 未ログイン時：会員登録CTA */}
             {!loading && !isLoggedIn && (
               <Link
-                href="/customer-mypage?register=1"
+                href="/mypage?register=1"
                 onClick={() => setMenuOpen(false)}
                 style={{
                   marginTop: 28,

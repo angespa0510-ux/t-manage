@@ -896,9 +896,9 @@ export default function SingleMotherGuidePage() {
           <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>📚 関連ガイドもご覧ください</p>
           <div className="space-y-1.5">
             {[
-              { href: "/mypage/tax-guide", icon: "🔒", label: "副業がバレない 完全ガイド", color: PINK },
-              { href: "/mypage/spouse-guide", icon: "💑", label: "配偶者控除・扶養 完全ガイド", color: PURPLE },
-              { href: "/mypage/invoice-guide", icon: "💎", label: "インボイス登録ガイド", color: "#c3a782" },
+              { href: "/cast/tax-guide", icon: "🔒", label: "副業がバレない 完全ガイド", color: PINK },
+              { href: "/cast/spouse-guide", icon: "💑", label: "配偶者控除・扶養 完全ガイド", color: PURPLE },
+              { href: "/cast/invoice-guide", icon: "💎", label: "インボイス登録ガイド", color: "#c3a782" },
             ].map(g => (
               <a
                 key={g.href}
@@ -924,7 +924,7 @@ export default function SingleMotherGuidePage() {
             不安なことがあれば、店長や市役所の窓口に相談してくださいね。
           </p>
           <Link
-            href="/mypage"
+            href="/cast"
             className="inline-block text-[11px] px-4 py-2 rounded-full cursor-pointer"
             style={{ backgroundColor: TEAL, color: "#fff", fontWeight: 600 }}
           >

@@ -114,7 +114,7 @@ export default function HomePage() {
         return;
       }
       if (localStorage.getItem("customer_mypage_id")) {
-        router.replace("/customer-mypage");
+        router.replace("/mypage");
         return;
       }
       if (sessionStorage.getItem("t-manage-staff")) {
@@ -925,7 +925,7 @@ function MemberCtaBanner() {
               </p>
             </div>
             <Link
-              href="/customer-mypage"
+              href="/mypage"
               className="site-mypage-link"
               style={{
                 padding: "10px 20px",
@@ -954,7 +954,7 @@ function MemberCtaBanner() {
             <DashCard
               label="NEXT RESERVATION"
               title="次回のご予約"
-              href="/customer-mypage"
+              href="/mypage"
             >
               {next ? (
                 <>
@@ -1027,7 +1027,7 @@ function MemberCtaBanner() {
             <DashCard
               label="MEMBER POINT"
               title="保有ポイント"
-              href="/customer-mypage"
+              href="/mypage"
             >
               <p
                 style={{
@@ -1070,7 +1070,7 @@ function MemberCtaBanner() {
             <DashCard
               label="FAVORITES"
               title="お気に入りセラピスト"
-              href="/customer-mypage"
+              href="/mypage"
             >
               <p
                 style={{
@@ -1115,7 +1115,7 @@ function MemberCtaBanner() {
           {/* 未読お知らせバナー */}
           {summary.unreadNotificationCount > 0 && (
             <Link
-              href="/customer-mypage"
+              href="/mypage"
               style={{
                 marginTop: SITE.sp.md,
                 display: "flex",
@@ -1212,7 +1212,7 @@ function MemberCtaBanner() {
           </p>
         </div>
         <Link
-          href="/customer-mypage?register=1"
+          href="/mypage?register=1"
           style={{
             padding: "14px 28px",
             background: SITE.color.pink,

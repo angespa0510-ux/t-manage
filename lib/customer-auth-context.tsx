@@ -5,7 +5,7 @@
  * お客様ログイン状態の共通 Context
  *
  * 目的:
- *   HP (app/(site)) と お客様マイページ (app/customer-mypage) で
+ *   HP (app/(site)) と お客様マイページ (app/mypage) で
  *   同一の会員ログイン状態を共有する。
  *
  * 現状の認証方式:
@@ -21,7 +21,7 @@
  * 方針:
  *   - HP を SSR で重くしないため、Context は「購読のみ、取得は useEffect」の軽量設計
  *   - ログアウトは localStorage 削除 + state クリアのみ
- *   - 既存の app/customer-mypage/page.tsx は localStorage を直接読み書き
+ *   - 既存の app/mypage/page.tsx は localStorage を直接読み書き
  *     しているが、本 Context も同じキーを参照するので共存可能
  * ═══════════════════════════════════════════════════════════
  */
