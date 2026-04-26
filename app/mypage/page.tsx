@@ -73,6 +73,20 @@ const linkify = (text: string) => {
 export default function CustomerMypage() {
   const { confirm, ConfirmModalNode } = useConfirm();
   const [customer, setCustomer] = useState<Customer | null>(null);
+  // アンケート: 回答可能な予約と発行済みクーポンを保持（Phase 1B-2）
+  const [pendingSurveys, setPendingSurveys] = useState<Array<{
+    reservationId: number;
+    date: string;
+    startTime: string;
+    course: string;
+    therapistName: string;
+  }>>([]);
+  const [surveyCoupons, setSurveyCoupons] = useState<Array<{
+    id: number;
+    code: string;
+    discountAmount: number;
+    expiresAt: string;
+  }>>([]);
   const [authMode, setAuthMode] = useState<"login" | "register" | "reset">("login");
   const [authEmail, setAuthEmail] = useState(""); const [authPw, setAuthPw] = useState(""); const [authName, setAuthName] = useState(""); const [authPhone, setAuthPhone] = useState(""); const [authError, setAuthError] = useState(""); const [authLoading, setAuthLoading] = useState(false); const [showPw, setShowPw] = useState(false);
   const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
@@ -184,6 +198,15 @@ export default function CustomerMypage() {
     // NGセラピスト取得（このお客様をNGにしたセラピスト）
     const { data: ngNotes } = await supabase.from("therapist_customer_notes").select("therapist_id").eq("customer_name", customer.name).eq("is_ng", true);
     if (ngNotes) setNgTherapistIdsForMe(new Set(ngNotes.map(n => n.therapist_id)));
+    // アンケート: 未回答予約と発行済みクーポン取得（Phase 1B-2）
+    try {
+      const sr = await fetch(`/api/survey/list?customerId=${customer.id}`);
+      if (sr.ok) {
+        const sd = await sr.json();
+        setPendingSurveys(sd.pending || []);
+        setSurveyCoupons(sd.coupons || []);
+      }
+    } catch { /* 取得失敗は静かに無視 */ }
     // お客様セラピストメモ取得
     try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer.id); if (memos) setCustomerMemos(memos); } catch {}
   }, [customer]);
@@ -651,6 +674,102 @@ export default function CustomerMypage() {
             <span style={{ flex: 1, fontSize: 12, color: C.accentDark, letterSpacing: "0.03em" }}>未読のお知らせが {unreadCount} 件あります</span>
             <IconArrowRight size={14} color={C.accentDark} />
           </button>
+        )}
+
+        {/* ═══ アンケート未回答（Phase 1B-2） ═══ */}
+        {pendingSurveys.length > 0 && (
+          <div style={{
+            border: `1px solid ${C.borderPink}`,
+            backgroundColor: C.accentBg,
+            padding: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 16 }}>🌸</span>
+              <p style={{ fontSize: 13, color: C.accentDark, margin: 0, fontWeight: 500 }}>
+                ご感想をお聞かせください
+              </p>
+            </div>
+            <p style={{ fontSize: 11, color: C.textSub, margin: 0, marginBottom: 12, lineHeight: 1.6 }}>
+              ご回答いただくと <strong style={{ color: C.accentDark }}>1,000円OFFクーポン</strong> をプレゼント🎁（次回ご予約時に利用可・他の割引と併用可）
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pendingSurveys.slice(0, 3).map((p) => (
+                <a
+                  key={p.reservationId}
+                  href={`/mypage/survey/${p.reservationId}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                    backgroundColor: "#fff",
+                    border: `1px solid ${C.borderPink}`,
+                    textDecoration: "none",
+                    fontFamily: FONT_SERIF,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: C.text, margin: 0, marginBottom: 2 }}>
+                      {p.date} {p.startTime}〜
+                      {p.therapistName && <span style={{ color: C.accentDark, marginLeft: 6 }}>担当: {p.therapistName}</span>}
+                    </p>
+                    <p style={{ fontSize: 10, color: C.textMuted, margin: 0 }}>{p.course}</p>
+                  </div>
+                  <IconArrowRight size={14} color={C.accent} />
+                </a>
+              ))}
+              {pendingSurveys.length > 3 && (
+                <p style={{ fontSize: 10, color: C.textMuted, textAlign: "center", margin: 0 }}>
+                  他 {pendingSurveys.length - 3} 件
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ アンケートクーポン（Phase 1B-2） ═══ */}
+        {surveyCoupons.length > 0 && (
+          <div style={{
+            border: `1px solid ${C.borderPink}`,
+            backgroundColor: "#fff",
+            padding: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 16 }}>🎟</span>
+              <p style={{ fontSize: 13, color: C.text, margin: 0, fontWeight: 500 }}>
+                お持ちのアンケートクーポン
+              </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {surveyCoupons.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    padding: 12,
+                    backgroundColor: C.accentBg,
+                    border: `1px dashed ${C.accent}`,
+                  }}
+                >
+                  <p style={{ fontSize: 10, color: C.accentDark, margin: 0, marginBottom: 4 }}>
+                    {c.discountAmount.toLocaleString()}円OFF
+                  </p>
+                  <p style={{
+                    fontSize: 18,
+                    fontFamily: "monospace",
+                    fontWeight: 600,
+                    letterSpacing: 2,
+                    color: C.text,
+                    margin: "4px 0",
+                  }}>
+                    {c.code}
+                  </p>
+                  <p style={{ fontSize: 10, color: C.textMuted, margin: 0 }}>
+                    有効期限: {new Date(c.expiresAt).toLocaleDateString("ja-JP")} まで・他の割引と併用可
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* ═══ ヒーロー ═══ */}
