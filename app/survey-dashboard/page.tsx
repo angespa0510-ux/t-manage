@@ -82,7 +82,7 @@ const TABS: { key: Tab; label: string; emoji: string }[] = [
 export default function SurveyDashboardPage() {
   const router = useRouter();
   const { dark, T } = useTheme();
-  const { activeStaff, isManager } = useStaffSession();
+  const { activeStaff, isRestored, isManager } = useStaffSession();
 
   const [tab, setTab] = useState<Tab>("list");
   const [surveys, setSurveys] = useState<Survey[]>([]);
@@ -103,16 +103,21 @@ export default function SurveyDashboardPage() {
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
   const [therapistFilter, setTherapistFilter] = useState<number>(0);
 
-  // 認証
+  // 認証 (セッション復元後にチェック)
   useEffect(() => {
-    if (!activeStaff) { router.push("/dashboard"); return; }
-  }, [activeStaff, router]);
+    if (!isRestored) return; // localStorage からの復元中は待つ
+    if (!activeStaff) {
+      router.push("/admin");
+      return;
+    }
+  }, [activeStaff, isRestored, router]);
 
   // データ取得
   useEffect(() => {
-    if (!activeStaff) return;
+    if (!isRestored || !activeStaff) return;
     fetchAllData();
-  }, [activeStaff, dateFrom, dateTo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStaff, isRestored, dateFrom, dateTo]);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -244,8 +249,12 @@ export default function SurveyDashboardPage() {
   // レンダリング
   // ─────────────────────────────────────
 
+  if (!isRestored) {
+    return <div style={{ padding: 24, color: "#888" }}>読み込み中...</div>;
+  }
+
   if (!activeStaff) {
-    return <div style={{ padding: 24, color: T.textMuted }}>認証中...</div>;
+    return <div style={{ padding: 24, color: T.textMuted }}>ログインが必要です。リダイレクトしています...</div>;
   }
 
   return (
