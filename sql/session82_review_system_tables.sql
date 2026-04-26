@@ -99,7 +99,8 @@ CREATE INDEX IF NOT EXISTS idx_surveys_hp_published ON customer_surveys(hp_publi
 CREATE INDEX IF NOT EXISTS idx_surveys_token ON customer_surveys(access_token);
 
 ALTER TABLE customer_surveys DISABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Allow all on customer_surveys" ON customer_surveys
+DROP POLICY IF EXISTS "Allow all on customer_surveys" ON customer_surveys;
+CREATE POLICY "Allow all on customer_surveys" ON customer_surveys
   FOR ALL USING (true) WITH CHECK (true);
 
 
@@ -133,7 +134,8 @@ CREATE INDEX IF NOT EXISTS idx_survey_notify_status ON survey_notifications(stat
 CREATE INDEX IF NOT EXISTS idx_survey_notify_reservation ON survey_notifications(reservation_id);
 
 ALTER TABLE survey_notifications DISABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Allow all on survey_notifications" ON survey_notifications
+DROP POLICY IF EXISTS "Allow all on survey_notifications" ON survey_notifications;
+CREATE POLICY "Allow all on survey_notifications" ON survey_notifications
   FOR ALL USING (true) WITH CHECK (true);
 
 
@@ -172,7 +174,8 @@ CREATE INDEX IF NOT EXISTS idx_survey_coupons_unused ON survey_coupons(customer_
 CREATE INDEX IF NOT EXISTS idx_survey_coupons_expires ON survey_coupons(expires_at);
 
 ALTER TABLE survey_coupons DISABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Allow all on survey_coupons" ON survey_coupons
+DROP POLICY IF EXISTS "Allow all on survey_coupons" ON survey_coupons;
+CREATE POLICY "Allow all on survey_coupons" ON survey_coupons
   FOR ALL USING (true) WITH CHECK (true);
 
 
