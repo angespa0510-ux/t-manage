@@ -6,6 +6,7 @@ import TaxSupportWizard from "../../components/TaxSupportWizard";
 import TaxBookkeeping from "../../components/TaxBookkeeping";
 import { SITE, MARBLE } from "../../lib/site-theme";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
+import { calcGrossRevenue } from "../../lib/settlement-calc";
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
 import InstallPrompt from "../../components/InstallPrompt";
@@ -1730,7 +1731,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           {/* 年間ビュー */}
           {salaryViewMode === "annual" && (() => {
             // 業務委託報酬総額: total_back + 調整金 + 情報配信報酬 (gift_bonus_amount)
-            const aGross = annualSettlements.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0) + (r.gift_bonus_amount || 0), 0);
+            // SSOT: lib/settlement-calc.ts の calcGrossRevenue
+            const aGross = annualSettlements.reduce((s, r) => s + calcGrossRevenue(r), 0);
             const aGiftBonus = annualSettlements.reduce((s, r) => s + (r.gift_bonus_amount || 0), 0);
             const aInvDed = annualSettlements.reduce((s, r) => s + (r.invoice_deduction || 0), 0);
             const aTax = annualSettlements.reduce((s, r) => s + (r.withholding_tax || 0), 0);
@@ -1743,7 +1745,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             for (let m = 1; m <= 12; m++) {
               const key = `${salaryYear}-${String(m).padStart(2, "0")}`;
               const ms = annualSettlements.filter(s => s.date.startsWith(key));
-              if (ms.length > 0) monthlyData.push({ month: `${m}月`, gross: ms.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0) + (r.gift_bonus_amount || 0), 0), final: ms.reduce((s, r) => s + (r.final_payment || 0), 0), days: ms.length });
+              if (ms.length > 0) monthlyData.push({ month: `${m}月`, gross: ms.reduce((s, r) => s + calcGrossRevenue(r), 0), final: ms.reduce((s, r) => s + (r.final_payment || 0), 0), days: ms.length });
             }
             const openPayslip = () => {
               if (!therapist) return;
