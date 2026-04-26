@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useConfirm } from "../../components/useConfirm";
+import { findTherapistName } from "../../lib/therapist-utils";
 
 type Therapist = { id: number; name: string };
 type Store = { id: number; name: string };
@@ -86,7 +87,7 @@ export default function ShiftManagement() {
   const openAddForCell = (tid: number, date: string) => { setAddTherapistId(tid); setAddDate(date); setAddStoreId(stores.length > 0 ? stores[0].id : 0); setAddStart("12:00"); setAddEnd("03:00"); setAddStatus("confirmed"); setMsg(""); setShowAddShift(true); };
   const openEdit = (s: Shift) => { setEditShift(s); setEditStoreId(s.store_id); setEditStart(s.start_time); setEditEnd(s.end_time); setEditStatus(s.status); };
 
-  const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "—";
+  const getTherapistName = (id: number) => findTherapistName(therapists, id, "—");
 
   // お気に入り通知
   const notifyFavoriteCustomers = async (therapistId: number, date: string, startTime: string, endTime: string) => {

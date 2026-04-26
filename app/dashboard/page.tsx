@@ -12,6 +12,7 @@ import { useConfirm } from "../../components/useConfirm";
 import { runAutoSettlementIfDue } from "../../lib/staff-advances";
 import { calcSettlementRounding } from "../../lib/settlement-calc";
 import { fetchSafeListData } from "../../lib/cash-aggregation";
+import { findTherapistName, makeTherapistNameResolver } from "../../lib/therapist-utils";
 import { useToast } from "../../lib/toast";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
@@ -266,7 +267,7 @@ export default function Dashboard() {
       const allRes = res || [];
       const completed = allRes.filter(r => (r as any).status === "completed");
       const getCourseByName = (name: string) => (crs || []).find((c: any) => c.name === name);
-      const getThName = (id: number) => (thList || []).find((t: any) => t.id === id)?.name || "不明";
+      const getThName = makeTherapistNameResolver(thList || [], "不明");
       // 売上サマリー
       const totalSales = completed.reduce((s, r) => s + ((r as any).total_price || 0), 0);
       // 売上内訳
@@ -755,7 +756,7 @@ export default function Dashboard() {
 
   const today = new Date(); const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`; const dayNames = ["日", "月", "火", "水", "木", "金", "土"]; const dayStr = dayNames[today.getDay()];
   const hours = today.getHours(); const greeting = hours < 12 ? "おはようございます" : hours < 18 ? "こんにちは" : "お疲れ様です";
-  const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "—";
+  const getTherapistName = (id: number) => findTherapistName(therapists, id, "—");
   const getStoreName = (id: number) => storesList.find((s) => s.id === id)?.name || "—";
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 

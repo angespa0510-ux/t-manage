@@ -309,7 +309,9 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     const { data: sh } = await supabase.from("shifts").select("*").eq("therapist_id", tid).gte("date", m1).lte("date", m2).eq("status", "confirmed").order("date"); if (sh) setShifts(sh);
     const { data: sr } = await supabase.from("shift_requests").select("*").eq("therapist_id", tid).order("date"); if (sr) setShiftRequests(sr);
     const [sy, sm] = salaryMonth.split("-").map(Number); const dim = new Date(sy, sm, 0).getDate();
-    const { data: stl } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", tid).gte("date", `${salaryMonth}-01`).lte("date", `${salaryMonth}-${String(dim).padStart(2, "0")}`).eq("is_settled", true).order("date"); if (stl) setSettlements(stl);
+    // L-2: 報酬リスト表示で使うカラムだけを取得して通信量を削減
+    const SETTLE_COLS = "id,date,final_payment,order_count,total_sales,total_back,gift_bonus_amount,invoice_deduction,withholding_tax,welfare_fee,transport_fee";
+    const { data: stl } = await supabase.from("therapist_daily_settlements").select(SETTLE_COLS).eq("therapist_id", tid).gte("date", `${salaryMonth}-01`).lte("date", `${salaryMonth}-${String(dim).padStart(2, "0")}`).eq("is_settled", true).order("date"); if (stl) setSettlements(stl as typeof settlements);
     const d30 = new Date(); d30.setDate(d30.getDate() - 30);
     const { data: res } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", d30.toISOString().split("T")[0]).eq("status", "completed").order("date", { ascending: false }); if (res) setReservations(res);
     const { data: allRes } = await supabase.from("reservations").select("*").eq("therapist_id", tid).eq("status", "completed").order("date", { ascending: false }); if (allRes) setAllReservations(allRes);
@@ -321,7 +323,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     const calDim = new Date(cy, cm, 0).getDate();
     const calStart = `${calMonth}-01`; const calEnd = `${calMonth}-${String(calDim).padStart(2, "0")}`;
     const { data: csh } = await supabase.from("shifts").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("status", "confirmed"); if (csh) setCalShifts(csh);
-    const { data: cstl } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("is_settled", true); if (cstl) setCalSettlements(cstl);
+    // L-2: カレンダー表示は date と final_payment しか使わない
+    const { data: cstl } = await supabase.from("therapist_daily_settlements").select("id,date,final_payment").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).eq("is_settled", true); if (cstl) setCalSettlements(cstl as typeof calSettlements);
     const { data: cres } = await supabase.from("reservations").select("*").eq("therapist_id", tid).gte("date", calStart).lte("date", calEnd).neq("status", "cancelled"); if (cres) setCalReservations(cres);
     // マニュアルデータ
     const { data: mc } = await supabase.from("manual_categories").select("*").order("sort_order"); if (mc) setManualCats(mc);

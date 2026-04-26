@@ -11,6 +11,7 @@ import HPOutputPanel from "../../lib/hp-output-panel";
 import LineShiftPanel from "../../lib/line-shift-panel";
 import WeeklyTaskPanel from "../../lib/weekly-task-panel";
 import { useConfirm } from "../../components/useConfirm";
+import { findTherapistName } from "../../lib/therapist-utils";
 
 type Store = { id: number; name: string };
 type Building = { id: number; store_id: number; name: string };
@@ -190,7 +191,7 @@ useEffect(() => {
 
   const allPoints = useMemo(() => therapists.map((t) => ({ ...t, ...calcPoints(t.id) })).sort((a, b) => a.points - b.points), [therapists, calcPoints]);
 
-  const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "";
+  const getTherapistName = (id: number) => findTherapistName(therapists, id, "");
   const getShiftsForDate = (date: string) => allShifts.filter((s) => s.date === date);
   const getAssignmentsForDate = (date: string) => allAssignments.filter((a) => a.date === date);
   const getAssignment = (date: string, roomId: number, slot: string) => allAssignments.find((a) => a.date === date && a.room_id === roomId && a.slot === slot);

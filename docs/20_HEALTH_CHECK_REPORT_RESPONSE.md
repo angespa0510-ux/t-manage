@@ -32,6 +32,17 @@
 
 ## 未対応の保守 ToDo（Phase 0 後に段階対応）
 
+### 完了済み（2026-04-27 第2弾、6 件）
+
+| ToDo | 内容 | 主な変更 |
+|---|---|---|
+| M-2 ✅ | セラピスト名解決の SSOT 化 | `lib/therapist-utils.ts` 新設、6 ファイル（dashboard / cash-dashboard / analytics / sales / shifts / room-assignments）の find ロジックを統一 |
+| M-3 ✅ | Therapist 型のスキーマ整合 | timechart の `(th as any).salary_type` 等 11 箇所の any キャストを排除、Therapist 型に salary / welfare / プロフィール系フィールドを追加 |
+| M-4 ✅ | スキーマ SSOT 不在 | `sql/_schema_snapshot.sql` 新設、`therapist_daily_settlements` の再構築 CREATE TABLE と pg_dump 取得手順を集約 |
+| L-2 ✅ | `select("*")` の絞り込み | doc 指名の cash-dashboard L158/L162 と cast L312/L324 を必要カラム列挙化（残 79 ファイルは Phase 2） |
+| L-3 ✅ | reserve/replenish 命名整理 | UI state ↔ DB の対応関係を timechart L302-308 にマッピング表として固定（実リネームは call site 多数のためコメント明文化に留める） |
+| L-4 ✅ | 絵文字コメント正式名称化 | `🏛` → `[Reserve]`、`💰` → `[Replenish]`、`🎁` → `[GiftBack]` |
+
 ### 重要度: 中（保守フェーズ）
 
 #### M-1: timechart 3,154 行のコンポーネント分割
@@ -40,40 +51,16 @@
 - **着手タイミング**: 本番運用が安定した 6/15 以降。Phase 0 中はデグレリスクが大きすぎるため避ける
 - **見積**: 中規模（半日〜1日）
 
-#### M-2: セラピスト名解決関数の `lib/therapist-utils.ts` 集約
-- **理由**: dashboard L240, L324, L748 で `getThName` / `getName2` の 2 系統が分散
-- **着手タイミング**: いつでも可、ただし影響箇所多数
-- **見積**: 小規模（1〜2 時間）
-
-#### M-3: `Therapist` 型に `salary_type` / `welfare_fee_orders_threshold` 等のスキーマ整合
-- **理由**: timechart で `(th as any).salary_type` のような any キャストが多発
-- **着手タイミング**: 全体型整理プロジェクトの一環として
-- **見積**: 中規模（半日）
-
-#### M-4: スキーマ SSOT 不在
-- **理由**: `therapist_daily_settlements` の CREATE TABLE 文がコードベース内に見つからない
-- **推奨**: 現状スキーマのスナップショットを `sql/_schema_snapshot.sql` に出力（Supabase の `pg_dump` で取得可能）
-- **着手タイミング**: いつでも可
-- **見積**: 小規模（30 分）
-
 ### 重要度: 低（性能・コード品質）
 
 #### L-1: 精算モーダルの useState 12 個 → useReducer
-- **場所**: `app/timechart/page.tsx` L265-278
+- **場所**: `app/timechart/page.tsx` L292-318 (Therapist 型整理 / コメント追加で行番号若干シフト)
+- **着手タイミング**: M-1 と同じく Phase 2 準備期（8/1〜）。1 ファイルで集約・分割を同時に進める方が効率的
 - **見積**: 中規模
 
-#### L-2: `select("*")` の多用
-- **場所**: cash-dashboard L154, cast L311 ほか
-- **推奨**: 必要なカラムのみ列挙
-- **見積**: 中規模
-
-#### L-3: 命名統一
-- **場所**: UI state の `settleUseReserve` / `settleUseReplenish` と DB 側の `toyohashi_reserve_movements` / `room_cash_replenishments` で語彙が揃っていない
-- **見積**: 中規模
-
-#### L-4: 絵文字コメント記号の正式名称化
-- **場所**: `app/timechart/page.tsx` L275-276 の 🏛 / 💰
-- **見積**: 小規模
+#### L-2 (残): `select("*")` の絞り込み (79 ファイル残)
+- **着手タイミング**: 影響テーブルが大きい順に段階対応
+- **見積**: 中規模（テーブル単位で判断）
 
 ---
 
@@ -82,8 +69,8 @@
 | 状況 | 推奨アクション |
 |---|---|
 | 本番開始直後（〜6/15） | **手を入れない**。バグ報告対応に専念 |
-| 本番運用安定（6/15〜7/31） | M-2, M-4, L-4 など低リスクな掃除から |
-| Phase 2（リゼクシー）準備期（8/1〜） | M-1, M-3, L-1, L-2 など型・分割の根本対応 |
+| 本番運用安定（6/15〜7/31） | ~~M-2, M-4, L-4 など低リスクな掃除から~~ → 2026-04-27 に M-2/M-3/M-4/L-2/L-3/L-4 完了済み |
+| Phase 2（リゼクシー）準備期（8/1〜） | M-1, L-1 の根本対応（残 L-2 の段階展開もここで） |
 | TERA-MANAGE SaaS 化（Phase 5+） | 全体型整理 + マルチテナント対応の一環として |
 
 ---

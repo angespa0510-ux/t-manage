@@ -11,7 +11,34 @@ import { useStaffSession } from "../../lib/staff-session";
 import { useConfirm } from "../../components/useConfirm";
 import { customerMypageUrl, TMANAGE_URL } from "../../lib/site-urls";
 
-type Therapist = { id: number; name: string; phone: string; status: string; has_withholding: boolean };
+// 健康診断レポート 2026-04-26 「M-3: Therapist 型のスキーマ整合」対応。
+// 旧式は最小限のフィールドのみ列挙し、他は (th as any) で逃がしていたが、
+// 給与計算・厚生費・プロフィール表示で参照するフィールドを明示し any キャストを排除する。
+// （DB スキーマと完全一致しない可能性があるため optional にしている — 既存挙動を維持）
+type Therapist = {
+  id: number;
+  name: string;
+  phone: string;
+  status: string;
+  has_withholding: boolean;
+  // 給与計算系（精算モーダル）
+  salary_type?: string;            // "fixed" | その他: 固定給/歩合制の判定
+  salary_amount?: number;          // 固定給の金額
+  transport_fee?: number;          // 交通費（一律）
+  has_invoice?: boolean;           // インボイス登録済みか
+  // 厚生費（welfare_fee）系
+  welfare_fee?: number;            // 基本厚生費（既定 500）
+  welfare_fee_orders_threshold?: number; // 件数閾値
+  welfare_fee_orders_amount?: number;    // 件数閾値達成時の金額
+  welfare_fee_pay_threshold?: number;    // 支払額閾値
+  welfare_fee_pay_amount?: number;       // 支払額閾値達成時の金額
+  // プロフィール / 表示系
+  notes?: string;
+  age?: number;
+  height_cm?: number;
+  cup?: string;
+  interval_minutes?: number;       // 予約間隔（分）
+};
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
 type Shift = { id: number; therapist_id: number; store_id: number; date: string; start_time: string; end_time: string; status: string };
@@ -272,9 +299,15 @@ function TimeChartInner() {
   const [settleSalesCollected, setSettleSalesCollected] = useState(false);
   const [settleChangeCollected, setSettleChangeCollected] = useState(false);
   const [settleSafeDeposited, setSettleSafeDeposited] = useState(false);
-  const [settleUseReserve, setSettleUseReserve] = useState(false);  // 🏛 豊橋予備金から補充するか（豊橋ルームのみ）
-  const [settleUseReplenish, setSettleUseReplenish] = useState(false);  // 💰 釣銭補充で対応するか（豊橋以外のルーム）
-  const [settleGiftBack, setSettleGiftBack] = useState(0);  // 🎁 投げ銭バック (pending な gift_payouts の合計)
+  // ─── 精算モーダル「現金不足の補填方法」トグル ───
+  // 健康診断レポート 2026-04-26 「L-3: 命名統一」対応。
+  // UI state と DB の対応関係を以下に固定して、今後の改修で語彙ブレが起きないようにする：
+  //   settleUseReserve   → therapist_daily_settlements.reserve_used_amount + toyohashi_reserve_movements (withdraw)
+  //   settleUseReplenish → room_cash_replenishments (staff_name='精算モーダル自動補充')
+  // ※ "Use" プレフィックスは DB 側の "_used_amount" / "movement" レコードを生成する意図を表す。
+  const [settleUseReserve, setSettleUseReserve] = useState(false);    // 豊橋予備金から立替（豊橋ルームのみ）
+  const [settleUseReplenish, setSettleUseReplenish] = useState(false); // 釣銭補充で対応（豊橋以外のルーム）
+  const [settleGiftBack, setSettleGiftBack] = useState(0);  // [GiftBack] 投げ銭バック (pending な gift_payouts の合計)
   const [settleGiftPayoutIds, setSettleGiftPayoutIds] = useState<number[]>([]);  // 精算時に paid に更新する payout id 一覧
   const [showReplenish, setShowReplenish] = useState<number | null>(null);
   const [settledIds, setSettledIds] = useState<Set<number>>(new Set());
@@ -1118,17 +1151,17 @@ function TimeChartInner() {
                     }}>
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] text-white font-medium flex-shrink-0" style={{ backgroundColor: isCO ? "#888" : colors[origIdx % colors.length] }}>{t.name.charAt(0)}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); setEditTherapist(t); setEtNotes((t as any).notes || ""); }} className="font-medium truncate cursor-pointer flex items-center gap-0.5" style={{ fontSize: tcConfig.nameSize, textDecoration: isCO ? "line-through" : "none", background: "none", border: "none", padding: 0, color: T.text, textAlign: "left" }}>{t.name}<span style={{ fontSize: 8, opacity: 0.4 }}>✏️</span></button>
-                        {(t as any).age > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).age}歳</span>}
-                        {(t as any).height_cm > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).height_cm}cm</span>}
-                        {(t as any).cup && <span className="text-[7px]" style={{ color: T.textMuted }}>{(t as any).cup}</span>}
+                      <div className="flex items-center gap-1"><button onClick={(e) => { e.stopPropagation(); setEditTherapist(t); setEtNotes(t.notes || ""); }} className="font-medium truncate cursor-pointer flex items-center gap-0.5" style={{ fontSize: tcConfig.nameSize, textDecoration: isCO ? "line-through" : "none", background: "none", border: "none", padding: 0, color: T.text, textAlign: "left" }}>{t.name}<span style={{ fontSize: 8, opacity: 0.4 }}>✏️</span></button>
+                        {(t.age || 0) > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{t.age}歳</span>}
+                        {(t.height_cm || 0) > 0 && <span className="text-[7px]" style={{ color: T.textMuted }}>{t.height_cm}cm</span>}
+                        {t.cup && <span className="text-[7px]" style={{ color: T.textMuted }}>{t.cup}</span>}
                       </div>
                       <div className="flex items-center gap-1 text-[7px]" style={{ color: T.textMuted }}>
                         
                         {(() => { const sh = shifts.find(s => s.therapist_id === t.id); return sh ? <button onClick={(e) => { e.stopPropagation(); setEditShiftTherapist(t.id); setEditShiftId(sh.id); setEditShiftStart(sh.start_time?.slice(0,5) || "12:00"); setEditShiftEnd(sh.end_time?.slice(0,5) || "03:00"); }} className="cursor-pointer" style={{ color: "#c3a782", background: "none", border: "none", padding: 0, fontSize: 7 }}>⏰{sh.start_time?.slice(0,5)}〜{sh.end_time?.slice(0,5)}</button> : null; })()}
                         {(() => { const ra = roomAssigns.find(a => a.therapist_id === t.id); if (ra) { const rm = allRooms.find(r => r.id === ra.room_id); const bl = rm ? buildings.find(b => b.id === rm.building_id) : null; const hasReserve = (bl as any)?.cash_reserve > 0; return <><button onClick={(e) => { e.stopPropagation(); setEditRoomTherapist(t.id); const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { const rm2 = allRooms.find(r => r.id === ra2.room_id); setEditRoomId(ra2.room_id); setEditRoomStore(rm2?.store_id || 0); setEditRoomBuilding(rm2?.building_id || 0); } }} className="cursor-pointer" style={{ color: "#85a8c4", background: "none", border: "none", padding: 0, fontSize: 7 }}>🏠{bl?.name || ""}{rm?.name || ""}</button>{hasReserve && <button onClick={async (e) => { e.stopPropagation(); setShowReplenish(ra.room_id); setReplenishAmount(String((bl as any)?.cash_reserve || 20000)); setReplenishTherapistId(t.id); setReplenishStaff(""); const { data: ds } = await supabase.from("therapist_daily_settlements").select("therapist_id,sales_collected,change_collected,total_cash,total_back,room_id,safe_deposited").eq("date", selectedDate).eq("room_id", ra.room_id); if (ds) setDailySettlements(prev => { const filtered = prev.filter(p => p.room_id !== ra.room_id); return [...filtered, ...ds]; }); const past7: typeof pastUncollected = []; for (let d = 1; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds2 = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", ra.room_id).eq("date", ds2); if (ps) { for (const p of ps) { if (!p.sales_collected || !p.change_collected) { const th2 = therapists.find(x => x.id === p.therapist_id); const { data: pastRep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", ra.room_id).eq("date", ds2); const repAmt = pastRep ? pastRep.reduce((s2: number, r2: { amount: number }) => s2 + r2.amount, 0) : 0; past7.push({ date: ds2, total_cash: p.total_cash || 0, total_back: p.total_back || 0, total_sales: p.total_sales || 0, therapist_name: th2?.name || "", sales_collected: !!p.sales_collected, change_collected: !!p.change_collected, replenish_amount: repAmt }); } } } } setPastUncollected(past7); }} style={{ color: "#22c55e", background: "none", border: "none", padding: 0, fontSize: 7, cursor: "pointer", marginLeft: 2 }}>💰釣銭{(() => { const rp = replenishments.filter(x => rm && x.room_id === rm.id).reduce((s2, x2) => s2 + x2.amount, 0); if (changeCollectedIds.has(t.id)) return rp > 0 ? `¥0 (回収${fmt(rp)})` : "¥0"; return fmt(rp); })()}</button>}</>; } return null; })()}
                       </div>
-                      {(t as any).notes && <div style={{ overflow: "hidden", maxWidth: 120 }}><span className="text-[6px] block" style={{ color: "#f59e0b", whiteSpace: "nowrap", animation: (t as any).notes.length > 12 ? `scrollLeft ${Math.max(3, (t as any).notes.length * 0.2)}s linear infinite` : "none" }}>📝{(t as any).notes}</span></div>}
+                      {t.notes && <div style={{ overflow: "hidden", maxWidth: 120 }}><span className="text-[6px] block" style={{ color: "#f59e0b", whiteSpace: "nowrap", animation: t.notes.length > 12 ? `scrollLeft ${Math.max(3, t.notes.length * 0.2)}s linear infinite` : "none" }}>📝{t.notes}</span></div>}
                       {isCO && <span className="text-[7px]" style={{ color: "#c45555" }}>退勤済</span>}
                       {settledIds.has(t.id) && <button onClick={async (e) => { e.stopPropagation(); const ok = await confirm({ title: `${t.name} の清算確定を取り消しますか？`, message: "この日の清算データが削除され、再度清算できる状態に戻ります。", variant: "danger", confirmLabel: "取り消す" }); if (!ok) return; await supabase.from("therapist_daily_settlements").delete().eq("therapist_id", t.id).eq("date", selectedDate); setSettledIds(prev => { const next = new Set(prev); next.delete(t.id); return next; }); toast.show("清算を取り消しました", "info"); fetchData(); }} className="text-[8px] px-1.5 py-0.5 rounded font-bold cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>✓ 清算済</button>}
                     </div>
@@ -1138,7 +1171,7 @@ function TimeChartInner() {
                         {isCO ? "復活" : "退勤"}
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); const bRes2 = reservations.filter(r => r.therapist_id === t.id && (r as any).status !== "cancelled").sort((a, b) => timeToMinutes(b.end_time) - timeToMinutes(a.end_time)); setBreakStart(bRes2.length > 0 ? bRes2[0].end_time.slice(0,5) : "12:00"); setShowBreakModal(t.id); setBreakDuration(30); }} className="text-[8px] px-1.5 py-0 rounded cursor-pointer border leading-tight" style={{ borderColor: "#a855f744", color: "#a855f7" }}>休憩</button>
-                      <button onClick={async (e) => { e.stopPropagation(); setSettleTh(t); setSettleAdj(""); setSettleAdjNote(""); setSettleInvoice((t as any).has_invoice || false); setSettleSalesCollected(false); setSettleChangeCollected(false); setSettleUseReserve(false); setSettleUseReplenish(false); /* 投げ銭バック取得: pending な gift_payouts の合計 + paid で当日精算済みの分 */ try { const { data: pendingP } = await supabase.from("gift_payouts").select("id, requested_points").eq("therapist_id", t.id).eq("status", "pending"); const { data: paidP } = await supabase.from("gift_payouts").select("id, requested_points").eq("therapist_id", t.id).eq("status", "paid").eq("settlement_date", selectedDate); const allP = [...(pendingP || []), ...(paidP || [])]; const giftSum = allP.reduce((s: number, p: { requested_points: number }) => s + (p.requested_points || 0), 0); setSettleGiftBack(giftSum); setSettleGiftPayoutIds(allP.map((p: { id: number }) => p.id)); } catch { setSettleGiftBack(0); setSettleGiftPayoutIds([]); } const { data: existing } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", t.id).eq("date", selectedDate).maybeSingle(); setSettleSettled(!!existing?.is_settled); if (existing) { setSettleSalesCollected(!!existing.sales_collected); setSettleChangeCollected(!!existing.change_collected); setSettleSafeDeposited(!!existing.safe_deposited); setSettleUseReserve(((existing as any).reserve_used_amount || 0) > 0); } else { setSettleSafeDeposited(false); } const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { /* 精算モーダル自動補充（釣銭）レコードがあれば settleUseReplenish=true に復元 */ const { data: autoRep } = await supabase.from("room_cash_replenishments").select("id").eq("room_id", ra2.room_id).eq("date", selectedDate).eq("therapist_id", t.id).eq("staff_name", "精算モーダル自動補充"); if (autoRep && autoRep.length > 0) setSettleUseReplenish(true); const past7: typeof pastUncollected = []; for (let d = 0; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", ra2.room_id).eq("date", ds); if (ps) { for (const p of ps) { if (p.therapist_id === t.id && ds === selectedDate) continue; if (!p.sales_collected || !p.change_collected) { const th2 = therapists.find(x => x.id === p.therapist_id); const { data: pastRep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", ra2.room_id).eq("date", ds); const repAmt = pastRep ? pastRep.reduce((s: number, r: { amount: number }) => s + r.amount, 0) : 0; past7.push({ date: ds, total_cash: p.total_cash || 0, total_back: p.total_back || 0, total_sales: p.total_sales || 0, therapist_name: th2?.name || "不明", sales_collected: !!p.sales_collected, change_collected: !!p.change_collected, replenish_amount: repAmt }); } } } } setPastUncollected(past7); } else { setPastUncollected([]); } }} className="text-[8px] px-1.5 py-0 rounded cursor-pointer border leading-tight" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>清算</button>
+                      <button onClick={async (e) => { e.stopPropagation(); setSettleTh(t); setSettleAdj(""); setSettleAdjNote(""); setSettleInvoice(t.has_invoice || false); setSettleSalesCollected(false); setSettleChangeCollected(false); setSettleUseReserve(false); setSettleUseReplenish(false); /* 投げ銭バック取得: pending な gift_payouts の合計 + paid で当日精算済みの分 */ try { const { data: pendingP } = await supabase.from("gift_payouts").select("id, requested_points").eq("therapist_id", t.id).eq("status", "pending"); const { data: paidP } = await supabase.from("gift_payouts").select("id, requested_points").eq("therapist_id", t.id).eq("status", "paid").eq("settlement_date", selectedDate); const allP = [...(pendingP || []), ...(paidP || [])]; const giftSum = allP.reduce((s: number, p: { requested_points: number }) => s + (p.requested_points || 0), 0); setSettleGiftBack(giftSum); setSettleGiftPayoutIds(allP.map((p: { id: number }) => p.id)); } catch { setSettleGiftBack(0); setSettleGiftPayoutIds([]); } const { data: existing } = await supabase.from("therapist_daily_settlements").select("*").eq("therapist_id", t.id).eq("date", selectedDate).maybeSingle(); setSettleSettled(!!existing?.is_settled); if (existing) { setSettleSalesCollected(!!existing.sales_collected); setSettleChangeCollected(!!existing.change_collected); setSettleSafeDeposited(!!existing.safe_deposited); setSettleUseReserve(((existing as any).reserve_used_amount || 0) > 0); } else { setSettleSafeDeposited(false); } const ra2 = roomAssigns.find(a => a.therapist_id === t.id); if (ra2) { /* 精算モーダル自動補充（釣銭）レコードがあれば settleUseReplenish=true に復元 */ const { data: autoRep } = await supabase.from("room_cash_replenishments").select("id").eq("room_id", ra2.room_id).eq("date", selectedDate).eq("therapist_id", t.id).eq("staff_name", "精算モーダル自動補充"); if (autoRep && autoRep.length > 0) setSettleUseReplenish(true); const past7: typeof pastUncollected = []; for (let d = 0; d <= 7; d++) { const dd = new Date(selectedDate); dd.setDate(dd.getDate() - d); const ds = dd.toISOString().split("T")[0]; const { data: ps } = await supabase.from("therapist_daily_settlements").select("*").eq("room_id", ra2.room_id).eq("date", ds); if (ps) { for (const p of ps) { if (p.therapist_id === t.id && ds === selectedDate) continue; if (!p.sales_collected || !p.change_collected) { const th2 = therapists.find(x => x.id === p.therapist_id); const { data: pastRep } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", ra2.room_id).eq("date", ds); const repAmt = pastRep ? pastRep.reduce((s: number, r: { amount: number }) => s + r.amount, 0) : 0; past7.push({ date: ds, total_cash: p.total_cash || 0, total_back: p.total_back || 0, total_sales: p.total_sales || 0, therapist_name: th2?.name || "不明", sales_collected: !!p.sales_collected, change_collected: !!p.change_collected, replenish_amount: repAmt }); } } } } setPastUncollected(past7); } else { setPastUncollected([]); } }} className="text-[8px] px-1.5 py-0 rounded cursor-pointer border leading-tight" style={{ borderColor: "#c3a78244", color: "#c3a782" }}>清算</button>
                     </div>
                   </div>
                 );
@@ -1242,7 +1275,7 @@ function TimeChartInner() {
                       );
                     })}
                     {tRes.map((r, ri) => {
-                      const intervalMin = (t as any).interval_minutes || 0;
+                      const intervalMin = t.interval_minutes || 0;
                       if (intervalMin <= 0) return null;
                       const eM = timeToMinutes(r.end_time);
                       const iLeft = eM * (TC_HW / 60);
@@ -1683,8 +1716,8 @@ function TimeChartInner() {
         const tRes = reservations.filter(r => r.therapist_id === settleTh.id && (r as any).status === "completed");
         const totalSales = tRes.reduce((s,r) => s + ((r as any).total_price || 0), 0);
         const totalBack = tRes.reduce((s,r) => { const c = getCourseByName(r.course); return s + (c?.therapist_back || 0); }, 0);
-        const salaryType = (settleTh as any).salary_type || "fixed";
-        const salaryAmount = (settleTh as any).salary_amount || 0;
+        const salaryType = settleTh.salary_type || "fixed";
+        const salaryAmount = settleTh.salary_amount || 0;
         const salaryBonus = salaryType === "percent" ? Math.round(totalBack * salaryAmount / 100) : salaryAmount * tRes.length;
         const totalNomFee = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
         // 健康診断レポート 2026-04-26 Fix #5: 旧式 `nom?.therapist_back || nomination_fee || 0` は
@@ -1694,7 +1727,7 @@ function TimeChartInner() {
         // NOTE: 旧 totalNomBack (nom?.back_amount を集計) は admin UI が therapist_back のみを書き込むため
         //       常に 0 となるデッドコードだった。Fix #5 で削除。
 
-        const transportFee = (settleTh as any).transport_fee || 0;
+        const transportFee = settleTh.transport_fee || 0;
         const totalOpt = tRes.reduce((s,r) => s + ((r as any).options_total || 0), 0);
         const totalOptBack = tRes.reduce((s,r) => { const optNames = ((r as any).options_text || "").split(",").filter((n: string) => n); return s + optNames.reduce((os: number, n: string) => { const o = options.find(x => x.name === n); return os + ((o as any)?.therapist_back || 0); }, 0); }, 0);
         const totalExt = tRes.reduce((s,r) => s + ((r as any).extension_price || 0), 0);
@@ -1708,11 +1741,11 @@ function TimeChartInner() {
         const backTotal = totalBack + salaryBonus + totalNom + totalOptBack + totalExtBack + giftBack + adj;
         const welfareFee = (() => {
           if (tRes.length === 0) return 0;
-          const base = (settleTh as any).welfare_fee ?? 500;
-          const ordTh = (settleTh as any).welfare_fee_orders_threshold || 0;
-          const ordAmt = (settleTh as any).welfare_fee_orders_amount || 0;
-          const payTh = (settleTh as any).welfare_fee_pay_threshold || 0;
-          const payAmt = (settleTh as any).welfare_fee_pay_amount || 0;
+          const base = settleTh.welfare_fee ?? 500;
+          const ordTh = settleTh.welfare_fee_orders_threshold || 0;
+          const ordAmt = settleTh.welfare_fee_orders_amount || 0;
+          const payTh = settleTh.welfare_fee_pay_threshold || 0;
+          const payAmt = settleTh.welfare_fee_pay_amount || 0;
           if (payTh > 0 && backTotal >= payTh) return payAmt;
           if (ordTh > 0 && tRes.length >= ordTh) return ordAmt;
           return base;
@@ -2179,7 +2212,7 @@ ${invoiceDed > 0 ? `<p class="note">※ 仕入税額控除の経過措置は、�
             <h2 className="text-[15px] font-medium mb-1">出勤追加</h2>
             <p className="text-[11px] mb-4" style={{ color: T.textFaint }}>セラピストを本日の出勤に追加します</p>
             <div className="space-y-3">
-              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト *</label><input type="text" placeholder="名前で検索" value={addShiftSearch} onChange={(e) => setAddShiftSearch(e.target.value)} className="w-full px-3 py-2 rounded-xl text-[11px] outline-none mb-2" style={inputStyle} /><div className="max-h-[150px] overflow-y-auto space-y-1">{therapists.filter(t => t.status === "active" && (!addShiftSearch || t.name.toLowerCase().includes(addShiftSearch.toLowerCase()))).map(t => { const onShift = shiftTherapistIds.has(t.id); return <button key={t.id} onClick={() => setAddShiftTherapistId(t.id)} className="w-full text-left px-3 py-2 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: addShiftTherapistId === t.id ? "#c3a78222" : T.cardAlt, border: `1px solid ${addShiftTherapistId === t.id ? "#c3a782" : "transparent"}` }}><span>{t.name}{(t as any).age ? ` (${(t as any).age}歳)` : ""}</span>{onShift && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>出勤中</span>}</button>; })}</div></div>
+              <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>セラピスト *</label><input type="text" placeholder="名前で検索" value={addShiftSearch} onChange={(e) => setAddShiftSearch(e.target.value)} className="w-full px-3 py-2 rounded-xl text-[11px] outline-none mb-2" style={inputStyle} /><div className="max-h-[150px] overflow-y-auto space-y-1">{therapists.filter(t => t.status === "active" && (!addShiftSearch || t.name.toLowerCase().includes(addShiftSearch.toLowerCase()))).map(t => { const onShift = shiftTherapistIds.has(t.id); return <button key={t.id} onClick={() => setAddShiftTherapistId(t.id)} className="w-full text-left px-3 py-2 rounded-lg text-[11px] cursor-pointer flex items-center justify-between" style={{ backgroundColor: addShiftTherapistId === t.id ? "#c3a78222" : T.cardAlt, border: `1px solid ${addShiftTherapistId === t.id ? "#c3a782" : "transparent"}` }}><span>{t.name}{t.age ? ` (${t.age}歳)` : ""}</span>{onShift && <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>出勤中</span>}</button>; })}</div></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>開始時間</label><select value={addShiftStart} onChange={(e) => setAddShiftStart(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>
                 <div><label className="block text-[10px] mb-1" style={{ color: T.textSub }}>終了時間</label><select value={addShiftEnd} onChange={(e) => setAddShiftEnd(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none cursor-pointer" style={inputStyle}>{TIMES_10MIN.map((t) => (<option key={t} value={t}>{minutesToDisplay(timeToMinutes(t))}</option>))}</select></div>

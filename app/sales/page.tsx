@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "../../components/useConfirm";
+import { findTherapistName } from "../../lib/therapist-utils";
 
 type Sale = {
   id: number; created_at: string; date: string; therapist_id: number;
@@ -85,7 +86,7 @@ export default function SalesAnalysis() {
     fetchData();
   };
 
-  const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "不明";
+  const getTherapistName = (id: number) => findTherapistName(therapists, id, "不明");
   const getStoreName = (id: number) => stores.find((s) => s.id === id)?.name || "";
   const fmt = (n: number) => "¥" + n.toLocaleString();
 

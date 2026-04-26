@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useBackNav } from "../../lib/use-back-nav";
+import { findTherapistName } from "../../lib/therapist-utils";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string; total_price?: number; card_billing?: number; paypay_amount?: number; cash_amount?: number; nomination?: string; discount_amount?: number; nomination_fee?: number; options_total?: number; extension_price?: number };
 type Course = { id: number; name: string; duration: number; price: number; therapist_back: number };
@@ -223,7 +224,7 @@ export default function Analytics() {
   useEffect(() => { const check = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) router.push("/"); }; check(); fetchData(); }, [router, fetchData]);
 
   const getCourse = (name: string) => courses.find((c) => c.name === name);
-  const getTherapistName = (id: number) => therapists.find((t) => t.id === id)?.name || "不明";
+  const getTherapistName = (id: number) => findTherapistName(therapists, id, "不明");
   const fmt = (n: number) => "¥" + (n || 0).toLocaleString();
 
   // 売上は実際に計上された total_price を優先（dashboard/営業締めと同じ根拠）。null の古い予約は course.price にフォールバック

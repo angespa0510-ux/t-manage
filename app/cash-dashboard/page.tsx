@@ -9,6 +9,7 @@ import { useTheme } from "../../lib/theme";
 import { useConfirm } from "../../components/useConfirm";
 import { useToast } from "../../lib/toast";
 import { isSafeUncollected } from "../../lib/cash-aggregation";
+import { findTherapistName } from "../../lib/therapist-utils";
 import { runAutoSettlementIfDue } from "../../lib/staff-advances";
 
 /* ─────────── 型定義 ─────────── */
@@ -153,12 +154,13 @@ export default function CashDashboard() {
       const { data: bankTxs } = await supabase.from("bank_transactions").select("id,transaction_date,description,debit_amount,credit_amount,balance").ilike("description", "%三井住友%").gt("credit_amount", 0).order("transaction_date", { ascending: false });
       if (bankTxs) setAllBankTxs(bankTxs as BankTx[]);
 
-      // 精算データ全部
-      const { data: sets } = await supabase.from("therapist_daily_settlements").select("*");
+      // 精算データ全部 - L-2: Settlement 型に必要なカラムだけ取得
+      const { data: sets } = await supabase.from("therapist_daily_settlements")
+        .select("id,therapist_id,date,total_cash,final_payment,room_id,sales_collected,change_collected,safe_deposited,safe_collected_date,reserve_used_amount");
       if (sets) setSettlements(sets as Settlement[]);
 
-      // 釣銭補充
-      const { data: reps } = await supabase.from("room_cash_replenishments").select("*");
+      // 釣銭補充 - L-2: Replenish 型に必要なカラムだけ取得
+      const { data: reps } = await supabase.from("room_cash_replenishments").select("id,room_id,date,amount");
       if (reps) setReplenishAll(reps as Replenish[]);
 
       // 経費・収入
@@ -384,11 +386,9 @@ export default function CashDashboard() {
     fetchData();
   };
 
-  // セラピスト名取得
-  const getThName = (id: number | null) => {
-    if (!id) return "";
-    return therapists.find(t => t.id === id)?.name || `ID:${id}`;
-  };
+  // セラピスト名取得（id 不明時は ID:42 形式でデバッグしやすく）
+  const getThName = (id: number | null) =>
+    id ? findTherapistName(therapists, id, `ID:${id}`) : "";
 
   // ─── 残高計算 ───
   // PayPay銀行残高（最新の銀行取引のbalance）
