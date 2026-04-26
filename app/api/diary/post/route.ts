@@ -297,7 +297,7 @@ export async function POST(req: Request) {
     // 5. 駅ちか送信は非同期 (fire-and-forget) ※予約投稿時は実行しない (cron が実行)
     let ekichikaScheduled = false;
     if (sendToEkichika && !isScheduled) {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
       // 投稿レスポンスを返した後に駅ちか送信を走らせる(awaitしない)
       fetch(`${baseUrl}/api/diary/dispatch-ekichika`, {
         method: "POST",
@@ -309,7 +309,7 @@ export async function POST(req: Request) {
 
     // 6. お気に入り会員へpush通知 (非同期 fire-and-forget) ※予約時は実行しない
     if (!isScheduled) {
-      const baseUrlForPush = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+      const baseUrlForPush = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
       fetch(`${baseUrlForPush}/api/diary/notify-favorites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -319,7 +319,7 @@ export async function POST(req: Request) {
 
     // 7. Bluesky 自動投稿 (非同期 fire-and-forget) ※予約時は実行しない、公開のみ
     if (!isScheduled && visibility === "public") {
-      const baseUrlForBsky = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+      const baseUrlForBsky = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
       fetch(`${baseUrlForBsky}/api/diary/bluesky/post`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

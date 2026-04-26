@@ -100,7 +100,7 @@ export default function WebBookingSettings() {
 
           <div className="space-y-3">
             {[
-              { step: "1", icon: "🌐", title: "HPの「スケジュール」をタップ", desc: "ange-spa.com の /schedule で本日〜7日分の出勤セラピストを閲覧（ログイン不要）" },
+              { step: "1", icon: "🌐", title: "HPの「スケジュール」をタップ", desc: "ange-spa.jp の /schedule で本日〜7日分の出勤セラピストを閲覧（ログイン不要）" },
               { step: "2", icon: "👤", title: "気になるセラピストを見つける", desc: "セラピスト一覧・スケジュールから、興味のある方・時間帯を確認できます" },
               { step: "3", icon: "🔑", title: "「会員ページ」からマイページへ", desc: "予約は会員のマイページで行います。初回は 500pt プレゼント付きで新規登録" },
               { step: "4", icon: "📅", title: "マイページで日時を選ぶ", desc: "マイページの「予約」タブから、セラピスト・日時・コース・オプション等を選択" },

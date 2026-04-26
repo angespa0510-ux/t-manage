@@ -224,7 +224,7 @@ export async function POST(req: Request) {
         }
 
         // Storage(raw) にアップロード + ジョブ作成
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
         const uploadRes = await fetch(`${baseUrl}/api/diary/video/upload`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

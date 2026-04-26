@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     const url = `/diary/${entry.id}`;
 
     // push送信 (非同期で投げる、失敗しても投稿成功は変わらない)
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
     try {
       const res = await fetch(`${baseUrl}/api/push/send`, {
         method: "POST",

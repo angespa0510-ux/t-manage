@@ -430,7 +430,7 @@ export default function SystemSetup() {
                     <span style={{ color: "#c3a782", fontWeight: 600 }}>①</span> スマホのブラウザ（Chrome）で<span style={{ fontWeight: 600 }}>このページ</span>を開く
                   </p>
                   <code className="text-[11px] mt-1 block px-3 py-2 rounded-lg" style={{ backgroundColor: T.bg, color: "#c3a782" }}>
-                    {TMANAGE_URL}/system-setup
+                    {TMANAGE_URL}/admin/system-setup
                   </code>
                 </div>
                 <div className="p-3 rounded-xl" style={{ backgroundColor: T.cardAlt }}>

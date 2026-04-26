@@ -287,7 +287,7 @@ export default function NotificationPost() {
                   <p className="text-[12px] font-medium">🌐 公式HPトップの「最新のお知らせ」にも公開する</p>
                   {targetMode === "all" ? (
                     <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>
-                      HP (ange-spa.com) のトップページに表示されます。未ログインの訪問者にも見えるため、営業時間変更・お祝い告知・大型キャンペーンなど広く知らせたい内容向けです。
+                      HP (ange-spa.jp) のトップページに表示されます。未ログインの訪問者にも見えるため、営業時間変更・お祝い告知・大型キャンペーンなど広く知らせたい内容向けです。
                     </p>
                   ) : (
                     <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>

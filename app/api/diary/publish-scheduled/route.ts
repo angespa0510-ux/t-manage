@@ -54,7 +54,7 @@ export async function GET(req: Request) {
     let publishedCount = 0;
     let ekichikaTriggered = 0;
     let notifyTriggered = 0;
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
 
     for (const entry of rows) {
       // ステータス更新 → published に

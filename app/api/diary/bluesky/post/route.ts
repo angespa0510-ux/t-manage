@@ -11,7 +11,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://cbewozzdyjq
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const SITE_BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.com";
+const SITE_BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
 const BLUESKY_MAX_TEXT = 300; // Blueskyの上限文字数
 
 /**

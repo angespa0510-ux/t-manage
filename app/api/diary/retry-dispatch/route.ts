@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "権限がありません" }, { status: 403 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
 
     // 対象 entry を集める
     let targetIds: number[] = [];

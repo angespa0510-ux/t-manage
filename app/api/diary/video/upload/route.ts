@@ -138,7 +138,7 @@ export async function POST(req: Request) {
     }
 
     // fire-and-forget で処理API呼び出し
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://t-manage.vercel.app";
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ange-spa.jp";
     fetch(`${baseUrl}/api/diary/video/process-job`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
