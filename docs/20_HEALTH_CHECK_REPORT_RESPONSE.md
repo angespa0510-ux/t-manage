@@ -7,6 +7,21 @@
 
 ---
 
+> ## ⏰ 次回着手リマインダー: **2026-08-01 (Phase 2 準備期 開始日)**
+>
+> 以下の 2 件を着手すること。詳細は本ドキュメント末尾の M-1 / L-1 セクション参照。
+>
+> - **M-1**: timechart 3,154 行のコンポーネント分割 — `app/timechart/page.tsx` を
+>   `SettlementModal.tsx` / `useSettlementCalc.ts` / `useFetchTimechartData.ts` に分離
+> - **L-1**: 精算モーダル useState 14 個 → useReducer — `app/timechart/page.tsx` L292-318
+>
+> Phase 0（2026/6/1 本番開始）安定後、リゼクシー（2027/1/1 稼働目標）準備の起点として実施。
+> 着手前に本ドキュメント全体を再読し、SSOT 化済みの `lib/settlement-calc.ts` /
+> `lib/cash-aggregation.ts` / `lib/staff-permissions.ts` / `lib/therapist-utils.ts`
+> を分割後ファイルから引き続き参照する設計を維持すること。
+
+---
+
 ## 完了済み修正（main 反映済み）
 
 ### 重要度: 高（Phase 0 必須、5 件）
