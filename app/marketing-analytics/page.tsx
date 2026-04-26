@@ -204,7 +204,7 @@ export default function MarketingAnalyticsPage() {
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>📊 集客分析ダッシュボード</h1>
           <p style={{ fontSize: 11, color: T.textMuted }}>
-            写メ日記・ストーリー・ライブ配信・投げ銭の分析
+            写メ日記・ストーリー・ライブ配信・情報配信報酬の分析
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -271,7 +271,7 @@ export default function MarketingAnalyticsPage() {
                   <Stat T={T} label="総PV" value={fmt(data.diary.totalViews)} />
                   <Stat T={T} label="いいね" value={fmt(data.diary.totalLikes)} />
                   <Stat T={T} label="コメント" value={fmt(data.diary.totalComments)} />
-                  <Stat T={T} label="投げ銭" value={fmt(data.diary.totalGiftPoints) + "pt"} />
+                  <Stat T={T} label="配信報酬" value={fmt(data.diary.totalGiftPoints) + "pt"} />
                 </div>
               </div>
 
@@ -281,7 +281,7 @@ export default function MarketingAnalyticsPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 11 }}>
                   <Stat T={T} label="投稿数" value={fmt(data.story.publishedCount)} />
                   <Stat T={T} label="閲覧数" value={fmt(data.story.totalViews)} />
-                  <Stat T={T} label="投げ銭" value={fmt(data.story.totalGiftPoints) + "pt"} />
+                  <Stat T={T} label="配信報酬" value={fmt(data.story.totalGiftPoints) + "pt"} />
                 </div>
               </div>
 
@@ -295,7 +295,7 @@ export default function MarketingAnalyticsPage() {
                   <Stat T={T} label="累計視聴" value={fmt(data.live.totalViewers)} />
                   <Stat T={T} label="ハート" value={fmt(data.live.totalHearts)} />
                   <Stat T={T} label="コメント" value={fmt(data.live.totalComments)} />
-                  <Stat T={T} label="投げ銭" value={fmt(data.live.totalGiftPoints) + "pt"} />
+                  <Stat T={T} label="配信報酬" value={fmt(data.live.totalGiftPoints) + "pt"} />
                 </div>
               </div>
             </div>
@@ -311,7 +311,7 @@ export default function MarketingAnalyticsPage() {
               <ChartCard T={T} title="💰 売上" color="#6b9b7e">
                 {renderTimeline(data.dailyTimeline, "revenue", "#6b9b7e")}
               </ChartCard>
-              <ChartCard T={T} title="🎁 投げ銭" color={T.accent}>
+              <ChartCard T={T} title="💝 情報配信報酬" color={T.accent}>
                 {renderTimeline(data.dailyTimeline, "giftPoints", T.accent)}
               </ChartCard>
             </div>
@@ -319,7 +319,7 @@ export default function MarketingAnalyticsPage() {
 
           {/* ──────────── 投げ銭分析 ──────────── */}
           <div style={{ marginBottom: 18 }}>
-            <p style={{ fontSize: 11, color: T.textSub, marginBottom: 8, fontWeight: 500 }}>🎁 投げ銭分析</p>
+            <p style={{ fontSize: 11, color: T.textSub, marginBottom: 8, fontWeight: 500 }}>💝 情報配信報酬分析（お客様からの投げ銭）</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
               {/* 概要 */}
               <div style={{ padding: 14, backgroundColor: T.card, border: `1px solid ${T.border}` }}>
@@ -370,7 +370,7 @@ export default function MarketingAnalyticsPage() {
 
               {/* セラピストランキング */}
               <div style={{ padding: 14, backgroundColor: T.card, border: `1px solid ${T.border}` }}>
-                <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: T.text }}>🏆 投げ銭セラピストTOP5</p>
+                <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: T.text }}>🏆 情報配信報酬TOP5</p>
                 {data.gift.therapistRanking.length === 0 ? (
                   <p style={{ fontSize: 11, color: T.textMuted, textAlign: "center", padding: 16 }}>データなし</p>
                 ) : (

@@ -197,7 +197,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [aiListening, setAiListening] = useState(false);
   const [aiSessionCount, setAiSessionCount] = useState(0);
 
-  // ─── 投げ銭 (受領ポイント) ────────────────────────
+  // ─── 情報配信報酬 (受領ポイント) ────────────────────────
   type GiftSummary = {
     totalReceivedPoints: number;
     totalReceivedCount: number;
@@ -1327,7 +1327,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           } else if (mainTab === "money") {
             items = [
               { key: "salary", emoji: "💰", label: "給料明細" },
-              { key: "gift",   emoji: "🎁", label: "投げ銭" },
+              { key: "gift",   emoji: "💝", label: "配信報酬" },
               { key: "cert",   emoji: "📄", label: "証明書" },
               { key: "tax",    emoji: "📊", label: "確定申告" },
             ];
@@ -2708,23 +2708,23 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
         </div>
       )}
 
-      {/* ── 投げ銭タブ (受領ポイント) ── */}
+      {/* ── 情報配信報酬タブ (受領ポイント) ── */}
       {tab === "gift" && therapist && (
         <div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>
           {/* セクション見出し */}
           <div style={{ textAlign: "center" }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>GIFT POINTS</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🎁 もらった投げ銭</p>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>BROADCAST REWARDS</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>💝 もらった情報配信報酬</p>
             <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto" }} />
           </div>
 
           {giftLoading && !giftSummary ? (
             <div style={{ textAlign: "center", padding: 60, color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
           ) : !giftSummary || giftSummary.totalReceivedCount === 0 ? (
-            // ── まだ投げ銭をもらっていない ──
+            // ── まだ情報配信報酬をもらっていない ──
             <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "40px 20px", textAlign: "center" }}>
-              <p style={{ fontSize: 32, marginBottom: 14 }}>🎁</p>
-              <p style={{ fontSize: 13, color: T.text, marginBottom: 8, fontWeight: 500 }}>まだ投げ銭をもらっていません</p>
+              <p style={{ fontSize: 32, marginBottom: 14 }}>💝</p>
+              <p style={{ fontSize: 13, color: T.text, marginBottom: 8, fontWeight: 500 }}>まだ情報配信報酬をもらっていません</p>
               <p style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.8 }}>
                 ライブ配信や写メ日記を投稿すると、<br />
                 お客様から「桜」や「ハート」などの<br />
@@ -3006,9 +3006,9 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               {/* 注意書き */}
               <div style={{ padding: "12px 14px", backgroundColor: "rgba(195,167,130,0.05)", border: `1px solid ${T.border}` }}>
                 <p style={{ fontSize: 10, color: T.textSub, lineHeight: 1.8, margin: 0 }}>
-                  💡 投げ銭ポイントは出勤日の精算と一緒に支給されます。<br />
+                  💡 情報配信報酬（お客様からの投げ銭）は出勤日の精算と一緒に支給されます。<br />
                   💡 1,000pt 以上 / 100pt 単位で換金申請できます。<br />
-                  💡 投げ銭バックは通常のバック額に上乗せされ、インボイス・源泉も合わせて自動計算されます。<br />
+                  💡 申請したポイントは情報配信報酬として通常のバック額に上乗せされ、インボイス・源泉も合わせて自動計算されます。<br />
                   ※ お客様のお名前は最初の1文字だけ表示されます（プライバシー保護）。
                 </p>
               </div>
@@ -3121,7 +3121,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     <div style={{ padding: "12px 14px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, marginBottom: 14 }}>
                       <p style={{ margin: "0 0 8px", fontSize: 10, color: T.textMuted, letterSpacing: "0.1em" }}>申請内容</p>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-                        <span>投げ銭バック:</span>
+                        <span>情報配信報酬:</span>
                         <span style={{ color: T.accent }}>+¥{requestedNum.toLocaleString()}</span>
                       </div>
                       <p style={{ margin: "8px 0 0", fontSize: 9, color: T.textSub, lineHeight: 1.6 }}>
