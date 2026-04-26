@@ -63,6 +63,7 @@ type Settlement = {
   order_count: number; adjustment: number; adjustment_note: string; invoice_deduction: number;
   withholding_tax: number; welfare_fee: number; transport_fee: number; final_payment: number;
   total_card: number; total_paypay: number; total_cash: number; is_settled: boolean;
+  gift_bonus_amount?: number;
 };
 type Reservation = {
   id: number; customer_name: string; therapist_id: number; date: string; start_time: string;
@@ -1714,6 +1715,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                       <span>{stl.order_count}件</span>
                       <span>売上 <span style={{ fontFamily: FONT_SANS }}>{fmt(stl.total_sales)}</span></span>
                       <span>バック <span style={{ fontFamily: FONT_SANS }}>{fmt(stl.total_back)}</span></span>
+                      {(stl.gift_bonus_amount || 0) > 0 && <span style={{ color: "#c96b83" }}>💝 情報配信 <span style={{ fontFamily: FONT_SANS }}>+{fmt(stl.gift_bonus_amount || 0)}</span></span>}
                       {stl.invoice_deduction > 0 && <span style={{ color: "#c96b83" }}>INV <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.invoice_deduction)}</span></span>}
                       {stl.withholding_tax > 0 && <span style={{ color: "#c96b83" }}>源泉 <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.withholding_tax)}</span></span>}
                       {stl.welfare_fee > 0 && <span style={{ color: "#c96b83" }}>備品 <span style={{ fontFamily: FONT_SANS }}>-{fmt(stl.welfare_fee)}</span></span>}
@@ -1727,7 +1729,9 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
           {/* 年間ビュー */}
           {salaryViewMode === "annual" && (() => {
-            const aGross = annualSettlements.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0), 0);
+            // 業務委託報酬総額: total_back + 調整金 + 情報配信報酬 (gift_bonus_amount)
+            const aGross = annualSettlements.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0) + (r.gift_bonus_amount || 0), 0);
+            const aGiftBonus = annualSettlements.reduce((s, r) => s + (r.gift_bonus_amount || 0), 0);
             const aInvDed = annualSettlements.reduce((s, r) => s + (r.invoice_deduction || 0), 0);
             const aTax = annualSettlements.reduce((s, r) => s + (r.withholding_tax || 0), 0);
             const aWelfare = annualSettlements.reduce((s, r) => s + (r.welfare_fee || 0), 0);
@@ -1739,7 +1743,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             for (let m = 1; m <= 12; m++) {
               const key = `${salaryYear}-${String(m).padStart(2, "0")}`;
               const ms = annualSettlements.filter(s => s.date.startsWith(key));
-              if (ms.length > 0) monthlyData.push({ month: `${m}月`, gross: ms.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0), 0), final: ms.reduce((s, r) => s + (r.final_payment || 0), 0), days: ms.length });
+              if (ms.length > 0) monthlyData.push({ month: `${m}月`, gross: ms.reduce((s, r) => s + (r.total_back || 0) + (r.adjustment || 0) + (r.gift_bonus_amount || 0), 0), final: ms.reduce((s, r) => s + (r.final_payment || 0), 0), days: ms.length });
             }
             const openPayslip = () => {
               if (!therapist) return;
@@ -1755,7 +1759,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 <table><tr><th>支払を受ける者（氏名）</th><td>${realName}</td></tr>${realName !== th.name ? `<tr><th>業務上の名称</th><td>${th.name}</td></tr>` : ""}<tr><th>支払を受ける者（住所）</th><td>${th.address || '<span style="color:#c45555">※未登録</span>'}</td></tr>${th.birth_date ? `<tr><th>生年月日</th><td>${th.birth_date}</td></tr>` : ""}<tr><th>区分</th><td>${th.has_withholding ? "報酬（所得税法第204条第1項第6号）" : "報酬（所得税法第204条第1項第1号）"}</td></tr><tr><th>細目</th><td>${th.has_withholding ? "ホステス等の業務に関する報酬" : "マッサージ施術業務"}</td></tr><tr><th>適格請求書発行事業者</th><td>${hasInv ? `登録あり（登録番号：${invNum}）` : "未登録"}</td></tr></table>
 <table><tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
 <tr><td>稼働日数</td><td class="right">${aDays}日</td><td style="font-size:10px;color:#888">年間清算回数</td></tr>
-<tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${aGross.toLocaleString()}</strong></td><td style="font-size:10px;color:#888">業務委託報酬の年間合計</td></tr>
+<tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${aGross.toLocaleString()}</strong></td><td style="font-size:10px;color:#888">業務委託報酬の年間合計${aGiftBonus > 0 ? `<br>（うち情報配信報酬 &yen;${aGiftBonus.toLocaleString()}）` : ""}</td></tr>
 ${aInvDed > 0 ? `<tr><td style="color:#c45555">仕入税額控除の経過措置</td><td class="right" style="color:#c45555">-&yen;${aInvDed.toLocaleString()}</td><td style="font-size:10px;color:#888">報酬額の10%を控除</td></tr><tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(aGross - aInvDed).toLocaleString()}</td><td style="font-size:10px;color:#888">支払金額 − 仕入税額控除</td></tr>` : ""}
 ${aTax > 0 ? `<tr><td style="color:#c45555">源泉徴収税額</td><td class="right" style="color:#c45555">-&yen;${aTax.toLocaleString()}</td><td style="font-size:10px;color:#888">所得税及び復興特別所得税</td></tr>` : `<tr><td>源泉徴収税額</td><td class="right">&yen;0</td><td style="font-size:10px;color:#888">源泉徴収対象外</td></tr>`}
 ${aWelfare > 0 ? `<tr><td style="color:#c45555">備品代・リネン代</td><td class="right" style="color:#c45555">-&yen;${aWelfare.toLocaleString()}</td><td style="font-size:10px;color:#888">&yen;${aDays > 0 ? Math.round(aWelfare / aDays).toLocaleString() : 0}/日 × ${aDays}日</td></tr>` : ""}
@@ -1795,11 +1799,12 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 </div>
 
                 {/* 控除内訳 */}
-                {(aInvDed > 0 || aWelfare > 0 || aTransport > 0) && (
+                {(aInvDed > 0 || aWelfare > 0 || aTransport > 0 || aGiftBonus > 0) && (
                   <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "16px 18px" }}>
                     <p style={{ margin: "0 0 12px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>CALCULATION — 控除・加算の内訳</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span>報酬額（税込）</span><span style={{ fontFamily: FONT_SANS, fontWeight: 500 }}>{fmt(aGross)}</span></div>
+                      {aGiftBonus > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83", paddingLeft: 16, fontSize: 11 }}><span>　└ うち 💝 情報配信報酬</span><span style={{ fontFamily: FONT_SANS }}>{fmt(aGiftBonus)}</span></div>}
                       {aInvDed > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− インボイス控除（10%）</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aInvDed)}</span></div>}
                       {aTax > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− 源泉徴収（10.21%）</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aTax)}</span></div>}
                       {aWelfare > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#c96b83" }}><span>− 備品・リネン代</span><span style={{ fontFamily: FONT_SANS }}>-{fmt(aWelfare)}</span></div>}
@@ -1812,6 +1817,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px dashed ${T.border}`, fontSize: 10, color: T.textMuted, lineHeight: 1.8, letterSpacing: "0.02em" }}>
                       <p style={{ margin: "0 0 4px", fontWeight: 500, color: T.textSub }}>💡 確定申告のヒント</p>
                       <p style={{ margin: 0 }}>・上の「報酬額（税込）」が税務署に報告される<strong>支払金額</strong>です（収入）</p>
+                      {aGiftBonus > 0 && <p style={{ margin: 0 }}>・<strong>情報配信報酬</strong>（{fmt(aGiftBonus)}）も業務委託報酬の一部として支払金額に含まれます</p>}
                       {aWelfare > 0 && <p style={{ margin: 0 }}>・<strong>備品・リネン代</strong>（{fmt(aWelfare)}）は必要経費として計上できます（消耗品費など）</p>}
                       {aTransport > 0 && <p style={{ margin: 0 }}>・<strong>交通費（実費精算分）</strong>（{fmt(aTransport)}）は立替精算なので<span style={{ color: "#c96b83" }}>収入にも経費にもなりません</span>（課税対象外）</p>}
                       {aTax > 0 && <p style={{ margin: 0 }}>・<strong>源泉徴収税額</strong>（{fmt(aTax)}）は確定申告で還付または納税調整の対象になります</p>}
