@@ -25,8 +25,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(METADATA_BASE_URL),
-  title: "T-MANAGE | チョップ",
-  description: "リラクゼーションサロン「チョップ」の統合管理システム",
+  title: "T-MANAGE | Ange Spa",
+  description: "リラクゼーションサロン「Ange Spa」の統合管理システム",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

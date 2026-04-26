@@ -93,13 +93,13 @@ export default function StaffLogin() {
             </svg>
           </div>
 
-          {/* 英文ロゴ */}
-          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: "0.4em", color: "#c96b83", fontWeight: 500 }}>ANGE SPA</p>
-          {/* 和文 */}
-          <h1 style={{ margin: "10px 0 8px", fontFamily: FONT_SERIF, fontSize: 26, letterSpacing: "0.2em", color: "#2b2b2b", fontWeight: 500 }}>チョップ</h1>
+          {/* 英文ロゴ（役割kicker） */}
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.4em", color: "#c96b83", fontWeight: 500 }}>STAFF</p>
+          {/* メインブランド名 */}
+          <h1 style={{ margin: "10px 0 10px", fontFamily: FONT_DISPLAY, fontSize: 38, letterSpacing: "0.06em", color: "#2b2b2b", fontWeight: 500, lineHeight: 1.1 }}>Ange Spa</h1>
           {/* ピンク細罫線 */}
           <div style={{ width: 32, height: 1, backgroundColor: "#e8849a", margin: "0 auto 10px" }} />
-          <p style={{ margin: 0, fontSize: 11, color: "#8a8a8a", letterSpacing: "0.25em" }}>サロン管理システム</p>
+          <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, color: "#8a8a8a", letterSpacing: "0.25em" }}>t-manage</p>
         </div>
 
         {/* Login Card */}
