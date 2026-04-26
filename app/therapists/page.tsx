@@ -28,6 +28,7 @@ type Therapist = {
   tags?: string[]; body_type?: string; hair_style?: string; hair_color?: string;
   sub_photo_urls?: string[]; blog_url?: string; twitter_url?: string; instagram_url?: string;
   public_sort_order?: number; is_pickup?: boolean; is_newcomer?: boolean;
+  video_url?: string | null; video_poster_url?: string | null;
 };
 
 // ─── 公開HPで使うタイプタグ選択肢（現行HP準拠） ───
@@ -102,6 +103,9 @@ const [addLoginPassword, setAddLoginPassword] = useState("");
   const [editBlogUrl, setEditBlogUrl] = useState("");
   const [editTwitterUrl, setEditTwitterUrl] = useState("");
   const [editInstagramUrl, setEditInstagramUrl] = useState("");
+  const [editVideoUrl, setEditVideoUrl] = useState("");
+  const [editVideoFile, setEditVideoFile] = useState<File | null>(null);
+  const [editVideoUploading, setEditVideoUploading] = useState(false);
   const [editPublicSortOrder, setEditPublicSortOrder] = useState("0");
   const [editIsPickup, setEditIsPickup] = useState(false);
   const [editIsNewcomer, setEditIsNewcomer] = useState(false);
@@ -487,6 +491,8 @@ const generatePassword = () => {
     setEditBlogUrl(t.blog_url || "");
     setEditTwitterUrl(t.twitter_url || "");
     setEditInstagramUrl(t.instagram_url || "");
+    setEditVideoUrl(t.video_url || "");
+    setEditVideoFile(null);
     setEditPublicSortOrder(String(t.public_sort_order ?? 0));
     setEditIsPickup(t.is_pickup || false);
     setEditIsNewcomer(t.is_newcomer || false);
@@ -519,6 +525,17 @@ const generatePassword = () => {
     if (finalSubPhotoUrls.length > 0) {
       photoUrl = finalSubPhotoUrls[0];
     }
+    // 動画アップロード（新規ファイルがあれば）
+    let finalVideoUrl: string | null = editVideoUrl || null;
+    if (editVideoFile) {
+      const ext = editVideoFile.name.split(".").pop() || "mp4";
+      const fn = `therapist_video_${editTarget.id}_${Date.now()}.${ext}`;
+      const { error: vErr } = await supabase.storage.from("therapist-photos").upload(fn, editVideoFile, { upsert: true, contentType: editVideoFile.type });
+      if (!vErr) {
+        const { data: vu } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
+        if (vu?.publicUrl) finalVideoUrl = vu.publicUrl;
+      }
+    }
     const { error } = await supabase.from("therapists").update({
       name: editName.trim(), phone: editPhone.trim(), status: editStatus,
       salary_type: editSalaryType, salary_amount: parseInt(editSalaryAmount) || 0,
@@ -550,6 +567,7 @@ const generatePassword = () => {
       blog_url: editBlogUrl.trim(),
       twitter_url: editTwitterUrl.trim(),
       instagram_url: editInstagramUrl.trim(),
+      video_url: finalVideoUrl,
       public_sort_order: parseInt(editPublicSortOrder) || 0,
       is_pickup: editIsPickup,
       is_newcomer: editIsNewcomer,
@@ -1377,6 +1395,42 @@ const generatePassword = () => {
                       <input type="url" value={editInstagramUrl} onChange={(e) => setEditInstagramUrl(e.target.value)} placeholder="https://instagram.com/..." className="w-full px-3 py-2 rounded-lg text-[11px] outline-none" style={inputStyle} />
                     </div>
                   </div>
+                </div>
+
+                {/* セラピスト紹介動画（1人1動画） */}
+                <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                  <label className="block text-[11px] mb-2 font-medium" style={{ color: T.textSub }}>🎬 セラピスト紹介動画 <span className="text-[9px]" style={{ color: T.textMuted }}>（1人1動画／HP詳細ページに掲載）</span></label>
+                  {editVideoUrl && !editVideoFile && (
+                    <div className="mb-2 rounded-lg overflow-hidden" style={{ backgroundColor: "#000" }}>
+                      <video src={editVideoUrl} controls playsInline className="w-full" style={{ maxHeight: 200, display: "block" }} />
+                    </div>
+                  )}
+                  {editVideoFile && (
+                    <div className="mb-2 p-2 rounded-lg flex items-center gap-2" style={{ backgroundColor: "#e8849a08", border: "1px solid #e8849a44" }}>
+                      <span className="text-[16px]">🎬</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] truncate" style={{ color: "#e8849a" }}>{editVideoFile.name}</p>
+                        <p className="text-[9px]" style={{ color: T.textMuted }}>{(editVideoFile.size / (1024 * 1024)).toFixed(1)} MB · 「更新する」押下時にアップロードされます</p>
+                      </div>
+                      <button type="button" onClick={() => setEditVideoFile(null)} className="px-2 py-1 rounded text-[10px] cursor-pointer" style={{ backgroundColor: "#88888822", color: T.textSub }}>キャンセル</button>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <label className="px-3 py-2 rounded-lg text-[11px] cursor-pointer border inline-flex items-center gap-1" style={{ borderColor: "#e8849a44", color: "#e8849a", backgroundColor: "#e8849a08" }}>
+                      🎬 {editVideoUrl || editVideoFile ? "動画を変更" : "動画をアップロード"}
+                      <input type="file" accept="video/mp4,video/quicktime,video/webm" className="hidden" onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        const maxSize = 100 * 1024 * 1024; // 100MB
+                        if (f.size > maxSize) { toast.show("動画は100MB以下にしてください", "error"); return; }
+                        setEditVideoFile(f);
+                      }} />
+                    </label>
+                    {editVideoUrl && (
+                      <button type="button" onClick={() => { setEditVideoUrl(""); setEditVideoFile(null); }} className="px-3 py-2 rounded-lg text-[11px] cursor-pointer border" style={{ borderColor: "#c4555544", color: "#c45555", backgroundColor: "#c4555508" }}>🗑️ 動画を削除</button>
+                    )}
+                  </div>
+                  <p className="text-[9px] mt-2" style={{ color: T.textMuted, lineHeight: 1.6 }}>※ MP4 / MOV / WebM 形式・最大100MB・1人1動画まで（古い動画は自動上書き）</p>
                 </div>
 
                 {/* 公開設定（ソート順・PICK UP・新人） */}

@@ -55,6 +55,8 @@ type Therapist = {
   blog_url?: string;
   twitter_url?: string;
   instagram_url?: string;
+  video_url?: string | null;
+  video_poster_url?: string | null;
 };
 
 type Shift = {
@@ -695,6 +697,57 @@ export default function TherapistDetailPage({
           `}</style>
         </div>
       </section>
+
+      {/* ───── VIDEO / セラピスト紹介動画 ───── */}
+      {t.video_url && (
+        <section
+          style={{
+            padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+            backgroundColor: SITE.color.bgSoft,
+          }}
+        >
+          <div style={{ maxWidth: SITE.layout.maxWidthNarrow, margin: "0 auto" }}>
+            <SectionHeading label="VIDEO" title="セラピスト紹介動画" />
+            <div
+              style={{
+                backgroundColor: "#000",
+                aspectRatio: "9 / 16",
+                maxWidth: 420,
+                margin: "0 auto",
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                src={t.video_url}
+                poster={t.video_poster_url || undefined}
+                controls
+                playsInline
+                preload="metadata"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  display: "block",
+                }}
+              />
+            </div>
+            <p
+              style={{
+                marginTop: SITE.sp.md,
+                textAlign: "center",
+                fontSize: 11,
+                color: SITE.color.textMuted,
+                fontFamily: SITE.font.serif,
+                letterSpacing: SITE.ls.loose,
+              }}
+            >
+              {t.name} さんからのメッセージ動画
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* ───── GALLERY / 会員限定写真 ───── */}
       {hpPhotos.length > 0 && (
