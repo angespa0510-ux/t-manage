@@ -231,6 +231,7 @@ export function SurveyForm(props: SurveyFormProps) {
         backLinkLabel={backLinkLabel}
         extra={resultExtraMessage}
         reviewText={reviewText}
+        ratingOverall={ratingOverall}
       />
     );
   }
@@ -601,12 +602,14 @@ function ResultView({
   backLinkLabel,
   extra,
   reviewText,
+  ratingOverall,
 }: {
   result: SurveySubmitResponse;
   backLinkHref: string;
   backLinkLabel: string;
   extra?: React.ReactNode;
   reviewText?: string;
+  ratingOverall: number;
 }) {
   const [copied, setCopied] = useState(false);
 
