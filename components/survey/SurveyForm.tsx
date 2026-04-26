@@ -218,7 +218,21 @@ export function SurveyForm(props: SurveyFormProps) {
 
   // 完了画面
   if (result) {
-    return <ResultView result={result} backLinkHref={backLinkHref} backLinkLabel={backLinkLabel} extra={resultExtraMessage} />;
+    // Google投稿用テキスト: AI生成があればそれ、なければ自由記述を結合
+    const reviewText =
+      aiComposed.trim() ||
+      [goodPoints.trim(), therapistMessage.trim(), improvementPoints.trim()]
+        .filter((s) => s.length > 0)
+        .join("\n\n");
+    return (
+      <ResultView
+        result={result}
+        backLinkHref={backLinkHref}
+        backLinkLabel={backLinkLabel}
+        extra={resultExtraMessage}
+        reviewText={reviewText}
+      />
+    );
   }
 
   return (
@@ -587,12 +601,37 @@ function ResultView({
   backLinkHref,
   backLinkLabel,
   extra,
+  reviewText,
 }: {
   result: SurveySubmitResponse;
   backLinkHref: string;
   backLinkLabel: string;
   extra?: React.ReactNode;
+  reviewText?: string;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyReviewText = async () => {
+    if (!reviewText) return;
+    try {
+      await navigator.clipboard.writeText(reviewText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 古いブラウザ用フォールバック
+      const ta = document.createElement("textarea");
+      ta.value = reviewText;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* noop */ }
+      document.body.removeChild(ta);
+    }
+  };
+
+  const showGoogleSection = Boolean(result.googleReviewUrl && reviewText && reviewText.trim().length > 0);
+
   return (
     <div>
       <div style={{ textAlign: "center", marginBottom: 24 }}>
@@ -656,6 +695,121 @@ function ResultView({
       )}
 
       {extra && <div style={{ marginBottom: 16 }}>{extra}</div>}
+
+      {/* ══ Google投稿誘導 (Phase 2A) ══ */}
+      {showGoogleSection && (
+        <div
+          style={{
+            ...cardStyle,
+            marginBottom: 16,
+            backgroundColor: "#fff",
+            borderColor: C.borderPink,
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: 12 }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, color: C.accent, letterSpacing: 2, marginBottom: 4 }}>
+              GOOGLE REVIEW
+            </p>
+            <h3 style={{ fontSize: 15, color: C.text, fontWeight: 500, margin: 0 }}>
+              🌟 Googleにも投稿してみませんか？
+            </h3>
+            <p style={{ fontSize: 11, color: C.textMuted, margin: "8px 0 0 0", lineHeight: 1.6 }}>
+              （ご投稿はあくまで任意です・投稿の有無でクーポンには影響しません）
+            </p>
+          </div>
+
+          {/* 身バレリスク配慮ガイド */}
+          <div
+            style={{
+              padding: "12px 14px",
+              backgroundColor: "#fffbf5",
+              border: `1px solid #f0d9b8`,
+              fontSize: 11,
+              color: "#7c5a30",
+              lineHeight: 1.7,
+              marginBottom: 14,
+            }}
+          >
+            <p style={{ margin: 0, marginBottom: 6, fontWeight: 500 }}>
+              💡 ご投稿のときの注意点（身元保護のため）
+            </p>
+            <ul style={{ paddingLeft: 16, margin: 0, fontSize: 10 }}>
+              <li>本名や個人情報を含まない、匿名のアカウントでのご投稿をおすすめします</li>
+              <li>顔写真や個人を特定できる情報はアカウントに含めないでください</li>
+              <li>来店日時や具体的な体験内容など、特定可能な情報はお控えください</li>
+              <li>セラピストの本名・連絡先は絶対にご投稿に含めないでください</li>
+            </ul>
+          </div>
+
+          {/* ご投稿用文章 */}
+          <label style={{ display: "block", fontSize: 11, color: C.textSub, marginBottom: 6 }}>
+            📝 ご投稿用にまとめた文章（コピーしてご利用ください）
+          </label>
+          <div
+            style={{
+              padding: 12,
+              backgroundColor: C.cardAlt,
+              border: `1px solid ${C.border}`,
+              fontSize: 12,
+              color: C.text,
+              lineHeight: 1.8,
+              whiteSpace: "pre-wrap",
+              marginBottom: 12,
+              maxHeight: 200,
+              overflowY: "auto",
+            }}
+          >
+            {reviewText}
+          </div>
+
+          {/* アクション */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button
+              onClick={copyReviewText}
+              style={{
+                width: "100%",
+                padding: 12,
+                fontSize: 12,
+                backgroundColor: copied ? C.green : "#fff",
+                color: copied ? "#fff" : C.accentDark,
+                border: `1px solid ${copied ? C.green : C.borderPink}`,
+                cursor: "pointer",
+                fontFamily: FONT_SERIF,
+                letterSpacing: 1,
+                transition: "all 0.2s",
+              }}
+            >
+              {copied ? "✓ クリップボードにコピーしました" : "📋 文章をコピーする"}
+            </button>
+            <a
+              href={result.googleReviewUrl || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                width: "100%",
+                padding: 14,
+                fontSize: 13,
+                backgroundColor: "#4285F4", // Google ブランドカラー
+                color: "#fff",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: FONT_SERIF,
+                letterSpacing: 1,
+                textAlign: "center",
+                textDecoration: "none",
+                display: "block",
+              }}
+            >
+              🌟 Googleレビューを書く（新しいタブで開く）
+            </a>
+          </div>
+
+          <p style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.6, marginTop: 12, marginBottom: 0, textAlign: "center" }}>
+            ご投稿いただいた場合も、いただかなかった場合も、<br />
+            上のクーポンは変わらず次回ご来店時に自動適用されます🌸
+          </p>
+        </div>
+      )}
 
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.7, textAlign: "center" }}>
