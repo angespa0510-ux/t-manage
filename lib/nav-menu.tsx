@@ -31,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: "💴", label: "資金管理", path: "/admin/cash-dashboard", category: "売上", requiresCashDashboard: true },
   { icon: "📦", label: "棚卸管理", path: "/admin/inventory", category: "売上", requiresCashDashboard: true },
   { icon: "📒", label: "税理士ポータル", path: "/admin/tax-portal", category: "売上", requiresTaxPortal: true },
+  { icon: "🔍", label: "アクセス解析", path: "/admin/insights", category: "売上", requiresManager: true },
 
   // ── 顧客 ──
   { icon: "👥", label: "顧客一覧",       path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },

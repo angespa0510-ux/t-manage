@@ -58,6 +58,7 @@ const LEGACY_REDIRECTS: Record<string, string> = {
   "/sales": "/admin/sales",
   "/call-test": "/admin/call-test",
   "/call-assistant": "/admin/call-assistant",
+  "/insights": "/admin/insights",
 };
 
 // /admin/X → /X の透過リライト対象パス(逆引き用)

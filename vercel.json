@@ -27,6 +27,10 @@
     {
       "path": "/api/diary/video/process-job",
       "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/insights/cron",
+      "schedule": "0 23 * * *"
     }
   ]
 }
