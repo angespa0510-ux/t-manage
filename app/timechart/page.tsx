@@ -1687,9 +1687,13 @@ function TimeChartInner() {
         const salaryAmount = (settleTh as any).salary_amount || 0;
         const salaryBonus = salaryType === "percent" ? Math.round(totalBack * salaryAmount / 100) : salaryAmount * tRes.length;
         const totalNomFee = tRes.reduce((s,r) => s + ((r as any).nomination_fee || 0), 0);
-        const totalNom = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.therapist_back || (r as any).nomination_fee || 0); }, 0);
-        const totalNomBack = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.back_amount || 0); }, 0);
-        
+        // 健康診断レポート 2026-04-26 Fix #5: 旧式 `nom?.therapist_back || nomination_fee || 0` は
+        // therapist_back が未設定 / 0 の場合に nomination_fee（顧客請求額）が支給額になる過払いリスクがあった。
+        // options/extensions と同じ `|| 0` フォールバックに統一（指名マスタ未登録 → 0、明示 0 → 0）。
+        const totalNom = tRes.reduce((s,r) => { const nom = nominations.find(n => n.name === (r as any).nomination); return s + (nom?.therapist_back || 0); }, 0);
+        // NOTE: 旧 totalNomBack (nom?.back_amount を集計) は admin UI が therapist_back のみを書き込むため
+        //       常に 0 となるデッドコードだった。Fix #5 で削除。
+
         const transportFee = (settleTh as any).transport_fee || 0;
         const totalOpt = tRes.reduce((s,r) => s + ((r as any).options_total || 0), 0);
         const totalOptBack = tRes.reduce((s,r) => { const optNames = ((r as any).options_text || "").split(",").filter((n: string) => n); return s + optNames.reduce((os: number, n: string) => { const o = options.find(x => x.name === n); return os + ((o as any)?.therapist_back || 0); }, 0); }, 0);
