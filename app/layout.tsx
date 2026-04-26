@@ -9,6 +9,7 @@ import PinChangeModal from "../components/PinChangeModal";
 import PwaRegister from "../components/PwaRegister";
 import { VercelAnalyticsGate } from "../components/VercelAnalyticsGate";
 import { ClarityScript } from "../components/ClarityScript";
+import { GoogleAnalytics } from "../components/GoogleAnalytics";
 import { METADATA_BASE_URL } from "../lib/site-urls";
 
 const geistSans = Geist({
@@ -66,6 +67,7 @@ export default function RootLayout({
         <ThemeProvider><ToastProvider><StaffSessionProvider><CtiPopupProvider>{children}<PinChangeModal /><PwaRegister /></CtiPopupProvider></StaffSessionProvider></ToastProvider></ThemeProvider>
         <VercelAnalyticsGate />
         <ClarityScript />
+        <GoogleAnalytics />
       </body>
     </html>
   );
