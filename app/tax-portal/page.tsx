@@ -14,7 +14,7 @@ type Course = { id: number; name: string; duration: number; price: number; thera
 type Expense = { id: number; date: string; category: string; name: string; amount: number; store_id: number; is_recurring: boolean; notes: string; type: string; receipt_url?: string; receipt_thumb_url?: string; receipt_name?: string; payment_method?: string; needs_review?: boolean; review_note?: string; flagged_by_name?: string; flagged_at?: string | null };
 type Store = { id: number; name: string; company_name?: string; fiscal_month?: number };
 type Therapist = { id: number; name: string; real_name?: string; has_withholding?: boolean; has_invoice?: boolean; therapist_invoice_number?: string; transport_fee?: number; address?: string };
-type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number };
+type Settlement = { therapist_id: number; date: string; total_back: number; invoice_deduction: number; withholding_tax: number; adjustment: number; final_payment: number; transport_fee: number; welfare_fee: number; gift_bonus_amount?: number };
 type TaxDoc = { id: number; category: string; file_name: string; file_url: string; file_path: string; file_size: number; fiscal_period: string; uploaded_by_name: string; notes: string; created_at: string; target_person_name?: string };
 type TaxTaskStatus = { id: number; task_id: string; fiscal_year: number; status: string; note: string; updated_by_name: string; updated_at: string };
 type TaxTask = {
@@ -530,7 +530,7 @@ export default function TaxPortal() {
 
     // 期間内のセラピスト日次清算
     const { data: sts } = await supabase.from("therapist_daily_settlements")
-      .select("therapist_id,date,total_back,invoice_deduction,withholding_tax,adjustment,final_payment,transport_fee,welfare_fee")
+      .select("therapist_id,date,total_back,invoice_deduction,withholding_tax,adjustment,final_payment,transport_fee,welfare_fee,gift_bonus_amount")
       .gte("date", startDate).lte("date", endDate).eq("is_settled", true);
     if (sts) setSettlements(sts);
   }, [viewMode, selectedMonth, selectedYear, smYear, smMonth]);
@@ -1069,7 +1069,7 @@ export default function TaxPortal() {
   };
 
   // 📄 支払調書HTMLを生成（1セラピスト分）
-  const buildShiharaiHtml = (p: { id: number; name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }) => {
+  const buildShiharaiHtml = (p: { id: number; name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; giftBonus: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }) => {
     const th = therapists.find(t => t.id === p.id);
     const store = stores.find(s => !!s.company_name) || stores[0];
     const y = viewMode === "monthly" ? parseInt(selectedMonth.split("-")[0]) : selectedYear;
@@ -1094,7 +1094,7 @@ export default function TaxPortal() {
 <table>
   <tr><th style="width:45%">項目</th><th class="right" style="width:20%">金額</th><th style="width:35%">摘要</th></tr>
   <tr><td>稼働日数</td><td class="right">${p.days}日</td><td class="small">年間清算回数</td></tr>
-  <tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${p.gross.toLocaleString()}</strong></td><td class="small">業務委託報酬の年間合計</td></tr>
+  <tr><td><strong>支払金額（税込）</strong></td><td class="right"><strong>&yen;${p.gross.toLocaleString()}</strong></td><td class="small">業務委託報酬の年間合計${p.giftBonus > 0 ? `<br>（うち情報配信報酬 &yen;${p.giftBonus.toLocaleString()}）` : ""}</td></tr>
   ${p.invoiceDed > 0 ? `
     <tr><td class="red">仕入税額控除の経過措置</td><td class="right red">-&yen;${p.invoiceDed.toLocaleString()}</td><td class="small">報酬額の10%を控除</td></tr>
     <tr style="background:#f9f6f0"><td>控除後の報酬額</td><td class="right">&yen;${(p.gross - p.invoiceDed).toLocaleString()}</td><td class="small">支払金額 − 仕入税額控除</td></tr>
@@ -1175,7 +1175,7 @@ ${innerHtml}
 </html>`;
 
   // 📄 1セラピスト分の支払調書を開く
-  const openSingleShiharai = (p: { id: number; name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }) => {
+  const openSingleShiharai = (p: { id: number; name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; giftBonus: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }) => {
     const html = buildShiharaiWrapperHtml(buildShiharaiHtml(p), `支払調書_${viewMode === "monthly" ? selectedMonth : selectedYear}_${p.realName}`);
     const w = window.open("", "_blank");
     if (!w) { alert("ポップアップがブロックされました。ブラウザ設定を確認してください。"); return; }
@@ -1408,9 +1408,9 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
   const exportTherapistCSV = () => {
     const rows: (string | number)[][] = [];
     if (accFormat === "general") {
-      rows.push(["氏名", "源泉対象", "インボイス", "登録番号", "出勤日数", "報酬総額", "インボイス控除", "源泉徴収", "実支給額"]);
-      therapistPayroll.forEach(p => rows.push([p.realName, p.hasWithholding ? "対象" : "対象外", p.hasInvoice ? "登録済" : "未登録", p.invoiceNum, p.days, p.gross, p.invoiceDed, p.tax, p.final]));
-      rows.push(["合計", "", "", "", "", totalTherapistGross, totalInvoiceDed, totalWithholding, therapistPayroll.reduce((s, p) => s + p.final, 0)]);
+      rows.push(["氏名", "源泉対象", "インボイス", "登録番号", "出勤日数", "報酬総額", "うち情報配信報酬", "インボイス控除", "源泉徴収", "実支給額"]);
+      therapistPayroll.forEach(p => rows.push([p.realName, p.hasWithholding ? "対象" : "対象外", p.hasInvoice ? "登録済" : "未登録", p.invoiceNum, p.days, p.gross, p.giftBonus, p.invoiceDed, p.tax, p.final]));
+      rows.push(["合計", "", "", "", "", totalTherapistGross, totalTherapistGiftBonus, totalInvoiceDed, totalWithholding, therapistPayroll.reduce((s, p) => s + p.final, 0)]);
     } else if (accFormat === "yayoi" || accFormat === "mf") {
       const dateCol = accFormat === "yayoi" ? "取引日付" : "取引日";
       const debitAmtCol = accFormat === "yayoi" ? "借方金額" : "借方金額(円)";
@@ -1497,7 +1497,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
 
   // セラピスト支払・源泉徴収集計（期間内）
   const therapistPayroll = (() => {
-    const map: Record<number, { name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }> = {};
+    const map: Record<number, { name: string; realName: string; hasWithholding: boolean; hasInvoice: boolean; invoiceNum: string; gross: number; giftBonus: number; invoiceDed: number; tax: number; welfare: number; transport: number; final: number; days: number }> = {};
     settlements.forEach(s => {
       const th = therapists.find(t => t.id === s.therapist_id);
       if (!map[s.therapist_id]) {
@@ -1507,10 +1507,13 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
           hasWithholding: !!th?.has_withholding,
           hasInvoice: !!th?.has_invoice,
           invoiceNum: th?.therapist_invoice_number || "",
-          gross: 0, invoiceDed: 0, tax: 0, welfare: 0, transport: 0, final: 0, days: 0,
+          gross: 0, giftBonus: 0, invoiceDed: 0, tax: 0, welfare: 0, transport: 0, final: 0, days: 0,
         };
       }
-      const backAmt = (s.total_back || 0) + (s.adjustment || 0);
+      // 業務委託報酬の総額: 通常バック + 調整金 + 情報配信報酬(投げ銭換金分)
+      // 情報配信報酬は「業務委託報酬の追加部分」として税務上扱う
+      // (精算時に gift_bonus_amount 込みで源泉・インボイス控除が計算済みなので、gross にも含めて整合させる)
+      const backAmt = (s.total_back || 0) + (s.adjustment || 0) + (s.gift_bonus_amount || 0);
       const transportFee = s.transport_fee || th?.transport_fee || 0;
       let dayWT = s.withholding_tax || 0;
       // 源泉徴収税額の自動計算（204条1項6号: (報酬 - インボイス控除 - 5000) * 10.21%）
@@ -1518,6 +1521,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
         dayWT = Math.floor(Math.max(backAmt - (s.invoice_deduction || 0) - 5000, 0) * 0.1021);
       }
       map[s.therapist_id].gross += backAmt;
+      map[s.therapist_id].giftBonus += (s.gift_bonus_amount || 0);
       map[s.therapist_id].invoiceDed += (s.invoice_deduction || 0);
       map[s.therapist_id].tax += dayWT;
       map[s.therapist_id].welfare += (s.welfare_fee || 0);
@@ -1529,6 +1533,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
   })();
 
   const totalTherapistGross = therapistPayroll.reduce((s, p) => s + p.gross, 0);
+  const totalTherapistGiftBonus = therapistPayroll.reduce((s, p) => s + p.giftBonus, 0);
 
   if (!activeStaff || !canAccessTaxPortal) {
     return (
@@ -1933,6 +1938,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                         <th style={{ padding: "6px 10px", textAlign: "center", borderRight: gridBorder, borderBottom: gridBorder }}>インボイス</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>出勤日数</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>報酬総額</th>
+                        <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder, color: "#c96b83" }} title="うち情報配信報酬（配信投げ銭の換金分）">うち情報配信</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>インボイス控除</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>源泉徴収</th>
                         <th style={{ padding: "6px 10px", textAlign: "right", borderRight: gridBorder, borderBottom: gridBorder }}>実支給額</th>
@@ -1941,7 +1947,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                     </thead>
                     <tbody>
                       {therapistPayroll.length === 0 && (
-                        <tr><td colSpan={10} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>対象期間の清算データがありません</td></tr>
+                        <tr><td colSpan={11} style={{ padding: "24px", textAlign: "center", color: T.textFaint, fontSize: 11 }}>対象期間の清算データがありません</td></tr>
                       )}
                       {therapistPayroll.map((p, i) => (
                         <tr key={p.id} style={{ borderTop: gridBorder, backgroundColor: i % 2 === 0 ? "transparent" : T.cardAlt + "40" }}>
@@ -1958,6 +1964,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                           </td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: T.textSub }}>{p.days}日</td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder }}>{fmt(p.gross)}</td>
+                          <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: p.giftBonus > 0 ? "#c96b83" : T.textFaint }}>{p.giftBonus > 0 ? fmt(p.giftBonus) : "—"}</td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#85a8c4" }}>{fmt(p.invoiceDed)}</td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#f59e0b" }}>{fmt(p.tax)}</td>
                           <td style={{ padding: "5px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 500, borderRight: gridBorder }}>{fmt(p.final)}</td>
@@ -1976,6 +1983,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                           <td style={{ padding: "8px 10px", borderRight: gridBorder }}></td>
                           <td colSpan={4} style={{ padding: "8px 10px", borderRight: gridBorder }}>合計（{therapistPayroll.length}名）</td>
                           <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#e091a8" }}>{fmt(totalTherapistGross)}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: totalTherapistGiftBonus > 0 ? "#c96b83" : T.textFaint }}>{totalTherapistGiftBonus > 0 ? fmt(totalTherapistGiftBonus) : "—"}</td>
                           <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#85a8c4" }}>{fmt(totalInvoiceDed)}</td>
                           <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder, color: "#f59e0b" }}>{fmt(totalWithholding)}</td>
                           <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", borderRight: gridBorder }}>{fmt(therapistPayroll.reduce((s, p) => s + p.final, 0))}</td>

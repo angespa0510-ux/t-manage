@@ -994,7 +994,7 @@ export default function Dashboard() {
                       {closingData.totalOptBack > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>オプションバック</span><span>-{fmt(closingData.totalOptBack)}</span></div>}
                       {closingData.totalExtBack > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>延長バック</span><span>-{fmt(closingData.totalExtBack)}</span></div>}
                       <div className="flex justify-between pt-1" style={{ borderTop: `1px dashed ${T.border}` }}><span style={{ color: T.textSub }}>バック合計</span><span>-{fmt(closingData.totalBack)}</span></div>
-                      {closingData.totalGiftBack > 0 && <div className="flex justify-between" style={{ color: "#c96b83" }}><span>💝 投げ銭バック</span><span>-{fmt(closingData.totalGiftBack)}</span></div>}
+                      {closingData.totalGiftBack > 0 && <div className="flex justify-between" style={{ color: "#c96b83" }}><span>💝 情報配信報酬</span><span>-{fmt(closingData.totalGiftBack)}</span></div>}
                       {closingData.totalInvoiceDed > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>インボイス控除（店側収入）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalInvoiceDed)}</span></div>}
                       {closingData.totalWithholding > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>源泉徴収（店側預り）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalWithholding)}</span></div>}
                       {closingData.totalWelfare > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>備品・リネン代（店側収入）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalWelfare)}</span></div>}
@@ -1173,7 +1173,7 @@ export default function Dashboard() {
                       {closingData.therapistSales.length === 0 ? (
                         <p className="text-[10px]" style={{ color: T.textFaint }}>データなし</p>
                       ) : closingData.therapistSales.map((t: any, i: number) => (
-                        <div key={i} className="flex justify-between py-0.5"><span>{t.name}（{t.count}件）</span><span>売上{fmt(t.sales)} / バック{fmt(t.back)}{t.giftBack > 0 ? <> / <span style={{ color: "#c96b83" }}>投げ銭+{fmt(t.giftBack)}</span></> : ""}</span></div>
+                        <div key={i} className="flex justify-between py-0.5"><span>{t.name}（{t.count}件）</span><span>売上{fmt(t.sales)} / バック{fmt(t.back)}{t.giftBack > 0 ? <> / <span style={{ color: "#c96b83" }}>情報配信+{fmt(t.giftBack)}</span></> : ""}</span></div>
                       ))}
                     </div>
                   </div>
