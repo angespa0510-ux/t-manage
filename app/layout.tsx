@@ -5,6 +5,7 @@ import { ThemeProvider } from "../lib/theme";
 import { ToastProvider } from "../lib/toast";
 import { StaffSessionProvider } from "../lib/staff-session";
 import { CtiPopupProvider } from "../lib/cti-popup";
+import { CommandPaletteProvider } from "../lib/command-palette";
 import PinChangeModal from "../components/PinChangeModal";
 import PwaRegister from "../components/PwaRegister";
 import { VercelAnalyticsGate } from "../components/VercelAnalyticsGate";
@@ -64,7 +65,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" style={{ margin: 0 }}>
-        <ThemeProvider><ToastProvider><StaffSessionProvider><CtiPopupProvider>{children}<PinChangeModal /><PwaRegister /></CtiPopupProvider></StaffSessionProvider></ToastProvider></ThemeProvider>
+        <ThemeProvider><ToastProvider><StaffSessionProvider><CtiPopupProvider><CommandPaletteProvider>{children}<PinChangeModal /><PwaRegister /></CommandPaletteProvider></CtiPopupProvider></StaffSessionProvider></ToastProvider></ThemeProvider>
         <VercelAnalyticsGate />
         <ClarityScript />
         <GoogleAnalytics />

@@ -13,9 +13,9 @@ import { useStaffSession } from "./staff-session";
 // requiresCashDashboard: true の項目は 社長・経営責任者 のみ表示 (税理士除外)
 // requiresCallAssistant: true の項目は 社長・経営責任者 のみ表示 (通話AI)
 
-type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean; requiresCashDashboard?: boolean; requiresManager?: boolean; requiresCallAssistant?: boolean };
+export type NavItem = { icon: string; label: string; path: string; category: string; requiresTaxPortal?: boolean; requiresCashDashboard?: boolean; requiresManager?: boolean; requiresCallAssistant?: boolean };
 
-const NAV_ITEMS: NavItem[] = [
+export const NAV_ITEMS: NavItem[] = [
   // ── 日常業務（毎日使うもの）──
   { icon: "🏠", label: "HOME",        path: "/admin/dashboard",              category: "日常業務" },
   { icon: "📅", label: "タイムチャート", path: "/admin/timechart",              category: "日常業務" },
