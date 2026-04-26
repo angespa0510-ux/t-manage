@@ -758,6 +758,32 @@ function SettingsView({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  // 手動リマインダ送信
+  const [reminding, setReminding] = useState(false);
+  const [reminderResult, setReminderResult] = useState<string>("");
+
+  const handleManualReminder = async () => {
+    setReminding(true);
+    setReminderResult("");
+    try {
+      const res = await fetch("/api/cron/survey-reminder");
+      const data = await res.json();
+      if (!res.ok) {
+        setReminderResult(`❌ エラー: ${data.error || "不明"}`);
+      } else {
+        const s = data.stats || {};
+        setReminderResult(
+          `✓ 完了: 候補 ${s.candidates}件 / 送信 ${s.sent}件 / 既回答 ${s.skippedAlreadyResponded}件 / 既送信 ${s.skippedAlreadyNotified}件 / 非会員 ${s.skippedNoMypage}件 / オプトアウト ${s.skippedOptedOut}件`
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setReminderResult("❌ 通信エラー");
+    } finally {
+      setReminding(false);
+    }
+  };
+
   useEffect(() => {
     setCouponAmount(pointSettings?.survey_coupon_amount || 1000);
     setValidMonths(pointSettings?.survey_coupon_valid_months || 3);
@@ -894,6 +920,51 @@ function SettingsView({
         </button>
         {message && <span style={{ color: "#22c55e", fontSize: 11 }}>{message}</span>}
       </div>
+
+      {/* 手動リマインダ送信 */}
+      <section style={{ padding: 16, backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+        <h3 style={{ fontSize: 13, fontWeight: 500, marginBottom: 12, marginTop: 0 }}>
+          🔔 アンケートリマインダ通知
+        </h3>
+        <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 12, lineHeight: 1.7 }}>
+          施術完了から2〜7日前のご予約で、まだアンケートにご回答いただいていない<strong style={{ color: T.text }}>マイページ会員様</strong>に、マイページのプッシュ通知をお送りします。
+          <br />
+          通常は毎日 朝10時 (JST) に自動実行されます。下のボタンで手動でも即時実行できます。
+        </p>
+        <p style={{ fontSize: 10, color: T.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
+          スキップ条件: 既回答 / 既送信 / マイページ未登録 / 配信停止希望
+        </p>
+        <button
+          onClick={handleManualReminder}
+          disabled={reminding}
+          style={{
+            padding: "10px 20px",
+            fontSize: 12,
+            backgroundColor: reminding ? T.textMuted : T.cardAlt,
+            color: T.text,
+            border: `1px solid ${T.border}`,
+            cursor: reminding ? "wait" : "pointer",
+            letterSpacing: 0.5,
+          }}
+        >
+          {reminding ? "送信中…" : "🔔 リマインダを今すぐ送る"}
+        </button>
+        {reminderResult && (
+          <p
+            style={{
+              marginTop: 12,
+              padding: 10,
+              fontSize: 11,
+              backgroundColor: T.cardAlt,
+              border: `1px solid ${T.border}`,
+              color: T.text,
+              lineHeight: 1.6,
+            }}
+          >
+            {reminderResult}
+          </p>
+        )}
+      </section>
     </div>
   );
 }
