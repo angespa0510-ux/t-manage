@@ -23,10 +23,9 @@ const FOOTER_NAV = [
 ];
 
 const LEGAL_NAV = [
-  { label: "特定商取引法",        path: "/corporate/legal" },
+  { label: "特定商取引法",         path: "/corporate/legal" },
   { label: "プライバシーポリシー", path: "/corporate/privacy" },
-  { label: "会員ページ",           path: "/mypage" },
-  { label: "STAFF",                path: "/staff-login" },
+  { label: "会員マイページ",       path: "/mypage" },
 ];
 
 const TEL_PRIMARY   = "070-1675-5900";

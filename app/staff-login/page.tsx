@@ -39,7 +39,7 @@ export default function StaffLogin() {
     try {
       const therapistSession = localStorage.getItem("therapist_session");
       if (therapistSession) {
-        router.replace("/mypage");
+        router.replace("/cast");
         return;
       }
       const customerId = localStorage.getItem("customer_mypage_id");
@@ -49,7 +49,7 @@ export default function StaffLogin() {
       }
       const staffSession = sessionStorage.getItem("t-manage-staff");
       if (staffSession) {
-        router.replace("/dashboard");
+        router.replace("/admin/dashboard");
         return;
       }
     } catch {
@@ -72,7 +72,7 @@ export default function StaffLogin() {
     if (authError) {
       setError("メールアドレスまたはパスワードが正しくありません");
     } else if (data.user) {
-      router.push("/dashboard");
+      router.push("/admin/dashboard");
     }
   };
 
