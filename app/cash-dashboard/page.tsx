@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 import { useStaffSession } from "../../lib/staff-session";
 import { useTheme } from "../../lib/theme";
 import { useConfirm } from "../../components/useConfirm";
+import { useToast } from "../../lib/toast";
 import { runAutoSettlementIfDue } from "../../lib/staff-advances";
 
 /* ─────────── 型定義 ─────────── */
@@ -79,6 +80,7 @@ export default function CashDashboard() {
   const { dark, toggle, T } = useTheme();
   const { activeStaff, canAccessCashDashboard } = useStaffSession();
   const { confirm, ConfirmModalNode } = useConfirm();
+  const toast = useToast();
 
   const [atmDeposits, setAtmDeposits] = useState<AtmDeposit[]>([]);
   const [latestBankTx, setLatestBankTx] = useState<BankTx | null>(null);
@@ -198,9 +200,14 @@ export default function CashDashboard() {
   useEffect(() => { if (canAccessCashDashboard) fetchData(); }, [canAccessCashDashboard, fetchData]);
 
   // 前借り月末自動精算チェック (cash-dashboard 初回ロード時に一度だけ実行)
+  // 健康診断レポート 2026-04-26 Fix #6: dashboard と同じくサイレントエラー吞み込みを修正
   useEffect(() => {
-    runAutoSettlementIfDue().catch(() => {});
-  }, []);
+    runAutoSettlementIfDue().catch((err) => {
+      console.error("[runAutoSettlementIfDue]", err);
+      const msg = err instanceof Error ? err.message : "不明なエラー";
+      toast.show(`月末自動精算チェックに失敗しました。${msg}`, "error");
+    });
+  }, [toast]);
 
   // ATM預入 → 銀行取引との自動マッチング
   const autoMatchBankTx = async (depositId: number, depositDate: string, amount: number) => {
@@ -238,21 +245,29 @@ export default function CashDashboard() {
   };
 
   // ATM預入保存
+  // 健康診断レポート 2026-04-26 Fix #6: insert/select の error 未確認を toast 通知に統一
   const saveAtmDeposit = async () => {
     const amt = parseInt(atmAmount.replace(/,/g, ""));
     if (!amt || amt <= 0) { alert("金額を入力してください"); return; }
     setAtmSaving(true);
     try {
-      const { data: inserted } = await supabase.from("atm_deposits").insert({
+      const { data: inserted, error } = await supabase.from("atm_deposits").insert({
         deposit_date: atmDate,
         amount: amt,
         note: atmNote.trim(),
         recorded_by_name: activeStaff?.name || "",
       }).select().single();
-      if (inserted) {
-        // 自動マッチング試行
-        await autoMatchBankTx(inserted.id, atmDate, amt);
+      if (error || !inserted) {
+        toast.show(`ATM預入の保存に失敗しました: ${error?.message || "不明なエラー"}`, "error");
+        return;
       }
+      // 自動マッチング試行（失敗しても本体保存は成功なので情報のみ）
+      try {
+        await autoMatchBankTx(inserted.id, atmDate, amt);
+      } catch (mErr) {
+        console.warn("[autoMatchBankTx]", mErr);
+      }
+      toast.show("ATM預入を保存しました", "success");
       setAtmAmount(""); setAtmNote(""); setShowAtmModal(false);
       fetchData();
     } finally {
@@ -268,7 +283,12 @@ export default function CashDashboard() {
       confirmLabel: "削除する",
     });
     if (!ok) return;
-    await supabase.from("atm_deposits").delete().eq("id", id);
+    const { error } = await supabase.from("atm_deposits").delete().eq("id", id);
+    if (error) {
+      toast.show(`削除に失敗しました: ${error.message}`, "error");
+      return;
+    }
+    toast.show("ATM預入記録を削除しました", "success");
     fetchData();
   };
 
@@ -279,7 +299,7 @@ export default function CashDashboard() {
     if (reserveType === "withdraw" && !reserveTherapistId) { alert("セラピストを選択してください"); return; }
     setReserveSaving(true);
     try {
-      await supabase.from("toyohashi_reserve_movements").insert({
+      const { error } = await supabase.from("toyohashi_reserve_movements").insert({
         movement_date: reserveDate,
         movement_type: reserveType,
         amount: amt,
@@ -287,6 +307,11 @@ export default function CashDashboard() {
         recorded_by_name: activeStaff?.name || "",
         note: reserveNote.trim(),
       });
+      if (error) {
+        toast.show(`予備金記録の保存に失敗しました: ${error.message}`, "error");
+        return;
+      }
+      toast.show("予備金記録を保存しました", "success");
       setReserveAmount(""); setReserveNote(""); setReserveTherapistId(null);
       setShowReserveModal(false);
       fetchData();
@@ -303,7 +328,12 @@ export default function CashDashboard() {
       confirmLabel: "削除する",
     });
     if (!ok) return;
-    await supabase.from("toyohashi_reserve_movements").delete().eq("id", id);
+    const { error } = await supabase.from("toyohashi_reserve_movements").delete().eq("id", id);
+    if (error) {
+      toast.show(`削除に失敗しました: ${error.message}`, "error");
+      return;
+    }
+    toast.show("予備金記録を削除しました", "success");
     fetchData();
   };
 
@@ -315,7 +345,7 @@ export default function CashDashboard() {
     if (mgr === null && stf === null && toy === null) { alert("少なくとも1つの金庫の実測値を入力してください"); return; }
     setCheckSaving(true);
     try {
-      await supabase.from("cash_balance_checks").insert({
+      const { error } = await supabase.from("cash_balance_checks").insert({
         check_date: checkDate,
         manager_safe_actual: mgr,
         staff_safe_actual: stf,
@@ -323,6 +353,11 @@ export default function CashDashboard() {
         checked_by_name: activeStaff?.name || "",
         note: checkNote.trim(),
       });
+      if (error) {
+        toast.show(`残高確認の保存に失敗しました: ${error.message}`, "error");
+        return;
+      }
+      toast.show("金庫残高確認を保存しました", "success");
       setCheckManagerSafe(""); setCheckStaffSafe(""); setCheckToyohashi(""); setCheckNote("");
       setShowCheckModal(false);
       fetchData();
@@ -339,7 +374,12 @@ export default function CashDashboard() {
       confirmLabel: "削除する",
     });
     if (!ok) return;
-    await supabase.from("cash_balance_checks").delete().eq("id", id);
+    const { error } = await supabase.from("cash_balance_checks").delete().eq("id", id);
+    if (error) {
+      toast.show(`削除に失敗しました: ${error.message}`, "error");
+      return;
+    }
+    toast.show("確認記録を削除しました", "success");
     fetchData();
   };
 

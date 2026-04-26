@@ -84,7 +84,10 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
   const forceLogout = useCallback((idleLogout: boolean) => {
     const st = activeStaffRef.current;
     if (st) {
-      // ログアウトログ記録（失敗しても無視）
+      // ログアウトログ記録
+      // 健康診断レポート 2026-04-26 Fix #6: catch {} のサイレント握りつぶし、および
+      // .then(() => {}) で Promise rejection も無視していた。少なくとも console.warn で
+      // 開発者が気づけるようにする。本番では監査ログ収集システムへの再試行送信が望ましい。
       try {
         supabase.from("staff_login_logs").insert({
           staff_id: st.id,
@@ -92,8 +95,14 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
           logout_at: new Date().toISOString(),
           idle_logout: idleLogout,
           user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : "",
-        }).then(() => {});
-      } catch {}
+        }).then(({ error }: { error: { message?: string } | null }) => {
+          if (error) console.warn("[staff-session] logout log insert failed:", error.message);
+        }, (err: unknown) => {
+          console.warn("[staff-session] logout log promise rejected:", err);
+        });
+      } catch (err: unknown) {
+        console.warn("[staff-session] logout log threw:", err);
+      }
     }
     setActiveStaff(null);
     setPinChangeDismissed(false);
@@ -224,14 +233,21 @@ export function StaffSessionProvider({ children }: { children: ReactNode }) {
     } catch {}
     updateActivity();
 
-    // ログイン履歴を記録（失敗しても無視）
+    // ログイン履歴を記録
+    // 健康診断レポート 2026-04-26 Fix #6: サイレントエラー吞み込みを最低限の console.warn 化
     try {
       supabase.from("staff_login_logs").insert({
         staff_id: staff!.id,
         staff_name: staff!.name,
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : "",
-      }).then(() => {});
-    } catch {}
+      }).then(({ error }: { error: { message?: string } | null }) => {
+        if (error) console.warn("[staff-session] login log insert failed:", error.message);
+      }, (err: unknown) => {
+        console.warn("[staff-session] login log promise rejected:", err);
+      });
+    } catch (err: unknown) {
+      console.warn("[staff-session] login log threw:", err);
+    }
 
     return { ok: true, staff };
   };
