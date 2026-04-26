@@ -218,6 +218,23 @@ export async function POST(req: Request) {
     await recomputeTherapistStats(body.therapistId);
 
     // ─────────────────────────────────────
+    // 7.5 低評価アラート（rating <= 3）
+    // ─────────────────────────────────────
+    if (body.ratingOverall && body.ratingOverall <= 3) {
+      // 非同期で送信（メール失敗でレスポンス遅延しないように fire-and-forget）
+      sendLowRatingAlert({
+        surveyId: survey.id,
+        rating: body.ratingOverall,
+        customerId,
+        therapistId: body.therapistId,
+        goodPoints: body.goodPoints,
+        improvementPoints: body.improvementPoints,
+        therapistMessage: body.therapistMessage,
+        finalReviewText: body.finalReviewText,
+      }).catch((err) => console.error("[survey/submit] low-rating alert send error:", err));
+    }
+
+    // ─────────────────────────────────────
     // 8. Google Review URL の取得（店舗設定）
     // ─────────────────────────────────────
     const { data: reservation } = await supabase
@@ -288,4 +305,101 @@ async function recomputeTherapistStats(therapistId: number) {
       nps_score: Number(nps.toFixed(2)),
     })
     .eq("id", therapistId);
+}
+
+/**
+ * 低評価アラートメール送信（rating <= 3）
+ * オーナー・管理者にメール通知を送る（fire-and-forget）
+ *
+ * 宛先: settings.smtp_from（SMTP設定の送信元 = オーナーのGmail）
+ * 件名: ⚠️ 低評価アンケートが届きました
+ * 内容: お客様名・担当・評価・自由記述
+ */
+async function sendLowRatingAlert(params: {
+  surveyId: number;
+  rating: number;
+  customerId: number | null;
+  therapistId: number | null;
+  goodPoints?: string;
+  improvementPoints?: string;
+  therapistMessage?: string;
+  finalReviewText?: string;
+}) {
+  // 顧客名・セラピスト名を取得
+  let customerName = "お客様";
+  let therapistName = "";
+  if (params.customerId) {
+    const { data: c } = await supabase.from("customers").select("name").eq("id", params.customerId).maybeSingle();
+    if (c) customerName = c.name;
+  }
+  if (params.therapistId) {
+    const { data: t } = await supabase.from("therapists").select("name").eq("id", params.therapistId).maybeSingle();
+    if (t) therapistName = t.name;
+  }
+
+  // 宛先メール取得
+  const { data: settingsData } = await supabase
+    .from("settings")
+    .select("key,value")
+    .in("key", ["smtp_from", "store_name"]);
+  const settingsMap: Record<string, string> = {};
+  (settingsData || []).forEach((s) => { settingsMap[s.key] = s.value; });
+  const recipient = settingsMap.smtp_from;
+  const storeName = settingsMap.store_name || "Ange Spa";
+
+  if (!recipient) {
+    console.warn("[survey/submit] low-rating alert: smtp_from が未設定のため送信スキップ");
+    return;
+  }
+
+  const stars = "★".repeat(params.rating) + "☆".repeat(5 - params.rating);
+  const subject = `⚠️ 低評価アラート ${stars} ${customerName}様`;
+  const lines: string[] = [];
+  lines.push(`【${storeName}】低評価のアンケートが届きました。`);
+  lines.push("");
+  lines.push(`評価: ${stars} (${params.rating}/5)`);
+  lines.push(`お客様: ${customerName}様`);
+  if (therapistName) lines.push(`担当: ${therapistName}`);
+  lines.push("");
+  if (params.goodPoints) {
+    lines.push("【良かった点】");
+    lines.push(params.goodPoints);
+    lines.push("");
+  }
+  if (params.improvementPoints) {
+    lines.push("【改善希望】");
+    lines.push(params.improvementPoints);
+    lines.push("");
+  }
+  if (params.therapistMessage) {
+    lines.push("【担当者へのメッセージ】");
+    lines.push(params.therapistMessage);
+    lines.push("");
+  }
+  if (params.finalReviewText) {
+    lines.push("【まとめ文章】");
+    lines.push(params.finalReviewText);
+    lines.push("");
+  }
+  lines.push("");
+  lines.push("詳細は管理画面でご確認ください:");
+  lines.push("/survey-dashboard?tab=alerts");
+
+  const body = lines.join("\n");
+
+  // 内部APIに POST して送信
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://ange-spa.jp";
+    await fetch(`${baseUrl}/api/deliver-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: recipient,
+        subject,
+        body,
+      }),
+    });
+  } catch (e) {
+    console.error("[survey/submit] low-rating alert email error:", e);
+  }
 }

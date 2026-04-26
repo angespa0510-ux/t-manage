@@ -784,6 +784,33 @@ function SettingsView({
     }
   };
 
+  // 手動月次レポート送信
+  const [reporting, setReporting] = useState(false);
+  const [reportResult, setReportResult] = useState<string>("");
+
+  const handleManualReport = async () => {
+    setReporting(true);
+    setReportResult("");
+    try {
+      const res = await fetch("/api/cron/survey-monthly-report");
+      const data = await res.json();
+      if (!res.ok) {
+        setReportResult(`❌ エラー: ${data.error || "不明"}`);
+      } else if (data.summary) {
+        setReportResult(
+          `✓ ${data.period} 集計: ${data.summary.total}件 / 平均${data.summary.avgRating.toFixed(2)} / NPS${data.summary.nps.toFixed(0)} ${data.emailSent ? "(メール送信済み)" : "(メール宛先未設定)"}`
+        );
+      } else {
+        setReportResult(data.message || "完了");
+      }
+    } catch (e) {
+      console.error(e);
+      setReportResult("❌ 通信エラー");
+    } finally {
+      setReporting(false);
+    }
+  };
+
   useEffect(() => {
     setCouponAmount(pointSettings?.survey_coupon_amount || 1000);
     setValidMonths(pointSettings?.survey_coupon_valid_months || 3);
@@ -964,6 +991,69 @@ function SettingsView({
             {reminderResult}
           </p>
         )}
+      </section>
+
+      {/* 月次レポート + 低評価アラート (Phase 4B) */}
+      <section style={{ padding: 16, backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+        <h3 style={{ fontSize: 13, fontWeight: 500, marginBottom: 12, marginTop: 0 }}>
+          📧 メール通知
+        </h3>
+
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 12, color: T.text, marginBottom: 4, fontWeight: 500 }}>
+            ⚠️ 低評価アラート（即時送信）
+          </p>
+          <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 0, lineHeight: 1.7 }}>
+            評価3以下のアンケートが届いた瞬間に、設定済みの管理者メール宛 (smtp_from)
+            に自動送信されます。設定不要・常時稼働中。
+          </p>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+          <p style={{ fontSize: 12, color: T.text, marginBottom: 4, fontWeight: 500 }}>
+            📊 月次レポート
+          </p>
+          <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 12, lineHeight: 1.7 }}>
+            毎月1日 朝9時 (JST) に自動送信。前月の件数・平均評価・NPS・セラピストランキング・
+            クーポン使用数等のサマリー。下のボタンで即時実行できます。
+          </p>
+          <button
+            onClick={handleManualReport}
+            disabled={reporting}
+            style={{
+              padding: "10px 20px",
+              fontSize: 12,
+              backgroundColor: reporting ? T.textMuted : T.cardAlt,
+              color: T.text,
+              border: `1px solid ${T.border}`,
+              cursor: reporting ? "wait" : "pointer",
+              letterSpacing: 0.5,
+            }}
+          >
+            {reporting ? "送信中…" : "📊 前月レポートを今すぐ送る"}
+          </button>
+          {reportResult && (
+            <p
+              style={{
+                marginTop: 12,
+                padding: 10,
+                fontSize: 11,
+                backgroundColor: T.cardAlt,
+                border: `1px solid ${T.border}`,
+                color: T.text,
+                lineHeight: 1.6,
+              }}
+            >
+              {reportResult}
+            </p>
+          )}
+        </div>
+
+        <p style={{ fontSize: 10, color: T.textMuted, marginTop: 16, lineHeight: 1.6 }}>
+          ※ メール送信先は SMTP 設定の送信元アドレス (smtp_from) になります。
+          <br />
+          設定: システム設定 → SMTP 設定
+        </p>
       </section>
     </div>
   );
