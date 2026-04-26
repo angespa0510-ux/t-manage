@@ -280,7 +280,9 @@ export default function Dashboard() {
       const totalCashSales = completed.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
       // セラピスト支払い（バック内訳）
       const totalCourseBack = completed.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
-      const totalNomBack = completed.reduce((s, r) => { const nom = (nomData || []).find((n: any) => n.name === (r as any).nomination); return s + ((nom as any)?.therapist_back || (r as any).nomination_fee || 0); }, 0);
+      // 健康診断レポート 2026-04-26 Fix #5: 旧式 `nom.therapist_back || nomination_fee || 0` の
+      // 過払いリスクを options/extensions と同じ `|| 0` 形式に統一。
+      const totalNomBack = completed.reduce((s, r) => { const nom = (nomData || []).find((n: any) => n.name === (r as any).nomination); return s + ((nom as any)?.therapist_back || 0); }, 0);
       const totalOptBack = completed.reduce((s, r) => { const optNames = ((r as any).options_text || "").split(",").filter((n: string) => n); return s + optNames.reduce((os: number, n: string) => { const o = (optData || []).find((x: any) => x.name === n); return os + ((o as any)?.therapist_back || 0); }, 0); }, 0);
       const totalExtBack = completed.reduce((s, r) => { const ex = (extData || []).find((x: any) => x.name === (r as any).extension_name); return s + ((ex as any)?.therapist_back || 0); }, 0);
       const totalBack = totalCourseBack + totalNomBack + totalOptBack + totalExtBack;
