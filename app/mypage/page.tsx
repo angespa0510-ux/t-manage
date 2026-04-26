@@ -164,6 +164,26 @@ export default function CustomerMypage() {
   const [memoSaving, setMemoSaving] = useState(false);
   const [showMemoModal, setShowMemoModal] = useState(false);
 
+  // 予約導線（HPセラピスト詳細→空き時間→マイページ）
+  // ログイン画面でセラピスト名と日時バナーを表示するための情報
+  const [pendingBookInfo, setPendingBookInfo] = useState<{ tid: number; date: string; time: string; therapistName?: string } | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let raw: string | null = null;
+    try { raw = localStorage.getItem("pending_book"); } catch { return; }
+    if (!raw) return;
+    try {
+      const p = JSON.parse(raw) as { tid: number; date: string; time: string };
+      if (p.tid && p.date && p.time) {
+        setPendingBookInfo(p);
+        // セラピスト名を取得（バナー表示用）
+        supabase.from("therapists").select("name").eq("id", p.tid).maybeSingle().then(({ data }) => {
+          if (data?.name) setPendingBookInfo({ ...p, therapistName: data.name });
+        });
+      }
+    } catch {}
+  }, []);
+
   // イベント（マイページ用に取得・Session 56）
   const [customerEvents, setCustomerEvents] = useState<EventItem[]>([]);
 
@@ -175,6 +195,28 @@ export default function CustomerMypage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("register") === "1") {
       setAuthMode("register");
+    }
+  }, []);
+
+  // URLパラメータ ?book=THERAPIST_ID&date=YYYY-MM-DD&time=HH:MM で予約導線（HPセラピスト詳細→空き時間タップ）
+  // ログイン中: 予約フォームを自動表示
+  // 未ログイン: localStorage に保存し、登録画面に切り替えてから登録/ログイン後に自動表示
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const bookId = params.get("book");
+    const bookDateP = params.get("date");
+    const bookTimeP = params.get("time");
+    if (bookId && /^\d+$/.test(bookId) && bookDateP && bookTimeP) {
+      try {
+        localStorage.setItem(
+          "pending_book",
+          JSON.stringify({ tid: Number(bookId), date: bookDateP, time: bookTimeP })
+        );
+      } catch {}
+      // 未ログイン時のみ登録モードに（既ログインの場合は別 useEffect で予約フォームを開く）
+      const saved = localStorage.getItem("customer_mypage_id");
+      if (!saved) setAuthMode("register");
     }
   }, []);
 
@@ -232,6 +274,64 @@ export default function CustomerMypage() {
     const { data: res } = await supabase.from("reservations").select("*").eq("date", date).not("status", "eq", "cancelled").order("start_time"); if (res) setSchedRes(res);
   }, []);
   useEffect(() => { if (customer && tab === "schedule") { fetchDaySchedule(schedDate); } }, [schedDate, tab, customer, fetchDaySchedule]);
+
+  // 保留中予約の自動オープン（HPからの予約導線：?book=ID&date=...&time=... → 登録/ログイン後に自動表示）
+  useEffect(() => {
+    if (!customer) return;
+    if (typeof window === "undefined") return;
+    if (courses.length === 0) return; // コースデータが未取得の間は待つ
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem("pending_book");
+    } catch { return; }
+    if (!raw) return;
+    try {
+      const p = JSON.parse(raw) as { tid: number; date: string; time: string };
+      if (!p.tid || !p.date || !p.time) {
+        localStorage.removeItem("pending_book");
+        return;
+      }
+      // 該当セラピストのその日のシフト店舗を取得（フォールバック: stores[0]）
+      supabase
+        .from("shifts")
+        .select("store_id")
+        .eq("therapist_id", p.tid)
+        .eq("date", p.date)
+        .eq("status", "confirmed")
+        .maybeSingle()
+        .then(({ data }) => {
+          const storeId = data?.store_id || (stores.length > 0 ? stores[0].id : 0);
+          setBookDate(p.date);
+          setBookTime(p.time);
+          setBookTherapistId(p.tid);
+          setBookCourseId(0);
+          setBookStoreId(storeId);
+          setBookNotes("");
+          setBookMsg("");
+          setBookDiscountId(0);
+          setBookOptions([]);
+          setBookExtId(0);
+          setBookPointUse(0);
+          setBookDone(false);
+          setFreeMode(false);
+          setBookFreeBuildingId(null);
+          setSchedView("form");
+          setTab("schedule");
+          try { localStorage.removeItem("pending_book"); } catch {}
+          // URL からクエリを除去
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("book");
+            url.searchParams.delete("date");
+            url.searchParams.delete("time");
+            url.searchParams.delete("register");
+            window.history.replaceState({}, "", url.toString());
+          } catch {}
+        });
+    } catch {
+      try { localStorage.removeItem("pending_book"); } catch {}
+    }
+  }, [customer, courses, stores]);
 
   // 週間スケジュール取得
   const fetchWeekSchedule = useCallback(async (tid: number, baseDate: string) => {
@@ -484,6 +584,37 @@ export default function CustomerMypage() {
                 color: C.textSub,
               }}>会員の皆さまへ</p>
             </div>
+
+            {/* 予約導線バナー（HPセラピスト詳細→空き時間→マイページ から来た場合） */}
+            {pendingBookInfo && (
+              <div
+                style={{
+                  marginBottom: 20,
+                  padding: 16,
+                  backgroundColor: "#fff5f7",
+                  border: `1px solid ${C.accent}55`,
+                  borderRadius: 8,
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 10, letterSpacing: "0.2em", color: C.accent, fontFamily: FONT_DISPLAY }}>
+                  ＼ ご予約の最終ステップ ／
+                </p>
+                <p style={{ margin: "8px 0 4px", fontSize: 14, color: C.text, fontFamily: FONT_SERIF, letterSpacing: "0.05em", fontWeight: 500 }}>
+                  {pendingBookInfo.therapistName ? `${pendingBookInfo.therapistName} さん` : "ご指名セラピスト"}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: C.textSub, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
+                  {(() => {
+                    const dt = new Date(pendingBookInfo.date + "T00:00:00");
+                    const wd = ["日", "月", "火", "水", "木", "金", "土"][dt.getDay()];
+                    return `${dt.getMonth() + 1}/${dt.getDate()}(${wd}) ${pendingBookInfo.time} 〜`;
+                  })()}
+                </p>
+                <p style={{ margin: "10px 0 0", fontSize: 10, color: C.textMuted, lineHeight: 1.6 }}>
+                  会員登録（無料・約30秒）後にコース選択へ進みます
+                </p>
+              </div>
+            )}
 
             {/* カード */}
             <div style={{

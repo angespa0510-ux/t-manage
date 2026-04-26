@@ -43,7 +43,27 @@ type Shift = {
 
 type Store = { id: number; name: string; shop_display_name?: string; shop_is_public?: boolean };
 
+type Reservation = {
+  id: number;
+  therapist_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+};
+
 const todayStr = () => new Date().toISOString().split("T")[0];
+
+// 時刻 → 分（営業時間 12:00〜27:00 を想定し、9時未満は翌日扱いで +24h）
+const timeToMin = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return (h < 9 ? h + 24 : h) * 60 + m;
+};
+const minToTime = (m: number) => {
+  const h = Math.floor(m / 60);
+  const mi = m % 60;
+  return `${String(h >= 24 ? h - 24 : h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+};
 const timeHM = (t: string) => (t || "").slice(0, 5);
 const weekday = (d: string) => {
   const days = ["日", "月", "火", "水", "木", "金", "土"];
@@ -84,9 +104,23 @@ export default function SchedulePage() {
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(todayStr());
   const [storeFilter, setStoreFilter] = useState<number | null>(null);
+
+  // セラピスト指定モード（?therapist=ID で起動）
+  const [therapistIdParam, setTherapistIdParam] = useState<number | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const tid = params.get("therapist");
+    if (tid && /^\d+$/.test(tid)) setTherapistIdParam(Number(tid));
+  }, []);
+  const selectedTherapist = useMemo(
+    () => (therapistIdParam ? therapists.find((t) => t.id === therapistIdParam) || null : null),
+    [therapistIdParam, therapists]
+  );
 
   // 日付リスト（本日〜6日後）
   const dateTabs = useMemo(() => {
@@ -98,7 +132,7 @@ export default function SchedulePage() {
     (async () => {
       const start = dateTabs[0];
       const end = dateTabs[dateTabs.length - 1];
-      const [tResp, sResp, stResp] = await Promise.all([
+      const [tResp, sResp, stResp, rResp] = await Promise.all([
         supabase
           .from("therapists")
           .select("*")
@@ -116,9 +150,16 @@ export default function SchedulePage() {
           .from("stores")
           .select("id,name,shop_display_name,shop_is_public")
           .eq("shop_is_public", true),
+        supabase
+          .from("reservations")
+          .select("id,therapist_id,date,start_time,end_time,status")
+          .gte("date", start)
+          .lte("date", end)
+          .not("status", "eq", "cancelled"),
       ]);
       setTherapists(tResp.data || []);
       setShifts(sResp.data || []);
+      setReservations(rResp.data || []);
       // 公開店舗がない場合は全店舗表示
       const storesData = (stResp.data && stResp.data.length > 0)
         ? stResp.data
@@ -156,15 +197,144 @@ export default function SchedulePage() {
     stores.find((s) => s.id === sid)?.name ||
     "";
 
+  // セラピスト指定モード時の選択日空き時間スロット
+  // 30分刻みで、シフトの中で予約と被らない時間を空きとする
+  const selectedTherapistSlots = useMemo(() => {
+    if (!selectedTherapist) return [];
+    const shift = shifts.find(
+      (s) => s.therapist_id === selectedTherapist.id && s.date === selectedDate
+    );
+    if (!shift) return [];
+    const ss = timeToMin(shift.start_time);
+    const se = timeToMin(shift.end_time);
+    const ress = reservations.filter(
+      (r) => r.therapist_id === selectedTherapist.id && r.date === selectedDate
+    );
+    // 「今より過去」は予約不可
+    const isToday = selectedDate === todayStr();
+    const now = new Date();
+    const nowMin = isToday ? timeToMin(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`) : -1;
+
+    const slots: { time: string; available: boolean; past: boolean }[] = [];
+    for (let m = ss; m < se; m += 30) {
+      const t = minToTime(m);
+      const busy = ress.some((r) => {
+        const rs = timeToMin(r.start_time);
+        const re = timeToMin(r.end_time);
+        // 30分先まで連続で空いているかをチェック
+        return m < re && m + 30 > rs;
+      });
+      const past = isToday && m < nowMin;
+      slots.push({ time: t, available: !busy, past });
+    }
+    return slots;
+  }, [selectedTherapist, shifts, reservations, selectedDate]);
+
+  // 7日分の出勤日（指定セラピスト用）
+  const selectedTherapistShiftDates = useMemo(() => {
+    if (!selectedTherapist) return new Set<string>();
+    return new Set(
+      shifts
+        .filter((s) => s.therapist_id === selectedTherapist.id)
+        .map((s) => s.date)
+    );
+  }, [selectedTherapist, shifts]);
+
   return (
     <>
-      <PageHero
-        label="SCHEDULE"
-        title="出勤スケジュール"
-        subtitle="本日から1週間分のセラピスト出勤スケジュールをご確認いただけます。"
-        bgVideo="/videos/schedule.mp4"
-        bgVideoPoster="/videos/schedule-poster.jpg"
-      />
+      {selectedTherapist ? (
+        // ───────────── セラピスト指定モード（HP「このセラピストで予約する」経由） ─────────────
+        <section
+          style={{
+            padding: `${SITE.sp.xl} ${SITE.sp.lg} ${SITE.sp.lg}`,
+            backgroundColor: SITE.color.bgSoft,
+            borderBottom: `1px solid ${SITE.color.border}`,
+          }}
+        >
+          <div style={{ maxWidth: SITE.layout.maxWidthText, margin: "0 auto" }}>
+            <p
+              style={{
+                fontFamily: SITE.font.display,
+                fontSize: 11,
+                color: SITE.color.pink,
+                letterSpacing: SITE.ls.wide,
+                textAlign: "center",
+                marginBottom: 8,
+              }}
+            >
+              WEB RESERVATION
+            </p>
+            <p
+              style={{
+                fontFamily: SITE.font.serif,
+                fontSize: 13,
+                color: SITE.color.textSub,
+                letterSpacing: SITE.ls.loose,
+                textAlign: "center",
+                marginBottom: SITE.sp.lg,
+              }}
+            >
+              空き時間を選んでご予約へお進みください
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                padding: SITE.sp.md,
+                backgroundColor: "#ffffff",
+                border: `1px solid ${SITE.color.border}`,
+              }}
+            >
+              {selectedTherapist.photo_url && (
+                <img
+                  src={selectedTherapist.photo_url}
+                  alt={selectedTherapist.name}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    objectFit: "cover",
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <div>
+                <p
+                  style={{
+                    fontFamily: SITE.font.display,
+                    fontSize: 10,
+                    color: SITE.color.textMuted,
+                    letterSpacing: SITE.ls.wide,
+                    marginBottom: 4,
+                  }}
+                >
+                  THERAPIST
+                </p>
+                <p
+                  style={{
+                    fontFamily: SITE.font.serif,
+                    fontSize: 18,
+                    color: SITE.color.text,
+                    letterSpacing: SITE.ls.loose,
+                  }}
+                >
+                  {selectedTherapist.name}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <PageHero
+          label="SCHEDULE"
+          title="出勤スケジュール"
+          subtitle="本日から1週間分のセラピスト出勤スケジュールをご確認いただけます。"
+          bgVideo="/videos/schedule.mp4"
+          bgVideoPoster="/videos/schedule-poster.jpg"
+        />
+      )}
 
       {/* 日付タブ */}
       <section
@@ -267,8 +437,8 @@ export default function SchedulePage() {
         </div>
       </section>
 
-      {/* 店舗フィルタ */}
-      {stores.length > 1 && (
+      {/* 店舗フィルタ（セラピスト指定モード時は非表示） */}
+      {!selectedTherapist && stores.length > 1 && (
         <section
           style={{
             padding: `${SITE.sp.lg} ${SITE.sp.lg}`,
@@ -337,7 +507,8 @@ export default function SchedulePage() {
         </section>
       )}
 
-      {/* 出勤セラピスト */}
+      {/* セラピスト指定モード時は店舗フィルタを非表示（既に1人に絞られているため） */}
+      {/* 出勤セラピスト or 空き時間グリッド */}
       <section
         style={{
           ...MARBLE.blue,
@@ -348,6 +519,105 @@ export default function SchedulePage() {
         <div style={{ maxWidth: SITE.layout.maxWidth, margin: "0 auto" }}>
           {loading ? (
             <LoadingBlock />
+          ) : selectedTherapist ? (
+            // ───────── セラピスト指定モード：空き時間グリッド ─────────
+            <div style={{ maxWidth: SITE.layout.maxWidthText, margin: "0 auto" }}>
+              {!selectedTherapistShiftDates.has(selectedDate) ? (
+                <EmptyBlock
+                  title="この日は出勤予定がありません"
+                  sub="別の日付をお選びください。"
+                />
+              ) : selectedTherapistSlots.length === 0 ? (
+                <EmptyBlock
+                  title="ご予約可能な時間がありません"
+                  sub="別の日付をご確認ください。"
+                />
+              ) : (
+                <>
+                  <p
+                    style={{
+                      fontFamily: SITE.font.display,
+                      fontSize: 11,
+                      color: SITE.color.textSub,
+                      letterSpacing: SITE.ls.wide,
+                      marginBottom: SITE.sp.lg,
+                      textAlign: "center",
+                    }}
+                  >
+                    AVAILABLE TIME / 空き時間
+                  </p>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
+                      gap: 8,
+                      marginBottom: SITE.sp.xl,
+                    }}
+                  >
+                    {selectedTherapistSlots.map((slot) => {
+                      const disabled = !slot.available || slot.past;
+                      return (
+                        <a
+                          key={slot.time}
+                          href={
+                            disabled
+                              ? undefined
+                              : `/mypage?book=${selectedTherapist.id}&date=${selectedDate}&time=${slot.time}`
+                          }
+                          aria-disabled={disabled}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "14px 4px",
+                            backgroundColor: disabled ? SITE.color.bgSoft : "#ffffff",
+                            border: `1px solid ${disabled ? SITE.color.border : SITE.color.pink}`,
+                            color: disabled ? SITE.color.textMuted : SITE.color.pink,
+                            cursor: disabled ? "not-allowed" : "pointer",
+                            textDecoration: "none",
+                            fontFamily: SITE.font.serif,
+                            transition: SITE.transition.base,
+                            opacity: disabled ? 0.5 : 1,
+                          }}
+                          onClick={(e) => {
+                            if (disabled) e.preventDefault();
+                          }}
+                        >
+                          <span style={{ fontSize: 14, fontWeight: 500, letterSpacing: SITE.ls.loose }}>
+                            {slot.time}
+                          </span>
+                          <span style={{ fontSize: 10, marginTop: 2, letterSpacing: SITE.ls.wide }}>
+                            {slot.past ? "終了" : slot.available ? "空き" : "満"}
+                          </span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                  <div
+                    style={{
+                      padding: SITE.sp.md,
+                      backgroundColor: "#ffffff",
+                      border: `1px solid ${SITE.color.border}`,
+                      textAlign: "center",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: SITE.font.serif,
+                        fontSize: 11,
+                        color: SITE.color.textMuted,
+                        letterSpacing: SITE.ls.loose,
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      ご希望の時間をタップすると<br />
+                      会員ページでコース・指名を選んでご予約いただけます。
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
           ) : therapistsOfDay.length === 0 ? (
             <EmptyBlock
               title="この日の出勤セラピストはまだ登録されていません"
@@ -426,8 +696,17 @@ export default function SchedulePage() {
               lineHeight: SITE.lh.body,
             }}
           >
-            ご予約・ご相談は<br />
-            お電話またはLINEにて承っております
+            {selectedTherapist ? (
+              <>
+                空き時間からの予約以外は<br />
+                お電話またはLINEにて承っております
+              </>
+            ) : (
+              <>
+                ご予約・ご相談は<br />
+                お電話またはLINEにて承っております
+              </>
+            )}
           </p>
           <div
             style={{
