@@ -266,8 +266,10 @@ export default function Dashboard() {
     const totalWithholding = settledList2.reduce((s: number, d: any) => s + (d.withholding_tax || 0), 0);
     const totalWelfare = settledList2.reduce((s: number, d: any) => s + (d.welfare_fee || 0), 0);
     const totalTransportSettle = settledList2.reduce((s: number, d: any) => s + (d.transport_fee || 0), 0);
+    // 💝 投げ銭バック合計（gift_bonus_amount は精算時に final_payment に込まれている）
+    const totalGiftBack = settledList2.reduce((s: number, d: any) => s + (d.gift_bonus_amount || 0), 0);
     const totalRounding = settledList2.reduce((s: number, d: any) => {
-      const raw = (d.total_back || 0) - (d.invoice_deduction || 0) - (d.withholding_tax || 0) - (d.welfare_fee || 0) + (d.transport_fee || 0);
+      const raw = (d.total_back || 0) + (d.gift_bonus_amount || 0) - (d.invoice_deduction || 0) - (d.withholding_tax || 0) - (d.welfare_fee || 0) + (d.transport_fee || 0);
       return s + ((d.final_payment || 0) - raw);
     }, 0);
     // 釣銭補充（明細付き）
@@ -396,13 +398,15 @@ export default function Dashboard() {
       const tRes = completed.filter(r => r.therapist_id === tid);
       const tSales = tRes.reduce((s, r) => s + ((r as any).total_price || 0), 0);
       const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
-      return { name: getThName(tid), count: tRes.length, sales: tSales, back: tBack };
+      const ds = settledList2.find((s: any) => s.therapist_id === tid);
+      const tGiftBack = ds?.gift_bonus_amount || 0;
+      return { name: getThName(tid), count: tRes.length, sales: tSales, back: tBack, giftBack: tGiftBack };
     });
     setClosingData({
       resCount: allRes.length, compCount: completed.length, totalSales,
       totalCoursePrice, totalNom, totalOpt, totalExt, totalDisc,
       totalCard, totalPaypay, totalCashSales,
-      totalBack, totalCourseBack, totalNomBack, totalOptBack, totalExtBack, totalFinalPay, totalInvoiceDed, totalWithholding, totalWelfare, totalTransportSettle, totalRounding, totalReplenish, replenishList,
+      totalBack, totalCourseBack, totalNomBack, totalOptBack, totalExtBack, totalGiftBack, totalFinalPay, totalInvoiceDed, totalWithholding, totalWelfare, totalTransportSettle, totalRounding, totalReplenish, replenishList,
       expenseList, expenseTotal, incomeList, incomeTotal,
       netProfit, therapistData, totalOut,
       staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
@@ -990,6 +994,7 @@ export default function Dashboard() {
                       {closingData.totalOptBack > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>オプションバック</span><span>-{fmt(closingData.totalOptBack)}</span></div>}
                       {closingData.totalExtBack > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>延長バック</span><span>-{fmt(closingData.totalExtBack)}</span></div>}
                       <div className="flex justify-between pt-1" style={{ borderTop: `1px dashed ${T.border}` }}><span style={{ color: T.textSub }}>バック合計</span><span>-{fmt(closingData.totalBack)}</span></div>
+                      {closingData.totalGiftBack > 0 && <div className="flex justify-between" style={{ color: "#c96b83" }}><span>💝 投げ銭バック</span><span>-{fmt(closingData.totalGiftBack)}</span></div>}
                       {closingData.totalInvoiceDed > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>インボイス控除（店側収入）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalInvoiceDed)}</span></div>}
                       {closingData.totalWithholding > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>源泉徴収（店側預り）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalWithholding)}</span></div>}
                       {closingData.totalWelfare > 0 && <div className="flex justify-between"><span style={{ color: T.textSub }}>備品・リネン代（店側収入）</span><span style={{ color: "#22c55e" }}>+{fmt(closingData.totalWelfare)}</span></div>}
@@ -1168,7 +1173,7 @@ export default function Dashboard() {
                       {closingData.therapistSales.length === 0 ? (
                         <p className="text-[10px]" style={{ color: T.textFaint }}>データなし</p>
                       ) : closingData.therapistSales.map((t: any, i: number) => (
-                        <div key={i} className="flex justify-between py-0.5"><span>{t.name}（{t.count}件）</span><span>売上{fmt(t.sales)} / バック{fmt(t.back)}</span></div>
+                        <div key={i} className="flex justify-between py-0.5"><span>{t.name}（{t.count}件）</span><span>売上{fmt(t.sales)} / バック{fmt(t.back)}{t.giftBack > 0 ? <> / <span style={{ color: "#c96b83" }}>投げ銭+{fmt(t.giftBack)}</span></> : ""}</span></div>
                       ))}
                     </div>
                   </div>
