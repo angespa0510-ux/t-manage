@@ -7,6 +7,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { jsPDF } from "jspdf";
 import { useToast } from "../../lib/toast";
 import { useStaffSession } from "../../lib/staff-session";
+import { effectiveIsManager, effectiveCanTaxPortal, effectiveCanCashDashboard, defaultIsManager, defaultCanTaxPortal, defaultCanCashDashboard } from "../../lib/staff-permissions";
 import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { isAdvanceEligible, runAutoSettlementIfDue, type StaffAdvance } from "../../lib/staff-advances";
 import { useConfirm } from "../../components/useConfirm";
@@ -1075,22 +1076,12 @@ const openPaymentStatement = (sch: Schedule) => {
 
         {/* ========== Tab: Permissions Matrix ========== */}
         {tab === "permissions" && (() => {
-          // 権限定義 — staff-session.tsx のロジックと完全に同期すること
-          // デフォルト判定（ロール/法人ポジションベース）
-          const defaultIsManagerFn = (_s: Staff) => true; // 管理系操作は基本みんなできる
-          const defaultCanTaxFn = (s: Staff) =>
-            s.company_position === "社長" ||
-            s.company_position === "経営責任者" ||
-            s.company_position === "税理士" ||
-            s.role === "supervisor";
-          const defaultCanCashFn = (s: Staff) =>
-            s.company_position === "社長" ||
-            s.company_position === "経営責任者";
-
-          // 実効権限（override があればそれを優先）
-          const effIsManager = (s: Staff) => s.override_is_manager ?? defaultIsManagerFn(s);
-          const effCanTax = (s: Staff) => s.override_can_tax_portal ?? defaultCanTaxFn(s);
-          const effCanCash = (s: Staff) => s.override_can_cash_dashboard ?? defaultCanCashFn(s);
+          // 権限判定: lib/staff-permissions.ts の SSOT を使用
+          // (旧式は同じロジックが lib/staff-session.tsx と本ファイルに重複していた。
+          //  健康診断レポート 2026-04-26 Fix #7 で SSOT 化)
+          const effIsManager = (s: Staff) => effectiveIsManager(s);
+          const effCanTax = (s: Staff) => effectiveCanTaxPortal(s);
+          const effCanCash = (s: Staff) => effectiveCanCashDashboard(s);
 
           // 社長（canEdit = 編集可能）
           const isPresident = activeStaff?.company_position === "社長";
@@ -1106,9 +1097,9 @@ const openPaymentStatement = (sch: Schedule) => {
             hint: string;
           };
           const features: Feature[] = [
-            { key: "manage", label: "管理系操作",     icon: "📅", eff: effIsManager, def: defaultIsManagerFn, overrideKey: "override_is_manager",         hint: "タイムチャート編集・営業締め・精算・金庫など" },
-            { key: "tax",    label: "税理士ポータル", icon: "📒", eff: effCanTax,    def: defaultCanTaxFn,    overrideKey: "override_can_tax_portal",     hint: "売上/経費/セラピスト支払/書類庫/銀行取込 など" },
-            { key: "cash",   label: "資金管理",       icon: "💴", eff: effCanCash,   def: defaultCanCashFn,   overrideKey: "override_can_cash_dashboard", hint: "5財布のリアルタイム表示・ATM預入・豊橋予備金管理" },
+            { key: "manage", label: "管理系操作",     icon: "📅", eff: effIsManager, def: defaultIsManager,        overrideKey: "override_is_manager",         hint: "タイムチャート編集・営業締め・精算・金庫など" },
+            { key: "tax",    label: "税理士ポータル", icon: "📒", eff: effCanTax,    def: defaultCanTaxPortal,     overrideKey: "override_can_tax_portal",     hint: "売上/経費/セラピスト支払/書類庫/銀行取込 など" },
+            { key: "cash",   label: "資金管理",       icon: "💴", eff: effCanCash,   def: defaultCanCashDashboard, overrideKey: "override_can_cash_dashboard", hint: "5財布のリアルタイム表示・ATM預入・豊橋予備金管理" },
           ];
 
           const roleLabelFn: Record<string, string> = { owner: "社長(owner)", manager: "経営責任者(manager)", leader: "店長(leader)", supervisor: "責任者(supervisor)", staff: "スタッフ(staff)" };
