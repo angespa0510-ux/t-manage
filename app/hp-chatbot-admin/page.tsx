@@ -522,6 +522,9 @@ export default function HpChatbotAdminPage() {
                 rows={3}
                 style={inputStyle(T)}
               />
+              <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
+                💡 URL・<code style={{ fontSize: 11 }}>/access</code> など内部パス・電話番号は自動でリンクになります
+              </p>
             </Field>
             <Field label="フォールバックメッセージ (AI応答できない時)">
               <textarea
@@ -530,6 +533,9 @@ export default function HpChatbotAdminPage() {
                 rows={2}
                 style={inputStyle(T)}
               />
+              <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
+                💡 「お電話で承ります <code style={{ fontSize: 11 }}>070-1675-5900</code>」のように番号を書くと自動でタップ発信できます
+              </p>
             </Field>
             <Field label="AIフォールバック有効">
               <Toggle
@@ -634,13 +640,20 @@ export default function HpChatbotAdminPage() {
                 style={inputStyle(T)}
               />
             </Field>
-            <Field label="回答 (Markdown可)">
+            <Field label="回答">
               <textarea
                 value={editingFaq.answer || ""}
                 onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })}
                 rows={6}
+                placeholder="例: アクセス情報は /access からご確認いただけます。お電話の場合は 070-1675-5900 までどうぞ。"
                 style={inputStyle(T)}
               />
+              <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
+                💡 <strong>URL・内部パス・電話番号</strong>を文中に書くと、自動でクリック可能なリンクになります。<br />
+                ・<code style={{ fontSize: 11 }}>https://example.com</code> → 新タブで開く<br />
+                ・<code style={{ fontSize: 11 }}>/access</code> や <code style={{ fontSize: 11 }}>/schedule</code> → ページ遷移<br />
+                ・<code style={{ fontSize: 11 }}>070-1675-5900</code> → タップで電話発信
+              </p>
             </Field>
             <Field label="キーワード (カンマ区切り)">
               <input
