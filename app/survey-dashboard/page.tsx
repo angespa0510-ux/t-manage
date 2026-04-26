@@ -94,13 +94,21 @@ export default function SurveyDashboardPage() {
   const [selectedSurvey, setSelectedSurvey] = useState<Survey | null>(null);
   const [savingHpPublish, setSavingHpPublish] = useState(false);
 
+  // JST 基準での日付（UTC とのズレで「今日」がずれないように）
+  const todayJst = () => {
+    const now = new Date();
+    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    return jst.toISOString().split("T")[0];
+  };
+
   // フィルタ
   const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split("T")[0];
+    const now = new Date();
+    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    jst.setDate(jst.getDate() - 30);
+    return jst.toISOString().split("T")[0];
   });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
+  const [dateTo, setDateTo] = useState(() => todayJst());
   const [therapistFilter, setTherapistFilter] = useState<number>(0);
 
   // 認証 (セッション復元後にチェック)
@@ -121,8 +129,9 @@ export default function SurveyDashboardPage() {
 
   const fetchAllData = async () => {
     setLoading(true);
-    const fromIso = new Date(dateFrom + "T00:00:00").toISOString();
-    const toIso = new Date(dateTo + "T23:59:59").toISOString();
+    // JST タイムゾーンを明示してUTC変換（日付の境界ズレを防ぐ）
+    const fromIso = new Date(`${dateFrom}T00:00:00+09:00`).toISOString();
+    const toIso = new Date(`${dateTo}T23:59:59+09:00`).toISOString();
 
     const [surveysRes, thRes, custRes, storesRes, ptRes] = await Promise.all([
       supabase
