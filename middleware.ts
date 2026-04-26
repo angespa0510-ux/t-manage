@@ -174,8 +174,20 @@ export function middleware(req: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
-  // ──────── 6. t-manage.vercel.app など(開発・移行暫定)────────
-  // 暫定で全機能アクセス可。Phase 2 以降で挙動を変える可能性あり。
+  // ──────── 6. t-manage.vercel.app などのデフォルト ────────
+  // 開発・移行用。ange-spa.jp と同じルーティングを適用して
+  // 旧URLリダイレクト + /admin/* リライトが動くようにする。
+  // 1-a. 旧URL を新URL へ 301 リダイレクト(互換)
+  if (LEGACY_REDIRECTS[path]) {
+    url.pathname = LEGACY_REDIRECTS[path];
+    return NextResponse.redirect(url, 301);
+  }
+  // 1-b. /admin/* を内部リライト
+  const rewrittenDefault = rewriteAdminPath(path);
+  if (rewrittenDefault) {
+    url.pathname = rewrittenDefault;
+    return NextResponse.rewrite(url);
+  }
   return NextResponse.next();
 }
 
