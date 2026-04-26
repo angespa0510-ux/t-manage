@@ -33,7 +33,7 @@ export default function WebBookingSettings() {
   };
 
   const publicUrl = `${origin}/schedule`;
-  const mypageUrl = `${origin}/customer-mypage`;
+  const mypageUrl = `${origin}/mypage`;
 
   const copyUrl = (url: string, label: string) => {
     navigator.clipboard.writeText(url);

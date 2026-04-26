@@ -98,7 +98,7 @@ export function CtiPopupProvider({ children }: { children: React.ReactNode }) {
 
     const noCtiPaths = [
       "/corporate",
-      "/customer-mypage",
+      "/mypage",
       "/mypage",
       "/confirm-email",
       "/confirm-staff-email",

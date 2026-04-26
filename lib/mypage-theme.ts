@@ -62,12 +62,12 @@ export const MYPAGE = {
   // 画像スロット（/public/mypage/ に配置予定）
   // 存在しなければフォールバック表示
   images: {
-    heroLogin:       "/mypage/hero-login.jpg",          // ログイン画面背景
-    heroHome:        "/mypage/hero-home.jpg",           // ホーム上部装飾
-    emptyReservation: "/mypage/empty-reservation.jpg",  // 次回予約なし
-    emptyFavorite:   "/mypage/empty-favorite.jpg",      // お気に入りなし
-    emptyNotification: "/mypage/empty-notification.jpg",// お知らせなし
-    welcomeLoop:     "/mypage/welcome-loop.mp4",        // ホーム動画
+    heroLogin:       "/cast/hero-login.jpg",          // ログイン画面背景
+    heroHome:        "/cast/hero-home.jpg",           // ホーム上部装飾
+    emptyReservation: "/cast/empty-reservation.jpg",  // 次回予約なし
+    emptyFavorite:   "/cast/empty-favorite.jpg",      // お気に入りなし
+    emptyNotification: "/cast/empty-notification.jpg",// お知らせなし
+    welcomeLoop:     "/cast/welcome-loop.mp4",        // ホーム動画
   },
 } as const;
 

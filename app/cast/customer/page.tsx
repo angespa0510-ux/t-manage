@@ -106,7 +106,7 @@ function CustomerDetailInner() {
       <div className="rounded-2xl border p-8 text-center max-w-sm w-full" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <p className="text-[40px] mb-4">🔒</p>
         <p className="text-[14px] font-medium mb-2">{error}</p>
-        <a href="/mypage" className="inline-block mt-4 px-6 py-2.5 rounded-xl text-[12px] text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>マイページへ</a>
+        <a href="/cast" className="inline-block mt-4 px-6 py-2.5 rounded-xl text-[12px] text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>マイページへ</a>
       </div>
     </div>
   );
@@ -115,7 +115,7 @@ function CustomerDetailInner() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: T.bg, color: T.text }}>
       <div className="rounded-2xl border p-8 text-center max-w-sm w-full" style={{ backgroundColor: T.card, borderColor: T.border }}>
         <p className="text-[14px]" style={{ color: T.textMuted }}>お客様名が指定されていません</p>
-        <a href="/mypage" className="inline-block mt-4 px-6 py-2.5 rounded-xl text-[12px] text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>マイページへ</a>
+        <a href="/cast" className="inline-block mt-4 px-6 py-2.5 rounded-xl text-[12px] text-white" style={{ background: "linear-gradient(135deg, #e8849a, #d4687e)" }}>マイページへ</a>
       </div>
     </div>
   );
@@ -279,7 +279,7 @@ function CustomerDetailInner() {
 
           {/* マイページへ戻る */}
           <div className="text-center py-4">
-            <a href="/mypage" className="text-[11px] underline" style={{ color: T.textMuted }}>← マイページに戻る</a>
+            <a href="/cast" className="text-[11px] underline" style={{ color: T.textMuted }}>← マイページに戻る</a>
           </div>
         </div>
       )}

@@ -664,7 +664,7 @@ export default function TherapistDetailPage({
                     />
                     {locked && (
                       <Link
-                        href="/customer-mypage"
+                        href="/mypage"
                         style={{
                           position: "absolute",
                           inset: 0,
@@ -742,7 +742,7 @@ export default function TherapistDetailPage({
                   会員登録すると、非公開の特別な写真をご覧いただけます
                 </p>
                 <Link
-                  href="/customer-mypage"
+                  href="/mypage"
                   style={{
                     display: "inline-block",
                     padding: "12px 32px",

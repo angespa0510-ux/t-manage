@@ -44,7 +44,7 @@ export default function StaffLogin() {
       }
       const customerId = localStorage.getItem("customer_mypage_id");
       if (customerId) {
-        router.replace("/customer-mypage");
+        router.replace("/mypage");
         return;
       }
       const staffSession = sessionStorage.getItem("t-manage-staff");
@@ -114,7 +114,7 @@ export default function StaffLogin() {
               <div style={{ fontSize: 12, color: "#c3a782", fontWeight: 500, letterSpacing: "0.05em" }}>セラピスト</div>
             </a>
             <a
-              href="/customer-mypage"
+              href="/mypage"
               style={{ display: "block", border: "1px solid #e8849a55", backgroundColor: "rgba(232,132,154,0.04)", padding: "11px 10px", textAlign: "center", textDecoration: "none", fontFamily: FONT_SERIF }}
             >
               <div style={{ fontFamily: FONT_DISPLAY, fontSize: 10, color: "#8a8a8a", marginBottom: 3, letterSpacing: "0.2em", fontWeight: 500 }}>CUSTOMER</div>

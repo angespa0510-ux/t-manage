@@ -770,7 +770,7 @@ export default function DiaryDetailPage({ params }: { params: Promise<{ id: stri
           <button
             onClick={() => {
               if (!customer) {
-                router.push("/customer-mypage");
+                router.push("/mypage");
                 return;
               }
               setGiftModalOpen(true);

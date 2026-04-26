@@ -965,7 +965,7 @@ export default function SpouseGuidePage() {
           <h2 className="text-[13px] font-semibold mb-3">🔗 関連ガイド</h2>
           <div className="space-y-2">
             <Link
-              href="/mypage/tax-guide"
+              href="/cast/tax-guide"
               className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
               style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
             >
@@ -981,7 +981,7 @@ export default function SpouseGuidePage() {
               <span style={{ color: T.textMuted, fontSize: 14 }}>→</span>
             </Link>
             <Link
-              href="/mypage/invoice-guide"
+              href="/cast/invoice-guide"
               className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
               style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
             >
@@ -1022,7 +1022,7 @@ export default function SpouseGuidePage() {
             不安なことがあれば、店長や税理士さん、市役所の税務課にも相談してくださいね。
           </p>
           <Link
-            href="/mypage"
+            href="/cast"
             className="inline-block mt-3 text-[11px] px-4 py-2 rounded-full cursor-pointer"
             style={{
               backgroundColor: PURPLE,

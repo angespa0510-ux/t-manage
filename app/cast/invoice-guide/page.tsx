@@ -987,7 +987,7 @@ export default function InvoiceGuidePage() {
           </div>
 
           <Link
-            href="/mypage?tab=tax"
+            href="/cast?tab=tax"
             className="block text-center py-3 rounded-xl text-[12px] font-bold"
             style={{
               background: `linear-gradient(135deg, ${GREEN}, #3a6b4a)`,
@@ -1012,7 +1012,7 @@ export default function InvoiceGuidePage() {
           <h2 className="text-[13px] font-semibold mb-3">🔗 関連ガイド</h2>
           <div className="space-y-2">
             <Link
-              href="/mypage/tax-guide"
+              href="/cast/tax-guide"
               className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
               style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
             >
@@ -1031,7 +1031,7 @@ export default function InvoiceGuidePage() {
               <span style={{ color: T.textMuted, fontSize: 14 }}>→</span>
             </Link>
             <Link
-              href="/mypage/spouse-guide"
+              href="/cast/spouse-guide"
               className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
               style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}
             >
@@ -1075,7 +1075,7 @@ export default function InvoiceGuidePage() {
             税理士さんのご紹介も可能です。
           </p>
           <Link
-            href="/mypage"
+            href="/cast"
             className="inline-block mt-3 text-[11px] px-4 py-2 rounded-full cursor-pointer"
             style={{
               background: `linear-gradient(135deg, ${GOLD}, #b09672)`,

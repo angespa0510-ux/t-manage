@@ -17,65 +17,65 @@ type NavItem = { icon: string; label: string; path: string; category: string; re
 
 const NAV_ITEMS: NavItem[] = [
   // ── 日常業務（毎日使うもの）──
-  { icon: "🏠", label: "HOME",        path: "/dashboard",              category: "日常業務" },
-  { icon: "📅", label: "タイムチャート", path: "/timechart",              category: "日常業務" },
-  { icon: "🏢", label: "部屋割り管理",  path: "/room-assignments",       category: "日常業務" },
-  { icon: "💰", label: "経費管理",      path: "/expenses",               category: "日常業務" },
+  { icon: "🏠", label: "HOME",        path: "/admin/dashboard",              category: "日常業務" },
+  { icon: "📅", label: "タイムチャート", path: "/admin/timechart",              category: "日常業務" },
+  { icon: "🏢", label: "部屋割り管理",  path: "/admin/room-assignments",       category: "日常業務" },
+  { icon: "💰", label: "経費管理",      path: "/admin/expenses",               category: "日常業務" },
   { icon: "🔒", label: "営業締め",      path: "DASHBOARD_PAGE:営業締め",  category: "日常業務" },
-  { icon: "🎙", label: "通話AI",       path: "/call-test",              category: "日常業務", requiresCallAssistant: true },
+  { icon: "🎙", label: "通話AI",       path: "/admin/call-test",              category: "日常業務", requiresCallAssistant: true },
 
   // ── 売上 ──
-  { icon: "📊", label: "売上分析",  path: "/analytics",      category: "売上" },
-  { icon: "📈", label: "集客分析",  path: "/marketing-analytics", category: "売上", requiresManager: true },
-  { icon: "📋", label: "バックオフィス",  path: "/tax-dashboard",  category: "売上", requiresCashDashboard: true },
-  { icon: "💴", label: "資金管理", path: "/cash-dashboard", category: "売上", requiresCashDashboard: true },
-  { icon: "📦", label: "棚卸管理", path: "/inventory", category: "売上", requiresCashDashboard: true },
-  { icon: "📒", label: "税理士ポータル", path: "/tax-portal", category: "売上", requiresTaxPortal: true },
+  { icon: "📊", label: "売上分析",  path: "/admin/analytics",      category: "売上" },
+  { icon: "📈", label: "集客分析",  path: "/admin/marketing-analytics", category: "売上", requiresManager: true },
+  { icon: "📋", label: "バックオフィス",  path: "/admin/tax-dashboard",  category: "売上", requiresCashDashboard: true },
+  { icon: "💴", label: "資金管理", path: "/admin/cash-dashboard", category: "売上", requiresCashDashboard: true },
+  { icon: "📦", label: "棚卸管理", path: "/admin/inventory", category: "売上", requiresCashDashboard: true },
+  { icon: "📒", label: "税理士ポータル", path: "/admin/tax-portal", category: "売上", requiresTaxPortal: true },
 
   // ── 顧客 ──
   { icon: "👥", label: "顧客一覧",       path: "DASHBOARD_PAGE:顧客一覧",    category: "顧客" },
   { icon: "📝", label: "顧客登録",       path: "DASHBOARD_PAGE:顧客登録",    category: "顧客" },
   { icon: "🎁", label: "ポイント管理",    path: "DASHBOARD_PAGE:ポイント管理", category: "顧客" },
-  { icon: "🔔", label: "会員お知らせ投稿", path: "/notification-post",         category: "顧客" },
-  { icon: "📱", label: "お客様マイページ", path: "/customer-mypage",           category: "顧客" },
+  { icon: "🔔", label: "会員お知らせ投稿", path: "/admin/notification-post",         category: "顧客" },
+  { icon: "📱", label: "お客様マイページ", path: "/mypage",           category: "顧客" },
 
   // ── セラピスト ──
-  { icon: "⏰", label: "セラピスト勤怠",       path: "/shifts",                       category: "セラピスト" },
-  { icon: "💆", label: "セラピスト登録",       path: "/therapists",                   category: "セラピスト" },
-  { icon: "📢", label: "セラピストお知らせ投稿", path: "/therapist-notification-post",  category: "セラピスト" },
-  { icon: "👤", label: "セラピストマイページ",  path: "/mypage",                       category: "セラピスト" },
-  { icon: "🎬", label: "AI動画生成",           path: "/video-generator",              category: "セラピスト" },
-  { icon: "💬", label: "チャット",             path: "/chat",                         category: "セラピスト" },
-  { icon: "📖", label: "マニュアル管理",       path: "/manual",                       category: "セラピスト" },
-  { icon: "📸", label: "写メ日記管理",         path: "/diary-moderation",             category: "セラピスト", requiresManager: true },
-  { icon: "📡", label: "ストーリー監視",       path: "/story-moderation",             category: "セラピスト", requiresManager: true },
-  { icon: "🦋", label: "Bluesky連携",          path: "/bluesky-admin",                category: "セラピスト", requiresManager: true },
-  { icon: "🎬", label: "ライブ配信管理",        path: "/live-admin",                   category: "セラピスト", requiresManager: true },
-  { icon: "📧", label: "駅ちか設定",           path: "/ekichika-settings",            category: "セラピスト", requiresManager: true },
-  { icon: "📨", label: "通知ダッシュボード",    path: "/notification-dashboard",       category: "セラピスト", requiresManager: true },
+  { icon: "⏰", label: "セラピスト勤怠",       path: "/admin/shifts",                       category: "セラピスト" },
+  { icon: "💆", label: "セラピスト登録",       path: "/admin/therapists",                   category: "セラピスト" },
+  { icon: "📢", label: "セラピストお知らせ投稿", path: "/admin/therapist-notification-post",  category: "セラピスト" },
+  { icon: "👤", label: "セラピストマイページ",  path: "/cast",                       category: "セラピスト" },
+  { icon: "🎬", label: "AI動画生成",           path: "/admin/video-generator",              category: "セラピスト" },
+  { icon: "💬", label: "チャット",             path: "/admin/chat",                         category: "セラピスト" },
+  { icon: "📖", label: "マニュアル管理",       path: "/admin/manual",                       category: "セラピスト" },
+  { icon: "📸", label: "写メ日記管理",         path: "/admin/diary-moderation",             category: "セラピスト", requiresManager: true },
+  { icon: "📡", label: "ストーリー監視",       path: "/admin/story-moderation",             category: "セラピスト", requiresManager: true },
+  { icon: "🦋", label: "Bluesky連携",          path: "/admin/bluesky-admin",                category: "セラピスト", requiresManager: true },
+  { icon: "🎬", label: "ライブ配信管理",        path: "/admin/live-admin",                   category: "セラピスト", requiresManager: true },
+  { icon: "📧", label: "駅ちか設定",           path: "/admin/ekichika-settings",            category: "セラピスト", requiresManager: true },
+  { icon: "📨", label: "通知ダッシュボード",    path: "/admin/notification-dashboard",       category: "セラピスト", requiresManager: true },
 
   // ── スタッフ ──
-  { icon: "📊", label: "スタッフ勤怠",  path: "/staff-attendance",  category: "スタッフ" },
-  { icon: "👥", label: "スタッフ設定",  path: "/staff",  category: "スタッフ" },
+  { icon: "📊", label: "スタッフ勤怠",  path: "/admin/staff-attendance",  category: "スタッフ" },
+  { icon: "👥", label: "スタッフ設定",  path: "/admin/staff",  category: "スタッフ" },
 
   // ── その他 ──
-  { icon: "📺", label: "カメラ・ロック管理", path: "/camera",        category: "その他" },
-  { icon: "📡", label: "IoTデバイス設定",   path: "/iot-settings",  category: "その他" },
-  { icon: "📞", label: "CTI監視",          path: "/cti-monitor",   category: "その他", requiresManager: true },
-  { icon: "🤖", label: "HPチャットBOT",    path: "/hp-chatbot-admin", category: "その他", requiresManager: true },
-  { icon: "📸", label: "HP写真管理",       path: "/hp-photos-admin", category: "その他", requiresManager: true },
-  { icon: "🧠", label: "チャット分析",       path: "/chat-insights",   category: "その他", requiresManager: true },
+  { icon: "📺", label: "カメラ・ロック管理", path: "/admin/camera",        category: "その他" },
+  { icon: "📡", label: "IoTデバイス設定",   path: "/admin/iot-settings",  category: "その他" },
+  { icon: "📞", label: "CTI監視",          path: "/admin/cti-monitor",   category: "その他", requiresManager: true },
+  { icon: "🤖", label: "HPチャットBOT",    path: "/admin/hp-chatbot-admin", category: "その他", requiresManager: true },
+  { icon: "📸", label: "HP写真管理",       path: "/admin/hp-photos-admin", category: "その他", requiresManager: true },
+  { icon: "🧠", label: "チャット分析",       path: "/admin/chat-insights",   category: "その他", requiresManager: true },
 
   // ── 登録・設定 ──
-  { icon: "📋", label: "コース登録",    path: "/courses",           category: "登録・設定" },
-  { icon: "🔑", label: "利用場所登録",  path: "/rooms",             category: "登録・設定" },
-  { icon: "📱", label: "電話番号バックアップ", path: "/contact-sync", category: "登録・設定" },
-  { icon: "🌐", label: "WEB予約公開設定", path: "/web-booking-settings", category: "登録・設定" },
-  { icon: "⚙️", label: "サービス設定",  path: "/service-settings",  category: "登録・設定" },
-  { icon: "🛠️", label: "システム設定",  path: "/system-setup",      category: "登録・設定" },
+  { icon: "📋", label: "コース登録",    path: "/admin/courses",           category: "登録・設定" },
+  { icon: "🔑", label: "利用場所登録",  path: "/admin/rooms",             category: "登録・設定" },
+  { icon: "📱", label: "電話番号バックアップ", path: "/admin/contact-sync", category: "登録・設定" },
+  { icon: "🌐", label: "WEB予約公開設定", path: "/admin/web-booking-settings", category: "登録・設定" },
+  { icon: "⚙️", label: "サービス設定",  path: "/admin/service-settings",  category: "登録・設定" },
+  { icon: "🛠️", label: "システム設定",  path: "/admin/system-setup",      category: "登録・設定" },
 
   // ── マニュアル ──
-  { icon: "📖", label: "操作マニュアル", path: "/operations-manual", category: "マニュアル" },
+  { icon: "📖", label: "操作マニュアル", path: "/admin/operations-manual", category: "マニュアル" },
 ];
 
 // ── サイドバー本体 ─────────────────────────────────
@@ -99,10 +99,12 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
   const handleClick = (item: NavItem) => {
     if (item.path.startsWith("DASHBOARD_PAGE:")) {
       const page = item.path.split(":")[1];
-      if (window.location.pathname === "/dashboard") {
+      const onDashboard = window.location.pathname === "/admin/dashboard"
+        || window.location.pathname === "/dashboard";
+      if (onDashboard) {
         window.dispatchEvent(new CustomEvent("dashboardPage", { detail: page }));
       } else {
-        router.push(`/dashboard?page=${encodeURIComponent(page)}`);
+        router.push(`/admin/dashboard?page=${encodeURIComponent(page)}`);
       }
     } else {
       router.push(item.path);

@@ -35,7 +35,7 @@ export default function robots(): MetadataRoute.Robots {
           "/shifts",
           "/staff",
           "/mypage",
-          "/customer-mypage",
+          "/mypage",
           "/api/",
           "/tax-portal",
           "/cash-dashboard",

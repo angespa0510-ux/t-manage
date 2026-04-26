@@ -41,7 +41,7 @@ export default function GuidePageHero({
   title,
   subtitle,
   marble = "pink",
-  backHref = "/mypage",
+  backHref = "/cast",
   backLabel = "マイページに戻る",
 }: {
   label: string;   // 英文ラベル (e.g. "TAX GUIDE")

@@ -510,7 +510,7 @@ export default function LiveBroadcastPage() {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
 
       // マイページへ戻る
-      router.push("/mypage");
+      router.push("/cast");
     } catch (e) {
       console.error(e);
     }
@@ -598,7 +598,7 @@ export default function LiveBroadcastPage() {
       {/* ヘッダ */}
       <div style={{ padding: 14, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button
-          onClick={() => phase === "live" ? endBroadcast() : router.push("/mypage")}
+          onClick={() => phase === "live" ? endBroadcast() : router.push("/cast")}
           style={{ padding: "6px 10px", fontSize: 11, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${C.border}`, color: C.textSub, fontFamily: FONT_SERIF }}
         >
           {phase === "live" ? "✕ 配信終了" : "← マイページに戻る"}
