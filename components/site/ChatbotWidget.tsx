@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { SITE } from "../../lib/site-theme";
 
@@ -57,6 +57,87 @@ const MSGS_KEY = "hp_chatbot_messages";
 
 function genSessionId() {
   return "sess_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+/**
+ * BOT返信メッセージ内のURL・内部パス・電話番号を自動でリンク化する。
+ *
+ * 対応パターン:
+ *   - https://example.com / http://...      → 新タブで開く外部リンク
+ *   - /access, /system, /schedule など      → SPA遷移（同タブ）
+ *   - 070-1234-5678, 0701234567 など        → tel: リンク（電話発信）
+ *
+ * 区切り判定:
+ *   - 句読点(、。) 全角空白 半角空白 ) ] 】 」 で終わったらそこまでをURLとして扱う
+ *
+ * セキュリティ:
+ *   - 外部リンクは noopener noreferrer
+ */
+function renderWithLinks(text: string): ReactNode[] {
+  // URL / 内部パス / 電話番号 を順に検出
+  // - https?://... : 区切り文字が出るまで
+  // - /xxx/yyy    : 英数字 + ハイフン + アンダースコア + スラッシュ
+  // - 電話番号    : 0始まりで桁数 9〜11、ハイフン任意
+  const regex = /(https?:\/\/[^\s、。()（）\[\]【】「」]+|\/[a-zA-Z0-9_\-/]+(?:\?[^\s、。()（）\[\]【】「」]*)?|0\d{1,4}-?\d{1,4}-?\d{4})/g;
+
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    // マッチ前のテキスト
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+
+    const matched = match[0];
+    const linkStyle = {
+      color: SITE.color.pink,
+      textDecoration: "underline",
+      textUnderlineOffset: 2,
+      wordBreak: "break-all" as const,
+    };
+
+    if (matched.startsWith("http")) {
+      // 外部URL: 新タブ
+      parts.push(
+        <a
+          key={key++}
+          href={matched}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={linkStyle}
+        >
+          {matched}
+        </a>
+      );
+    } else if (matched.startsWith("/")) {
+      // 内部パス: Next.js Link で SPA 遷移
+      parts.push(
+        <Link key={key++} href={matched} style={linkStyle}>
+          {matched}
+        </Link>
+      );
+    } else {
+      // 電話番号: tel: リンク
+      const tel = matched.replace(/-/g, "");
+      parts.push(
+        <a key={key++} href={`tel:${tel}`} style={linkStyle}>
+          {matched}
+        </a>
+      );
+    }
+
+    lastIndex = match.index + matched.length;
+  }
+
+  // 残りテキスト
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [text];
 }
 
 export default function ChatbotWidget() {
@@ -433,7 +514,7 @@ export default function ChatbotWidget() {
                       wordBreak: "break-word",
                     }}
                   >
-                    {m.content}
+                    {m.role === "bot" ? renderWithLinks(m.content) : m.content}
                   </div>
 
                   {/* 評価 + CTA */}
