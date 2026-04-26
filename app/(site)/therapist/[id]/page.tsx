@@ -93,8 +93,32 @@ export default function TherapistDetailPage({
   const [mainImage, setMainImage] = useState<string>("");
   const [hpPhotos, setHpPhotos] = useState<HpPhoto[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<HpPhoto | null>(null);
+  const [reviews, setReviews] = useState<Array<{
+    id: number;
+    displayName: string;
+    rating: number;
+    reviewText: string;
+    highlights: string[];
+    publishedAt: string | null;
+    therapistReply: string | null;
+    therapistReplyAt: string | null;
+  }>>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
   const { customer, isLoggedIn } = useCustomerAuth();
   const isMember = isLoggedIn && !!customer;
+
+  // レビュー取得（このセラピストへの公開レビューのみ）
+  useEffect(() => {
+    if (!therapistId) return;
+    setReviewsLoading(true);
+    fetch(`/api/reviews/public?therapistId=${therapistId}&limit=10`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.reviews) setReviews(data.reviews);
+      })
+      .catch(() => {})
+      .finally(() => setReviewsLoading(false));
+  }, [therapistId]);
 
   useEffect(() => {
     (async () => {
@@ -1072,6 +1096,206 @@ export default function TherapistDetailPage({
           </div>
         </div>
       </section>
+
+      {/* ───── お客様の声（このセラピスト宛のレビュー） ───── */}
+      {(reviewsLoading || reviews.length > 0) && (
+        <section
+          style={{
+            padding: `${SITE.sp.section} ${SITE.sp.lg}`,
+            backgroundColor: SITE.color.surface,
+          }}
+        >
+          <div style={{ maxWidth: SITE.layout.maxWidthNarrow, margin: "0 auto" }}>
+            <SectionHeading label="VOICES" title="お客様の声" />
+            {reviewsLoading ? (
+              <p
+                style={{
+                  textAlign: "center",
+                  color: SITE.color.textMuted,
+                  fontSize: "13px",
+                  padding: SITE.sp.xl,
+                }}
+              >
+                読み込み中...
+              </p>
+            ) : (
+              <>
+                {/* 平均評価 */}
+                {reviews.length > 0 && (() => {
+                  const avg = reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length;
+                  return (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        marginBottom: SITE.sp.xl,
+                        padding: `${SITE.sp.md} ${SITE.sp.lg}`,
+                        backgroundColor: SITE.color.pinkSoft,
+                        border: `1px solid ${SITE.color.borderPink}`,
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontFamily: SITE.font.display,
+                          fontSize: 11,
+                          color: SITE.color.textMuted,
+                          letterSpacing: SITE.ls.wide,
+                          marginBottom: 6,
+                        }}
+                      >
+                        AVERAGE RATING
+                      </p>
+                      <p
+                        style={{
+                          color: SITE.color.pinkDeep,
+                          fontSize: 22,
+                          letterSpacing: 3,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {"★".repeat(Math.round(avg))}
+                        <span style={{ color: SITE.color.borderPink }}>
+                          {"★".repeat(5 - Math.round(avg))}
+                        </span>
+                      </p>
+                      <p style={{ fontSize: 12, color: SITE.color.text, fontFamily: SITE.font.serif }}>
+                        {avg.toFixed(1)} <span style={{ fontSize: 10, color: SITE.color.textMuted }}>({reviews.length}件)</span>
+                      </p>
+                    </div>
+                  );
+                })()}
+                {/* レビュー一覧 */}
+                <div style={{ display: "flex", flexDirection: "column", gap: SITE.sp.md }}>
+                  {reviews.map((rv) => {
+                    const date = rv.publishedAt
+                      ? new Date(rv.publishedAt).toLocaleDateString("ja-JP", { year: "numeric", month: "short", day: "numeric" })
+                      : null;
+                    return (
+                      <div
+                        key={rv.id}
+                        style={{
+                          backgroundColor: SITE.color.surfaceAlt,
+                          border: `1px solid ${SITE.color.border}`,
+                          padding: 0,
+                        }}
+                      >
+                        {/* ヘッダー：星評価＋日付 */}
+                        <div
+                          style={{
+                            padding: "12px 16px",
+                            backgroundColor: SITE.color.pinkSoft,
+                            borderBottom: `1px solid ${SITE.color.borderPink}`,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span style={{ color: SITE.color.pinkDeep, fontSize: 14, letterSpacing: 2 }}>
+                            {"★".repeat(rv.rating)}
+                            <span style={{ color: SITE.color.borderPink }}>{"★".repeat(5 - rv.rating)}</span>
+                          </span>
+                          {date && (
+                            <span style={{ fontSize: 10, color: SITE.color.textMuted, fontFamily: SITE.font.display, letterSpacing: 1 }}>
+                              {date}
+                            </span>
+                          )}
+                        </div>
+                        {/* 本文 */}
+                        <div style={{ padding: 16 }}>
+                          {rv.reviewText && (
+                            <p
+                              style={{
+                                fontSize: 13,
+                                lineHeight: 1.85,
+                                color: SITE.color.text,
+                                margin: 0,
+                                marginBottom: 10,
+                                fontFamily: SITE.font.serif,
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
+                              {rv.reviewText}
+                            </p>
+                          )}
+                          {rv.highlights.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+                              {rv.highlights.slice(0, 5).map((h) => (
+                                <span
+                                  key={h}
+                                  style={{
+                                    fontSize: 10,
+                                    padding: "2px 8px",
+                                    backgroundColor: SITE.color.surface,
+                                    color: SITE.color.pinkDeep,
+                                    border: `1px solid ${SITE.color.borderPink}`,
+                                    fontFamily: SITE.font.serif,
+                                  }}
+                                >
+                                  {h}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <p
+                            style={{
+                              fontSize: 11,
+                              color: SITE.color.textMuted,
+                              margin: 0,
+                              fontFamily: SITE.font.serif,
+                              paddingTop: 10,
+                              borderTop: `1px dashed ${SITE.color.border}`,
+                            }}
+                          >
+                            {rv.displayName}
+                          </p>
+                        </div>
+                        {/* セラピスト返信 */}
+                        {rv.therapistReply && (
+                          <div
+                            style={{
+                              margin: "0 16px 16px",
+                              padding: "12px 14px",
+                              backgroundColor: SITE.color.surface,
+                              border: `1px dashed ${SITE.color.borderPink}`,
+                              fontSize: 12,
+                              color: SITE.color.text,
+                              fontFamily: SITE.font.serif,
+                              lineHeight: 1.8,
+                              whiteSpace: "pre-wrap",
+                            }}
+                          >
+                            <p style={{ margin: 0, marginBottom: 6, fontSize: 10, color: SITE.color.pinkDeep, letterSpacing: SITE.ls.wide }}>
+                              {therapist.name} からの返信
+                            </p>
+                            {rv.therapistReply}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* もっと見る */}
+                <div style={{ textAlign: "center", marginTop: SITE.sp.xl }}>
+                  <Link
+                    href="/reviews"
+                    style={{
+                      display: "inline-block",
+                      padding: "10px 28px",
+                      border: `1px solid ${SITE.color.pink}`,
+                      color: SITE.color.pink,
+                      fontFamily: SITE.font.serif,
+                      fontSize: "12px",
+                      letterSpacing: SITE.ls.wide,
+                      textDecoration: "none",
+                    }}
+                  >
+                    全セラピストのお客様の声を見る
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
     </>
   );
 }
