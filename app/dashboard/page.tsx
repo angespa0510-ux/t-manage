@@ -395,34 +395,53 @@ export default function Dashboard() {
       const safeUncollectedList = (safeUncoll || []).map((s: any) => {
         const rm2 = (rooms || []).find((r: any) => r.id === s.room_id);
         const bl2 = rm2 ? (blds || []).find((b: any) => b.id === rm2.building_id) : null;
-        return { date: s.date, therapist: getThName(s.therapist_id), room: `${bl2?.name || ""}${rm2?.name || ""}`, salesAmt: Math.max((s.total_cash || 0) - (s.final_payment || 0), 0), changeAmt: 0 };
+        return { date: s.date, therapist: getThName(s.therapist_id), room: `${bl2?.name || ""}${rm2?.name || ""}`, salesAmt: Math.max((s.total_cash || 0) - (s.final_payment || 0), 0), changeAmt: 0, _room_id: s.room_id };
       });
-      // 各金庫投函の釣銭を取得 (N+1 だが、本ファイル外で個別最適化予定。エラー時は throw)
+
+      // 健康診断レポート 2026-04-26 Fix #9: N+1 解消
+      // 旧式は loop 内で各 (room_id, date) ごとに 1 クエリ × 件数 → 数十回のラウンドトリップ
+      // 新式は 1 クエリで関連分を一括取得 → Map で O(1) lookup
+      const collectKeys = (rows: any[]): { roomIds: number[]; dates: string[] } => {
+        const roomIds = Array.from(new Set(rows.map((r: any) => r.room_id).filter((x: any) => x > 0))) as number[];
+        const dates = Array.from(new Set(rows.map((r: any) => r.date))) as string[];
+        return { roomIds, dates };
+      };
+      const buildRepKey = (roomId: number, date: string) => `${roomId}::${date}`;
+
+      // 未回収・本日回収 をまとめて 1 つのバッチで取得
+      const allSafeRows = [...(safeUncoll || []), ...(safeCollToday || [])];
+      const { roomIds: safeRoomIds, dates: safeDates } = collectKeys(allSafeRows);
+      const safeRepMap = new Map<string, number>();
+      if (safeRoomIds.length > 0 && safeDates.length > 0) {
+        const repRows = await expectOk<any[]>(
+          supabase.from("room_cash_replenishments")
+            .select("room_id,date,amount")
+            .in("room_id", safeRoomIds)
+            .in("date", safeDates),
+          "room_cash_replenishments(safe_batch)"
+        );
+        for (const r of (repRows || [])) {
+          const key = buildRepKey(r.room_id, r.date);
+          safeRepMap.set(key, (safeRepMap.get(key) || 0) + (r.amount || 0));
+        }
+      }
+
+      // 各 safeUncollectedList 行に changeAmt を補完（DB アクセスなし、Map lookup）
       for (const su of safeUncollectedList) {
-        const roomMatch = (rooms || []).find((r: any) => su.room.includes(r.name || ""));
-        if (roomMatch) {
-          const repSafe = await expectOk<any[]>(
-            supabase.from("room_cash_replenishments").select("amount").eq("room_id", roomMatch.id).eq("date", su.date),
-            `room_cash_replenishments(safe_uncollected/${su.date})`
-          );
-          su.changeAmt = (repSafe || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
+        if (su._room_id > 0) {
+          su.changeAmt = safeRepMap.get(buildRepKey(su._room_id, su.date)) || 0;
         }
       }
       const safeTotalUncollected = safeUncollectedList.reduce((s: number, x: any) => s + x.salesAmt + x.changeAmt, 0);
 
-      // 金庫回収分（本日回収）
-      const safeCollectedTodayList: { date: string; therapist: string; room: string; amount: number }[] = [];
-      for (const sc of (safeCollToday || [])) {
+      // 金庫回収分（本日回収）も同じ Map で組み立て
+      const safeCollectedTodayList: { date: string; therapist: string; room: string; amount: number }[] = (safeCollToday || []).map((sc: any) => {
         const rm3 = (rooms || []).find((r: any) => r.id === sc.room_id);
         const bl3 = rm3 ? (blds || []).find((b: any) => b.id === rm3.building_id) : null;
         const net3 = Math.max((sc.total_cash || 0) - (sc.final_payment || 0), 0);
-        const repSc = await expectOk<any[]>(
-          supabase.from("room_cash_replenishments").select("amount").eq("room_id", sc.room_id).eq("date", sc.date),
-          `room_cash_replenishments(safe_collected/${sc.id})`
-        );
-        const repAmt3 = (repSc || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
-        safeCollectedTodayList.push({ date: sc.date, therapist: getThName(sc.therapist_id), room: `${bl3?.name || ""}${rm3?.name || ""}`, amount: net3 + repAmt3 });
-      }
+        const repAmt3 = safeRepMap.get(buildRepKey(sc.room_id, sc.date)) || 0;
+        return { date: sc.date, therapist: getThName(sc.therapist_id), room: `${bl3?.name || ""}${rm3?.name || ""}`, amount: net3 + repAmt3 };
+      });
       const safeCollectedTodayTotal = safeCollectedTodayList.reduce((s: number, x: any) => s + x.amount, 0);
 
       // 豊橋予備金使用額（本日、精算モーダルから立替された分）
