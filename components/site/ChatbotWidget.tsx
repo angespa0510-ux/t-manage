@@ -76,6 +76,10 @@ function genSessionId() {
  *   - 外部リンクは noopener noreferrer
  */
 function renderWithLinks(text: string): ReactNode[] {
+  // "\n" リテラル文字列 → 実際の改行に変換
+  // (DB の text カラムに '\\n' として保存されている場合の正規化)
+  const normalized = text.replace(/\\n/g, '\n');
+
   // 統合正規表現:
   //   group1 = Markdown全体 / group2 = ラベル / group3 = URL
   //   group4 = 生URL / 内部パス / 電話番号
@@ -119,10 +123,10 @@ function renderWithLinks(text: string): ReactNode[] {
     }
   };
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(normalized)) !== null) {
     // マッチ前のテキスト
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      parts.push(normalized.slice(lastIndex, match.index));
     }
 
     if (match[1]) {
@@ -140,11 +144,11 @@ function renderWithLinks(text: string): ReactNode[] {
   }
 
   // 残りテキスト
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+  if (lastIndex < normalized.length) {
+    parts.push(normalized.slice(lastIndex));
   }
 
-  return parts.length > 0 ? parts : [text];
+  return parts.length > 0 ? parts : [normalized];
 }
 
 export default function ChatbotWidget() {
