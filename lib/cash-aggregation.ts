@@ -87,14 +87,28 @@ export async function fetchSafeListData(): Promise<{
     return (bl?.name || "") + (rm.name || "");
   };
 
-  // 各 settlement 行に対する釣銭補充額の取得（現状 N+1。Fix #9 で最適化予定）
-  const buildItem = async (s: any): Promise<SafeListItem> => {
-    const { data: rep } = await supabase
+  // 健康診断レポート 2026-04-26 Fix #9 補完: N+1 解消
+  // 旧式は各 settlement 行ごとに room_cash_replenishments を 1 クエリ取得していた。
+  // 新式は (room_id, date) のユニークセットを集めて 1 クエリで一括取得 → Map で O(1) lookup。
+  const allRows = [...sfList, ...sfHList];
+  const roomIds = Array.from(new Set(allRows.map((s: any) => s.room_id).filter((x: any) => x > 0))) as number[];
+  const dates = Array.from(new Set(allRows.map((s: any) => s.date))) as string[];
+
+  const repMap = new Map<string, number>();
+  if (roomIds.length > 0 && dates.length > 0) {
+    const { data: repRows } = await supabase
       .from("room_cash_replenishments")
-      .select("amount")
-      .eq("room_id", s.room_id)
-      .eq("date", s.date);
-    const repAmt = (rep || []).reduce((sum: number, r: any) => sum + (r.amount || 0), 0);
+      .select("room_id,date,amount")
+      .in("room_id", roomIds)
+      .in("date", dates);
+    for (const r of (repRows || [])) {
+      const key = `${r.room_id}::${r.date}`;
+      repMap.set(key, (repMap.get(key) || 0) + (r.amount || 0));
+    }
+  }
+
+  const buildItem = (s: any): SafeListItem => {
+    const repAmt = repMap.get(`${s.room_id}::${s.date}`) || 0;
     return {
       id: s.id,
       date: s.date,
@@ -107,14 +121,11 @@ export async function fetchSafeListData(): Promise<{
     };
   };
 
-  // 並列に釣銭額を引く（Promise.all で順次でなく同時実行）
-  const [uncollected, history] = await Promise.all([
-    Promise.all(sfList.map(buildItem)),
-    Promise.all(sfHList.map(async (s: any): Promise<SafeHistoryItem> => {
-      const base = await buildItem(s);
-      return { ...base, safe_collected_date: s.safe_collected_date };
-    })),
-  ]);
+  const uncollected = sfList.map(buildItem);
+  const history: SafeHistoryItem[] = sfHList.map((s: any) => ({
+    ...buildItem(s),
+    safe_collected_date: s.safe_collected_date,
+  }));
 
   return { uncollected, history };
 }
