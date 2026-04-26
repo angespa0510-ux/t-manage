@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 import { useStaffSession } from "../../lib/staff-session";
 import { useTheme } from "../../lib/theme";
 import { useConfirm } from "../../components/useConfirm";
+import { isSafeUncollected } from "../../lib/cash-aggregation";
 import { runAutoSettlementIfDue } from "../../lib/staff-advances";
 
 /* ─────────── 型定義 ─────────── */
@@ -363,7 +364,8 @@ export default function CashDashboard() {
   }, 0);
 
   // 金庫未回収（金庫に投函済みだが、まだ回収していない分）
-  const safeUncollectedSettlements = settlements.filter(s => s.safe_deposited && !s.safe_collected_date);
+  // 健康診断レポート 2026-04-26 Fix #8: 述語を lib/cash-aggregation.ts の SSOT に統一
+  const safeUncollectedSettlements = settlements.filter(isSafeUncollected);
   const safeUncollected = safeUncollectedSettlements.reduce((sum, s) => {
     const net = Math.max((s.total_cash || 0) - (s.final_payment || 0), 0);
     const rep = replenishAll.filter(r => r.room_id === s.room_id && r.date === s.date).reduce((a, b) => a + (b.amount || 0), 0);
