@@ -1,7 +1,7 @@
 {
-  "name": "T-MANAGE | チョップ",
-  "short_name": "T-MANAGE",
-  "description": "リラクゼーションサロン「チョップ」の統合管理システム",
+  "name": "Ange Spa",
+  "short_name": "Ange Spa",
+  "description": "リラクゼーションサロン Ange Spa の予約・マイページ",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -39,14 +39,14 @@
     {
       "name": "お客様マイページ",
       "short_name": "マイページ",
-      "description": "予約・歩数・ポイントを確認",
-      "url": "/customer-mypage"
+      "description": "予約・ポイント・お気に入りを確認",
+      "url": "/mypage"
     },
     {
       "name": "セラピストマイページ",
       "short_name": "セラピスト",
       "description": "シフト・給料・マニュアル",
-      "url": "/mypage"
+      "url": "/cast"
     }
   ]
 }

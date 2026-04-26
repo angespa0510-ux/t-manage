@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "T-MANAGE",
+    title: "Ange Spa",
   },
   icons: {
     icon: [

@@ -94,7 +94,7 @@ export default function InstallPrompt({ dismissKey }: Props) {
           <div style={{ fontSize: 36, marginBottom: 8 }}>📱</div>
           <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: "#c96b83", fontWeight: 500 }}>INSTALL</p>
           <p style={{ margin: "6px 0 4px", fontSize: 15, fontWeight: 500, color: "#2b2b2b", letterSpacing: "0.1em" }}>
-            T-MANAGE をアプリとして使う
+            Ange Spa をアプリとして使う
           </p>
           <div style={{ width: 24, height: 1, backgroundColor: "#e8849a", margin: "0 auto 8px" }} />
           <p style={{ margin: 0, fontSize: 11, color: "#8a8a8a", letterSpacing: "0.08em" }}>

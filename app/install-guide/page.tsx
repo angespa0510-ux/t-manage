@@ -135,7 +135,7 @@ export default function InstallGuidePage() {
             </Step>
 
             <Step num={4} title="ホーム画面のアイコンから開く" highlight>
-              <p style={{ margin: 0 }}><strong style={{ color: COLOR.warn }}>ここが大切！</strong> Safari を閉じて、ホーム画面に現れた「T-MANAGE」のアイコンから開き直してください。</p>
+              <p style={{ margin: 0 }}><strong style={{ color: COLOR.warn }}>ここが大切！</strong> Safari を閉じて、ホーム画面に現れた「Ange Spa」のアイコンから開き直してください。</p>
               <p style={{ margin: "8px 0 0", fontSize: 11, color: COLOR.textMuted, letterSpacing: "0.02em" }}>
                 ※ Safari から直接開くと通知などの機能が使えません
               </p>
@@ -179,7 +179,7 @@ export default function InstallGuidePage() {
             </Step>
 
             <Step num={4} title="ホーム画面のアイコンから開く" highlight>
-              <p style={{ margin: 0 }}>ホーム画面に現れた「T-MANAGE」のアイコンから開き直してください。</p>
+              <p style={{ margin: 0 }}>ホーム画面に現れた「Ange Spa」のアイコンから開き直してください。</p>
             </Step>
           </div>
         </div>
@@ -202,7 +202,7 @@ export default function InstallGuidePage() {
               マイページの「🔔 プッシュ通知」カードから「タップで無効化」を押せばいつでも止められます。
             </Faq>
             <Faq q="通知が来ません">
-              iPhone の場合、「設定」→「通知」→「T-MANAGE」で通知が許可されているか確認してください。iOS は必ず 16.4 以上が必要です。
+              iPhone の場合、「設定」→「通知」→「Ange Spa」で通知が許可されているか確認してください。iOS は必ず 16.4 以上が必要です。
             </Faq>
           </div>
         </div>
