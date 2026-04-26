@@ -1730,6 +1730,81 @@ function TimeChartInner() {
         const carryOverTotal = carryOverSales + carryOverChange;
         const cashBalance = cashReserve + totalCash - finalPay + carryOverTotal;
         const storeRecovery = cashBalance > cashReserve ? cashBalance - cashReserve : 0;
+
+        // 健康診断レポート 2026-04-26 Fix #3「精算保存トランザクション化」対応:
+        // 旧式は 9 個の DB オペレーションが連鎖実行され、途中失敗で部分書込みが残るリスクがあった。
+        // sql/session77_confirm_settlement_rpc.sql で定義した RPC で 1 トランザクション化し、
+        // エラー時は PostgreSQL が自動 ROLLBACK する。
+        const onSettleConfirm = async () => {
+          setSettleSaving(true);
+          try {
+            const reserveUsedAmt = (settleUseReserve && cashBalance < 0) ? Math.abs(cashBalance) : 0;
+            const replenishUsedAmt = (settleUseReplenish && cashBalance < 0) ? Math.abs(cashBalance) : 0;
+            const useAutoClose = settleUseReserve || settleUseReplenish;
+            // 予備金/釣銭補充使用時は売上回収・釣銭回収は自動で完結扱い、金庫投函はなし
+            const effectiveSalesCollected = useAutoClose ? true : settleSalesCollected;
+            const effectiveChangeCollected = useAutoClose ? true : settleChangeCollected;
+            const effectiveSafeDeposited = useAutoClose ? false : settleSafeDeposited;
+
+            const { data, error } = await supabase.rpc("confirm_settlement", {
+              p_data: {
+                therapist_id: settleTh.id,
+                therapist_name: settleTh.name,
+                date: selectedDate,
+                room_id: ra?.room_id || 0,
+                total_sales: totalSales,
+                total_back: totalBack + salaryBonus + totalNom + totalOptBack + totalExtBack,
+                total_nomination: totalNom,
+                total_options: totalOpt,
+                total_extension: totalExt,
+                total_discount: totalDisc,
+                total_card: totalCard,
+                total_paypay: totalPaypay,
+                total_cash: totalCash,
+                order_count: tRes.length,
+                adjustment: adj,
+                adjustment_note: settleAdjNote.trim(),
+                invoice_deduction: invoiceDed,
+                has_invoice: settleInvoice,
+                withholding_tax: withholding,
+                final_payment: finalPay,
+                welfare_fee: welfareFee,
+                transport_fee: transportFee,
+                effective_sales_collected: effectiveSalesCollected,
+                effective_change_collected: effectiveChangeCollected,
+                effective_safe_deposited: effectiveSafeDeposited,
+                reserve_used_amount: reserveUsedAmt,
+                replenish_used_amount: replenishUsedAmt,
+                gift_bonus_amount: giftBack,
+                gift_payout_ids: settleGiftPayoutIds,
+                past_uncollected_sales_dates: pastUncollected.filter(p => !p.sales_collected).map(p => p.date),
+                past_uncollected_change_dates: pastUncollected.filter(p => !p.change_collected).map(p => p.date),
+              },
+            });
+
+            if (error) {
+              console.error("[confirm_settlement]", error);
+              toast.show(`清算保存に失敗しました: ${error.message || "不明なエラー"}`, "error");
+              return;  // モーダルは閉じず、ユーザーが再試行できる状態を維持
+            }
+
+            const result = (data ?? {}) as { settlement_id?: number; gift_bonus_count?: number };
+            const giftBonusCount = result.gift_bonus_count || 0;
+
+            toast.show(
+              giftBonusCount > 0 ? `清算を確定しました（情報配信報酬 ${giftBonusCount}件 / +${fmt(giftBack)} 含む）` :
+              reserveUsedAmt > 0 ? `清算を確定しました（豊橋予備金から ${fmt(reserveUsedAmt)} 立替記録）` :
+              replenishUsedAmt > 0 ? `清算を確定しました（釣銭 ${fmt(replenishUsedAmt)} 補充記録）` :
+              "清算を確定しました",
+              "success"
+            );
+            setSettleTh(null);
+            fetchData();
+          } finally {
+            setSettleSaving(false);
+          }
+        };
+
         return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSettleTh(null)}>
           <div className="rounded-2xl border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
@@ -1884,7 +1959,7 @@ function TimeChartInner() {
               </div>
               )}
               <div className="flex gap-3 pt-2">
-                <button onClick={async () => { setSettleSaving(true); const reserveUsedAmt = (settleUseReserve && cashBalance < 0) ? Math.abs(cashBalance) : 0; const replenishUsedAmt = (settleUseReplenish && cashBalance < 0) ? Math.abs(cashBalance) : 0; const useAutoClose = settleUseReserve || settleUseReplenish; /* 予備金/釣銭補充使用時は売上回収・釣銭回収は自動で完結扱い、金庫投函はなし */ const effectiveSalesCollected = useAutoClose ? true : settleSalesCollected; const effectiveChangeCollected = useAutoClose ? true : settleChangeCollected; const effectiveSafeDeposited = useAutoClose ? false : settleSafeDeposited; await supabase.from("therapist_daily_settlements").upsert({ therapist_id: settleTh.id, date: selectedDate, total_sales: totalSales, total_back: totalBack + salaryBonus + totalNom + totalOptBack + totalExtBack, total_nomination: totalNom, total_options: totalOpt, total_extension: totalExt, total_discount: totalDisc, total_card: totalCard, total_paypay: totalPaypay, total_cash: totalCash, order_count: tRes.length, is_settled: true, adjustment: adj, adjustment_note: settleAdjNote.trim(), invoice_deduction: invoiceDed, has_invoice: settleInvoice, withholding_tax: withholding, final_payment: finalPay, welfare_fee: welfareFee, transport_fee: transportFee, room_id: ra?.room_id || 0, sales_collected: effectiveSalesCollected, change_collected: effectiveChangeCollected, safe_deposited: effectiveSafeDeposited, reserve_used_amount: reserveUsedAmt, gift_bonus_amount: giftBack }, { onConflict: "therapist_id,date" }); /* 投げ銭ボーナス消化: pending な gift_payouts を 'paid' に更新 (final_payment は既に giftBack を含んでいるので追加加算しない) */ let giftBonusCount = 0; try { const { data: stlForId } = await supabase.from("therapist_daily_settlements").select("id").eq("therapist_id", settleTh.id).eq("date", selectedDate).maybeSingle(); const stlId = (stlForId as { id: number } | null)?.id; if (stlId && settleGiftPayoutIds.length > 0) { const nowIso = new Date().toISOString(); /* pending を paid に更新 */ const { data: updatedRows } = await supabase.from("gift_payouts").update({ status: "paid", settlement_id: stlId, settlement_date: selectedDate, paid_at: nowIso }).in("id", settleGiftPayoutIds).eq("status", "pending").select("id"); giftBonusCount = updatedRows?.length || 0; } } catch (e) { console.error("gift bonus settle error:", e); } if (ra && effectiveSalesCollected) { for (const p of pastUncollected) { if (!p.sales_collected) { await supabase.from("therapist_daily_settlements").update({ sales_collected: true }).eq("room_id", ra.room_id).eq("date", p.date).eq("sales_collected", false); } } } if (ra && effectiveChangeCollected) { for (const p of pastUncollected) { if (!p.change_collected) { await supabase.from("therapist_daily_settlements").update({ change_collected: true }).eq("room_id", ra.room_id).eq("date", p.date).eq("change_collected", false); } } } /* 豊橋予備金の自動連動: 既存の精算連動エントリを削除 → 必要なら新規作成 */ const linkNote = `精算連動:${settleTh.name}`; await supabase.from("toyohashi_reserve_movements").delete().eq("therapist_id", settleTh.id).eq("movement_date", selectedDate).eq("movement_type", "withdraw").eq("note", linkNote); if (reserveUsedAmt > 0) { await supabase.from("toyohashi_reserve_movements").insert({ movement_date: selectedDate, movement_type: "withdraw", amount: reserveUsedAmt, therapist_id: settleTh.id, recorded_by_name: "精算モーダル自動連動", note: linkNote }); } /* 釣銭補充の自動連動: 既存の自動補充レコードを削除 → 必要なら新規作成 */ if (ra) { await supabase.from("room_cash_replenishments").delete().eq("room_id", ra.room_id).eq("date", selectedDate).eq("therapist_id", settleTh.id).eq("staff_name", "精算モーダル自動補充"); if (replenishUsedAmt > 0) { await supabase.from("room_cash_replenishments").insert({ room_id: ra.room_id, date: selectedDate, amount: replenishUsedAmt, therapist_id: settleTh.id, staff_name: "精算モーダル自動補充" }); } } toast.show(giftBonusCount > 0 ? `清算を確定しました（情報配信報酬 ${giftBonusCount}件 / +${fmt(giftBack)} 含む）` : reserveUsedAmt > 0 ? `清算を確定しました（豊橋予備金から ${fmt(reserveUsedAmt)} 立替記録）` : replenishUsedAmt > 0 ? `清算を確定しました（釣銭 ${fmt(replenishUsedAmt)} 補充記録）` : "清算を確定しました", "success"); setSettleSaving(false); setSettleTh(null); fetchData(); }} disabled={settleSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{settleSaving ? "保存中..." : "清算確定"}</button>
+                <button onClick={onSettleConfirm} disabled={settleSaving} className="px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer disabled:opacity-60">{settleSaving ? "保存中..." : "清算確定"}</button>
                 <button onClick={() => setSettleTh(null)} className="px-5 py-2.5 border text-[11px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>閉じる</button>
 <button onClick={() => { const store = stores[0]; const th = settleTh; const realName = (th as any)?.real_name || th.name; const hasInv = settleInvoice; const invNum = (th as any)?.therapist_invoice_number || ""; const w = window.open("", "_blank"); if (!w) return; w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>支払通知書_${selectedDate}_${th.name}</title>
 <style>body{font-family:'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;max-width:750px;margin:40px auto;padding:30px;color:#222;font-weight:500}h1{text-align:center;font-size:20px;border-bottom:3px double #333;padding-bottom:10px;margin-bottom:5px;letter-spacing:4px}h2{text-align:center;font-size:12px;color:#888;font-weight:normal;margin-bottom:25px}table{width:100%;border-collapse:collapse;margin:15px 0}td,th{border:1px solid #bbb;padding:10px 14px;font-size:13px;font-weight:500}th{background:#f5f0e8;text-align:left;width:38%}.right{text-align:right}.total-row{background:#f9f6f0;font-weight:bold;font-size:14px}.section{margin-top:25px;padding-top:15px;border-top:1px solid #ddd}.company{font-size:11px;line-height:2;color:#555}.note{font-size:9px;color:#888;margin-top:4px;line-height:1.8}.doc-title{font-size:9px;color:#999;text-align:right;margin-bottom:20px}.stamp-area{display:flex;justify-content:space-between;margin-top:40px}.stamp-box{border-top:1px solid #333;width:180px;text-align:center;padding-top:5px;font-size:11px;color:#666}@media print{body{margin:0;padding:20px}}</style></head><body>
