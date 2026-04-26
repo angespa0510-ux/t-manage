@@ -11,6 +11,7 @@ import { useBackNav } from "../../lib/use-back-nav";
 import { useConfirm } from "../../components/useConfirm";
 import { runAutoSettlementIfDue } from "../../lib/staff-advances";
 import { calcSettlementRounding } from "../../lib/settlement-calc";
+import { useToast } from "../../lib/toast";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
 
@@ -71,6 +72,7 @@ export default function Dashboard() {
   const { dark, toggle, T } = useTheme();
   const { activeStaff, isManager, login, logout: staffLogout } = useStaffSession();
   const { confirm, ConfirmModalNode } = useConfirm();
+  const toast = useToast();
   const [showPinModal, setShowPinModal] = useState(false);
   usePinKeyboard(showPinModal);
   const [pinInput, setPinInput] = useState("");
@@ -226,196 +228,246 @@ export default function Dashboard() {
 
   const fetchClosingReport = useCallback(async (date: string) => {
     setClosingLoading(true);
-    const { data: res } = await supabase.from("reservations").select("*").eq("date", date);
-    const { data: settlements } = await supabase.from("therapist_daily_settlements").select("*").eq("date", date);
-    const { data: exp } = await supabase.from("expenses").select("*").eq("date", date);
-    const { data: rooms } = await supabase.from("rooms").select("*");
-    const { data: blds } = await supabase.from("buildings").select("*");
-    const { data: repData } = await supabase.from("room_cash_replenishments").select("*").eq("date", date);
-    const { data: crs } = await supabase.from("courses").select("*");
-    const { data: ra } = await supabase.from("room_assignments").select("*").eq("date", date);
-    const { data: thList } = await supabase.from("therapists").select("id,name,status");
-    const allRes = res || [];
-    const completed = allRes.filter(r => (r as any).status === "completed");
-    const getCourseByName = (name: string) => (crs || []).find((c: any) => c.name === name);
-    const getThName = (id: number) => (thList || []).find((t: any) => t.id === id)?.name || "不明";
-    // 売上サマリー
-    const totalSales = completed.reduce((s, r) => s + ((r as any).total_price || 0), 0);
-    // 売上内訳
-    const totalCoursePrice = completed.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.price || 0); }, 0);
-    const totalNom = completed.reduce((s, r) => s + ((r as any).nomination_fee || 0), 0);
-    const totalOpt = completed.reduce((s, r) => s + ((r as any).options_total || 0), 0);
-    const totalExt = completed.reduce((s, r) => s + ((r as any).extension_price || 0), 0);
-    const totalDisc = completed.reduce((s, r) => s + ((r as any).discount_amount || 0), 0);
-    // 支払い方法別
-    const totalCard = completed.reduce((s, r) => s + ((r as any).card_billing || 0), 0);
-    const totalPaypay = completed.reduce((s, r) => s + ((r as any).paypay_amount || 0), 0);
-    const totalCashSales = completed.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
-    // セラピスト支払い（バック内訳）
-    const { data: nomData } = await supabase.from("nominations").select("*");
-    const { data: optData } = await supabase.from("options").select("*");
-    const { data: extData } = await supabase.from("extensions").select("*");
-    const totalCourseBack = completed.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
-    const totalNomBack = completed.reduce((s, r) => { const nom = (nomData || []).find((n: any) => n.name === (r as any).nomination); return s + ((nom as any)?.therapist_back || (r as any).nomination_fee || 0); }, 0);
-    const totalOptBack = completed.reduce((s, r) => { const optNames = ((r as any).options_text || "").split(",").filter((n: string) => n); return s + optNames.reduce((os: number, n: string) => { const o = (optData || []).find((x: any) => x.name === n); return os + ((o as any)?.therapist_back || 0); }, 0); }, 0);
-    const totalExtBack = completed.reduce((s, r) => { const ex = (extData || []).find((x: any) => x.name === (r as any).extension_name); return s + ((ex as any)?.therapist_back || 0); }, 0);
-    const totalBack = totalCourseBack + totalNomBack + totalOptBack + totalExtBack;
-    // 清算データから実支給額
-    const settledList2 = settlements || [];
-    const totalFinalPay = settledList2.reduce((s: number, d: any) => s + (d.final_payment || 0), 0);
-    const totalInvoiceDed = settledList2.reduce((s: number, d: any) => s + (d.invoice_deduction || 0), 0);
-    const totalWithholding = settledList2.reduce((s: number, d: any) => s + (d.withholding_tax || 0), 0);
-    const totalWelfare = settledList2.reduce((s: number, d: any) => s + (d.welfare_fee || 0), 0);
-    const totalTransportSettle = settledList2.reduce((s: number, d: any) => s + (d.transport_fee || 0), 0);
-    // 💝 投げ銭バック合計（gift_bonus_amount は精算時に final_payment に込まれている）
-    const totalGiftBack = settledList2.reduce((s: number, d: any) => s + (d.gift_bonus_amount || 0), 0);
-    // 100円切上による端数集計（旧式は adjustment が抜けて adjustment 分過大になっていたため
-    // SSOT helper calcSettlementRounding で統一）
-    const totalRounding = settledList2.reduce((s: number, d: any) => s + calcSettlementRounding(d), 0);
-    // 釣銭補充（明細付き）
-    const replenishList = (repData || []).map((r: any) => {
-      const rm = (rooms || []).find((x: any) => x.id === r.room_id);
-      const bl2 = rm ? (blds || []).find((b: any) => b.id === rm.building_id) : null;
-      const bldName = bl2?.name || "";
-      const thName = r.therapist_id ? getThName(r.therapist_id) : "";
-      return { id: r.id, room: `${bldName}${rm?.name || ""}`, therapist: thName, staff: r.staff_name || "", amount: r.amount || 0, time: r.created_at ? new Date(r.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "" };
-    });
-    const totalReplenish = replenishList.reduce((s: number, r: any) => s + r.amount, 0);
-    // 経費・入金
-    const expenseList = (exp || []).filter((e: any) => e.type === "expense");
-    const expenseTotal = expenseList.reduce((s: number, e: any) => s + (e.amount || 0), 0);
-    const incomeList = (exp || []).filter((e: any) => e.type === "income");
-    const incomeTotal = incomeList.reduce((s: number, e: any) => s + (e.amount || 0), 0);
-    // 本日の収支
-    const netProfit = totalSales - totalFinalPay - expenseTotal + incomeTotal;
-    // 現金確認シート
-    const settledList = settlements || [];
-    const therapistData = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
-      const tRes = completed.filter(r => r.therapist_id === tid);
-      const tCash = tRes.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
-      const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
-      const assign = (ra || []).find((a: any) => a.therapist_id === tid);
-      const ds = settledList.find((s: any) => s.therapist_id === tid);
-      const roomId = (ds && ds.room_id > 0) ? ds.room_id : (assign ? assign.room_id : 0);
-      const rm = roomId > 0 ? (rooms || []).find((r: any) => r.id === roomId) : null;
-      const bl = rm ? (blds || []).find((b: any) => b.id === rm.building_id) : null;
-      const bldName = bl?.name || "";
-      const rmName = rm?.name || "";
-      const finalPay = ds?.final_payment || 0;
-      const reserveUsed = ds?.reserve_used_amount || 0;  // 豊橋予備金からの立替額
-      const roomReplenish = assign ? replenishList.filter((r: any) => (rooms || []).find((x: any) => x.id === assign.room_id)?.id === r.id ? false : true, []).length >= 0 ? (repData || []).filter((r: any) => r.room_id === assign.room_id).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0) : 0 : 0;
-      // 売上残 = お客様現金 - セラピスト支払 + 予備金立替 (予備金で補充された分は実質0)
-      const netAfterPay = tCash - finalPay + reserveUsed;
-      return { id: tid, name: getThName(tid), room: `${bldName}${rmName}`, cash: tCash, back: tBack, finalPay, replenish: roomReplenish, netAfterPay, net: tCash - finalPay + reserveUsed, reserveUsed, salesCollected: !!ds?.sales_collected, changeCollected: !!ds?.change_collected, safeDeposited: !!ds?.safe_deposited };
-    });
-    const totalOut = totalReplenish + expenseTotal;
-    const staffCollectedAmt = therapistData.filter(t => t.salesCollected && !t.safeDeposited).reduce((s, t) => s + (t.changeCollected ? t.replenish : 0) + t.netAfterPay, 0);
-    const safeDepositedAmt = therapistData.filter(t => t.salesCollected && t.safeDeposited).reduce((s, t) => s + (t.changeCollected ? t.replenish : 0) + t.netAfterPay, 0);
-    const totalUncollected = therapistData.filter(t => !t.salesCollected).reduce((s, t) => s + t.replenish + t.netAfterPay, 0);
-    const totalChangeUncollected = therapistData.filter(t => t.salesCollected && !t.changeCollected).reduce((s, t) => s + t.replenish, 0);
 
-    // スタッフ前借り(本日分) - 管理者金庫に入る現金から直接差し引かれる
-    const { data: advRows } = await supabase
-      .from("staff_advances")
-      .select("id,staff_id,amount,reason,status")
-      .eq("advance_date", date)
-      .eq("status", "pending");
-    const { data: staffAll } = await supabase.from("staff").select("id,name");
-    const getStaffName = (id: number) => (staffAll || []).find((s: any) => s.id === id)?.name || "不明";
-    const staffAdvanceList = (advRows || []).map((a: any) => ({
-      id: a.id, staff_id: a.staff_id, name: getStaffName(a.staff_id), amount: a.amount, reason: a.reason || "",
-    }));
-    const staffAdvanceTotal = staffAdvanceList.reduce((s: number, a: any) => s + a.amount, 0);
+    // 健康診断レポート 2026-04-26 「重要度: 高 - fetchClosingReport の全クエリでエラー未チェック」対応。
+    // 旧式は { data } のみを destructure して error を破棄していたため、Supabase 障害時に
+    // 空配列で続行 → 売上 0 円・支給額 0 円のレポートが出力されて誤った経営判断につながる
+    // リスクがあった。expectOk で error を throw → try/catch で toast 通知して中断する。
+    const expectOk = async <R,>(
+      promise: PromiseLike<{ data: R | null; error: any }>,
+      label: string,
+    ): Promise<R | null> => {
+      const { data, error } = await promise;
+      if (error) throw new Error(`[${label}] ${error.message || "クエリ失敗"}`);
+      return data;
+    };
 
-    // 前借り未記録チェック (本日出勤予定で preset>0 かつ pending/skipped 未記録のスタッフ)
-    const { data: todaySchs } = await supabase.from("staff_schedules").select("staff_id").eq("date", date);
-    const todayWorkingIds = new Set((todaySchs || []).map((s: any) => s.staff_id));
-    const { data: eligibleStaff } = await supabase.from("staff")
-      .select("id,name,advance_preset_amount")
-      .eq("status", "active")
-      .gt("advance_preset_amount", 0);
-    const { data: skippedRows } = await supabase.from("staff_advances")
-      .select("staff_id").eq("advance_date", date).eq("status", "skipped");
-    const recordedIds = new Set(staffAdvanceList.map((a: any) => a.staff_id));
-    const skippedIds = new Set((skippedRows || []).map((s: any) => s.staff_id));
-    const unrecordedAdvanceList = (eligibleStaff || [])
-      .filter((s: any) => todayWorkingIds.has(s.id))
-      .filter((s: any) => !recordedIds.has(s.id) && !skippedIds.has(s.id))
-      .map((s: any) => ({ id: s.id, name: s.name, preset: s.advance_preset_amount }));
+    try {
+      // ─── 第1群: 当日データ + マスタ (12 件並列) ───
+      const [
+        res, settlements, exp, rooms, blds, repData, crs, ra, thList,
+        nomData, optData, extData,
+      ] = await Promise.all([
+        expectOk<any[]>(supabase.from("reservations").select("*").eq("date", date), "reservations"),
+        expectOk<any[]>(supabase.from("therapist_daily_settlements").select("*").eq("date", date), "therapist_daily_settlements(date)"),
+        expectOk<any[]>(supabase.from("expenses").select("*").eq("date", date), "expenses"),
+        expectOk<any[]>(supabase.from("rooms").select("*"), "rooms"),
+        expectOk<any[]>(supabase.from("buildings").select("*"), "buildings"),
+        expectOk<any[]>(supabase.from("room_cash_replenishments").select("*").eq("date", date), "room_cash_replenishments"),
+        expectOk<any[]>(supabase.from("courses").select("*"), "courses"),
+        expectOk<any[]>(supabase.from("room_assignments").select("*").eq("date", date), "room_assignments"),
+        expectOk<any[]>(supabase.from("therapists").select("id,name,status"), "therapists"),
+        expectOk<any[]>(supabase.from("nominations").select("*"), "nominations"),
+        expectOk<any[]>(supabase.from("options").select("*"), "options"),
+        expectOk<any[]>(supabase.from("extensions").select("*"), "extensions"),
+      ]);
 
-    const cashOnHand = -totalReplenish - expenseTotal + incomeTotal + staffCollectedAmt - staffAdvanceTotal;
-    // 金庫未回収（金庫投函済み・未回収）
-    const { data: safeUncoll } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).is("safe_collected_date", null);
-    const safeUncollectedList = (safeUncoll || []).map((s: any) => {
-      const rm2 = (rooms || []).find((r: any) => r.id === s.room_id);
-      const bl2 = rm2 ? (blds || []).find((b: any) => b.id === rm2.building_id) : null;
-      return { date: s.date, therapist: getThName(s.therapist_id), room: `${bl2?.name || ""}${rm2?.name || ""}`, salesAmt: Math.max((s.total_cash || 0) - (s.final_payment || 0), 0), changeAmt: 0 };
-    });
-    // 各金庫投函の釣銭を取得
-    for (const su of safeUncollectedList) {
-      const roomMatch = (rooms || []).find((r: any) => su.room.includes(r.name || ""));
-      if (roomMatch) {
-        const { data: repSafe } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", roomMatch.id).eq("date", su.date);
-        su.changeAmt = (repSafe || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
+      const allRes = res || [];
+      const completed = allRes.filter(r => (r as any).status === "completed");
+      const getCourseByName = (name: string) => (crs || []).find((c: any) => c.name === name);
+      const getThName = (id: number) => (thList || []).find((t: any) => t.id === id)?.name || "不明";
+      // 売上サマリー
+      const totalSales = completed.reduce((s, r) => s + ((r as any).total_price || 0), 0);
+      // 売上内訳
+      const totalCoursePrice = completed.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.price || 0); }, 0);
+      const totalNom = completed.reduce((s, r) => s + ((r as any).nomination_fee || 0), 0);
+      const totalOpt = completed.reduce((s, r) => s + ((r as any).options_total || 0), 0);
+      const totalExt = completed.reduce((s, r) => s + ((r as any).extension_price || 0), 0);
+      const totalDisc = completed.reduce((s, r) => s + ((r as any).discount_amount || 0), 0);
+      // 支払い方法別
+      const totalCard = completed.reduce((s, r) => s + ((r as any).card_billing || 0), 0);
+      const totalPaypay = completed.reduce((s, r) => s + ((r as any).paypay_amount || 0), 0);
+      const totalCashSales = completed.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
+      // セラピスト支払い（バック内訳）
+      const totalCourseBack = completed.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
+      const totalNomBack = completed.reduce((s, r) => { const nom = (nomData || []).find((n: any) => n.name === (r as any).nomination); return s + ((nom as any)?.therapist_back || (r as any).nomination_fee || 0); }, 0);
+      const totalOptBack = completed.reduce((s, r) => { const optNames = ((r as any).options_text || "").split(",").filter((n: string) => n); return s + optNames.reduce((os: number, n: string) => { const o = (optData || []).find((x: any) => x.name === n); return os + ((o as any)?.therapist_back || 0); }, 0); }, 0);
+      const totalExtBack = completed.reduce((s, r) => { const ex = (extData || []).find((x: any) => x.name === (r as any).extension_name); return s + ((ex as any)?.therapist_back || 0); }, 0);
+      const totalBack = totalCourseBack + totalNomBack + totalOptBack + totalExtBack;
+      // 清算データから実支給額
+      const settledList2 = settlements || [];
+      const totalFinalPay = settledList2.reduce((s: number, d: any) => s + (d.final_payment || 0), 0);
+      const totalInvoiceDed = settledList2.reduce((s: number, d: any) => s + (d.invoice_deduction || 0), 0);
+      const totalWithholding = settledList2.reduce((s: number, d: any) => s + (d.withholding_tax || 0), 0);
+      const totalWelfare = settledList2.reduce((s: number, d: any) => s + (d.welfare_fee || 0), 0);
+      const totalTransportSettle = settledList2.reduce((s: number, d: any) => s + (d.transport_fee || 0), 0);
+      // 💝 投げ銭バック合計（gift_bonus_amount は精算時に final_payment に込まれている）
+      const totalGiftBack = settledList2.reduce((s: number, d: any) => s + (d.gift_bonus_amount || 0), 0);
+      // 100円切上による端数集計（旧式は adjustment が抜けて adjustment 分過大になっていたため
+      // SSOT helper calcSettlementRounding で統一）
+      const totalRounding = settledList2.reduce((s: number, d: any) => s + calcSettlementRounding(d), 0);
+      // 釣銭補充（明細付き）
+      const replenishList = (repData || []).map((r: any) => {
+        const rm = (rooms || []).find((x: any) => x.id === r.room_id);
+        const bl2 = rm ? (blds || []).find((b: any) => b.id === rm.building_id) : null;
+        const bldName = bl2?.name || "";
+        const thName = r.therapist_id ? getThName(r.therapist_id) : "";
+        return { id: r.id, room: `${bldName}${rm?.name || ""}`, therapist: thName, staff: r.staff_name || "", amount: r.amount || 0, time: r.created_at ? new Date(r.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "" };
+      });
+      const totalReplenish = replenishList.reduce((s: number, r: any) => s + r.amount, 0);
+      // 経費・入金
+      const expenseList = (exp || []).filter((e: any) => e.type === "expense");
+      const expenseTotal = expenseList.reduce((s: number, e: any) => s + (e.amount || 0), 0);
+      const incomeList = (exp || []).filter((e: any) => e.type === "income");
+      const incomeTotal = incomeList.reduce((s: number, e: any) => s + (e.amount || 0), 0);
+      // 本日の収支
+      const netProfit = totalSales - totalFinalPay - expenseTotal + incomeTotal;
+      // 現金確認シート
+      const settledList = settlements || [];
+      const therapistData = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
+        const tRes = completed.filter(r => r.therapist_id === tid);
+        const tCash = tRes.reduce((s, r) => s + ((r as any).cash_amount || 0), 0);
+        const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
+        const assign = (ra || []).find((a: any) => a.therapist_id === tid);
+        const ds = settledList.find((s: any) => s.therapist_id === tid);
+        const roomId = (ds && ds.room_id > 0) ? ds.room_id : (assign ? assign.room_id : 0);
+        const rm = roomId > 0 ? (rooms || []).find((r: any) => r.id === roomId) : null;
+        const bl = rm ? (blds || []).find((b: any) => b.id === rm.building_id) : null;
+        const bldName = bl?.name || "";
+        const rmName = rm?.name || "";
+        const finalPay = ds?.final_payment || 0;
+        const reserveUsed = ds?.reserve_used_amount || 0;  // 豊橋予備金からの立替額
+        const roomReplenish = assign ? replenishList.filter((r: any) => (rooms || []).find((x: any) => x.id === assign.room_id)?.id === r.id ? false : true, []).length >= 0 ? (repData || []).filter((r: any) => r.room_id === assign.room_id).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0) : 0 : 0;
+        // 売上残 = お客様現金 - セラピスト支払 + 予備金立替 (予備金で補充された分は実質0)
+        const netAfterPay = tCash - finalPay + reserveUsed;
+        return { id: tid, name: getThName(tid), room: `${bldName}${rmName}`, cash: tCash, back: tBack, finalPay, replenish: roomReplenish, netAfterPay, net: tCash - finalPay + reserveUsed, reserveUsed, salesCollected: !!ds?.sales_collected, changeCollected: !!ds?.change_collected, safeDeposited: !!ds?.safe_deposited };
+      });
+      const totalOut = totalReplenish + expenseTotal;
+      const staffCollectedAmt = therapistData.filter(t => t.salesCollected && !t.safeDeposited).reduce((s, t) => s + (t.changeCollected ? t.replenish : 0) + t.netAfterPay, 0);
+      const safeDepositedAmt = therapistData.filter(t => t.salesCollected && t.safeDeposited).reduce((s, t) => s + (t.changeCollected ? t.replenish : 0) + t.netAfterPay, 0);
+      const totalUncollected = therapistData.filter(t => !t.salesCollected).reduce((s, t) => s + t.replenish + t.netAfterPay, 0);
+      const totalChangeUncollected = therapistData.filter(t => t.salesCollected && !t.changeCollected).reduce((s, t) => s + t.replenish, 0);
+
+      // ─── 第2群: スタッフ前借り関連 (5 件並列) ───
+      const [advRows, staffAll, todaySchs, eligibleStaff, skippedRows] = await Promise.all([
+        expectOk<any[]>(
+          supabase.from("staff_advances").select("id,staff_id,amount,reason,status").eq("advance_date", date).eq("status", "pending"),
+          "staff_advances(pending)"
+        ),
+        expectOk<any[]>(supabase.from("staff").select("id,name"), "staff"),
+        expectOk<any[]>(supabase.from("staff_schedules").select("staff_id").eq("date", date), "staff_schedules"),
+        expectOk<any[]>(
+          supabase.from("staff").select("id,name,advance_preset_amount").eq("status", "active").gt("advance_preset_amount", 0),
+          "staff(eligible)"
+        ),
+        expectOk<any[]>(
+          supabase.from("staff_advances").select("staff_id").eq("advance_date", date).eq("status", "skipped"),
+          "staff_advances(skipped)"
+        ),
+      ]);
+
+      const getStaffName = (id: number) => (staffAll || []).find((s: any) => s.id === id)?.name || "不明";
+      const staffAdvanceList = (advRows || []).map((a: any) => ({
+        id: a.id, staff_id: a.staff_id, name: getStaffName(a.staff_id), amount: a.amount, reason: a.reason || "",
+      }));
+      const staffAdvanceTotal = staffAdvanceList.reduce((s: number, a: any) => s + a.amount, 0);
+
+      // 前借り未記録チェック (本日出勤予定で preset>0 かつ pending/skipped 未記録のスタッフ)
+      const todayWorkingIds = new Set((todaySchs || []).map((s: any) => s.staff_id));
+      const recordedIds = new Set(staffAdvanceList.map((a: any) => a.staff_id));
+      const skippedIds = new Set((skippedRows || []).map((s: any) => s.staff_id));
+      const unrecordedAdvanceList = (eligibleStaff || [])
+        .filter((s: any) => todayWorkingIds.has(s.id))
+        .filter((s: any) => !recordedIds.has(s.id) && !skippedIds.has(s.id))
+        .map((s: any) => ({ id: s.id, name: s.name, preset: s.advance_preset_amount }));
+
+      const cashOnHand = -totalReplenish - expenseTotal + incomeTotal + staffCollectedAmt - staffAdvanceTotal;
+
+      // ─── 第3群: 金庫関連 (3 件並列) ───
+      const [safeUncoll, safeCollToday, reserveMovements] = await Promise.all([
+        expectOk<any[]>(
+          supabase.from("therapist_daily_settlements").select("*").eq("safe_deposited", true).is("safe_collected_date", null),
+          "therapist_daily_settlements(safe_uncollected)"
+        ),
+        expectOk<any[]>(
+          supabase.from("therapist_daily_settlements").select("*").eq("safe_collected_date", date).eq("safe_deposited", true),
+          "therapist_daily_settlements(safe_collected_today)"
+        ),
+        expectOk<any[]>(
+          supabase.from("toyohashi_reserve_movements").select("movement_type,amount").lte("movement_date", date).range(0, 49999),
+          "toyohashi_reserve_movements"
+        ),
+      ]);
+
+      // 金庫未回収（金庫投函済み・未回収）
+      const safeUncollectedList = (safeUncoll || []).map((s: any) => {
+        const rm2 = (rooms || []).find((r: any) => r.id === s.room_id);
+        const bl2 = rm2 ? (blds || []).find((b: any) => b.id === rm2.building_id) : null;
+        return { date: s.date, therapist: getThName(s.therapist_id), room: `${bl2?.name || ""}${rm2?.name || ""}`, salesAmt: Math.max((s.total_cash || 0) - (s.final_payment || 0), 0), changeAmt: 0 };
+      });
+      // 各金庫投函の釣銭を取得 (N+1 だが、本ファイル外で個別最適化予定。エラー時は throw)
+      for (const su of safeUncollectedList) {
+        const roomMatch = (rooms || []).find((r: any) => su.room.includes(r.name || ""));
+        if (roomMatch) {
+          const repSafe = await expectOk<any[]>(
+            supabase.from("room_cash_replenishments").select("amount").eq("room_id", roomMatch.id).eq("date", su.date),
+            `room_cash_replenishments(safe_uncollected/${su.date})`
+          );
+          su.changeAmt = (repSafe || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
+        }
       }
+      const safeTotalUncollected = safeUncollectedList.reduce((s: number, x: any) => s + x.salesAmt + x.changeAmt, 0);
+
+      // 金庫回収分（本日回収）
+      const safeCollectedTodayList: { date: string; therapist: string; room: string; amount: number }[] = [];
+      for (const sc of (safeCollToday || [])) {
+        const rm3 = (rooms || []).find((r: any) => r.id === sc.room_id);
+        const bl3 = rm3 ? (blds || []).find((b: any) => b.id === rm3.building_id) : null;
+        const net3 = Math.max((sc.total_cash || 0) - (sc.final_payment || 0), 0);
+        const repSc = await expectOk<any[]>(
+          supabase.from("room_cash_replenishments").select("amount").eq("room_id", sc.room_id).eq("date", sc.date),
+          `room_cash_replenishments(safe_collected/${sc.id})`
+        );
+        const repAmt3 = (repSc || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
+        safeCollectedTodayList.push({ date: sc.date, therapist: getThName(sc.therapist_id), room: `${bl3?.name || ""}${rm3?.name || ""}`, amount: net3 + repAmt3 });
+      }
+      const safeCollectedTodayTotal = safeCollectedTodayList.reduce((s: number, x: any) => s + x.amount, 0);
+
+      // 豊橋予備金使用額（本日、精算モーダルから立替された分）
+      const reserveUsedList = settledList.filter((s: any) => (s.reserve_used_amount || 0) > 0).map((s: any) => ({
+        therapist: getThName(s.therapist_id),
+        amount: s.reserve_used_amount || 0
+      }));
+      const reserveUsedTotal = reserveUsedList.reduce((s: number, x: any) => s + x.amount, 0);
+
+      // 豊橋予備金の残高（当日終了時点の累計）
+      // initial + refund + adjustment − withdraw
+      const toyohashiBalance = (reserveMovements || []).reduce((s: number, m: any) => {
+        const amt = m.amount || 0;
+        return m.movement_type === "withdraw" ? s - amt : s + amt;
+      }, 0);
+
+      // セラピスト別売上
+      const therapistSales = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
+        const tRes = completed.filter(r => r.therapist_id === tid);
+        const tSales = tRes.reduce((s, r) => s + ((r as any).total_price || 0), 0);
+        const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
+        const ds = settledList2.find((s: any) => s.therapist_id === tid);
+        const tGiftBack = ds?.gift_bonus_amount || 0;
+        return { name: getThName(tid), count: tRes.length, sales: tSales, back: tBack, giftBack: tGiftBack };
+      });
+      setClosingData({
+        resCount: allRes.length, compCount: completed.length, totalSales,
+        totalCoursePrice, totalNom, totalOpt, totalExt, totalDisc,
+        totalCard, totalPaypay, totalCashSales,
+        totalBack, totalCourseBack, totalNomBack, totalOptBack, totalExtBack, totalGiftBack, totalFinalPay, totalInvoiceDed, totalWithholding, totalWelfare, totalTransportSettle, totalRounding, totalReplenish, replenishList,
+        expenseList, expenseTotal, incomeList, incomeTotal,
+        netProfit, therapistData, totalOut,
+        staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
+        staffAdvanceList, staffAdvanceTotal, unrecordedAdvanceList,
+        therapistSales, safeUncollectedList, safeTotalUncollected, safeCollectedTodayList, safeCollectedTodayTotal,
+        reserveUsedList, reserveUsedTotal, toyohashiBalance,
+      });
+    } catch (err) {
+      console.error("[fetchClosingReport]", err);
+      const msg = err instanceof Error ? err.message : "不明なエラー";
+      toast.show(`営業締めデータの取得に失敗しました。${msg}`, "error");
+      // setClosingData は更新せず、前回値（または初期値）を維持して
+      // 「取得失敗」と分かる状態のまま finally で loading を解除する
+    } finally {
+      setClosingLoading(false);
     }
-    const safeTotalUncollected = safeUncollectedList.reduce((s: number, x: any) => s + x.salesAmt + x.changeAmt, 0);
-
-    // 金庫回収分（本日回収）
-    const { data: safeCollToday } = await supabase.from("therapist_daily_settlements").select("*").eq("safe_collected_date", date).eq("safe_deposited", true);
-    const safeCollectedTodayList: { date: string; therapist: string; room: string; amount: number }[] = [];
-    for (const sc of (safeCollToday || [])) {
-      const rm3 = (rooms || []).find((r: any) => r.id === sc.room_id);
-      const bl3 = rm3 ? (blds || []).find((b: any) => b.id === rm3.building_id) : null;
-      const net3 = Math.max((sc.total_cash || 0) - (sc.final_payment || 0), 0);
-      const { data: repSc } = await supabase.from("room_cash_replenishments").select("amount").eq("room_id", sc.room_id).eq("date", sc.date);
-      const repAmt3 = (repSc || []).reduce((s2: number, r2: any) => s2 + (r2.amount || 0), 0);
-      safeCollectedTodayList.push({ date: sc.date, therapist: getThName(sc.therapist_id), room: `${bl3?.name || ""}${rm3?.name || ""}`, amount: net3 + repAmt3 });
-    }
-    const safeCollectedTodayTotal = safeCollectedTodayList.reduce((s: number, x: any) => s + x.amount, 0);
-
-    // 豊橋予備金使用額（本日、精算モーダルから立替された分）
-    const reserveUsedList = settledList.filter((s: any) => (s.reserve_used_amount || 0) > 0).map((s: any) => ({
-      therapist: getThName(s.therapist_id),
-      amount: s.reserve_used_amount || 0
-    }));
-    const reserveUsedTotal = reserveUsedList.reduce((s: number, x: any) => s + x.amount, 0);
-
-    // 豊橋予備金の残高（当日終了時点の累計）
-    // initial + refund + adjustment − withdraw
-    const { data: reserveMovements } = await supabase
-      .from("toyohashi_reserve_movements")
-      .select("movement_type,amount")
-      .lte("movement_date", date)
-      .range(0, 49999);
-    const toyohashiBalance = (reserveMovements || []).reduce((s: number, m: any) => {
-      const amt = m.amount || 0;
-      return m.movement_type === "withdraw" ? s - amt : s + amt;
-    }, 0);
-
-    // セラピスト別売上
-    const therapistSales = [...new Set(completed.map(r => r.therapist_id))].map(tid => {
-      const tRes = completed.filter(r => r.therapist_id === tid);
-      const tSales = tRes.reduce((s, r) => s + ((r as any).total_price || 0), 0);
-      const tBack = tRes.reduce((s, r) => { const c = getCourseByName(r.course); return s + ((c as any)?.therapist_back || 0); }, 0);
-      const ds = settledList2.find((s: any) => s.therapist_id === tid);
-      const tGiftBack = ds?.gift_bonus_amount || 0;
-      return { name: getThName(tid), count: tRes.length, sales: tSales, back: tBack, giftBack: tGiftBack };
-    });
-    setClosingData({
-      resCount: allRes.length, compCount: completed.length, totalSales,
-      totalCoursePrice, totalNom, totalOpt, totalExt, totalDisc,
-      totalCard, totalPaypay, totalCashSales,
-      totalBack, totalCourseBack, totalNomBack, totalOptBack, totalExtBack, totalGiftBack, totalFinalPay, totalInvoiceDed, totalWithholding, totalWelfare, totalTransportSettle, totalRounding, totalReplenish, replenishList,
-      expenseList, expenseTotal, incomeList, incomeTotal,
-      netProfit, therapistData, totalOut,
-      staffCollectedAmt, safeDepositedAmt, totalUncollected, cashOnHand,
-      staffAdvanceList, staffAdvanceTotal, unrecordedAdvanceList,
-      therapistSales, safeUncollectedList, safeTotalUncollected, safeCollectedTodayList, safeCollectedTodayTotal,
-      reserveUsedList, reserveUsedTotal, toyohashiBalance,
-    });
-    setClosingLoading(false);
-  }, []);
+  }, [toast]);
 
   // Auto-fetch closing report when date changes or page becomes active
   useEffect(() => {
@@ -425,9 +477,16 @@ export default function Dashboard() {
   }, [closingDate, activePage, fetchClosingReport]);
 
   // 前借り月末自動精算チェック (dashboard 初回ロード時に一度だけ実行)
+  // 健康診断レポート 2026-04-26 「重要度: 中 - サイレントエラー吞み込み」対応:
+  // 旧式は .catch(() => {}) で完全無視 → 月末締めで自動精算が走らなかった日に気づけない。
+  // console.error と toast 通知でユーザーが気づけるようにする。
   useEffect(() => {
-    runAutoSettlementIfDue().catch(() => {});
-  }, []);
+    runAutoSettlementIfDue().catch((err) => {
+      console.error("[runAutoSettlementIfDue]", err);
+      const msg = err instanceof Error ? err.message : "不明なエラー";
+      toast.show(`月末自動精算チェックに失敗しました。${msg}`, "error");
+    });
+  }, [toast]);
 
   const shiftClosingDate = (days: number) => {
     const d = new Date(closingDate + "T00:00:00");
