@@ -132,7 +132,9 @@ export default function TherapistDetailPage({
         setNotFound(true);
       } else {
         setTherapist(tResp.data);
-        setMainImage(tResp.data.photo_url || "");
+        // メイン表示用画像: sub_photo_urls[0] 優先、なければ photo_url
+        const firstSub = (tResp.data.sub_photo_urls || [])[0];
+        setMainImage(firstSub || tResp.data.photo_url || "");
       }
       setShifts(sResp.data || []);
       setStores(stResp.data || []);
@@ -180,7 +182,18 @@ export default function TherapistDetailPage({
   }
 
   const t = therapist;
-  const subPhotos = [t.photo_url, ...(t.sub_photo_urls || [])].filter(Boolean);
+  // 表示写真 = sub_photo_urls 最大5枚。データがない場合は photo_url にフォールバック。
+  const displayPhotos: { url: string; isMembersOnly: boolean }[] = (() => {
+    const subs = (t.sub_photo_urls || []).slice(0, 5);
+    let arr: string[] = subs;
+    if (arr.length === 0 && t.photo_url) arr = [t.photo_url];
+    return arr.map((url, i) => ({
+      url,
+      // 5枚目（index=4）のみ会員限定。1〜4枚目は誰でも閲覧可。
+      isMembersOnly: i === 4,
+    }));
+  })();
+  const subPhotos = displayPhotos.map((p) => p.url);
   const getStoreName = (sid: number) =>
     stores.find((s) => s.id === sid)?.shop_display_name ||
     stores.find((s) => s.id === sid)?.name ||
@@ -284,43 +297,117 @@ export default function TherapistDetailPage({
                   </div>
                 )}
               </div>
-              {/* サブ写真サムネ */}
-              {subPhotos.length > 1 && (
+              {/* サブ写真サムネ（最大5枚、5枚目は会員限定モザイク） */}
+              {displayPhotos.length > 1 && (
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: `repeat(${Math.min(subPhotos.length, 4)}, 1fr)`,
+                    gridTemplateColumns: `repeat(${Math.min(displayPhotos.length, 5)}, 1fr)`,
                     gap: 6,
                   }}
                 >
-                  {subPhotos.slice(0, 4).map((url, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setMainImage(url)}
-                      style={{
-                        padding: 0,
-                        border: mainImage === url
-                          ? `1px solid ${SITE.color.pink}`
-                          : `1px solid ${SITE.color.border}`,
-                        background: "transparent",
-                        cursor: "pointer",
-                        aspectRatio: "1 / 1",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={url}
-                        alt=""
+                  {displayPhotos.map((p, i) => {
+                    const locked = p.isMembersOnly && !isMember;
+                    const active = !locked && mainImage === p.url;
+                    if (locked) {
+                      return (
+                        <Link
+                          key={i}
+                          href="/mypage?register=1"
+                          aria-label="会員限定写真：会員登録で閲覧"
+                          style={{
+                            position: "relative",
+                            display: "block",
+                            border: `1px solid ${SITE.color.border}`,
+                            aspectRatio: "1 / 1",
+                            overflow: "hidden",
+                            cursor: "pointer",
+                            textDecoration: "none",
+                          }}
+                          onClick={() => {
+                            // CTAクリック計測（既存APIを再利用、photo_id は 0 = sub_photo_urls 5枚目を意味する目印）
+                            fetch("/api/hp-chatbot-event", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "photo_cta",
+                                view_type: "cta_clicked",
+                                therapist_id: therapistId,
+                                photo_id: 0,
+                              }),
+                            }).catch(() => {});
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={p.url}
+                            alt=""
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                              filter: "blur(14px) brightness(0.85)",
+                              transform: "scale(1.2)",
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 4,
+                              background: "rgba(0,0,0,0.18)",
+                            }}
+                          >
+                            <span style={{ fontSize: 18, color: "#ffffff", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>🔒</span>
+                            <span
+                              style={{
+                                fontFamily: SITE.font.display,
+                                fontSize: 8,
+                                color: "#ffffff",
+                                letterSpacing: SITE.ls.wide,
+                                textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                              }}
+                            >
+                              MEMBERS
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    }
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setMainImage(p.url)}
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
+                          padding: 0,
+                          border: active
+                            ? `1px solid ${SITE.color.pink}`
+                            : `1px solid ${SITE.color.border}`,
+                          background: "transparent",
+                          cursor: "pointer",
+                          aspectRatio: "1 / 1",
+                          overflow: "hidden",
                         }}
-                      />
-                    </button>
-                  ))}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={p.url}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

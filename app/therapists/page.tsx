@@ -444,7 +444,8 @@ const generatePassword = () => {
     if (error) { setSaving(false); setMsg("登録失敗: " + error.message); return; }
     if (addPhotoFile && data) {
       const url = await uploadPhoto(addPhotoFile, data.id);
-      if (url) await supabase.from("therapists").update({ photo_url: url }).eq("id", data.id);
+      // photo_url と sub_photo_urls[0] を同時に保存（HP表示で sub_photo_urls 優先）
+      if (url) await supabase.from("therapists").update({ photo_url: url, sub_photo_urls: [url] }).eq("id", data.id);
     }
     setSaving(false); setMsg("登録しました！");
     setAddName(""); setAddPhone(""); setAddStatus("active"); setAddSalaryType("fixed"); setAddSalaryAmount(""); setAddAge(""); setAddInterval("10"); setAddTransport("0");
@@ -511,6 +512,12 @@ const generatePassword = () => {
           if (u?.publicUrl) finalSubPhotoUrls.push(u.publicUrl);
         }
       }
+    }
+    // 5枚制限（念のため）
+    finalSubPhotoUrls = finalSubPhotoUrls.slice(0, 5);
+    // photo_url を sub_photo_urls[0] と自動同期（基本写真UI廃止に伴う互換維持）
+    if (finalSubPhotoUrls.length > 0) {
+      photoUrl = finalSubPhotoUrls[0];
     }
     const { error } = await supabase.from("therapists").update({
       name: editName.trim(), phone: editPhone.trim(), status: editStatus,
@@ -1000,7 +1007,12 @@ const generatePassword = () => {
                 </div>
               </div>
               <div><label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📝 備考・メモ</label><textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="セラピストの備考を入力" rows={2} className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} /></div>
-              <PhotoField preview={editPhotoPreview} fileRef={editFileRef} onFileChange={(f) => handleFileChange(f, true)} width={editPhotoW} height={editPhotoH} onWidthChange={setEditPhotoW} onHeightChange={setEditPhotoH} />
+              <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <p className="text-[10px]" style={{ color: T.textMuted, lineHeight: 1.7 }}>
+                  💡 <strong style={{ color: T.textSub }}>写真はサブ写真ギャラリーで管理</strong><br />
+                  公開HPに表示される写真は「サブ写真」（最大5枚）で管理します。1枚目が一覧・スケジュールページのアイコンとして使われます。サブ写真ギャラリーは下にスクロールしてください。
+                </p>
+              </div>
             </div>
             )}
 
@@ -1288,32 +1300,64 @@ const generatePassword = () => {
                   </div>
                 </div>
 
-                {/* サブ写真ギャラリー */}
+                {/* サブ写真ギャラリー（最大5枚 / 1枚目=アイコン / 5枚目=会員限定） */}
                 <div>
-                  <label className="block text-[11px] mb-2" style={{ color: T.textSub }}>📸 サブ写真 <span className="text-[9px]" style={{ color: T.textMuted }}>（詳細ページでギャラリー表示）</span></label>
-                  <div className="grid grid-cols-4 gap-2 mb-2">
-                    {editSubPhotoUrls.map((url, i) => (
-                      <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden border" style={{ borderColor: T.border }}>
-                        <img src={url} alt={`sub-${i}`} className="w-full h-full object-cover" />
-                        <button type="button" onClick={() => setEditSubPhotoUrls(editSubPhotoUrls.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
-                      </div>
-                    ))}
-                    {editSubPhotoFiles.map((f, i) => (
-                      <div key={`new-${i}`} className="relative aspect-[3/4] rounded-lg overflow-hidden border" style={{ borderColor: "#e8849a66", backgroundColor: "#e8849a08" }}>
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-1">
-                          <span className="text-[16px]">📸</span>
-                          <span className="text-[8px] text-center leading-tight truncate w-full" style={{ color: "#e8849a" }}>{f.name}</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-[11px]" style={{ color: T.textSub }}>📸 公開HP写真 <span className="text-[9px]" style={{ color: T.textMuted }}>（最大5枚・1枚目がアイコン・5枚目は会員限定）</span></label>
+                    <span className="text-[9px]" style={{ color: T.textMuted }}>{editSubPhotoUrls.length + editSubPhotoFiles.length} / 5</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2 mb-2">
+                    {editSubPhotoUrls.map((url, i) => {
+                      const idx = i; // 既存写真の通し番号
+                      const isIcon = idx === 0;
+                      const isMembers = idx === 4;
+                      return (
+                        <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden border" style={{ borderColor: isIcon ? T.accent : isMembers ? "#e8849a88" : T.border }}>
+                          <img src={url} alt={`sub-${i}`} className="w-full h-full object-cover" />
+                          {isIcon && (
+                            <span className="absolute top-1 left-1 text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: T.accent, color: "#fff", fontWeight: 600 }}>👤 アイコン</span>
+                          )}
+                          {isMembers && (
+                            <span className="absolute top-1 left-1 text-[8px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#e8849a", color: "#fff", fontWeight: 600 }}>🔒 会員限定</span>
+                          )}
+                          <button type="button" onClick={() => setEditSubPhotoUrls(editSubPhotoUrls.filter((_, k) => k !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
                         </div>
-                        <button type="button" onClick={() => setEditSubPhotoFiles(editSubPhotoFiles.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
-                      </div>
-                    ))}
-                    <label className="aspect-[3/4] rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-all hover:bg-white/5" style={{ borderColor: T.border }}>
-                      <span className="text-[20px]">＋</span>
-                      <span className="text-[9px]" style={{ color: T.textMuted }}>追加</span>
-                      <input type="file" accept="image/*" multiple onChange={(e) => { const files = Array.from(e.target.files || []); setEditSubPhotoFiles([...editSubPhotoFiles, ...files]); }} className="hidden" />
-                    </label>
+                      );
+                    })}
+                    {editSubPhotoFiles.map((f, i) => {
+                      const idx = editSubPhotoUrls.length + i; // アップロード後の通し番号
+                      const isIcon = idx === 0;
+                      const isMembers = idx === 4;
+                      return (
+                        <div key={`new-${i}`} className="relative aspect-[3/4] rounded-lg overflow-hidden border" style={{ borderColor: "#e8849a66", backgroundColor: "#e8849a08" }}>
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-1">
+                            <span className="text-[16px]">📸</span>
+                            <span className="text-[8px] text-center leading-tight truncate w-full" style={{ color: "#e8849a" }}>{f.name}</span>
+                          </div>
+                          {isIcon && (
+                            <span className="absolute top-1 left-1 text-[7px] px-1 py-0.5 rounded" style={{ backgroundColor: T.accent, color: "#fff", fontWeight: 600 }}>👤 アイコン</span>
+                          )}
+                          {isMembers && (
+                            <span className="absolute top-1 left-1 text-[7px] px-1 py-0.5 rounded" style={{ backgroundColor: "#e8849a", color: "#fff", fontWeight: 600 }}>🔒 会員</span>
+                          )}
+                          <button type="button" onClick={() => setEditSubPhotoFiles(editSubPhotoFiles.filter((_, k) => k !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
+                        </div>
+                      );
+                    })}
+                    {editSubPhotoUrls.length + editSubPhotoFiles.length < 5 && (
+                      <label className="aspect-[3/4] rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-all hover:bg-white/5" style={{ borderColor: T.border }}>
+                        <span className="text-[20px]">＋</span>
+                        <span className="text-[9px]" style={{ color: T.textMuted }}>追加</span>
+                        <input type="file" accept="image/*" multiple onChange={(e) => {
+                          const remain = 5 - (editSubPhotoUrls.length + editSubPhotoFiles.length);
+                          const files = Array.from(e.target.files || []).slice(0, Math.max(0, remain));
+                          setEditSubPhotoFiles([...editSubPhotoFiles, ...files]);
+                        }} className="hidden" />
+                      </label>
+                    )}
                   </div>
                   {editSubPhotoFiles.length > 0 && <p className="text-[9px]" style={{ color: "#e8849a" }}>📸 {editSubPhotoFiles.length}件が「更新する」押下時にアップロードされます</p>}
+                  {editSubPhotoUrls.length + editSubPhotoFiles.length >= 5 && <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>5枚に達しました。新しい写真を追加するには、既存の写真を削除してください。</p>}
                 </div>
 
                 {/* SNS・ブログリンク */}
