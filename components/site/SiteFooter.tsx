@@ -20,6 +20,7 @@ const FOOTER_NAV = [
   { label: "アクセス",     path: "/access" },
   { label: "求人",         path: "/recruit" },
   { label: "お問い合わせ", path: "/contact" },
+  { label: "アンケート",   path: "/survey" },
 ];
 
 const LEGAL_NAV = [
