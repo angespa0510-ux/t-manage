@@ -55,7 +55,8 @@ export default function AccessPage() {
         label="ACCESS"
         title="店舗・アクセス"
         subtitle="名古屋・三河安城・豊橋エリアに展開する Ange Spa 各店舗のご案内です。"
-        bgImage="/images/placeholder/access.jpg"
+        bgVideo="/videos/access.mp4"
+        bgVideoPoster="/videos/access-poster.jpg"
       />
 
       <div

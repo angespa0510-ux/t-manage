@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { SITE, MARBLE } from "../../../lib/site-theme";
+import { PageHero } from "../../../components/site/SiteLayoutParts";
 import { useCustomerAuth } from "../../../lib/customer-auth-context";
 import StoryRing from "../../../components/site/StoryRing";
 
@@ -147,54 +148,14 @@ export default function DiaryTimelinePage() {
   // ════════════════════════════════════════════════════
   return (
     <div style={{ ...MARBLE.pink, minHeight: "100vh", paddingBottom: 80 }}>
-      {/* ヒーロー */}
-      <div style={{ padding: "60px 20px 40px", textAlign: "center" }}>
-        <p
-          style={{
-            fontFamily: SITE.font.display,
-            fontSize: SITE.fs.sm,
-            letterSpacing: SITE.ls.wider,
-            color: SITE.color.pink,
-            marginBottom: 12,
-            fontWeight: 500,
-          }}
-        >
-          DIARY
-        </p>
-        <h1
-          style={{
-            fontFamily: SITE.font.serif,
-            fontSize: SITE.fs.h1,
-            color: SITE.color.text,
-            fontWeight: 500,
-            letterSpacing: SITE.ls.loose,
-            marginBottom: 16,
-            lineHeight: SITE.lh.heading,
-          }}
-        >
-          写メ日記
-        </h1>
-        <div
-          style={{
-            width: 50,
-            height: 1,
-            backgroundColor: SITE.color.pink,
-            margin: "0 auto 16px",
-          }}
-        />
-        <p
-          style={{
-            fontFamily: SITE.font.serif,
-            fontSize: SITE.fs.body,
-            color: SITE.color.textSub,
-            lineHeight: SITE.lh.body,
-            maxWidth: 480,
-            margin: "0 auto",
-          }}
-        >
-          セラピストたちの日常を、ありのままお届け
-        </p>
-      </div>
+      {/* ヒーロー（動画背景） */}
+      <PageHero
+        label="DIARY"
+        title="写メ日記"
+        subtitle="セラピストたちの日常を、ありのままお届け"
+        bgVideo="/videos/diary.mp4"
+        bgVideoPoster="/videos/diary-poster.jpg"
+      />
 
       {/* コンテンツコンテナ */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 16px" }}>
