@@ -629,7 +629,10 @@ function ResultView({
     }
   };
 
-  const showGoogleSection = Boolean(result.googleReviewUrl && reviewText && reviewText.trim().length > 0);
+  // ★3以下は Google誘導をしない（安全策・低評価がGoogleに流れるのを防ぐ）
+  const isHighRating = ratingOverall >= 4;
+  const hasReviewText = Boolean(reviewText && reviewText.trim().length > 0);
+  const showGoogleSection = Boolean(result.googleReviewUrl) && isHighRating;
 
   return (
     <div>
@@ -713,7 +716,9 @@ function ResultView({
               🌟 Googleにも投稿してみませんか？
             </h3>
             <p style={{ fontSize: 11, color: C.textMuted, margin: "8px 0 0 0", lineHeight: 1.6 }}>
-              （ご投稿はあくまで任意です・投稿の有無でクーポンには影響しません）
+              {hasReviewText
+                ? "（ご投稿はあくまで任意です・投稿の有無でクーポンには影響しません）"
+                : "★評価のご投稿だけでも嬉しいです🌸 ご投稿は任意です"}
             </p>
           </div>
 
@@ -740,46 +745,52 @@ function ResultView({
             </ul>
           </div>
 
-          {/* ご投稿用文章 */}
-          <label style={{ display: "block", fontSize: 11, color: C.textSub, marginBottom: 6 }}>
-            📝 ご投稿用にまとめた文章（コピーしてご利用ください）
-          </label>
-          <div
-            style={{
-              padding: 12,
-              backgroundColor: C.cardAlt,
-              border: `1px solid ${C.border}`,
-              fontSize: 12,
-              color: C.text,
-              lineHeight: 1.8,
-              whiteSpace: "pre-wrap",
-              marginBottom: 12,
-              maxHeight: 200,
-              overflowY: "auto",
-            }}
-          >
-            {reviewText}
-          </div>
+          {/* ご投稿用文章（テキストがある場合のみ） */}
+          {hasReviewText && (
+            <>
+              <label style={{ display: "block", fontSize: 11, color: C.textSub, marginBottom: 6 }}>
+                📝 ご投稿用にまとめた文章（コピーしてご利用ください）
+              </label>
+              <div
+                style={{
+                  padding: 12,
+                  backgroundColor: C.cardAlt,
+                  border: `1px solid ${C.border}`,
+                  fontSize: 12,
+                  color: C.text,
+                  lineHeight: 1.8,
+                  whiteSpace: "pre-wrap",
+                  marginBottom: 12,
+                  maxHeight: 200,
+                  overflowY: "auto",
+                }}
+              >
+                {reviewText}
+              </div>
+            </>
+          )}
 
           {/* アクション */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              onClick={copyReviewText}
-              style={{
-                width: "100%",
-                padding: 12,
-                fontSize: 12,
-                backgroundColor: copied ? C.green : "#fff",
-                color: copied ? "#fff" : C.accentDark,
-                border: `1px solid ${copied ? C.green : C.borderPink}`,
-                cursor: "pointer",
-                fontFamily: FONT_SERIF,
-                letterSpacing: 1,
-                transition: "all 0.2s",
-              }}
-            >
-              {copied ? "✓ クリップボードにコピーしました" : "📋 文章をコピーする"}
-            </button>
+            {hasReviewText && (
+              <button
+                onClick={copyReviewText}
+                style={{
+                  width: "100%",
+                  padding: 12,
+                  fontSize: 12,
+                  backgroundColor: copied ? C.green : "#fff",
+                  color: copied ? "#fff" : C.accentDark,
+                  border: `1px solid ${copied ? C.green : C.borderPink}`,
+                  cursor: "pointer",
+                  fontFamily: FONT_SERIF,
+                  letterSpacing: 1,
+                  transition: "all 0.2s",
+                }}
+              >
+                {copied ? "✓ クリップボードにコピーしました" : "📋 文章をコピーする"}
+              </button>
+            )}
             <a
               href={result.googleReviewUrl || "#"}
               target="_blank"
@@ -799,7 +810,9 @@ function ResultView({
                 display: "block",
               }}
             >
-              🌟 Googleレビューを書く（新しいタブで開く）
+              {hasReviewText
+                ? "🌟 Googleレビューを書く（新しいタブで開く）"
+                : "🌟 ★評価でGoogleに投稿（新しいタブで開く）"}
             </a>
           </div>
 
