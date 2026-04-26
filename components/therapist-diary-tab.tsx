@@ -710,7 +710,7 @@ export default function TherapistDiaryTab({
         FONT_SANS={FONT_SANS}
       />
 
-      {/* 投げ銭受領セクション */}
+      {/* 情報配信報酬受領セクション */}
       <TherapistGiftSection
         therapistId={therapistId}
         authToken={authToken}

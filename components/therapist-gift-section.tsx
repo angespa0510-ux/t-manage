@@ -45,7 +45,7 @@ type Gift = {
 };
 
 /**
- * セラピストマイページ用 投げ銭受領セクション
+ * セラピストマイページ用 情報配信報酬受領セクション
  *
  * - 残高/累計/今月/今年 の4数字を大きく表示
  * - 受領履歴 (直近20件)
@@ -100,20 +100,20 @@ export default function TherapistGiftSection({ therapistId, authToken, C, FONT_S
       {/* セクション見出し */}
       <div style={{ textAlign: "center", marginBottom: 4 }}>
         <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: C.accent, marginBottom: 6, fontWeight: 500 }}>
-          GIFTS
+          BROADCAST REWARDS
         </p>
         <p style={{ fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.08em", color: C.text, fontWeight: 500, marginBottom: 8 }}>
-          🎁 いただいた投げ銭
+          💝 いただいた情報配信報酬
         </p>
         <div style={{ width: 24, height: 1, backgroundColor: C.accent, margin: "0 auto" }} />
       </div>
 
       {!balance || balance.totalCount === 0 ? (
         <div style={{ padding: 24, textAlign: "center", backgroundColor: C.card, border: `1px dashed ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🎁</div>
-          <p style={{ fontSize: 12, color: C.textSub, marginBottom: 4 }}>まだ投げ銭はありません</p>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>💝</div>
+          <p style={{ fontSize: 12, color: C.textSub, marginBottom: 4 }}>まだ情報配信報酬はありません</p>
           <p style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.6 }}>
-            お客様からいただいた投げ銭ポイントが<br />こちらに表示されます
+            お客様からの投げ銭でいただいた情報配信報酬が<br />こちらに表示されます
           </p>
         </div>
       ) : (
