@@ -21,6 +21,7 @@ type Settlement = {
   total_cash?: number; total_back?: number; final_payment?: number;
   invoice_deduction?: number; withholding_tax?: number;
   reserve_used_amount?: number;
+  gift_bonus_amount?: number;
   sales_collected?: boolean; change_collected?: boolean; safe_deposited?: boolean;
   safe_collected_date?: string | null;
 };
@@ -203,7 +204,7 @@ export default function Analytics() {
     if (ar) setAllReservations(ar as Reservation[]);
 
     // 年間の精算・経費・釣銭補充
-    const { data: ys } = await supabase.from("therapist_daily_settlements").select("id,therapist_id,date,total_cash,total_back,final_payment,invoice_deduction,withholding_tax,reserve_used_amount,sales_collected,change_collected,safe_deposited,safe_collected_date,room_id").gte("date", yearStart).lte("date", yearEnd).range(0, 49999);
+    const { data: ys } = await supabase.from("therapist_daily_settlements").select("id,therapist_id,date,total_cash,total_back,final_payment,invoice_deduction,withholding_tax,reserve_used_amount,gift_bonus_amount,sales_collected,change_collected,safe_deposited,safe_collected_date,room_id").gte("date", yearStart).lte("date", yearEnd).range(0, 49999);
     if (ys) setYearSettlements(ys as Settlement[]);
     const { data: ye } = await supabase.from("expenses").select("id,date,amount,type").gte("date", yearStart).lte("date", yearEnd).range(0, 49999);
     if (ye) setYearExpenses(ye as ExpenseRow[]);
@@ -391,7 +392,7 @@ export default function Analytics() {
       const yEnd = `${year}-12-31`;
       const [rRes, sRes, eRes, repRes, rmRes, aRes, scRes] = await Promise.all([
         supabase.from("reservations").select("*").eq("status", "completed").gte("date", yStart).lte("date", yEnd).range(0, 49999),
-        supabase.from("therapist_daily_settlements").select("id,therapist_id,date,total_cash,total_back,final_payment,invoice_deduction,withholding_tax,reserve_used_amount,sales_collected,change_collected,safe_deposited,safe_collected_date,room_id").gte("date", yStart).lte("date", yEnd).range(0, 49999),
+        supabase.from("therapist_daily_settlements").select("id,therapist_id,date,total_cash,total_back,final_payment,invoice_deduction,withholding_tax,reserve_used_amount,gift_bonus_amount,sales_collected,change_collected,safe_deposited,safe_collected_date,room_id").gte("date", yStart).lte("date", yEnd).range(0, 49999),
         supabase.from("expenses").select("id,date,amount,type").gte("date", yStart).lte("date", yEnd).range(0, 49999),
         supabase.from("room_cash_replenishments").select("id,date,room_id,amount").gte("date", yStart).lte("date", yEnd).range(0, 49999),
         supabase.from("toyohashi_reserve_movements").select("movement_date,movement_type,amount").gte("movement_date", yStart).lte("movement_date", yEnd).range(0, 9999),
@@ -500,18 +501,27 @@ export default function Analytics() {
 
   // ===== セラピスト別 =====
   const therapistData = useMemo(() => {
-    const map = new Map<number, { sales: number; back: number; count: number; customers: Set<string> }>();
+    const map = new Map<number, { sales: number; back: number; giftBonus: number; count: number; customers: Set<string> }>();
     const src = tab === "therapist" ? reservations : allReservations;
     for (const r of src) {
-      const ex = map.get(r.therapist_id) || { sales: 0, back: 0, count: 0, customers: new Set<string>() };
+      const ex = map.get(r.therapist_id) || { sales: 0, back: 0, giftBonus: 0, count: 0, customers: new Set<string>() };
       ex.sales += getPrice(r); ex.back += getBack(r); ex.count++; ex.customers.add(r.customer_name);
       map.set(r.therapist_id, ex);
+    }
+    // settlements から情報配信報酬 (gift_bonus_amount) を集計してマージ
+    const settlementSrc = tab === "therapist" ? monthSettlements : yearSettlements;
+    for (const s of settlementSrc) {
+      const giftBonus = s.gift_bonus_amount || 0;
+      if (giftBonus <= 0) continue;
+      const ex = map.get(s.therapist_id) || { sales: 0, back: 0, giftBonus: 0, count: 0, customers: new Set<string>() };
+      ex.giftBonus += giftBonus;
+      map.set(s.therapist_id, ex);
     }
     return Array.from(map.entries()).map(([id, d]) => ({
       id, name: getTherapistName(id), ...d, customers: d.customers.size,
       nomination: src.filter((r) => r.therapist_id === id && r.notes?.includes("指名")).length,
     })).sort((a, b) => b.sales - a.sales);
-  }, [reservations, allReservations, tab, courses, therapists]);
+  }, [reservations, allReservations, monthSettlements, yearSettlements, tab, courses, therapists]);
 
   // ===== コース別 =====
   const courseData = useMemo(() => {
@@ -1288,6 +1298,7 @@ export default function Analytics() {
                           { label: "指名", align: "right", w: "" },
                           { label: "売上", align: "right", w: "" },
                           { label: "バック", align: "right", w: "" },
+                          { label: "情報配信", align: "right", w: "" },
                           { label: "利益", align: "right", w: "" },
                           { label: "顧客数", align: "right", w: "" },
                           { label: "平均単価", align: "right", w: "" },
@@ -1299,7 +1310,7 @@ export default function Analytics() {
                     </thead>
                     <tbody>
                       {therapistData.length === 0 && (
-                        <tr><td colSpan={10} className="py-8 text-center text-[12px]" style={{ color: T.textFaint }}>データがありません</td></tr>
+                        <tr><td colSpan={11} className="py-8 text-center text-[12px]" style={{ color: T.textFaint }}>データがありません</td></tr>
                       )}
                       {therapistData.map((t, i) => {
                         const avg = t.count > 0 ? Math.round(t.sales / t.count) : 0;
@@ -1313,6 +1324,7 @@ export default function Analytics() {
                             <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{t.nomination}件</td>
                             <td className="py-2 px-3 text-right font-medium" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(t.sales)}</td>
                             <td className="py-2 px-3 text-right" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(t.back)}</td>
+                            <td className="py-2 px-3 text-right" style={{ color: t.giftBonus > 0 ? "#c96b83" : T.textFaint, borderRight: `1px solid ${T.border}` }}>{t.giftBonus > 0 ? `+${fmt(t.giftBonus)}` : "—"}</td>
                             <td className="py-2 px-3 text-right" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(t.sales - t.back)}</td>
                             <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{t.customers}名</td>
                             <td className="py-2 px-3 text-right" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{fmt(avg)}</td>
@@ -1329,6 +1341,7 @@ export default function Analytics() {
                           <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{therapistData.reduce((s, t) => s + t.nomination, 0)}件</td>
                           <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.accent, borderRight: `1px solid ${T.border}` }}>{fmt(therapistData.reduce((s, t) => s + t.sales, 0))}</td>
                           <td className="py-2.5 px-3 text-right font-bold" style={{ color: "#7ab88f", borderRight: `1px solid ${T.border}` }}>{fmt(therapistData.reduce((s, t) => s + t.back, 0))}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: therapistData.reduce((s, t) => s + t.giftBonus, 0) > 0 ? "#c96b83" : T.textFaint, borderRight: `1px solid ${T.border}` }}>{therapistData.reduce((s, t) => s + t.giftBonus, 0) > 0 ? `+${fmt(therapistData.reduce((s, t) => s + t.giftBonus, 0))}` : "—"}</td>
                           <td className="py-2.5 px-3 text-right font-bold" style={{ borderRight: `1px solid ${T.border}` }}>{fmt(therapistData.reduce((s, t) => s + (t.sales - t.back), 0))}</td>
                           <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>—</td>
                           <td className="py-2.5 px-3 text-right font-bold" style={{ color: T.textSub, borderRight: `1px solid ${T.border}` }}>{monthTotal.count > 0 ? fmt(Math.round(monthTotal.sales / monthTotal.count)) : "—"}</td>
