@@ -571,8 +571,7 @@ export function SurveyForm(props: SurveyFormProps) {
                   ご感想を Ange Spa の<strong style={{ color: C.accentDark }}>HP に匿名掲載</strong>することに同意します
                 </p>
                 <p style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.6 }}>
-                  「30代男性 Aさん」などの形式で掲載します。スタッフ確認後の公開となり、ご同意いただきマイページご登録の方には
-                  <strong style={{ color: C.accentDark }}> 500pt </strong>を進呈します。
+                  「30代男性 Aさん」などの形式で掲載します。スタッフ確認後の公開となります。お客様の本名・連絡先・来店日時など個人を特定する情報は含まれません。
                 </p>
               </div>
             </label>

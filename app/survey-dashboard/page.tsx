@@ -210,8 +210,8 @@ export default function SurveyDashboardPage() {
 
     const updatePayload: Record<string, unknown> = {
       hp_published: publish,
-      hp_published_at: publish ? new Date().toISOString() : null,
-      hp_published_by: publish ? activeStaff.id : null,
+      hp_publish_approved_at: publish ? new Date().toISOString() : null,
+      hp_publish_approved_by: publish ? activeStaff.id : null,
     };
     if (displayNameToSet) {
       updatePayload.hp_display_name = displayNameToSet;
@@ -222,32 +222,14 @@ export default function SurveyDashboardPage() {
       .update(updatePayload)
       .eq("id", surveyId);
 
-    if (!error && publish && pointSettings) {
-      // ポイント付与
-      const { data: survey } = await supabase
-        .from("customer_surveys")
-        .select("customer_id, hp_publish_bonus_granted")
-        .eq("id", surveyId)
-        .maybeSingle();
-      if (survey?.customer_id && !survey.hp_publish_bonus_granted) {
-        const bonus = pointSettings.hp_publish_bonus || 500;
-        const expAt = new Date();
-        expAt.setMonth(expAt.getMonth() + 12);
-        await supabase.from("customer_points").insert({
-          customer_id: survey.customer_id,
-          amount: bonus,
-          type: "earn",
-          description: "🌸 アンケートHP掲載ご同意ボーナス",
-          expires_at: expAt.toISOString(),
-        });
-        await supabase
-          .from("customer_surveys")
-          .update({ hp_publish_bonus_granted: true })
-          .eq("id", surveyId);
-      }
+    setSavingHpPublish(false);
+
+    if (error) {
+      console.error("[handleHpPublish] update error:", error);
+      alert(`更新失敗: ${error.message}`);
+      return;
     }
 
-    setSavingHpPublish(false);
     if (selectedSurvey?.id === surveyId) {
       setSelectedSurvey({ ...selectedSurvey, hp_published: publish });
     }
@@ -556,7 +538,7 @@ function ApprovalView({
           lineHeight: 1.6,
         }}
       >
-        ✅ HP掲載に同意いただいたご感想です。内容を確認のうえ「掲載」を押すと公開され、お客様に500ptが付与されます。
+        ✅ HP掲載に同意いただいたご感想です。内容を確認のうえ「掲載」を押すと公開されます。
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {surveys.map((s) => {
@@ -601,7 +583,7 @@ function ApprovalView({
                   disabled={saving}
                   style={btnPrimary(T)}
                 >
-                  ✓ HPに掲載する（+500pt）
+                  ✓ HPに掲載する
                 </button>
               </div>
             </div>
@@ -851,7 +833,6 @@ function SettingsView({
       .update({
         survey_coupon_amount: couponAmount,
         survey_coupon_valid_months: validMonths,
-        hp_publish_bonus: hpBonus,
       })
       .gt("id", 0);
 
@@ -901,15 +882,6 @@ function SettingsView({
               type="number"
               value={validMonths}
               onChange={(e) => setValidMonths(Number(e.target.value))}
-              style={inputStyle(T)}
-            />
-          </div>
-          <div>
-            <label style={labelStyle(T)}>HP掲載同意ボーナス（pt）</label>
-            <input
-              type="number"
-              value={hpBonus}
-              onChange={(e) => setHpBonus(Number(e.target.value))}
               style={inputStyle(T)}
             />
           </div>
@@ -1326,7 +1298,7 @@ function SurveyDetailModal({
             <div style={{ display: "flex", gap: 8 }}>
               {!survey.hp_published ? (
                 <button onClick={() => onPublish(survey.id, true)} disabled={saving} style={btnPrimary(T)}>
-                  ✓ HPに掲載する（+500pt付与）
+                  ✓ HPに掲載する
                 </button>
               ) : (
                 <button onClick={() => onPublish(survey.id, false)} disabled={saving} style={btnSecondary(T)}>

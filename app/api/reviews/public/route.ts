@@ -45,10 +45,10 @@ export async function GET(req: Request) {
         good_points,
         final_review_text,
         hp_display_name,
-        hp_published_at
+        hp_publish_approved_at
       `, { count: "exact" })
       .eq("hp_published", true)
-      .order("hp_published_at", { ascending: false })
+      .order("hp_publish_approved_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (therapistId) {
@@ -84,7 +84,7 @@ export async function GET(req: Request) {
         rating: r.rating_overall || 0,
         reviewText: r.final_review_text || r.good_points || "",
         highlights: Array.isArray(r.highlights) ? r.highlights : [],
-        publishedAt: r.hp_published_at,
+        publishedAt: r.hp_publish_approved_at,
         therapistName: r.therapist_id ? therapistMap[r.therapist_id] || "" : "",
       })),
     });
