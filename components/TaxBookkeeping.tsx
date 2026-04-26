@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { calcGrossRevenue, calcSettlementRounding } from "../lib/settlement-calc";
 
 type T = { [key: string]: string };
-type Settlement = { id: number; therapist_id: number; date: string; total_sales: number; total_back: number; order_count: number; adjustment: number; adjustment_note: string; invoice_deduction: number; withholding_tax: number; welfare_fee: number; transport_fee: number; final_payment: number; is_settled: boolean; };
+type Settlement = { id: number; therapist_id: number; date: string; total_sales: number; total_back: number; order_count: number; adjustment: number; adjustment_note: string; invoice_deduction: number; withholding_tax: number; welfare_fee: number; transport_fee: number; final_payment: number; is_settled: boolean; gift_bonus_amount?: number };
 type Expense = { id: number; therapist_id: number; date: string; category: string; subcategory: string; account_item: string; description: string; amount: number; receipt_url: string; receipt_thumb_url: string; memo: string; created_at: string; };
-type JournalEntry = { date: string; debit_account: string; debit_amount: number; credit_account: string; credit_amount: number; description: string; id: string; type: "income"|"expense"; receipt_url?: string; };
+type JournalEntry = { date: string; debit_account: string; debit_amount: number; credit_account: string; credit_amount: number; description: string; id: string; type: "income"|"expense"|"transfer"; receipt_url?: string; };
 
 const CATEGORIES = [
   { icon:"💄", label:"美容費", account:"消耗品費", subs:["美容院","ネイル","マツエク","スキンケア","化粧品","サプリ"] },
@@ -70,19 +71,149 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
   useEffect(()=>{checkTable();},[checkTable]);
   useEffect(()=>{fetchData();},[fetchData]);
 
-  /* 複式簿記 仕訳帳生成 */
-  const generateJournal=():JournalEntry[]=>{const entries:JournalEntry[]=[];
-    settlements.forEach(s=>{entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.final_payment,credit_account:"売上高",credit_amount:s.final_payment,description:`業務委託報酬 ${s.order_count}件`,id:`stl-${s.id}`});
-      if(s.withholding_tax>0)entries.push({date:s.date,type:"income",debit_account:"事業主貸",debit_amount:s.withholding_tax,credit_account:"売上高",credit_amount:s.withholding_tax,description:`源泉徴収税`,id:`wh-${s.id}`});
-      if(s.transport_fee>0)entries.push({date:s.date,type:"income",debit_account:"現金",debit_amount:s.transport_fee,credit_account:"雑収入",credit_amount:s.transport_fee,description:`交通費支給`,id:`tf-${s.id}`});});
-    expenses.forEach(e=>{if(e.category.startsWith("収入:")){entries.push({date:e.date,type:"income",debit_account:"現金",debit_amount:e.amount,credit_account:"売上高",credit_amount:e.amount,description:`${e.subcategory} ${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`});}else{entries.push({date:e.date,type:"expense",debit_account:e.account_item||"雑費",debit_amount:e.amount,credit_account:"現金",credit_amount:e.amount,description:`${e.subcategory?e.subcategory+" ":""}${e.description}${e.memo?`（${e.memo}）`:""}`,id:`exp-${e.id}`,receipt_url:e.receipt_url});}});
-    return entries.sort((a,b)=>a.date.localeCompare(b.date));};
+  /* 複式簿記 仕訳帳生成
+   *
+   * 健康診断レポート 2026-04-26 「重要度: 高 - gift_bonus_amount 不統一」対応で再構成。
+   *
+   * 旧式の問題:
+   *   - 売上高 = final_payment + withholding_tax で記帳していた
+   *   - adjustment / gift_bonus_amount が漏れる
+   *   - welfare_fee / invoice_deduction が経費として計上されない
+   *   - transport_fee が雑収入として加算され、final_payment にも込まれて二重計上
+   *   → tax-dashboard 等の業務委託報酬総額（total_back+adjustment+gift_bonus_amount）と
+   *     仕訳帳の売上高が食い違う温床になっていた。
+   *
+   * 新式（本ファイル）:
+   *   ① 売上高 = 業務委託報酬総額 = total_back + adjustment + gift_bonus_amount
+   *      (lib/settlement-calc.ts の calcGrossRevenue が SSOT)
+   *   ② 源泉徴収税は事業主貸（仮払税金）として transfer 型で記帳。P&L には影響しない。
+   *   ③ インボイス未登録控除は諸会費として経費計上。
+   *   ④ 備品・リネン代は消耗品費として経費計上。
+   *   ⑤ 交通費は実費補填として雑収入。
+   *   ⑥ 100円切上端数は雑収入（サロンからの切上ボーナス）。
+   *
+   *   貸借バランス:
+   *     Cr 売上高 + Cr 雑収入 = Dr 現金 + Dr 事業主貸 + Dr 諸会費 + Dr 消耗品費 (per settlement)
+   *     現金純増 = grossRev - withholding - invoice_ded - welfare + transport + rounding
+   *             = final_payment ✓
+   */
+  const generateJournal = (): JournalEntry[] => {
+    const entries: JournalEntry[] = [];
 
-  const journal=generateJournal();
-  const cashOptionIncome=expenses.filter(e=>e.category.startsWith("収入:")).reduce((s,e)=>s+e.amount,0);
-  const totalIncome=settlements.reduce((s,stl)=>s+stl.final_payment+stl.withholding_tax,0)+cashOptionIncome;
-  const totalExpense=expenses.filter(e=>!e.category.startsWith("収入:")).reduce((s,e)=>s+e.amount,0);
-  const profit=totalIncome-totalExpense;
+    settlements.forEach(s => {
+      const grossRev = calcGrossRevenue(s);
+      const rounding = calcSettlementRounding(s);
+
+      // ① 業務委託報酬総額の認識: Dr 現金 / Cr 売上高
+      if (grossRev > 0) {
+        entries.push({
+          date: s.date, type: "income",
+          debit_account: "現金", debit_amount: grossRev,
+          credit_account: "売上高", credit_amount: grossRev,
+          description: `業務委託報酬 ${s.order_count}件`,
+          id: `stl-${s.id}`,
+        });
+      }
+
+      // ② 源泉徴収税: Dr 事業主貸 / Cr 現金 （仮払税金として BS 振替）
+      if (s.withholding_tax > 0) {
+        entries.push({
+          date: s.date, type: "transfer",
+          debit_account: "事業主貸", debit_amount: s.withholding_tax,
+          credit_account: "現金", credit_amount: s.withholding_tax,
+          description: `源泉徴収税`,
+          id: `wh-${s.id}`,
+        });
+      }
+
+      // ③ インボイス未登録控除: Dr 諸会費 / Cr 現金
+      if (s.invoice_deduction > 0) {
+        entries.push({
+          date: s.date, type: "expense",
+          debit_account: "諸会費", debit_amount: s.invoice_deduction,
+          credit_account: "現金", credit_amount: s.invoice_deduction,
+          description: `インボイス未登録控除（10%）`,
+          id: `id-${s.id}`,
+        });
+      }
+
+      // ④ 備品・リネン代: Dr 消耗品費 / Cr 現金
+      if (s.welfare_fee > 0) {
+        entries.push({
+          date: s.date, type: "expense",
+          debit_account: "消耗品費", debit_amount: s.welfare_fee,
+          credit_account: "現金", credit_amount: s.welfare_fee,
+          description: `備品・リネン代`,
+          id: `wf-${s.id}`,
+        });
+      }
+
+      // ⑤ 交通費（実費補填）: Dr 現金 / Cr 雑収入
+      if (s.transport_fee > 0) {
+        entries.push({
+          date: s.date, type: "income",
+          debit_account: "現金", debit_amount: s.transport_fee,
+          credit_account: "雑収入", credit_amount: s.transport_fee,
+          description: `交通費支給（実費補填）`,
+          id: `tf-${s.id}`,
+        });
+      }
+
+      // ⑥ 100円切上端数: Dr 現金 / Cr 雑収入 （サロンの切上ボーナス、通常 0〜99 円）
+      if (rounding > 0) {
+        entries.push({
+          date: s.date, type: "income",
+          debit_account: "現金", debit_amount: rounding,
+          credit_account: "雑収入", credit_amount: rounding,
+          description: `100円切上端数`,
+          id: `rd-${s.id}`,
+        });
+      }
+    });
+
+    // ─── 手動入力経費・収入の仕訳 ───
+    expenses.forEach(e => {
+      if (e.category.startsWith("収入:")) {
+        entries.push({
+          date: e.date, type: "income",
+          debit_account: "現金", debit_amount: e.amount,
+          credit_account: "売上高", credit_amount: e.amount,
+          description: `${e.subcategory} ${e.description}${e.memo ? `（${e.memo}）` : ""}`,
+          id: `exp-${e.id}`,
+        });
+      } else {
+        entries.push({
+          date: e.date, type: "expense",
+          debit_account: e.account_item || "雑費", debit_amount: e.amount,
+          credit_account: "現金", credit_amount: e.amount,
+          description: `${e.subcategory ? e.subcategory + " " : ""}${e.description}${e.memo ? `（${e.memo}）` : ""}`,
+          id: `exp-${e.id}`,
+          receipt_url: e.receipt_url,
+        });
+      }
+    });
+
+    return entries.sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const journal = generateJournal();
+  const cashOptionIncome = expenses.filter(e => e.category.startsWith("収入:")).reduce((s, e) => s + e.amount, 0);
+
+  // 事業収入 = 仕訳帳の Cr 売上高 + Cr 雑収入 （仕訳帳と完全に整合）
+  // = 業務委託報酬総額(gross) + 交通費 + 100円切上端数 + 手動入力収入
+  const totalIncome = journal
+    .filter(e => e.type === "income")
+    .filter(e => e.credit_account === "売上高" || e.credit_account === "雑収入")
+    .reduce((s, e) => s + e.credit_amount, 0);
+
+  // 必要経費 = 仕訳帳の type==="expense" な Dr 合計
+  // = インボイス控除 + 備品リネン代 + 手動入力経費（諸会費 / 消耗品費 / 旅費交通費 等）
+  // 事業主貸（源泉徴収税）は type==="transfer" のため除外される
+  const totalExpense = journal
+    .filter(e => e.type === "expense")
+    .reduce((s, e) => s + e.debit_amount, 0);
+
+  const profit = totalIncome - totalExpense;
 
   const getAccountSummary=()=>{const map:Record<string,number>={};journal.filter(e=>e.type==="expense").forEach(e=>{map[e.debit_account]=(map[e.debit_account]||0)+e.debit_amount;});return Object.entries(map).sort((a,b)=>b[1]-a[1]);};
   const getGeneralLedger=()=>{const accounts:Record<string,JournalEntry[]>={};journal.forEach(e=>{[e.debit_account,e.credit_account].forEach(acc=>{if(!accounts[acc])accounts[acc]=[];accounts[acc].push(e);});});return accounts;};
@@ -153,7 +284,7 @@ export default function TaxBookkeeping({ T, therapistId }: { T: T; therapistId: 
   /* CSV生成 */
   const dlCSV=(fn:string,c:string)=>{const b=new Blob(["\uFEFF"+c],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=fn;a.click();};
   const csvJournal=()=>{const p=viewMode==="year"?`${year}年`:monthKey;dlCSV(`仕訳帳_${p}.csv`,"日付,借方科目,借方金額,貸方科目,貸方金額,摘要\n"+journal.map(e=>`${e.date},${e.debit_account},${e.debit_amount},${e.credit_account},${e.credit_amount},"${e.description}"`).join("\n"));};
-  const csvFreee=()=>{dlCSV(`freee取込_${year}年.csv`,"収支区分,管理番号,発生日,勘定科目,税区分,金額,税計算区分,税額,備考\n"+journal.map((e,i)=>`${e.type==="income"?"収入":"支出"},${i+1},${e.date},${e.type==="income"?e.credit_account:e.debit_account},課税売上10%,${e.type==="income"?e.credit_amount:e.debit_amount},税込,,"${e.description}"`).join("\n"));};
+  const csvFreee=()=>{dlCSV(`freee取込_${year}年.csv`,"収支区分,管理番号,発生日,勘定科目,税区分,金額,税計算区分,税額,備考\n"+journal.filter(e=>e.type!=="transfer").map((e,i)=>`${e.type==="income"?"収入":"支出"},${i+1},${e.date},${e.type==="income"?e.credit_account:e.debit_account},課税売上10%,${e.type==="income"?e.credit_amount:e.debit_amount},税込,,"${e.description}"`).join("\n"));};
   const csvMF=()=>{dlCSV(`MF取込_${year}年.csv`,"取引日,借方勘定科目,借方補助科目,借方税区分,借方金額,貸方勘定科目,貸方補助科目,貸方税区分,貸方金額,摘要\n"+journal.map(e=>`${e.date},${e.debit_account},,課対仕入10%,${e.debit_amount},${e.credit_account},,課対仕入10%,${e.credit_amount},"${e.description}"`).join("\n"));};
   const csvSyuushi=()=>{const t=calcTax();let c=`収支内訳書（${year}年）\n\n■ 収入\n事業収入,${t.totalIncome}\n\n■ 経費\n`;getAccountSummary().forEach(([k,v])=>{c+=`${k},${v}\n`;});c+=`経費合計,${t.totalExpense}\n\n■ 所得\n事業所得,${t.profit}\n`;if(isAoiro)c+=`青色申告特別控除,${t.aoiroD}\n差引事業所得,${t.bIncome}\n`;dlCSV(`収支内訳書_${year}年.csv`,c);};
 

@@ -10,6 +10,7 @@ import { usePinKeyboard } from "../../lib/use-pin-keyboard";
 import { useBackNav } from "../../lib/use-back-nav";
 import { useConfirm } from "../../components/useConfirm";
 import { runAutoSettlementIfDue } from "../../lib/staff-advances";
+import { calcSettlementRounding } from "../../lib/settlement-calc";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
 
@@ -268,10 +269,9 @@ export default function Dashboard() {
     const totalTransportSettle = settledList2.reduce((s: number, d: any) => s + (d.transport_fee || 0), 0);
     // 💝 投げ銭バック合計（gift_bonus_amount は精算時に final_payment に込まれている）
     const totalGiftBack = settledList2.reduce((s: number, d: any) => s + (d.gift_bonus_amount || 0), 0);
-    const totalRounding = settledList2.reduce((s: number, d: any) => {
-      const raw = (d.total_back || 0) + (d.gift_bonus_amount || 0) - (d.invoice_deduction || 0) - (d.withholding_tax || 0) - (d.welfare_fee || 0) + (d.transport_fee || 0);
-      return s + ((d.final_payment || 0) - raw);
-    }, 0);
+    // 100円切上による端数集計（旧式は adjustment が抜けて adjustment 分過大になっていたため
+    // SSOT helper calcSettlementRounding で統一）
+    const totalRounding = settledList2.reduce((s: number, d: any) => s + calcSettlementRounding(d), 0);
     // 釣銭補充（明細付き）
     const replenishList = (repData || []).map((r: any) => {
       const rm = (rooms || []).find((x: any) => x.id === r.room_id);

@@ -8,6 +8,7 @@ import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useToast } from "../../lib/toast";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate, generatePaymentCertificateHtml } from "../../lib/certificate-pdf";
+import { calcGrossRevenue } from "../../lib/settlement-calc";
 import JSZip from "jszip";
 import { useConfirm } from "../../components/useConfirm";
 
@@ -935,10 +936,11 @@ function CertificateManager({ T }: { T: any }) {
     const months: { month: number; amount: number; days: number }[] = [];
     if (kind === "therapist") {
       // 業務委託報酬総額: total_back + 調整金 + 情報配信報酬 (gift_bonus_amount)
+      // 計算は lib/settlement-calc.ts の calcGrossRevenue を経由（SSOT）
       const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back, adjustment, gift_bonus_amount").eq("therapist_id", personId).gte("date", `${certYear}-01-01`).lte("date", `${certYear}-12-31`);
       for (let m = 1; m <= 12; m++) {
         const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
-        months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0) + (s.adjustment || 0) + (s.gift_bonus_amount || 0), 0), days: ms.length });
+        months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + calcGrossRevenue(s), 0), days: ms.length });
       }
     } else {
       // スタッフ: コミッション＋夜勤手当＋免許手当を合算（交通費は実費のため除外）
@@ -2457,10 +2459,11 @@ function DocumentDeliveryManager({ T, activeStaff }: { T: any; activeStaff: any 
     const months: { month: number; amount: number; days: number }[] = [];
     if (kind === "therapist") {
       // 業務委託報酬総額: total_back + 調整金 + 情報配信報酬 (gift_bonus_amount)
+      // 計算は lib/settlement-calc.ts の calcGrossRevenue を経由（SSOT）
       const { data: sett } = await supabase.from("therapist_daily_settlements").select("date, total_back, adjustment, gift_bonus_amount").eq("therapist_id", personId).gte("date", `${targetYear}-01-01`).lte("date", `${targetYear}-12-31`);
       for (let m = 1; m <= 12; m++) {
         const ms = (sett || []).filter((s: any) => new Date(s.date).getMonth() + 1 === m);
-        months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + (s.total_back || 0) + (s.adjustment || 0) + (s.gift_bonus_amount || 0), 0), days: ms.length });
+        months.push({ month: m, amount: ms.reduce((a: number, s: any) => a + calcGrossRevenue(s), 0), days: ms.length });
       }
     } else {
       const { data: sch } = await supabase.from("staff_schedules").select("date, commission_fee, night_premium, license_premium").eq("staff_id", personId).eq("status", "completed").gte("date", `${targetYear}-01-01`).lte("date", `${targetYear}-12-31`);

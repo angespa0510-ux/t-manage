@@ -7,6 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
 import { useBackNav } from "../../lib/use-back-nav";
+import { calcGrossRevenue } from "../../lib/settlement-calc";
 import { useConfirm } from "../../components/useConfirm";
 
 type Reservation = { id: number; customer_name: string; therapist_id: number; date: string; start_time: string; end_time: string; course: string; notes: string; status?: string; total_price?: number; card_billing?: number; paypay_amount?: number; cash_amount?: number; discount_amount?: number; nomination_fee?: number; options_total?: number; extension_price?: number };
@@ -1513,7 +1514,8 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
       // 業務委託報酬の総額: 通常バック + 調整金 + 情報配信報酬(投げ銭換金分)
       // 情報配信報酬は「業務委託報酬の追加部分」として税務上扱う
       // (精算時に gift_bonus_amount 込みで源泉・インボイス控除が計算済みなので、gross にも含めて整合させる)
-      const backAmt = (s.total_back || 0) + (s.adjustment || 0) + (s.gift_bonus_amount || 0);
+      // SSOT: lib/settlement-calc.ts の calcGrossRevenue
+      const backAmt = calcGrossRevenue(s);
       const transportFee = s.transport_fee || th?.transport_fee || 0;
       let dayWT = s.withholding_tax || 0;
       // 源泉徴収税額の自動計算（204条1項6号: (報酬 - インボイス控除 - 5000) * 10.21%）
