@@ -98,6 +98,14 @@ export function SurveyForm(props: SurveyFormProps) {
   const [therapistMessage, setTherapistMessage] = useState("");
   const [hpPublishConsent, setHpPublishConsent] = useState(false);
 
+  // AI言語化補助 (Phase 1C)
+  const [aiComposing, setAiComposing] = useState(false);
+  const [aiComposed, setAiComposed] = useState(""); // AI が生成し、お客様が編集後の最終文章
+  const [aiOriginal, setAiOriginal] = useState(""); // やり直し時の比較用
+  const [aiGenerationCount, setAiGenerationCount] = useState(0);
+  const [aiError, setAiError] = useState("");
+  const MAX_AI_GENERATIONS = 3;
+
   // 送信
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SurveySubmitResponse | null>(null);
@@ -109,6 +117,57 @@ export function SurveyForm(props: SurveyFormProps) {
     setHighlights((prev) =>
       prev.includes(h) ? prev.filter((x) => x !== h) : [...prev, h]
     );
+  };
+
+  // ─────────────────────────────────────
+  // AI言語化補助 (Phase 1C)
+  // ─────────────────────────────────────
+  const hasFreeText = Boolean(
+    (highlights.length > 0) ||
+      goodPoints.trim() ||
+      improvementPoints.trim() ||
+      therapistMessage.trim()
+  );
+
+  const handleAiCompose = async () => {
+    if (aiGenerationCount >= MAX_AI_GENERATIONS) {
+      setAiError("生成回数の上限に達しました（3回まで）");
+      return;
+    }
+    if (!hasFreeText) {
+      setAiError("ご感想を1つ以上ご入力ください");
+      return;
+    }
+    setAiComposing(true);
+    setAiError("");
+    try {
+      const res = await fetch("/api/survey/ai-compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ratingOverall,
+          highlights,
+          goodPoints: goodPoints.trim(),
+          improvementPoints: improvementPoints.trim(),
+          therapistMessage: therapistMessage.trim(),
+          therapistName: reservation.therapistName,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiError(data.error || "AI生成に失敗しました");
+        return;
+      }
+      const composed = data.composedText || "";
+      setAiComposed(composed);
+      setAiOriginal(composed);
+      setAiGenerationCount((c) => c + 1);
+    } catch (e) {
+      console.error(e);
+      setAiError("通信エラーが発生しました");
+    } finally {
+      setAiComposing(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -130,6 +189,8 @@ export function SurveyForm(props: SurveyFormProps) {
         goodPoints: goodPoints.trim() || undefined,
         improvementPoints: improvementPoints.trim() || undefined,
         therapistMessage: therapistMessage.trim() || undefined,
+        finalReviewText: aiComposed.trim() || undefined,
+        aiGenerated: aiComposed.trim().length > 0 && aiGenerationCount > 0,
         hpPublishConsent,
         submittedFrom: token ? "qr" : "mypage",
       };
@@ -299,7 +360,7 @@ export function SurveyForm(props: SurveyFormProps) {
             label="✨ 改善してほしい点"
             value={improvementPoints}
             onChange={setImprovementPoints}
-            placeholder="例：受付の待ち時間がもう少し短いと…"
+            placeholder="例:受付の待ち時間がもう少し短いと…"
           />
           <TextField
             label={`💌 ${reservation.therapistName || "セラピスト"}さんへのメッセージ`}
@@ -307,6 +368,122 @@ export function SurveyForm(props: SurveyFormProps) {
             onChange={setTherapistMessage}
             placeholder="ご担当へのお礼の言葉などあればぜひ"
           />
+
+          {/* ─── AI言語化補助（Phase 1C） ─── */}
+          {hasFreeText && (
+            <div
+              style={{
+                marginTop: 20,
+                padding: 14,
+                backgroundColor: C.cardAlt,
+                border: `1px solid ${C.borderPink}`,
+              }}
+            >
+              <p style={{ fontSize: 12, color: C.text, fontWeight: 500, marginBottom: 4 }}>
+                ✨ AIに文章をまとめてもらう（任意）
+              </p>
+              <p style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.6, marginBottom: 12 }}>
+                上記でご入力いただいた内容を、自然な口コミ文章として整理します。
+                <br />
+                生成後の文章はご自身で編集・調整いただけます（最大3回まで生成可）
+              </p>
+
+              {!aiComposed && (
+                <button
+                  onClick={handleAiCompose}
+                  disabled={aiComposing}
+                  style={{
+                    width: "100%",
+                    padding: 12,
+                    fontSize: 12,
+                    backgroundColor: aiComposing ? C.textFaint : C.accentDark,
+                    color: "#fff",
+                    border: "none",
+                    cursor: aiComposing ? "wait" : "pointer",
+                    fontFamily: FONT_SERIF,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {aiComposing ? "生成中…（10秒程度）" : "✨ AIにまとめてもらう"}
+                </button>
+              )}
+
+              {aiComposed && (
+                <>
+                  <label style={{ display: "block", fontSize: 11, color: C.textSub, marginBottom: 4 }}>
+                    📝 AI生成文章（編集できます）
+                  </label>
+                  <textarea
+                    value={aiComposed}
+                    onChange={(e) => setAiComposed(e.target.value)}
+                    rows={6}
+                    style={{
+                      ...inputStyle,
+                      resize: "vertical",
+                      fontFamily: FONT_SERIF,
+                      lineHeight: 1.7,
+                    }}
+                  />
+                  <p style={{ fontSize: 10, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>
+                    生成回数: {aiGenerationCount} / {MAX_AI_GENERATIONS}
+                  </p>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={handleAiCompose}
+                      disabled={aiComposing || aiGenerationCount >= MAX_AI_GENERATIONS}
+                      style={{
+                        flex: 1,
+                        padding: 10,
+                        fontSize: 11,
+                        backgroundColor:
+                          aiComposing || aiGenerationCount >= MAX_AI_GENERATIONS
+                            ? C.textFaint
+                            : "#fff",
+                        color:
+                          aiComposing || aiGenerationCount >= MAX_AI_GENERATIONS
+                            ? "#fff"
+                            : C.accentDark,
+                        border: `1px solid ${C.borderPink}`,
+                        cursor:
+                          aiComposing || aiGenerationCount >= MAX_AI_GENERATIONS
+                            ? "wait"
+                            : "pointer",
+                        fontFamily: FONT_SERIF,
+                      }}
+                    >
+                      {aiComposing ? "生成中…" : "🔄 やり直す"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAiComposed("");
+                        setAiOriginal("");
+                        setAiError("");
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: 10,
+                        fontSize: 11,
+                        backgroundColor: "transparent",
+                        color: C.textMuted,
+                        border: `1px solid ${C.border}`,
+                        cursor: "pointer",
+                        fontFamily: FONT_SERIF,
+                      }}
+                    >
+                      使わない
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {aiError && (
+                <p style={{ fontSize: 11, color: C.accentDark, marginTop: 10 }}>
+                  ⚠ {aiError}
+                </p>
+              )}
+            </div>
+          )}
+
           <NavButtons onPrev={() => setStep(3)} onNext={() => setStep(5)} canNext canSkip onSkip={() => setStep(5)} />
         </StepCard>
       )}
@@ -331,6 +508,33 @@ export function SurveyForm(props: SurveyFormProps) {
             );
           })}
           {highlights.length > 0 && <ConfirmRow label="印象に残ったポイント" value={highlights.join("、")} />}
+
+          {/* AI生成された口コミ文章 */}
+          {aiComposed.trim() && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                backgroundColor: C.accentBg,
+                border: `1px solid ${C.borderPink}`,
+              }}
+            >
+              <p style={{ fontSize: 11, color: C.accentDark, marginBottom: 6, fontWeight: 500 }}>
+                ✨ ご投稿用にまとめた文章
+              </p>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: C.text,
+                  lineHeight: 1.8,
+                  whiteSpace: "pre-wrap",
+                  margin: 0,
+                }}
+              >
+                {aiComposed}
+              </p>
+            </div>
+          )}
 
           {/* HP掲載同意 */}
           <div
