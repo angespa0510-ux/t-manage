@@ -381,7 +381,7 @@ export async function GET() {
 
   const { data: settings } = await supabase
     .from("hp_chatbot_settings")
-    .select("is_enabled, greeting_message, show_member_cta, member_cta_text")
+    .select("is_enabled, greeting_message, fallback_message, show_member_cta, member_cta_text, member_cta_url")
     .eq("id", 1)
     .maybeSingle();
 

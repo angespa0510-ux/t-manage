@@ -58,6 +58,7 @@ type Settings = {
   ai_stopped_reason: string | null;
   show_member_cta: boolean;
   member_cta_text: string;
+  member_cta_url: string;
   max_questions_per_session: number;
 };
 
@@ -205,6 +206,7 @@ export default function HpChatbotAdminPage() {
         ai_monthly_budget_jpy: Number(settings.ai_monthly_budget_jpy || 0),
         show_member_cta: settings.show_member_cta,
         member_cta_text: settings.member_cta_text,
+        member_cta_url: settings.member_cta_url,
         max_questions_per_session: Number(settings.max_questions_per_session || 20),
         updated_at: new Date().toISOString(),
       })
@@ -569,8 +571,20 @@ export default function HpChatbotAdminPage() {
               <input
                 value={settings.member_cta_text}
                 onChange={(e) => setSettings({ ...settings, member_cta_text: e.target.value })}
+                placeholder="会員登録はこちら"
                 style={inputStyle(T)}
               />
+            </Field>
+            <Field label="会員登録誘導リンク先URL">
+              <input
+                value={settings.member_cta_url || ""}
+                onChange={(e) => setSettings({ ...settings, member_cta_url: e.target.value })}
+                placeholder="/customer-mypage"
+                style={inputStyle(T)}
+              />
+              <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
+                💡 ボタンをタップしたときの遷移先。<code style={{ fontSize: 11 }}>/customer-mypage</code> や外部URL <code style={{ fontSize: 11 }}>https://...</code> も可
+              </p>
             </Field>
 
             <button
