@@ -13,14 +13,15 @@ import { SITE } from "../../lib/site-theme";
  */
 
 const FOOTER_NAV = [
-  { label: "トップ",       path: "/" },
-  { label: "料金",         path: "/system" },
-  { label: "セラピスト",   path: "/therapist" },
-  { label: "スケジュール", path: "/schedule" },
-  { label: "アクセス",     path: "/access" },
-  { label: "求人",         path: "/recruit" },
-  { label: "お問い合わせ", path: "/contact" },
-  { label: "アンケート",   path: "/survey" },
+  { label: "トップ",         path: "/" },
+  { label: "料金",           path: "/system" },
+  { label: "セラピスト",     path: "/therapist" },
+  { label: "スケジュール",   path: "/schedule" },
+  { label: "アクセス",       path: "/access" },
+  { label: "お客様の声",     path: "/reviews" },
+  { label: "求人",           path: "/recruit" },
+  { label: "お問い合わせ",   path: "/contact" },
+  { label: "アンケート",     path: "/survey" },
 ];
 
 const LEGAL_NAV = [

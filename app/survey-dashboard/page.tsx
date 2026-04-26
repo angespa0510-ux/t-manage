@@ -168,13 +168,44 @@ export default function SurveyDashboardPage() {
   const handleHpPublish = async (surveyId: number, publish: boolean) => {
     if (!activeStaff) return;
     setSavingHpPublish(true);
+
+    // 承認時: hp_display_name を自動生成（未設定の場合）
+    let displayNameToSet: string | null = null;
+    if (publish) {
+      const targetSurvey = surveys.find((s) => s.id === surveyId);
+      if (targetSurvey && !targetSurvey.hp_display_name) {
+        // 顧客の生年月日から年代を判定
+        let ageGroup = "";
+        if (targetSurvey.customer_id) {
+          const { data: cust } = await supabase
+            .from("customers")
+            .select("birthday")
+            .eq("id", targetSurvey.customer_id)
+            .maybeSingle();
+          if (cust?.birthday) {
+            const age = Math.floor(
+              (Date.now() - new Date(cust.birthday).getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+            );
+            ageGroup = age < 30 ? "20代" : age < 40 ? "30代" : age < 50 ? "40代" : age < 60 ? "50代" : "60代";
+          }
+        }
+        const initial = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        displayNameToSet = `${ageGroup}男性 ${initial}さん`.trim();
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      hp_published: publish,
+      hp_published_at: publish ? new Date().toISOString() : null,
+      hp_published_by: publish ? activeStaff.id : null,
+    };
+    if (displayNameToSet) {
+      updatePayload.hp_display_name = displayNameToSet;
+    }
+
     const { error } = await supabase
       .from("customer_surveys")
-      .update({
-        hp_published: publish,
-        hp_published_at: publish ? new Date().toISOString() : null,
-        hp_published_by: publish ? activeStaff.id : null,
-      })
+      .update(updatePayload)
       .eq("id", surveyId);
 
     if (!error && publish && pointSettings) {
