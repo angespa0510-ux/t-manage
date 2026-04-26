@@ -12,6 +12,7 @@ import PushToggle from "../../components/PushToggle";
 import InstallPrompt from "../../components/InstallPrompt";
 import TherapistChatTab from "../../components/therapist-chat-tab";
 import TherapistDiaryTab from "../../components/therapist-diary-tab";
+import CastReviewsTab from "../../components/cast/CastReviewsTab";
 
 /* ─────────────────────────────────────────────────────────────
  * セラピストマイページ デザインシステム (Session 60 Phase 1)
@@ -101,7 +102,7 @@ export default function TherapistMyPage() {
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
   const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "gift" | "chat" | "diary">("home");
   // ワーク / マネー / ラーン タブ内のサブセグメント
-  const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers" | "diary">("schedule");
+  const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers" | "diary" | "reviews">("schedule");
   const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax" | "gift">("salary");
   const [learnSub, setLearnSub] = useState<"notifications" | "manual">("notifications");
   // ボトムナビ→実タブへのディスパッチ
@@ -116,7 +117,7 @@ export default function TherapistMyPage() {
   const getMainTab = (t: string): MainTab => {
     if (t === "home") return "home";
     if (t === "chat") return "chat";
-    if (t === "shift" || t === "schedule" || t === "customers" || t === "work") return "work";
+    if (t === "shift" || t === "schedule" || t === "customers" || t === "work" || t === "reviews") return "work";
     if (t === "salary" || t === "cert" || t === "tax" || t === "gift" || t === "money") return "money";
     return "learn";
   };
@@ -1326,6 +1327,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
               { key: "schedule",  emoji: "📅", label: "出勤予定" },
               { key: "shift",     emoji: "📝", label: "シフト希望" },
               { key: "diary",     emoji: "📸", label: "写メ日記" },
+              { key: "reviews",   emoji: "🌸", label: "お客様の声" },
               { key: "customers", emoji: "👤", label: "お客様" },
             ];
           } else if (mainTab === "money") {
@@ -1343,7 +1345,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           }
           const clickSub = (k: typeof tab) => {
             setTab(k);
-            if (k === "shift" || k === "schedule" || k === "customers" || k === "diary") setWorkSub(k);
+            if (k === "shift" || k === "schedule" || k === "customers" || k === "diary" || k === "reviews") setWorkSub(k);
             else if (k === "salary" || k === "cert" || k === "tax" || k === "gift") setMoneySub(k);
             else if (k === "notifications" || k === "manual") setLearnSub(k);
           };
@@ -1871,6 +1873,16 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
             </>);
           })()}
         </div>)}
+
+
+        {tab === "reviews" && therapist && (
+          <CastReviewsTab
+            therapistId={therapist.id}
+            T={T}
+            FONT_SERIF={FONT_SERIF}
+            FONT_DISPLAY={FONT_DISPLAY}
+          />
+        )}
 
 
         {tab === "customers" && (<div style={{ display: "flex", flexDirection: "column", gap: 18, fontFamily: FONT_SERIF }}>

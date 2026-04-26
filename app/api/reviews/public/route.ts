@@ -39,13 +39,16 @@ export async function GET(req: Request) {
       .from("customer_surveys")
       .select(`
         id,
+        customer_id,
         therapist_id,
         rating_overall,
         highlights,
         good_points,
         final_review_text,
         hp_display_name,
-        hp_publish_approved_at
+        hp_publish_approved_at,
+        therapist_reply,
+        therapist_reply_at
       `, { count: "exact" })
       .eq("hp_published", true)
       .order("hp_publish_approved_at", { ascending: false })
@@ -61,32 +64,41 @@ export async function GET(req: Request) {
       return NextResponse.json({ reviews: [], total: 0 });
     }
 
-    // セラピスト名を補完
+    // セラピスト情報を補完（photo_url含む）
     const therapistIds = Array.from(
       new Set(reviews.map((r) => r.therapist_id).filter((id): id is number => Boolean(id)))
     );
-    let therapistMap: Record<number, string> = {};
+    let therapistMap: Record<number, { name: string; photo_url: string | null }> = {};
     if (therapistIds.length > 0) {
       const { data: therapists } = await supabase
         .from("therapists")
-        .select("id, name")
+        .select("id, name, photo_url")
         .in("id", therapistIds);
       if (therapists) {
-        therapistMap = Object.fromEntries(therapists.map((t) => [t.id, t.name]));
+        therapistMap = Object.fromEntries(
+          therapists.map((t) => [t.id, { name: t.name, photo_url: t.photo_url }])
+        );
       }
     }
 
     return NextResponse.json({
       total: count || 0,
-      reviews: reviews.map((r) => ({
-        id: r.id,
-        displayName: r.hp_display_name || "Aさん",
-        rating: r.rating_overall || 0,
-        reviewText: r.final_review_text || r.good_points || "",
-        highlights: Array.isArray(r.highlights) ? r.highlights : [],
-        publishedAt: r.hp_publish_approved_at,
-        therapistName: r.therapist_id ? therapistMap[r.therapist_id] || "" : "",
-      })),
+      reviews: reviews.map((r) => {
+        const th = r.therapist_id ? therapistMap[r.therapist_id] : null;
+        return {
+          id: r.id,
+          displayName: r.hp_display_name || "Aさま",
+          rating: r.rating_overall || 0,
+          reviewText: r.final_review_text || r.good_points || "",
+          highlights: Array.isArray(r.highlights) ? r.highlights : [],
+          publishedAt: r.hp_publish_approved_at,
+          therapistId: r.therapist_id,
+          therapistName: th?.name || "",
+          therapistPhotoUrl: th?.photo_url || null,
+          therapistReply: r.therapist_reply || null,
+          therapistReplyAt: r.therapist_reply_at || null,
+        };
+      }),
     });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "エラーが発生しました";

@@ -183,29 +183,31 @@ export default function SurveyDashboardPage() {
     if (!activeStaff) return;
     setSavingHpPublish(true);
 
+    const targetSurvey = surveys.find((s) => s.id === surveyId);
+
     // 承認時: hp_display_name を自動生成（未設定の場合）
     let displayNameToSet: string | null = null;
-    if (publish) {
-      const targetSurvey = surveys.find((s) => s.id === surveyId);
-      if (targetSurvey && !targetSurvey.hp_display_name) {
-        // 顧客の生年月日から年代を判定
-        let ageGroup = "";
-        if (targetSurvey.customer_id) {
-          const { data: cust } = await supabase
-            .from("customers")
-            .select("birthday")
-            .eq("id", targetSurvey.customer_id)
-            .maybeSingle();
-          if (cust?.birthday) {
-            const age = Math.floor(
-              (Date.now() - new Date(cust.birthday).getTime()) / (1000 * 60 * 60 * 24 * 365.25)
-            );
-            ageGroup = age < 30 ? "20代" : age < 40 ? "30代" : age < 50 ? "40代" : age < 60 ? "50代" : "60代";
-          }
+    if (publish && targetSurvey && !targetSurvey.hp_display_name) {
+      // 顧客の生年月日 + 名前のイニシャルから表示名を生成
+      let ageGroup = "";
+      let initial = "";
+      if (targetSurvey.customer_id) {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("birthday, name, self_name")
+          .eq("id", targetSurvey.customer_id)
+          .maybeSingle();
+        if (cust?.birthday) {
+          const age = Math.floor(
+            (Date.now() - new Date(cust.birthday).getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+          );
+          ageGroup = age < 30 ? "20代" : age < 40 ? "30代" : age < 50 ? "40代" : age < 60 ? "50代" : "60代";
         }
-        const initial = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-        displayNameToSet = `${ageGroup}男性 ${initial}さん`.trim();
+        const nameSrc = (cust?.self_name || cust?.name || "").trim();
+        initial = makeInitial(nameSrc);
       }
+      if (!initial) initial = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      displayNameToSet = `${ageGroup}男性 ${initial}さま`.trim();
     }
 
     const updatePayload: Record<string, unknown> = {
@@ -216,25 +218,53 @@ export default function SurveyDashboardPage() {
     if (displayNameToSet) {
       updatePayload.hp_display_name = displayNameToSet;
     }
+    if (publish) {
+      updatePayload.therapist_notified_at = new Date().toISOString();
+    }
 
     const { error } = await supabase
       .from("customer_surveys")
       .update(updatePayload)
       .eq("id", surveyId);
 
-    setSavingHpPublish(false);
-
     if (error) {
+      setSavingHpPublish(false);
       console.error("[handleHpPublish] update error:", error);
       alert(`更新失敗: ${error.message}`);
       return;
     }
+
+    // 承認時: セラピストへ通知
+    if (publish && targetSurvey?.therapist_id) {
+      const reviewSnippet = (targetSurvey.final_review_text || targetSurvey.good_points || "")
+        .slice(0, 80);
+      const stars = "★".repeat(targetSurvey.rating_overall || 0);
+      await supabase.from("therapist_notifications").insert({
+        title: "🌸 お客様からのご感想が届きました",
+        body: `${stars}\n${reviewSnippet}${reviewSnippet.length >= 80 ? "…" : ""}\n\nセラピストマイページの「お客様の声」タブから返信できます。`,
+        type: "review",
+        target_therapist_id: targetSurvey.therapist_id,
+      });
+    }
+
+    setSavingHpPublish(false);
 
     if (selectedSurvey?.id === surveyId) {
       setSelectedSurvey({ ...selectedSurvey, hp_published: publish });
     }
     await fetchAllData();
   };
+
+  // 名前からイニシャル1文字を生成（漢字・カナ・英字対応）
+  function makeInitial(name: string): string {
+    if (!name) return "";
+    // 半角英字なら姓イニシャル
+    if (/^[a-zA-Z\s]+$/.test(name)) {
+      return name.trim()[0]?.toUpperCase() || "";
+    }
+    // 漢字・カタカナは先頭1文字
+    return name[0] || "";
+  }
 
   // ─────────────────────────────────────
   // レンダリング
