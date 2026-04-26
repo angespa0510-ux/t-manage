@@ -236,22 +236,69 @@ export async function POST(req: Request) {
 
     // ─────────────────────────────────────
     // 8. Google Review URL の取得（店舗設定）
+    //
+    // 予約 → 店舗 (stores) の特定方法（優先順位）:
+    //   1. reservations.room_id → rooms.store_id
+    //   2. reservations.free_building_id → buildings.store_id
+    //   3. shifts (therapist_id + date) → shifts.store_id
     // ─────────────────────────────────────
     const { data: reservation } = await supabase
       .from("reservations")
-      .select("free_building_id")
+      .select("free_building_id, room_id, therapist_id, date")
       .eq("id", body.reservationId)
       .maybeSingle();
 
+    let storeId: number | null = null;
+
+    if (reservation) {
+      // 1. room_id 経由
+      if (reservation.room_id) {
+        const { data: room } = await supabase
+          .from("rooms")
+          .select("store_id")
+          .eq("id", reservation.room_id)
+          .maybeSingle();
+        if (room?.store_id) storeId = room.store_id;
+      }
+
+      // 2. free_building_id 経由
+      if (!storeId && reservation.free_building_id) {
+        const { data: building } = await supabase
+          .from("buildings")
+          .select("store_id")
+          .eq("id", reservation.free_building_id)
+          .maybeSingle();
+        if (building?.store_id) storeId = building.store_id;
+      }
+
+      // 3. shift 経由（同日のセラピストシフトから）
+      if (!storeId && reservation.therapist_id && reservation.date) {
+        const { data: shift } = await supabase
+          .from("shifts")
+          .select("store_id")
+          .eq("therapist_id", reservation.therapist_id)
+          .eq("date", reservation.date)
+          .maybeSingle();
+        if (shift?.store_id) storeId = shift.store_id;
+      }
+    }
+
     let googleReviewUrl: string | null = null;
-    if (reservation?.free_building_id) {
+    if (storeId) {
       const { data: store } = await supabase
         .from("stores")
         .select("google_review_url")
-        .eq("id", reservation.free_building_id)
+        .eq("id", storeId)
         .maybeSingle();
       googleReviewUrl = store?.google_review_url || null;
     }
+
+    console.log("[survey/submit] store resolution:", {
+      reservationId: body.reservationId,
+      reservation,
+      storeId,
+      googleReviewUrl,
+    });
 
     // ─────────────────────────────────────
     // レスポンス
