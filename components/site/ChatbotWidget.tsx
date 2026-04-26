@@ -63,9 +63,11 @@ function genSessionId() {
  * BOT返信メッセージ内のURL・内部パス・電話番号を自動でリンク化する。
  *
  * 対応パターン:
- *   - https://example.com / http://...      → 新タブで開く外部リンク
- *   - /access, /system, /schedule など      → SPA遷移（同タブ）
- *   - 070-1234-5678, 0701234567 など        → tel: リンク（電話発信）
+ *   1. Markdownリンク [ラベル](URL)        → ラベルテキストをクリックでURLへ
+ *      例: [アクセスページ](/access)
+ *   2. https://example.com / http://...     → 新タブで開く外部リンク
+ *   3. /access, /system, /schedule など     → SPA遷移（同タブ）
+ *   4. 070-1234-5678, 0701234567 など       → tel: リンク（電話発信）
  *
  * 区切り判定:
  *   - 句読点(、。) 全角空白 半角空白 ) ] 】 」 で終わったらそこまでをURLとして扱う
@@ -74,16 +76,48 @@ function genSessionId() {
  *   - 外部リンクは noopener noreferrer
  */
 function renderWithLinks(text: string): ReactNode[] {
-  // URL / 内部パス / 電話番号 を順に検出
-  // - https?://... : 区切り文字が出るまで
-  // - /xxx/yyy    : 英数字 + ハイフン + アンダースコア + スラッシュ
-  // - 電話番号    : 0始まりで桁数 9〜11、ハイフン任意
-  const regex = /(https?:\/\/[^\s、。()（）\[\]【】「」]+|\/[a-zA-Z0-9_\-/]+(?:\?[^\s、。()（）\[\]【】「」]*)?|0\d{1,4}-?\d{1,4}-?\d{4})/g;
+  // 統合正規表現:
+  //   group1 = Markdown全体 / group2 = ラベル / group3 = URL
+  //   group4 = 生URL / 内部パス / 電話番号
+  const regex = /(\[([^\]]+)\]\(([^)]+)\))|(https?:\/\/[^\s、。()（）\[\]【】「」]+|\/[a-zA-Z0-9_\-/]+(?:\?[^\s、。()（）\[\]【】「」]*)?|0\d{1,4}-?\d{1,4}-?\d{4})/g;
 
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let match;
   let key = 0;
+
+  const linkStyle = {
+    color: SITE.color.pink,
+    textDecoration: "underline",
+    textUnderlineOffset: 2,
+    wordBreak: "break-all" as const,
+  };
+
+  const makeLink = (url: string, label: string, k: number): ReactNode => {
+    if (url.startsWith("http")) {
+      // 外部URL: 新タブ
+      return (
+        <a key={k} href={url} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+          {label}
+        </a>
+      );
+    } else if (url.startsWith("/")) {
+      // 内部パス: Next.js Link で SPA 遷移
+      return (
+        <Link key={k} href={url} style={linkStyle}>
+          {label}
+        </Link>
+      );
+    } else {
+      // 電話番号: tel: リンク
+      const tel = url.replace(/-/g, "");
+      return (
+        <a key={k} href={`tel:${tel}`} style={linkStyle}>
+          {label}
+        </a>
+      );
+    }
+  };
 
   while ((match = regex.exec(text)) !== null) {
     // マッチ前のテキスト
@@ -91,45 +125,18 @@ function renderWithLinks(text: string): ReactNode[] {
       parts.push(text.slice(lastIndex, match.index));
     }
 
-    const matched = match[0];
-    const linkStyle = {
-      color: SITE.color.pink,
-      textDecoration: "underline",
-      textUnderlineOffset: 2,
-      wordBreak: "break-all" as const,
-    };
-
-    if (matched.startsWith("http")) {
-      // 外部URL: 新タブ
-      parts.push(
-        <a
-          key={key++}
-          href={matched}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={linkStyle}
-        >
-          {matched}
-        </a>
-      );
-    } else if (matched.startsWith("/")) {
-      // 内部パス: Next.js Link で SPA 遷移
-      parts.push(
-        <Link key={key++} href={matched} style={linkStyle}>
-          {matched}
-        </Link>
-      );
-    } else {
-      // 電話番号: tel: リンク
-      const tel = matched.replace(/-/g, "");
-      parts.push(
-        <a key={key++} href={`tel:${tel}`} style={linkStyle}>
-          {matched}
-        </a>
-      );
+    if (match[1]) {
+      // Markdownリンク [label](url) 形式
+      const label = match[2];
+      const url = match[3];
+      parts.push(makeLink(url, label, key++));
+    } else if (match[4]) {
+      // 生URL / 内部パス / 電話番号
+      const matched = match[4];
+      parts.push(makeLink(matched, matched, key++));
     }
 
-    lastIndex = match.index + matched.length;
+    lastIndex = match.index + match[0].length;
   }
 
   // 残りテキスト

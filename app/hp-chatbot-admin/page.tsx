@@ -649,7 +649,8 @@ export default function HpChatbotAdminPage() {
                 style={inputStyle(T)}
               />
               <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
-                💡 <strong>URL・内部パス・電話番号</strong>を文中に書くと、自動でクリック可能なリンクになります。<br />
+                💡 <strong>以下の記法を使うと自動でクリック可能なリンクになります</strong><br />
+                ・<code style={{ fontSize: 11 }}>[アクセスページ](/access)</code> → ラベル付きリンク（<strong>推奨</strong>）<br />
                 ・<code style={{ fontSize: 11 }}>https://example.com</code> → 新タブで開く<br />
                 ・<code style={{ fontSize: 11 }}>/access</code> や <code style={{ fontSize: 11 }}>/schedule</code> → ページ遷移<br />
                 ・<code style={{ fontSize: 11 }}>070-1675-5900</code> → タップで電話発信
