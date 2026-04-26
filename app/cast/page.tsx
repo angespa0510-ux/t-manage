@@ -117,7 +117,7 @@ export default function TherapistMyPage() {
   const getMainTab = (t: string): MainTab => {
     if (t === "home") return "home";
     if (t === "chat") return "chat";
-    if (t === "shift" || t === "schedule" || t === "customers" || t === "work" || t === "reviews") return "work";
+    if (t === "shift" || t === "schedule" || t === "customers" || t === "work" || t === "reviews" || t === "diary") return "work";
     if (t === "salary" || t === "cert" || t === "tax" || t === "gift" || t === "money") return "money";
     return "learn";
   };
