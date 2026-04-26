@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     const smtpUser = settingsMap.smtp_user || "";
     const smtpPass = settingsMap.smtp_pass || "";
     const smtpFrom = settingsMap.smtp_from || smtpUser;
-    const storeName = settingsMap.store_name || "チョップ";
+    const storeName = settingsMap.store_name || "Ange Spa";
 
     if (!smtpUser || !smtpPass) {
       // SMTP設定がない場合、パスワードは更新するが、メール送信はスキップ

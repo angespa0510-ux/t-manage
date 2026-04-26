@@ -297,8 +297,8 @@ function StaffPageInner() {
     let token = s.email_token;
     if (!token) { token = crypto.randomUUID(); await supabase.from("staff").update({ email_token: token }).eq("id", s.id); }
     const confirmUrl = `${window.location.origin}/confirm-staff-email?token=${token}`;
-    const subject = encodeURIComponent("【チョップ】メールアドレス確認のお願い");
-    const body = encodeURIComponent(`${s.name} 様\n\nチョップからのメールアドレス確認です。\n以下のリンクをクリックして確認を完了してください。\n\n${confirmUrl}\n\n※このリンクはお一人様専用です。\n\nよろしくお願いいたします。\nチョップ`);
+    const subject = encodeURIComponent("【Ange Spa】メールアドレス確認のお願い");
+    const body = encodeURIComponent(`${s.name} 様\n\nAnge Spaからのメールアドレス確認です。\n以下のリンクをクリックして確認を完了してください。\n\n${confirmUrl}\n\n※このリンクはお一人様専用です。\n\nよろしくお願いいたします。\nAnge Spa`);
     window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(s.email)}&su=${subject}&body=${body}`, "_blank");
   };
 

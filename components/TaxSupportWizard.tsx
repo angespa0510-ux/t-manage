@@ -1203,12 +1203,12 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </div>
             </div>
 
-            {/* 判定フロー → チョップ推奨スタンス */}
+            {/* 判定フロー → Ange Spa推奨スタンス */}
             <div style={altCard} className="mb-3">
               <div className="p-3 rounded-xl mb-2" style={{ backgroundColor: "#c3a78220", border: "1px solid #c3a78266" }}>
-                <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💎 チョップからのお知らせ</p>
+                <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💎 Ange Spaからのお知らせ</p>
                 <p className="text-[9px]" style={{ color: T.textSub }}>
-                  チョップではセラピストさんのインボイス登録を<b>推奨</b>しています。
+                  Ange Spaではセラピストさんのインボイス登録を<b>推奨</b>しています。
                   未登録の場合はバック額の10%を控除していますが、登録すればこの控除がなくなり<b>毎月の手取りが増えます</b>。
                 </p>
                 <a href="/mypage/invoice-guide" style={{ color: "#c3a782", fontSize: "10px", textDecoration: "underline", display: "inline-block", marginTop: 4 }}>📖 詳しい手取りシミュレーション付きガイドはこちら</a>
@@ -1273,7 +1273,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               {profile.shopRequiresInvoice === false && (
                 <div className="space-y-2">
                   <div className="p-3 rounded-xl" style={{ backgroundColor: "#c3a78215", border: "1px solid #c3a78244" }}>
-                    <p className="text-[10px] font-medium mb-1" style={{ color: "#c3a782" }}>💎 チョップでは登録をおすすめしています</p>
+                    <p className="text-[10px] font-medium mb-1" style={{ color: "#c3a782" }}>💎 Ange Spaでは登録をおすすめしています</p>
                     <p className="text-[9px]" style={{ color: T.textSub }}>
                       現在、インボイス未登録のセラピストさんからはバック額の10%を控除しています。
                       登録すればこの控除がなくなり、<b>手取りが増えます</b>。

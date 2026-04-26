@@ -1217,7 +1217,7 @@ export default function ServiceSettings() {
                       const sampleVars: Record<string, string> = {
                         "{お客様名}": "田中太郎", "{日時}": "2025年4月10日（木）", "{日付}": "04/10（木）",
                         "{開始時刻}": "13:00", "{終了時刻}": "14:30", "{コース}": "90分コース",
-                        "{指名}": "本指名", "{割引}": "新規割引", "{店舗名}": "チョップ豊橋店",
+                        "{指名}": "本指名", "{割引}": "新規割引", "{店舗名}": "Ange Spa豊橋店",
                         "{金額}": "12,000", "{送信者}": "田中", "{セラピスト名}": "花子",
                         "{場所URL}": ntLocToyohashi || "https://example.com/location",
                         "{お客様リンク}": customerMypageUrl("田中太郎"),

@@ -46,7 +46,7 @@ export default function SystemSetup() {
   const [smtpUser, setSmtpUser] = useState("");
   const [smtpPass, setSmtpPass] = useState("");
   const [smtpFrom, setSmtpFrom] = useState("");
-  const [mailStoreName, setMailStoreName] = useState("チョップ");
+  const [mailStoreName, setMailStoreName] = useState("Ange Spa");
   const [smtpSaving, setSmtpSaving] = useState(false);
   const [smtpMsg, setSmtpMsg] = useState("");
 
@@ -1725,7 +1725,7 @@ STORE_ID=1`}
               <div className="space-y-4">
                 <div>
                   <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>店舗名（メール送信者名）</label>
-                  <input type="text" value={mailStoreName} onChange={e => setMailStoreName(e.target.value)} placeholder="チョップ" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
+                  <input type="text" value={mailStoreName} onChange={e => setMailStoreName(e.target.value)} placeholder="Ange Spa" className="w-full px-4 py-3 rounded-xl text-[13px] outline-none border" style={{ backgroundColor: T.cardAlt, borderColor: T.border, color: T.text }} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

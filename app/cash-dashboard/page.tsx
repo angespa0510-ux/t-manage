@@ -522,7 +522,7 @@ export default function CashDashboard() {
           <>
             {/* 合計資産カード */}
             <div className="rounded-2xl p-6" style={{ backgroundColor: T.card, border: `2px solid #c3a782` }}>
-              <p className="text-[11px] mb-1" style={{ color: T.textSub }}>💰 チョップの現在の全資産</p>
+              <p className="text-[11px] mb-1" style={{ color: T.textSub }}>💰 Ange Spaの現在の全資産</p>
               <p className="text-[32px] font-medium" style={{ color: "#c3a782", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAssets)}</p>
               <p className="text-[10px] mt-1" style={{ color: T.textFaint }}>
                 PayPay銀行 + 管理者金庫 + 豊橋予備金 + 金庫未回収 + ルーム未回収

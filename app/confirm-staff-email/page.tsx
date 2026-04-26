@@ -96,7 +96,7 @@ function ConfirmContent() {
 
         <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid #e5ded6" }}>
           <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.3em", color: "#8a8a8a", fontWeight: 500 }}>ANGE SPA</p>
-          <p style={{ margin: "3px 0 0", fontSize: 10, color: "#b5b5b5", letterSpacing: "0.1em" }}>チョップ salon management</p>
+          <p style={{ margin: "3px 0 0", fontSize: 10, color: "#b5b5b5", letterSpacing: "0.1em" }}>Ange Spa salon management</p>
         </div>
       </div>
     </div>

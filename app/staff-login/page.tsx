@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "next/navigation";
+import InstallPrompt from "../../components/InstallPrompt";
 
 const FONT_SERIF = "'Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
 const FONT_DISPLAY = "'Cormorant Garamond', 'Noto Serif JP', 'Yu Mincho', serif";
@@ -227,10 +228,6 @@ export default function StaffLogin() {
 
         {/* Footer */}
         <div style={{ textAlign: "center", marginTop: 28 }}>
-          <a href="/install-guide" style={{ display: "inline-block", marginBottom: 10, fontSize: 11, cursor: "pointer", color: "#c96b83", textDecoration: "underline", textUnderlineOffset: 4, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-            📱 アプリとして使う方法
-          </a>
-          <div style={{ width: 20, height: 1, backgroundColor: "#e5ded6", margin: "10px auto 10px" }} />
           <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, color: "#b5b5b5", letterSpacing: "0.15em" }}>
             &copy; 2026 ANGE SPA · ALL RIGHTS RESERVED
           </p>
@@ -238,6 +235,9 @@ export default function StaffLogin() {
 
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
+
+      {/* PWAインストール案内（モバイル限定の自動ポップアップ。/cast・/mypage と統一） */}
+      <InstallPrompt dismissKey="staff" />
     </div>
   );
 }

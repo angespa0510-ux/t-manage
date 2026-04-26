@@ -79,7 +79,7 @@ export default function InvoiceGuidePage() {
   };
 
   /* ───────── 計算ロジック ─────────
-     現状のチョップ計算式（timechart/page.tsx L1509）：
+     現状のAnge Spa計算式（timechart/page.tsx L1509）：
        invoice未登録 → バック × 10% を控除
        invoice登録  → 控除なし
 
@@ -125,7 +125,7 @@ export default function InvoiceGuidePage() {
       <GuidePageHero
         label="INVOICE GUIDE"
         title="💎 インボイス登録ガイド"
-        subtitle="チョップは、セラピストさんのインボイス登録を応援しています 🌸 登録すると毎月の手取りが増えるだけでなく、プロとしての信用度もUP。2026年の「2割特例」は登録するなら今が最もお得なタイミングです。"
+        subtitle="Ange Spaは、セラピストさんのインボイス登録を応援しています 🌸 登録すると毎月の手取りが増えるだけでなく、プロとしての信用度もUP。2026年の「2割特例」は登録するなら今が最もお得なタイミングです。"
         marble="beige"
       />
 
@@ -149,13 +149,13 @@ export default function InvoiceGuidePage() {
           </div>
         )}
 
-        {/* ─── チョップが推奨する3つの理由 ─── */}
+        {/* ─── Ange Spaが推奨する3つの理由 ─── */}
         <section
           className="rounded-2xl p-4 border"
           style={{ backgroundColor: T.card, borderColor: T.border }}
         >
           <h2 className="text-[14px] font-semibold mb-3">
-            🌟 チョップが登録を推奨する3つの理由
+            🌟 Ange Spaが登録を推奨する3つの理由
           </h2>
           <div className="space-y-2">
             {[
@@ -163,7 +163,7 @@ export default function InvoiceGuidePage() {
                 num: "①",
                 emoji: "💰",
                 title: "毎月の手取りが増える",
-                desc: "現在チョップでは、インボイス未登録のセラピストさんからバック額の10%を『インボイス控除』として差し引いています。登録すれば、この控除がなくなります。",
+                desc: "現在Ange Spaでは、インボイス未登録のセラピストさんからバック額の10%を『インボイス控除』として差し引いています。登録すれば、この控除がなくなります。",
                 color: GREEN,
               },
               {
@@ -663,7 +663,7 @@ export default function InvoiceGuidePage() {
               },
               {
                 step: "6",
-                title: "チョップへ登録番号を連絡",
+                title: "Ange Spaへ登録番号を連絡",
                 desc: "店長または事務担当へ。次月の清算からインボイス控除がなくなる！",
               },
             ].map((s) => (
@@ -733,7 +733,7 @@ export default function InvoiceGuidePage() {
               },
               {
                 title: "確定申告の手間が少し増える",
-                desc: "消費税の申告が1枚追加。チョップの確定申告サポートを使えば自動計算されます。",
+                desc: "消費税の申告が1枚追加。Ange Spaの確定申告サポートを使えば自動計算されます。",
               },
               {
                 title: "登録から2年間は免税事業者に戻れない",
@@ -795,7 +795,7 @@ export default function InvoiceGuidePage() {
             {[
               {
                 q: "インボイス登録は必須ですか？",
-                a: "法律上は任意です。ただしチョップでは、未登録の場合バック額の10%を『インボイス控除』として差し引いています（お店が仕入税額控除を取れないため）。登録すればこの控除がなくなるので、実質的に登録した方がお得です。",
+                a: "法律上は任意です。ただしAnge Spaでは、未登録の場合バック額の10%を『インボイス控除』として差し引いています（お店が仕入税額控除を取れないため）。登録すればこの控除がなくなるので、実質的に登録した方がお得です。",
               },
               {
                 q: "旦那さん・家族にバレませんか？",
@@ -891,7 +891,7 @@ export default function InvoiceGuidePage() {
           </div>
         </section>
 
-        {/* ─── チョップで確定申告完結 ─── */}
+        {/* ─── Ange Spaで確定申告完結 ─── */}
         <section
           className="rounded-2xl p-4 border"
           style={{
@@ -902,7 +902,7 @@ export default function InvoiceGuidePage() {
           <div className="flex items-center gap-2 mb-2">
             <span style={{ fontSize: 22 }}>🎉</span>
             <h2 className="text-[15px] font-bold" style={{ color: GREEN }}>
-              確定申告、freeeを契約しなくてもチョップで完結！
+              確定申告、freeeを契約しなくてもAnge Spaで完結！
             </h2>
           </div>
 
@@ -921,7 +921,7 @@ export default function InvoiceGuidePage() {
               忙しい日が続くとどんどん溜まり、確定申告の時期に地獄を見ることに…
             </p>
             <p className="text-[11.5px] leading-relaxed mt-2 font-semibold" style={{ color: GREEN }}>
-              チョップなら、お店で清算した瞬間に自動で帳簿に記録されます 🎉
+              Ange Spaなら、お店で清算した瞬間に自動で帳簿に記録されます 🎉
               <br />
               面倒な手入力は一切不要！
             </p>
@@ -982,7 +982,7 @@ export default function InvoiceGuidePage() {
               <br />
               <span style={{ color: RED }}>✗ freee等：</span>報酬を<strong>毎回手入力</strong> ＋ 年間 <strong>12,000〜35,000円</strong>
               <br />
-              <span style={{ color: GREEN }}>✓ チョップ：</span>報酬は<strong>自動記帳</strong>、経費もAI読取 ＋ <strong style={{ color: GREEN }}>完全無料</strong> ✨
+              <span style={{ color: GREEN }}>✓ Ange Spa：</span>報酬は<strong>自動記帳</strong>、経費もAI読取 ＋ <strong style={{ color: GREEN }}>完全無料</strong> ✨
             </p>
           </div>
 
@@ -1064,7 +1064,7 @@ export default function InvoiceGuidePage() {
             className="text-[11px] mb-2"
             style={{ color: GOLD, fontWeight: 700 }}
           >
-            🌸 あなたの頑張りをチョップは応援しています
+            🌸 あなたの頑張りをAnge Spaは応援しています
           </p>
           <p
             className="text-[11px] leading-relaxed"

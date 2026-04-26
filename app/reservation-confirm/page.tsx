@@ -81,7 +81,7 @@ function ReservationConfirmInner() {
         const discLine = res.discount_name ? "\n割引 : " + res.discount_name : "";
         const thLine = res.nomination !== "フリー" && therapistName ? "\n" + therapistName + "セラピスト" : "";
         const course = res.course + (res.extension_name ? "＋" + res.extension_name : "");
-        const storeName = res.store_name || "チョップ";
+        const storeName = res.store_name || "Ange Spa";
 
         let text: string;
         if (tpl) {

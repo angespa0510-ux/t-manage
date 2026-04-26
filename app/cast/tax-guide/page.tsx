@@ -125,7 +125,7 @@ export default function TaxGuidePage() {
               {
                 icon: "③",
                 title: "副業の収入は「業務委託報酬」として申告",
-                desc: "チョップでのお仕事は事業所得または雑所得。給与ではない。",
+                desc: "Ange Spaでのお仕事は事業所得または雑所得。給与ではない。",
               },
             ].map((p, i) => (
               <div
@@ -621,7 +621,7 @@ export default function TaxGuidePage() {
               },
               {
                 title: "副業がアルバイト（給与所得）の場合",
-                desc: "給与所得は普通徴収にできない。チョップは業務委託なのでOK✅",
+                desc: "給与所得は普通徴収にできない。Ange Spaは業務委託なのでOK✅",
               },
               {
                 title: "SNSで本名や顔が分かる投稿",

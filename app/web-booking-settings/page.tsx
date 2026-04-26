@@ -8,7 +8,7 @@ export default function WebBookingSettings() {
   const { T } = useTheme();
   const [copied, setCopied] = useState("");
   const [origin, setOrigin] = useState("");
-  const [storeName, setStoreName] = useState("チョップ");
+  const [storeName, setStoreName] = useState("Ange Spa");
   const [cancelPhone, setCancelPhone] = useState("070-1675-5900");
   const [phoneSaving, setPhoneSaving] = useState(false);
   const [phoneMsg, setPhoneMsg] = useState("");

@@ -2868,7 +2868,7 @@ ${under5.length > 0 ? `<div style="margin-top:20px">
                     <div className="rounded-xl p-4" style={{ backgroundColor: "#c3a78210", border: "1px solid #c3a78233" }}>
                       <p className="text-[11px] font-medium mb-1" style={{ color: "#c3a782" }}>💡 年間スケジュールについて</p>
                       <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
-                        このスケジュールは<strong>3月決算法人</strong>（合同会社テラスライフ/チョップ）向けです。<br/>
+                        このスケジュールは<strong>3月決算法人</strong>（合同会社テラスライフ/Ange Spa）向けです。<br/>
                         ステータスは<strong>期ごと</strong>に別々に記録されるので、毎年リセットされます（タスク一覧は固定）。<br/>
                         <strong>担当別の役割分担:</strong> 税理士=江坂先生 / 社労士=大石さん / 会社=社内対応 / 共同=決算など連携が必要なもの<br/>
                         <strong>📖 詳細あり</strong> のタスクは行をクリックすると手順・注意・関連シートへのリンクが開きます。<br/>

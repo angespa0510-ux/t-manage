@@ -131,7 +131,7 @@ function SidebarPortal({ open, onClose }: { open: boolean; onClose: () => void }
               <span style={{ color: "white", fontSize: 12, fontWeight: 600 }}>C</span>
             </div>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.9)", margin: 0 }}>チョップ</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.9)", margin: 0 }}>Ange Spa</p>
               <p style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", letterSpacing: 2, margin: 0 }}>SALON MANAGEMENT</p>
             </div>
           </div>

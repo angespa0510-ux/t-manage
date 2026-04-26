@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     const smtpUser = map.smtp_user || "";
     const smtpPass = map.smtp_pass || "";
     const smtpFrom = map.smtp_from || smtpUser;
-    const storeName = map.store_name || "チョップ";
+    const storeName = map.store_name || "Ange Spa";
 
     if (!smtpUser || !smtpPass) {
       if (deliveryId) await markFailed(deliveryId, "SMTP設定が未登録");

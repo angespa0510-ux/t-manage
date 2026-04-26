@@ -779,7 +779,7 @@ export default function Dashboard() {
         <div className="h-[72px] flex items-center px-6" style={{ borderBottom: `1px solid ${SB.border}` }}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-[#c3a782] to-[#a8895e] flex items-center justify-center shadow-[0_2px_8px_rgba(195,167,130,0.3)]"><span className="text-white text-[13px] font-semibold">C</span></div>
-            <div><p className="text-[14px] font-medium text-white/90">チョップ</p><p className="text-[9px] text-white/25 tracking-[2px] uppercase">salon management</p></div>
+            <div><p className="text-[14px] font-medium text-white/90">Ange Spa</p><p className="text-[9px] text-white/25 tracking-[2px] uppercase">salon management</p></div>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto py-5 px-3">
