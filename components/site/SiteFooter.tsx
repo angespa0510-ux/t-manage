@@ -25,8 +25,8 @@ const FOOTER_NAV = [
 ];
 
 const LEGAL_NAV = [
-  { label: "特定商取引法",         path: "/corporate/legal" },
-  { label: "プライバシーポリシー", path: "/corporate/privacy" },
+  { label: "特定商取引法",         path: "/legal" },
+  { label: "プライバシーポリシー", path: "/privacy" },
   { label: "会員マイページ",       path: "/mypage" },
 ];
 
