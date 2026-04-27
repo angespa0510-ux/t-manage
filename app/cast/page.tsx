@@ -100,6 +100,7 @@ export default function TherapistMyPage() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [therapist, setTherapist] = useState<Therapist | null>(null);
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
   const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "gift" | "chat" | "diary" | "reviews">("home");
@@ -258,7 +259,13 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) { setLoginError("メールアドレスとパスワードを入力してください"); return; }
     setLoginLoading(true); setLoginError("");
-    const { data } = await supabase.from("therapists").select("*").eq("login_email", email.trim()).eq("login_password", password.trim()).maybeSingle();
+    // 仮ID運用補助：@ を含まない場合は @temp.local を自動付与（例：ange001 → ange001@temp.local）
+    // 本番メアド設定後（@を含む値）はそのまま使われる
+    let normalizedEmail = email.trim();
+    if (!normalizedEmail.includes("@")) {
+      normalizedEmail = `${normalizedEmail}@temp.local`;
+    }
+    const { data } = await supabase.from("therapists").select("*").eq("login_email", normalizedEmail).eq("login_password", password.trim()).maybeSingle();
     setLoginLoading(false);
     if (data) { setTherapist(data); setLoggedIn(true); localStorage.setItem("therapist_session", JSON.stringify({ id: data.id, email: data.login_email })); }
     else { setLoginError("メールアドレスまたはパスワードが間違っています"); }
@@ -810,12 +817,29 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <div>
-                  <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>メールアドレス</label>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" onKeyDown={(e) => e.key === "Enter" && handleLogin()} style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
+                  <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>メールアドレス または 仮ID</label>
+                  <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ange001 または example@email.com" onKeyDown={(e) => e.key === "Enter" && handleLogin()} autoCapitalize="none" autoCorrect="off" spellCheck={false} style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 11, letterSpacing: "0.1em", color: T.textSub, marginBottom: 8 }}>パスワード</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" onKeyDown={(e) => e.key === "Enter" && handleLogin()} style={{ width: "100%", padding: "13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
+                  <div style={{ position: "relative" }}>
+                    <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" onKeyDown={(e) => e.key === "Enter" && handleLogin()} autoCapitalize="none" autoCorrect="off" spellCheck={false} style={{ width: "100%", padding: "13px 44px 13px 14px", fontSize: 13, backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, outline: "none", fontFamily: FONT_SERIF, color: T.text, boxSizing: "border-box" }} />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center" }}>
+                      <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={T.textSub} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                        {showPassword ? (
+                          <>
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </>
+                        ) : (
+                          <>
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </>
+                        )}
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 {loginError && <div style={{ padding: "12px 14px", backgroundColor: T.accentBg, color: SITE.color.pinkDeep, fontSize: 12, letterSpacing: "0.05em" }}>{loginError}</div>}
                 <button onClick={handleLogin} disabled={loginLoading} style={{ width: "100%", padding: "14px", backgroundColor: T.accent, color: "#fff", border: "none", cursor: loginLoading ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, fontSize: 13, letterSpacing: "0.15em", opacity: loginLoading ? 0.5 : 1, marginTop: 4 }}>{loginLoading ? "ログイン中..." : "ログイン"}</button>
