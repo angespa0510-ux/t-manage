@@ -81,7 +81,7 @@ export default function LegalPage() {
     },
     {
       label: "メールアドレス",
-      value: "info@ange-spa.jp",
+      value: "ange.spa0510@gmail.com",
     },
     {
       label: "サービス内容",
