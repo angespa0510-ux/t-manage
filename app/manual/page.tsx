@@ -45,6 +45,7 @@ export default function ManualPage() {
   const [showReadsFor, setShowReadsFor] = useState<number | null>(null);
   const [dragArticleId, setDragArticleId] = useState<number | null>(null);
   const [dragOverArticleId, setDragOverArticleId] = useState<number | null>(null);
+  const [dragOverPosition, setDragOverPosition] = useState<"before" | "after">("before");
   const [selectedCat, setSelectedCat] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTag, setFilterTag] = useState("");
@@ -333,9 +334,13 @@ export default function ManualPage() {
     const fromIdx = list.findIndex(a => a.id === dragArticleId);
     const toIdx = list.findIndex(a => a.id === targetId);
     if (fromIdx < 0 || toIdx < 0) { setDragArticleId(null); setDragOverArticleId(null); return; }
+    // ドロップ位置を計算: ターゲットの上半分なら "before"(targetIdx)、下半分なら "after"(targetIdx + 1)
+    let insertIdx = dragOverPosition === "after" ? toIdx + 1 : toIdx;
+    // 自分自身を先に削除すると、その後ろの要素のインデックスが1つずれる
+    if (fromIdx < insertIdx) insertIdx -= 1;
     const reordered = [...list];
     const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
+    reordered.splice(insertIdx, 0, moved);
     // DB一括更新
     for (let i = 0; i < reordered.length; i++) {
       if (reordered[i].sort_order !== i) {
@@ -440,21 +445,55 @@ export default function ManualPage() {
     const latestUpdate = updates.find(u => u.article_id === a.id);
     const isDragging = dragArticleId === a.id;
     const isDragOver = dragOverArticleId === a.id && dragArticleId !== a.id;
+    const showTopLine = isDragOver && dragOverPosition === "before";
+    const showBottomLine = isDragOver && dragOverPosition === "after";
     return (<React.Fragment key={a.id}>
       <div
         draggable
         onDragStart={(e) => { setDragArticleId(a.id); e.dataTransfer.effectAllowed = "move"; }}
         onDragEnd={() => { setDragArticleId(null); setDragOverArticleId(null); }}
-        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverArticleId(a.id); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          // マウス位置がカードの上半分か下半分かを判定
+          const rect = e.currentTarget.getBoundingClientRect();
+          const isTopHalf = e.clientY < rect.top + rect.height / 2;
+          setDragOverArticleId(a.id);
+          setDragOverPosition(isTopHalf ? "before" : "after");
+        }}
         onDragLeave={() => { if (dragOverArticleId === a.id) setDragOverArticleId(null); }}
         onDrop={(e) => { e.preventDefault(); handleArticleDrop(a.id); }}
         style={{
-          ...S.card, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", transition: "all 0.2s",
+          ...S.card, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", transition: "all 0.15s",
           opacity: isDragging ? 0.4 : 1,
-          borderTop: isDragOver ? "3px solid #e8849a" : undefined,
-          marginTop: isDragOver ? -3 : undefined,
+          borderTop: showTopLine ? "3px solid #e8849a" : undefined,
+          borderBottom: showBottomLine ? "3px solid #e8849a" : undefined,
+          marginTop: showTopLine ? -3 : undefined,
+          marginBottom: showBottomLine ? -3 : undefined,
+          boxShadow: isDragging ? "0 8px 24px rgba(232,132,154,0.25)" : undefined,
         }}
         onClick={() => openEditArticle(a)}>
+        {/* Drag handle - 視覚的に「ここを掴める」と分かるグリップアイコン */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            width: 18,
+            flexShrink: 0,
+            color: T.textMuted,
+            cursor: "grab",
+            opacity: 0.5,
+            transition: "opacity 0.2s",
+            userSelect: "none",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
+          title="ドラッグして並び替え"
+        >
+          <span style={{ fontSize: 14, lineHeight: 1, letterSpacing: -2 }}>⋮⋮</span>
+        </div>
         {/* Cover image */}
         {a.cover_image ? (
           <div style={{ width: 80, height: 80, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bg }}>
