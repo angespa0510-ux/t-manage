@@ -362,6 +362,24 @@ export default function ManualPage() {
     setEditCat(null); fetchData();
   };
 
+  // ── Category delete ──
+  // 安全策: 記事が1件でもあるカテゴリは削除させない（先に記事を別カテゴリへ移動 or 削除する必要あり）
+  const deleteCat = async (cat: Category) => {
+    const articleCount = articles.filter(a => a.category_id === cat.id).length;
+    if (articleCount > 0) {
+      alert(`このカテゴリには記事が ${articleCount} 件あります。\n先に記事を別のカテゴリへ移動するか削除してから、カテゴリを削除してください。`);
+      return;
+    }
+    const ok = confirm(`カテゴリ「${cat.icon} ${cat.name}」を削除しますか?\n（記事は0件なので安全に削除できます。この操作は取り消せません）`);
+    if (!ok) return;
+    const { error } = await supabase.from("manual_categories").delete().eq("id", cat.id);
+    if (error) {
+      alert(`削除に失敗しました: ${error.message}`);
+      return;
+    }
+    fetchData();
+  };
+
   // ── Styles ──
   const S = {
     page: { minHeight: "100vh", background: T.bg, color: T.text } as React.CSSProperties,
@@ -939,19 +957,34 @@ export default function ManualPage() {
       )}
 
       {/* Category list */}
-      {categories.map(c => (
-        <div key={c.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: c.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{c.icon}</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
-            <div style={{ fontSize: 12, color: T.textSub }}>{c.description}</div>
+      {categories.map(c => {
+        const articleCount = articles.filter(a => a.category_id === c.id).length;
+        const canDelete = articleCount === 0;
+        return (
+          <div key={c.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: c.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{c.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
+              <div style={{ fontSize: 12, color: T.textSub }}>{c.description}</div>
+            </div>
+            <span style={{ fontSize: 12, color: T.textMuted }}>{articleCount}件</span>
+            <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} onClick={() => {
+              setEditCat(c); setCatName(c.name); setCatIcon(c.icon); setCatColor(c.color); setCatDesc(c.description);
+            }} title="編集">✏️</button>
+            <button
+              style={{
+                ...S.btn,
+                padding: "4px 8px",
+                fontSize: 11,
+                opacity: canDelete ? 1 : 0.35,
+                cursor: canDelete ? "pointer" : "not-allowed",
+              }}
+              onClick={() => deleteCat(c)}
+              title={canDelete ? "削除" : `記事が${articleCount}件あるため削除できません`}
+            >🗑️</button>
           </div>
-          <span style={{ fontSize: 12, color: T.textMuted }}>{articles.filter(a => a.category_id === c.id).length}件</span>
-          <button style={{ ...S.btn, padding: "4px 8px", fontSize: 11 }} onClick={() => {
-            setEditCat(c); setCatName(c.name); setCatIcon(c.icon); setCatColor(c.color); setCatDesc(c.description);
-          }}>✏️</button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 
