@@ -60,6 +60,7 @@ type Therapist = {
   real_name: string; notes: string; status: string;
   photo_url?: string; sub_photo_urls?: string[];
   is_demo?: boolean;
+  tour_completed?: boolean;
 };
 type Shift = { id: number; therapist_id: number; date: string; start_time: string; end_time: string; store_id: number; status: string };
 type ShiftRequest = { id: number; therapist_id: number; week_start: string; date: string; start_time: string; end_time: string; store_id: number; status: string; notes: string };
@@ -103,6 +104,8 @@ export default function TherapistMyPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState(""); const [loginLoading, setLoginLoading] = useState(false);
+  // インタラクティブツアー
+  const [tourStep, setTourStep] = useState<number | null>(null); // null = ツアー非表示
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
   const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "gift" | "chat" | "diary" | "reviews">("home");
   // ワーク / マネー / ラーン タブ内のサブセグメント
@@ -268,7 +271,13 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     }
     const { data } = await supabase.from("therapists").select("*").eq("login_email", normalizedEmail).eq("login_password", password.trim()).maybeSingle();
     setLoginLoading(false);
-    if (data) { setTherapist(data); setLoggedIn(true); localStorage.setItem("therapist_session", JSON.stringify({ id: data.id, email: data.login_email })); }
+    if (data) {
+      setTherapist(data); setLoggedIn(true); localStorage.setItem("therapist_session", JSON.stringify({ id: data.id, email: data.login_email }));
+      // ツアー起動判定: 初回ログインまたはデモアカウントは常にツアー表示
+      if (!data.tour_completed || data.is_demo) {
+        setTimeout(() => setTourStep(0), 600); // 画面ロードを待ってから表示
+      }
+    }
     else { setLoginError("メールアドレスまたはパスワードが間違っています"); }
   };
 
@@ -293,7 +302,20 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
 
   useEffect(() => {
     const session = localStorage.getItem("therapist_session");
-    if (session) { const { id } = JSON.parse(session); supabase.from("therapists").select("*").eq("id", id).maybeSingle().then(({ data }) => { if (data) { setTherapist(data); setLoggedIn(true); } else localStorage.removeItem("therapist_session"); }); }
+    if (session) {
+      const { id } = JSON.parse(session);
+      supabase.from("therapists").select("*").eq("id", id).maybeSingle().then(({ data }: { data: Therapist | null }) => {
+        if (data) {
+          setTherapist(data); setLoggedIn(true);
+          // 復帰時もツアー判定（デモまたは未完了）
+          if (!data.tour_completed || data.is_demo) {
+            setTimeout(() => setTourStep(0), 600);
+          }
+        } else {
+          localStorage.removeItem("therapist_session");
+        }
+      });
+    }
     // URLクエリパラメータから初期タブを設定（例: /mypage?tab=tax）
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -586,7 +608,25 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     const returnDate = calDetailDate; setShowAddNote(false); setNoteViewTarget(null); setNoteForm({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 }); await fetchData(); if (returnDate) setCalDetailDate(returnDate);
   };
 
-  const logout = () => { localStorage.removeItem("therapist_session"); setLoggedIn(false); setTherapist(null); setTab("home"); };
+  const logout = () => { localStorage.removeItem("therapist_session"); setLoggedIn(false); setTherapist(null); setTab("home"); setTourStep(null); };
+
+  // ツアー完了処理: DBに完了フラグを保存（デモアカウントは保存しない＝毎回見せる）
+  const completeTour = async () => {
+    if (therapist && !therapist.is_demo) {
+      await supabase.from("therapists").update({ tour_completed: true }).eq("id", therapist.id);
+    }
+    setTourStep(null);
+  };
+
+  // ツアーステップ進行（タブ切替も同時に行う）
+  const advanceTour = (next: number) => {
+    setTourStep(next);
+    // ステップに応じて該当タブを開く
+    if (next === 1) setTab("home");
+    else if (next === 2) setTab("schedule");
+    else if (next === 3) setTab("salary");
+    else if (next === 4) setTab("manual");
+  };
 
   // 🔔 お知らせ既読操作
   const markNotifRead = async (notifId: number) => {
@@ -869,6 +909,163 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: T.bg, color: T.text }}>
       {ConfirmModalNode}
+
+      {/* ═══════════════════════════════════════════════
+          🌸 インタラクティブツアー（初回ログイン時の機能案内）
+          ═══════════════════════════════════════════════ */}
+      {tourStep !== null && therapist && (() => {
+        // 6ステップのコンテンツ定義
+        const steps = [
+          {
+            emoji: "🌸",
+            title: "新マイページへようこそ！",
+            body: `${therapist.name}さん、お疲れさまです。\nここでは、ご自身の出勤・報酬・お客様情報・確定申告まで、お仕事に関するすべてが確認できます。\n\n短いツアーで主な機能をご案内しますね。`,
+            buttonLabel: "ツアーを始める",
+          },
+          {
+            emoji: "🏠",
+            title: "ホーム画面",
+            body: "今日の予定と今月の報酬がひと目でわかります。\nログインしたら、まずここをチェックしてみてくださいね。",
+            buttonLabel: "次へ",
+          },
+          {
+            emoji: "💼",
+            title: "ワーク",
+            body: "シフト希望の提出・出勤予定の確認・お客様情報・写メ日記など、お仕事に関する操作はここから。\n\n6/1からは、こちらからシフト希望を出してくださいね。",
+            buttonLabel: "次へ",
+          },
+          {
+            emoji: "💰",
+            title: "マネー",
+            body: "給料明細・確定申告サポート・各種証明書の発行など、お金に関する情報はここに集約されています。\n\n副業バレ防止ガイドや、配偶者控除のしくみ、インボイス手取りシミュレーターも揃っています。",
+            buttonLabel: "次へ",
+          },
+          {
+            emoji: "📚",
+            title: "ラーン",
+            body: "マイページの使い方や業務マニュアル、お知らせがここにまとまっています。\n\nわからないことがあったら、まずここを開いてみてください。",
+            buttonLabel: "次へ",
+          },
+          {
+            emoji: "✨",
+            title: "準備完了！",
+            body: "ツアーは以上です。\nまずは仮パスワードを、ご自身が覚えやすいものに変更してくださいね。\n\n気づいた点、使いづらい点があれば、いつでもLINEで教えてください🌸",
+            buttonLabel: "マイページを使う",
+          },
+        ];
+        const current = steps[tourStep] || steps[0];
+        const isLast = tourStep === steps.length - 1;
+        const isFirst = tourStep === 0;
+        return (
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
+            backdropFilter: "blur(4px)",
+          }}>
+            <div style={{
+              backgroundColor: T.card,
+              border: `1px solid ${T.border}`,
+              borderRadius: 12,
+              maxWidth: 380,
+              width: "100%",
+              padding: "28px 24px 24px",
+              fontFamily: FONT_SERIF,
+              boxShadow: "0 20px 60px rgba(232,132,154,0.3)",
+              position: "relative",
+            }}>
+              {/* ステップインジケータ */}
+              <div style={{
+                display: "flex", justifyContent: "center", gap: 6, marginBottom: 18,
+              }}>
+                {steps.map((_, i) => (
+                  <div key={i} style={{
+                    width: i === tourStep ? 22 : 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: i === tourStep ? T.accent : T.border,
+                    transition: "all 0.3s",
+                  }} />
+                ))}
+              </div>
+
+              {/* 大きな絵文字 */}
+              <div style={{
+                textAlign: "center",
+                fontSize: 48,
+                marginBottom: 14,
+                lineHeight: 1,
+              }}>
+                {current.emoji}
+              </div>
+
+              {/* タイトル */}
+              <h2 style={{
+                margin: "0 0 14px",
+                textAlign: "center",
+                fontSize: 18,
+                fontWeight: 500,
+                letterSpacing: "0.05em",
+                color: T.text,
+              }}>{current.title}</h2>
+
+              {/* 本文 */}
+              <p style={{
+                margin: "0 0 24px",
+                textAlign: "center",
+                fontSize: 13,
+                lineHeight: 1.8,
+                color: T.textSub,
+                whiteSpace: "pre-wrap",
+              }}>{current.body}</p>
+
+              {/* ボタン */}
+              <button
+                onClick={() => {
+                  if (isLast) completeTour();
+                  else advanceTour(tourStep + 1);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  backgroundColor: T.accent,
+                  color: "#fff",
+                  border: "none",
+                  fontFamily: FONT_SERIF,
+                  fontSize: 13,
+                  letterSpacing: "0.15em",
+                  cursor: "pointer",
+                  borderRadius: 4,
+                }}
+              >
+                {current.buttonLabel}
+              </button>
+
+              {/* スキップリンク（最初と最後以外で表示） */}
+              {!isFirst && !isLast && (
+                <button
+                  onClick={completeTour}
+                  style={{
+                    display: "block",
+                    margin: "12px auto 0",
+                    background: "none",
+                    border: "none",
+                    color: T.textMuted,
+                    fontSize: 11,
+                    cursor: "pointer",
+                    fontFamily: FONT_SERIF,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  ツアーをスキップ
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       <InstallPrompt dismissKey="therapist" />
       {/* ═══ HP風ヘッダー ═══ */}
       <div style={{ height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0, backgroundColor: T.card, borderBottom: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>
