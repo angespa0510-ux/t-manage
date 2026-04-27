@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/survey-monthly-report",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/demo-reset",
+      "schedule": "0 15 * * *"
     }
   ]
 }

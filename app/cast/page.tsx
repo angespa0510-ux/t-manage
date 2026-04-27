@@ -59,6 +59,7 @@ type Therapist = {
   has_invoice: boolean; has_withholding: boolean; transport_fee: number;
   real_name: string; notes: string; status: string;
   photo_url?: string; sub_photo_urls?: string[];
+  is_demo?: boolean;
 };
 type Shift = { id: number; therapist_id: number; date: string; start_time: string; end_time: string; store_id: number; status: string };
 type ShiftRequest = { id: number; therapist_id: number; week_start: string; date: string; start_time: string; end_time: string; store_id: number; status: string; notes: string };
@@ -883,6 +884,23 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
           <button onClick={logout} style={{ padding: "7px 14px", fontSize: 11, cursor: "pointer", border: `1px solid ${T.accent}`, backgroundColor: "transparent", color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.1em" }}>ログアウト</button>
         </div>
       </div>
+
+      {/* ═══ デモアカウント用バナー ═══ */}
+      {therapist?.is_demo && (
+        <div style={{
+          padding: "10px 16px",
+          background: "linear-gradient(90deg, #fff5e6 0%, #ffe8d6 100%)",
+          color: "#8b5a00",
+          fontSize: 12,
+          textAlign: "center",
+          borderBottom: "1px solid #f0d8a8",
+          fontFamily: FONT_SERIF,
+          letterSpacing: "0.05em",
+          flexShrink: 0,
+        }}>
+          ✨ お試しモード — 自由に触ってください。深夜0時にリセットされます。
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto" style={{ paddingBottom: 76 }}><div className="max-w-[600px] mx-auto p-4">
 
         {tab === "home" && (<div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: FONT_SERIF }}>
