@@ -370,7 +370,12 @@ export default function ManualPage() {
       alert(`このカテゴリには記事が ${articleCount} 件あります。\n先に記事を別のカテゴリへ移動するか削除してから、カテゴリを削除してください。`);
       return;
     }
-    const ok = confirm(`カテゴリ「${cat.icon} ${cat.name}」を削除しますか?\n（記事は0件なので安全に削除できます。この操作は取り消せません）`);
+    const ok = await confirm({
+      title: `カテゴリ「${cat.icon} ${cat.name}」を削除しますか？`,
+      message: "記事は0件なので安全に削除できます。この操作は取り消せません。",
+      variant: "danger",
+      confirmLabel: "削除する",
+    });
     if (!ok) return;
     const { error } = await supabase.from("manual_categories").delete().eq("id", cat.id);
     if (error) {
