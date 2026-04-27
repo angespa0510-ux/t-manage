@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     // デモアカウントを取得
     const { data: demo, error: demoErr } = await supabase
       .from("therapists")
-      .select("id, login_email")
+      .select("id, name, login_email")
       .eq("is_demo", true)
       .maybeSingle();
 
@@ -43,22 +43,22 @@ export async function GET(req: Request) {
     }
 
     const demoId = demo.id;
+    const demoName = demo.name;
     const result: Record<string, number | string> = {
       demo_therapist_id: demoId,
+      demo_therapist_name: demoName,
       timestamp: new Date().toISOString(),
     };
 
-    // 各テーブルから demo_id のデータを削除
-    // エラーが起きても他のテーブルの処理は続ける
-    const tables = [
+    // therapist_id で識別するテーブル
+    const tablesByTherapistId = [
       "shift_requests",
       "customer_therapist_memos",
       "therapist_expenses",
       "manual_reads",
-      "manual_ai_logs",
     ];
 
-    for (const table of tables) {
+    for (const table of tablesByTherapistId) {
       try {
         const { error, count } = await supabase
           .from(table)
@@ -73,6 +73,22 @@ export async function GET(req: Request) {
       } catch (e) {
         result[`${table}_error`] = e instanceof Error ? e.message : "unknown error";
       }
+    }
+
+    // therapist_name で識別するテーブル（manual_ai_logsはこの方式）
+    try {
+      const { error, count } = await supabase
+        .from("manual_ai_logs")
+        .delete({ count: "exact" })
+        .eq("therapist_name", demoName);
+
+      if (error) {
+        result["manual_ai_logs_error"] = error.message;
+      } else {
+        result["manual_ai_logs_deleted"] = count || 0;
+      }
+    } catch (e) {
+      result["manual_ai_logs_error"] = e instanceof Error ? e.message : "unknown error";
     }
 
     return NextResponse.json({
