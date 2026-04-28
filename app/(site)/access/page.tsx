@@ -88,11 +88,13 @@ export default function AccessPage() {
   useEffect(() => {
     (async () => {
       // 公開建物 + 親ストアを並列取得し、クライアントで merge
+      // 並び順: 店舗ID昇順（同じ店舗の建物がまとまる）→ shop_sort_order → id
       const [bRes, sRes] = await Promise.all([
         supabase
           .from("buildings")
           .select("*")
           .eq("shop_is_public", true)
+          .order("store_id", { ascending: true })
           .order("shop_sort_order", { ascending: true })
           .order("id", { ascending: true }),
         supabase
