@@ -1824,6 +1824,99 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             );
           })()}
 
+          {/* ═══ ブロック4.5 — 契約書 v3.0 改訂のご案内バナー ═══ */}
+          {/*
+            業務委託契約書 v3.0 (施術業対応版) の改訂説明スライドへの誘導。
+            セラピスト全員が一読できるよう、ダッシュボードに常設バナーとして表示。
+            弁護士レビュー後にデフォルト化された段階で、必要に応じて表示制御を追加可。
+          */}
+          <section
+            style={{
+              ...MARBLE.pink,
+              padding: "32px 20px",
+              marginLeft: -16,
+              marginRight: -16,
+            }}
+          >
+            <div
+              style={{
+                maxWidth: 480,
+                margin: "0 auto",
+                backgroundColor: "rgba(255,255,255,0.92)",
+                border: `1px solid ${T.accent}`,
+                padding: "24px 22px",
+                textAlign: "center",
+                WebkitBackdropFilter: "blur(6px)",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: FONT_DISPLAY,
+                  fontSize: 11,
+                  letterSpacing: "0.25em",
+                  color: T.accent,
+                  margin: 0,
+                  fontWeight: 500,
+                }}
+              >
+                CONTRACT v3.0
+              </p>
+              <p
+                style={{
+                  fontFamily: FONT_SERIF,
+                  fontSize: 15,
+                  letterSpacing: "0.06em",
+                  color: T.text,
+                  margin: "6px 0 4px",
+                  fontWeight: 500,
+                }}
+              >
+                業務委託契約書 改訂のご案内
+              </p>
+              <div
+                style={{
+                  width: 28,
+                  height: 1,
+                  backgroundColor: T.accent,
+                  margin: "12px auto",
+                }}
+              />
+              <p
+                style={{
+                  fontFamily: FONT_SERIF,
+                  fontSize: 12,
+                  color: T.textSub,
+                  letterSpacing: "0.03em",
+                  lineHeight: 1.9,
+                  margin: "0 0 16px",
+                }}
+              >
+                業務委託契約書を改訂いたしました。
+                <br />
+                報酬・条件に変更はございません。
+                <br />
+                内容のご確認をお願いいたします。
+              </p>
+              <a
+                href="/cast/contract-v3-info"
+                style={{
+                  display: "inline-block",
+                  padding: "10px 24px",
+                  fontSize: 12,
+                  fontFamily: FONT_SERIF,
+                  letterSpacing: "0.08em",
+                  color: "#ffffff",
+                  backgroundColor: T.accent,
+                  textDecoration: "none",
+                  border: `1px solid ${T.accent}`,
+                }}
+              >
+                改訂のご案内を確認する →
+              </a>
+            </div>
+          </section>
+
           {/* ═══ ブロック5 — カレンダー ═══ */}
           {(() => {
             const [cy, cm] = calMonth.split("-").map(Number);

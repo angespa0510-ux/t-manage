@@ -780,6 +780,7 @@ const generatePassword = () => {
           <button onClick={openNgRegister} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c4555518", color: "#c45555", border: "1px solid #c4555544" }}>🚫 NG登録</button>
           <button onClick={() => setShowThImport(true)} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📥 インポート</button>
           <button onClick={() => { setShowTrash(true); fetchTrash(); }} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#88888818", color: "#888", border: "1px solid #88888844" }}>🗑️ ゴミ箱</button>
+          <a href="/admin/contract-v3-info" target="_blank" rel="noreferrer" className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium inline-flex items-center" style={{ backgroundColor: "#e8849a18", color: "#c96b83", border: "1px solid #e8849a44", textDecoration: "none" }}>📜 契約書改訂説明</a>
           <button onClick={generateBulkLinks} className="px-4 py-2 text-[11px] rounded-xl cursor-pointer font-medium" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>📨 書類一括発行</button>
           <button onClick={() => { setShowAdd(true); setMsg(""); }} className="px-4 py-2 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[11px] rounded-xl cursor-pointer">+ 新規登録</button>
         </div>

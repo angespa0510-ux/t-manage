@@ -851,7 +851,10 @@ export default function Dashboard() {
                 ))}
               </div>
               <div className="mt-8"><p className="text-[11px] mb-4" style={{ color: T.textMuted }}>クイックアクション</p>
-                <div className="flex flex-wrap gap-3">{["顧客登録", "タイムチャート", "日別分析", "セラピスト登録"].map((a) => (<button key={a} onClick={() => a === "タイムチャート" ? router.push("/timechart") : setActivePage(a)} className="px-5 py-2.5 border rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub }}>{a}</button>))}</div>
+                <div className="flex flex-wrap gap-3">
+                  {["顧客登録", "タイムチャート", "日別分析", "セラピスト登録"].map((a) => (<button key={a} onClick={() => a === "タイムチャート" ? router.push("/timechart") : setActivePage(a)} className="px-5 py-2.5 border rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub }}>{a}</button>))}
+                  <a href="/admin/contract-v3-info" target="_blank" rel="noreferrer" className="px-5 py-2.5 border rounded-xl text-[12px] cursor-pointer inline-flex items-center" style={{ backgroundColor: "#e8849a12", borderColor: "#e8849a44", color: "#c96b83", textDecoration: "none" }}>📜 契約書改訂説明</a>
+                </div>
               </div>
             </div>
           )}
