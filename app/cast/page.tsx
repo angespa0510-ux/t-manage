@@ -1753,8 +1753,9 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
         {/* 📖 お知らせ詳細モーダル */}
         {notifDetail && (
           <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)" }} onClick={() => setNotifDetail(null)}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 500, padding: 32, backgroundColor: T.card, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${T.border}` }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 500, maxHeight: "90vh", display: "flex", flexDirection: "column", backgroundColor: T.card, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF }}>
+              {/* ヘッダー（固定） */}
+              <div style={{ padding: "24px 28px 16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ fontSize: 26 }}>{notifDetail.type === "schedule" ? "📅" : notifDetail.type === "warning" ? "⚠️" : "📢"}</span>
                   <div>
@@ -1764,15 +1765,21 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                     </p>
                   </div>
                 </div>
-                <button onClick={() => setNotifDetail(null)} style={{ width: 30, height: 30, cursor: "pointer", fontSize: 14, backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
+                <button onClick={() => setNotifDetail(null)} style={{ width: 30, height: 30, cursor: "pointer", fontSize: 14, backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF, flexShrink: 0 }}>✕</button>
               </div>
-              <h3 style={{ fontFamily: FONT_SERIF, fontSize: 17, fontWeight: 500, letterSpacing: "0.05em", color: T.text, margin: "0 0 16px" }}>{notifDetail.title}</h3>
-              <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "16px 18px" }}>
-                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", whiteSpace: "pre-wrap", color: T.text }}>{notifDetail.body}</p>
+              {/* 本文（スクロール可能） */}
+              <div style={{ overflowY: "auto", flex: 1, padding: "20px 28px", minHeight: 0 }}>
+                <h3 style={{ fontFamily: FONT_SERIF, fontSize: 17, fontWeight: 500, letterSpacing: "0.05em", color: T.text, margin: "0 0 16px", lineHeight: 1.6 }}>{notifDetail.title}</h3>
+                <div style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, padding: "16px 18px" }}>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", whiteSpace: "pre-wrap", wordBreak: "break-word", color: T.text }}>{notifDetail.body}</p>
+                </div>
               </div>
-              <button onClick={() => setNotifDetail(null)} style={{ width: "100%", marginTop: 20, padding: 14, fontSize: 13, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>
-                閉じる
-              </button>
+              {/* フッター（固定） */}
+              <div style={{ padding: "16px 28px 24px", borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
+                <button onClick={() => setNotifDetail(null)} style={{ width: "100%", padding: 14, fontSize: 13, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>
+                  閉じる
+                </button>
+              </div>
             </div>
           </div>
         )}
