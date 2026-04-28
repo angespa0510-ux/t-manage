@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-c" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <marker id="arrow-c" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0 0, 10 5, 0 10" fill="#c96b83"/>
+    </marker>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-c)"/>
+
+  <text x="400" y="42" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">PRE-TREATMENT COUNSELING</text>
+  <text x="400" y="72" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">施術前カウンセリング 5ステップ</text>
+  <line x1="370" y1="86" x2="430" y2="86" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- 5 horizontal step cards -->
+  <!-- Step 1: お出迎え -->
+  <g transform="translate(40, 120)">
+    <rect width="140" height="180" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <circle cx="70" cy="40" r="22" fill="#fdeaee" stroke="#c96b83" stroke-width="1.4"/>
+    <text x="70" y="46" text-anchor="middle" font-size="20" fill="#c96b83">01</text>
+    <text x="70" y="86" text-anchor="middle" font-size="9" letter-spacing="3" fill="#c96b83" font-weight="500">WELCOME</text>
+    <text x="70" y="106" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">お出迎え</text>
+    <line x1="50" y1="118" x2="90" y2="118" stroke="#e8849a44"/>
+    <text x="70" y="138" text-anchor="middle" font-size="9" fill="#9a7d83">笑顔と優しい声で</text>
+    <text x="70" y="152" text-anchor="middle" font-size="9" fill="#9a7d83">お名前を確認</text>
+    <text x="70" y="168" text-anchor="middle" font-size="9" fill="#9a7d83">緊張を和らげる</text>
+  </g>
+
+  <!-- arrow 1->2 -->
+  <path d="M 184 210 l 8 0" stroke="#c96b83" stroke-width="1.5" marker-end="url(#arrow-c)"/>
+
+  <!-- Step 2: 体調確認 -->
+  <g transform="translate(200, 120)">
+    <rect width="140" height="180" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <circle cx="70" cy="40" r="22" fill="#fdeaee" stroke="#c96b83" stroke-width="1.4"/>
+    <text x="70" y="46" text-anchor="middle" font-size="20" fill="#c96b83">02</text>
+    <text x="70" y="86" text-anchor="middle" font-size="9" letter-spacing="3" fill="#c96b83" font-weight="500">CHECK</text>
+    <text x="70" y="106" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">体調確認</text>
+    <line x1="50" y1="118" x2="90" y2="118" stroke="#e8849a44"/>
+    <text x="70" y="138" text-anchor="middle" font-size="9" fill="#9a7d83">当日の体調・睡眠</text>
+    <text x="70" y="152" text-anchor="middle" font-size="9" fill="#9a7d83">アレルギー・既往歴</text>
+    <text x="70" y="168" text-anchor="middle" font-size="9" fill="#9a7d83">皮膚の状態</text>
+  </g>
+
+  <path d="M 344 210 l 8 0" stroke="#c96b83" stroke-width="1.5" marker-end="url(#arrow-c)"/>
+
+  <!-- Step 3: お悩みヒアリング -->
+  <g transform="translate(360, 120)">
+    <rect width="140" height="180" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <circle cx="70" cy="40" r="22" fill="#fdeaee" stroke="#c96b83" stroke-width="1.4"/>
+    <text x="70" y="46" text-anchor="middle" font-size="20" fill="#c96b83">03</text>
+    <text x="70" y="86" text-anchor="middle" font-size="9" letter-spacing="3" fill="#c96b83" font-weight="500">LISTEN</text>
+    <text x="70" y="106" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">ヒアリング</text>
+    <line x1="50" y1="118" x2="90" y2="118" stroke="#e8849a44"/>
+    <text x="70" y="138" text-anchor="middle" font-size="9" fill="#9a7d83">気になる箇所</text>
+    <text x="70" y="152" text-anchor="middle" font-size="9" fill="#9a7d83">お仕事・生活習慣</text>
+    <text x="70" y="168" text-anchor="middle" font-size="9" fill="#9a7d83">本日の希望</text>
+  </g>
+
+  <path d="M 504 210 l 8 0" stroke="#c96b83" stroke-width="1.5" marker-end="url(#arrow-c)"/>
+
+  <!-- Step 4: 提案・合意 -->
+  <g transform="translate(520, 120)">
+    <rect width="140" height="180" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <circle cx="70" cy="40" r="22" fill="#fdeaee" stroke="#c96b83" stroke-width="1.4"/>
+    <text x="70" y="46" text-anchor="middle" font-size="20" fill="#c96b83">04</text>
+    <text x="70" y="86" text-anchor="middle" font-size="9" letter-spacing="3" fill="#c96b83" font-weight="500">PROPOSE</text>
+    <text x="70" y="106" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">提案・合意</text>
+    <line x1="50" y1="118" x2="90" y2="118" stroke="#e8849a44"/>
+    <text x="70" y="138" text-anchor="middle" font-size="9" fill="#9a7d83">施術内容を説明</text>
+    <text x="70" y="152" text-anchor="middle" font-size="9" fill="#9a7d83">部位・圧の希望確認</text>
+    <text x="70" y="168" text-anchor="middle" font-size="9" fill="#9a7d83">使用オイル選定</text>
+  </g>
+
+  <!-- arrow 4->5 (down then up) -->
+  <path d="M 590 308 l 0 16 l -350 0 l 0 16" stroke="#c96b83" stroke-width="1.5" fill="none" marker-end="url(#arrow-c)"/>
+
+  <!-- Step 5: 施術中の声かけ -->
+  <g transform="translate(170, 340)">
+    <rect width="460" height="120" fill="#fdeaee" stroke="#c96b83" stroke-width="1.5"/>
+    <circle cx="60" cy="40" r="22" fill="#ffffff" stroke="#c96b83" stroke-width="1.4"/>
+    <text x="60" y="46" text-anchor="middle" font-size="20" fill="#c96b83">05</text>
+    <text x="60" y="76" text-anchor="middle" font-size="9" letter-spacing="3" fill="#c96b83" font-weight="500">DURING</text>
+    <text x="60" y="92" text-anchor="middle" font-size="11" fill="#3a2e30" letter-spacing="1" font-weight="500">施術中</text>
+
+    <g transform="translate(110, 30)">
+      <text x="0" y="0" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">施術中の継続的な確認</text>
+      <text x="0" y="22" font-size="10" fill="#3a2e30" letter-spacing="0.5">・「圧加減いかがですか？」を最初の5分で確認</text>
+      <text x="0" y="40" font-size="10" fill="#3a2e30" letter-spacing="0.5">・痛み／違和感がないか部位の切り替え時に確認</text>
+      <text x="0" y="58" font-size="10" fill="#3a2e30" letter-spacing="0.5">・体勢変更時は声をかけてサポート</text>
+      <text x="0" y="76" font-size="10" fill="#3a2e30" letter-spacing="0.5">・終了10分前から「あと10分です」と予告</text>
+    </g>
+  </g>
+
+  <!-- footer note -->
+  <g transform="translate(40, 480)">
+    <rect width="720" height="40" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="18" font-size="10" letter-spacing="2" fill="#c96b83" font-weight="500">📋 カルテに必ず記録</text>
+    <text x="20" y="32" font-size="9" fill="#9a7d83" letter-spacing="0.5">体調・気になる箇所・希望・所見・反応・次回提案 — 業務委託契約書 第11条「カルテ記録義務」に基づく</text>
+  </g>
+</svg>

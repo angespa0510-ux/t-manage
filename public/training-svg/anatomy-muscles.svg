@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-m" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <linearGradient id="bodyfill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce8ec"/>
+      <stop offset="100%" stop-color="#f5d4dc"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="560" fill="url(#bg-m)"/>
+
+  <text x="400" y="42" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">MAJOR MUSCLE GROUPS</text>
+  <text x="400" y="72" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">主要な筋肉群（背側 / 腹側）</text>
+  <line x1="370" y1="86" x2="430" y2="86" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- ============ Back view (left) ============ -->
+  <g transform="translate(150, 130)">
+    <text x="100" y="-15" text-anchor="middle" font-size="11" fill="#9a7d83" letter-spacing="3">POSTERIOR — 背側</text>
+
+    <!-- silhouette: head, neck, torso, arms, legs -->
+    <g fill="url(#bodyfill)" stroke="#d8a8b3" stroke-width="1.2">
+      <!-- head -->
+      <ellipse cx="100" cy="20" rx="22" ry="26"/>
+      <!-- neck -->
+      <rect x="92" y="42" width="16" height="12"/>
+      <!-- torso -->
+      <path d="M 60 56 q 0 -4 12 -6 l 56 0 q 12 2 12 6 l 6 80 q 0 8 -8 10 l -76 0 q -8 -2 -8 -10 z"/>
+      <!-- arms -->
+      <path d="M 60 60 q -22 4 -28 30 l -6 80 q -2 12 4 12 l 12 0 q 4 0 6 -10 l 8 -50 q 6 -28 6 -50 z"/>
+      <path d="M 140 60 q 22 4 28 30 l 6 80 q 2 12 -4 12 l -12 0 q -4 0 -6 -10 l -8 -50 q -6 -28 -6 -50 z"/>
+      <!-- pelvis -->
+      <path d="M 60 142 l 0 22 q 0 6 6 8 l 26 0 l 6 0 l 6 0 l 26 0 q 6 -2 6 -8 l 0 -22 z"/>
+      <!-- legs -->
+      <path d="M 70 168 l -2 130 q 0 6 6 6 l 12 0 q 6 0 6 -6 l 4 -130 z"/>
+      <path d="M 130 168 l 2 130 q 0 6 -6 6 l -12 0 q -6 0 -6 -6 l -4 -130 z"/>
+    </g>
+
+    <!-- muscle highlights (back) -->
+    <!-- 僧帽筋 trapezius -->
+    <path d="M 70 60 q 30 -8 60 0 l -2 30 l -56 0 z" fill="#e8849a55" stroke="#c96b83" stroke-width="1"/>
+    <!-- 広背筋 latissimus dorsi -->
+    <path d="M 68 92 q -2 30 12 50 l 14 -2 l 12 0 l 14 2 q 14 -20 12 -50 z" fill="#e8849a40" stroke="#c96b83" stroke-width="1"/>
+    <!-- 殿筋 gluteus -->
+    <ellipse cx="86" cy="158" rx="14" ry="10" fill="#e8849a55" stroke="#c96b83" stroke-width="1"/>
+    <ellipse cx="114" cy="158" rx="14" ry="10" fill="#e8849a55" stroke="#c96b83" stroke-width="1"/>
+    <!-- ハムストリング -->
+    <path d="M 74 200 l -2 60 l 18 0 l 2 -60 z" fill="#e8849a40" stroke="#c96b83" stroke-width="1"/>
+    <path d="M 126 200 l 2 60 l -18 0 l -2 -60 z" fill="#e8849a40" stroke="#c96b83" stroke-width="1"/>
+
+    <!-- labels -->
+    <g font-size="11" fill="#3a2e30" letter-spacing="1">
+      <line x1="100" y1="72" x2="180" y2="50" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="184" y="54">僧帽筋（そうぼうきん）</text>
+      <text x="184" y="68" font-size="9" fill="#9a7d83">肩こりの主部位</text>
+
+      <line x1="100" y1="120" x2="180" y2="115" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="184" y="118">広背筋（こうはいきん）</text>
+      <text x="184" y="132" font-size="9" fill="#9a7d83">背中全体を覆う大筋肉</text>
+
+      <line x1="100" y1="158" x2="180" y2="170" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="184" y="173">殿筋群（でんきんぐん）</text>
+      <text x="184" y="187" font-size="9" fill="#9a7d83">骨盤の安定に重要</text>
+
+      <line x1="118" y1="230" x2="180" y2="225" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="184" y="228">ハムストリング</text>
+      <text x="184" y="242" font-size="9" fill="#9a7d83">大腿後面・座位姿勢で硬化</text>
+    </g>
+  </g>
+
+  <!-- ============ Front view (right) ============ -->
+  <g transform="translate(530, 130)">
+    <text x="100" y="-15" text-anchor="middle" font-size="11" fill="#9a7d83" letter-spacing="3">ANTERIOR — 腹側</text>
+
+    <g fill="url(#bodyfill)" stroke="#d8a8b3" stroke-width="1.2">
+      <ellipse cx="100" cy="20" rx="22" ry="26"/>
+      <rect x="92" y="42" width="16" height="12"/>
+      <path d="M 60 56 q 0 -4 12 -6 l 56 0 q 12 2 12 6 l 6 80 q 0 8 -8 10 l -76 0 q -8 -2 -8 -10 z"/>
+      <path d="M 60 60 q -22 4 -28 30 l -6 80 q -2 12 4 12 l 12 0 q 4 0 6 -10 l 8 -50 q 6 -28 6 -50 z"/>
+      <path d="M 140 60 q 22 4 28 30 l 6 80 q 2 12 -4 12 l -12 0 q -4 0 -6 -10 l -8 -50 q -6 -28 -6 -50 z"/>
+      <path d="M 60 142 l 0 22 q 0 6 6 8 l 26 0 l 6 0 l 6 0 l 26 0 q 6 -2 6 -8 l 0 -22 z"/>
+      <path d="M 70 168 l -2 130 q 0 6 6 6 l 12 0 q 6 0 6 -6 l 4 -130 z"/>
+      <path d="M 130 168 l 2 130 q 0 6 -6 6 l -12 0 q -6 0 -6 -6 l -4 -130 z"/>
+    </g>
+
+    <!-- 大胸筋 -->
+    <path d="M 72 60 q 0 26 26 30 l 4 0 q 26 -4 26 -30 z" fill="#e8849a55" stroke="#c96b83" stroke-width="1"/>
+    <!-- 腹直筋 -->
+    <rect x="92" y="92" width="16" height="48" fill="#e8849a40" stroke="#c96b83" stroke-width="1"/>
+    <line x1="92" y1="104" x2="108" y2="104" stroke="#c96b83" stroke-width="0.6"/>
+    <line x1="92" y1="116" x2="108" y2="116" stroke="#c96b83" stroke-width="0.6"/>
+    <line x1="92" y1="128" x2="108" y2="128" stroke="#c96b83" stroke-width="0.6"/>
+    <!-- 大腿四頭筋 -->
+    <path d="M 74 175 l -2 70 l 18 0 l 2 -70 z" fill="#e8849a40" stroke="#c96b83" stroke-width="1"/>
+    <path d="M 126 175 l 2 70 l -18 0 l -2 -70 z" fill="#e8849a40" stroke="#c96b83" stroke-width="1"/>
+
+    <g font-size="11" fill="#3a2e30" letter-spacing="1">
+      <line x1="100" y1="80" x2="-30" y2="80" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="-34" y="83" text-anchor="end">大胸筋（だいきょうきん）</text>
+      <text x="-34" y="97" text-anchor="end" font-size="9" fill="#9a7d83">姿勢の前傾で硬化</text>
+
+      <line x1="100" y1="116" x2="-30" y2="135" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="-34" y="138" text-anchor="end">腹直筋（ふくちょくきん）</text>
+      <text x="-34" y="152" text-anchor="end" font-size="9" fill="#9a7d83">体幹の安定</text>
+
+      <line x1="118" y1="210" x2="-30" y2="220" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="-34" y="223" text-anchor="end">大腿四頭筋</text>
+      <text x="-34" y="237" text-anchor="end" font-size="9" fill="#9a7d83">立位を支える主筋</text>
+    </g>
+  </g>
+
+  <!-- footer -->
+  <text x="400" y="540" text-anchor="middle" font-size="10" fill="#9a7d83" letter-spacing="2">※ 教育用概念図です。詳細は研修動画および専門書で学習してください。</text>
+</svg>

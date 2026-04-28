@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-ln" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <linearGradient id="body-ln" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce8ec"/>
+      <stop offset="100%" stop-color="#f5d4dc"/>
+    </linearGradient>
+    <radialGradient id="node-grad-2">
+      <stop offset="0%" stop-color="#7eb8c4"/>
+      <stop offset="100%" stop-color="#4a8a9a"/>
+    </radialGradient>
+    <marker id="flowarrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#4a8a9a"/>
+    </marker>
+  </defs>
+
+  <rect width="800" height="560" fill="url(#bg-ln)"/>
+
+  <text x="400" y="42" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">LYMPHATIC DRAINAGE FLOW</text>
+  <text x="400" y="72" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">主要リンパ節と流れの方向</text>
+  <line x1="370" y1="86" x2="430" y2="86" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- ==================== Left: Front view ==================== -->
+  <g transform="translate(170, 110)">
+    <text x="100" y="-15" text-anchor="middle" font-size="11" fill="#9a7d83" letter-spacing="3">ANTERIOR — 腹側</text>
+
+    <g fill="url(#body-ln)" stroke="#d8a8b3" stroke-width="1.2">
+      <ellipse cx="100" cy="22" rx="22" ry="26"/>
+      <rect x="92" y="44" width="16" height="14"/>
+      <path d="M 60 58 q 0 -4 12 -6 l 56 0 q 12 2 12 6 l 6 84 q 0 8 -8 10 l -76 0 q -8 -2 -8 -10 z"/>
+      <path d="M 60 62 q -22 4 -28 30 l -6 80 q -2 12 4 12 l 12 0 q 4 0 6 -10 l 8 -50 q 6 -28 6 -50 z"/>
+      <path d="M 140 62 q 22 4 28 30 l 6 80 q 2 12 -4 12 l -12 0 q -4 0 -6 -10 l -8 -50 q -6 -28 -6 -50 z"/>
+      <path d="M 60 146 l 0 22 q 0 6 6 8 l 64 0 q 6 -2 6 -8 l 0 -22 z"/>
+      <path d="M 70 172 l -2 130 q 0 6 6 6 l 12 0 q 6 0 6 -6 l 4 -130 z"/>
+      <path d="M 130 172 l 2 130 q 0 6 -6 6 l -12 0 q -6 0 -6 -6 l -4 -130 z"/>
+    </g>
+
+    <!-- flow arrows toward terminus (clavicle area) -->
+    <g stroke="#4a8a9a" stroke-width="1.5" fill="none" opacity="0.85">
+      <!-- from arms toward axillary -->
+      <path d="M 30 180 q 6 -40 30 -100" marker-end="url(#flowarrow)"/>
+      <path d="M 170 180 q -6 -40 -30 -100" marker-end="url(#flowarrow)"/>
+      <!-- from chest to axillary -->
+      <path d="M 100 110 q -10 -10 -30 -28" marker-end="url(#flowarrow)"/>
+      <path d="M 100 110 q 10 -10 30 -28" marker-end="url(#flowarrow)"/>
+      <!-- from abdomen toward inguinal -->
+      <path d="M 90 120 q -8 20 -10 38" marker-end="url(#flowarrow)"/>
+      <path d="M 110 120 q 8 20 10 38" marker-end="url(#flowarrow)"/>
+      <!-- from legs toward inguinal -->
+      <path d="M 80 280 q -2 -60 0 -110" marker-end="url(#flowarrow)"/>
+      <path d="M 120 280 q 2 -60 0 -110" marker-end="url(#flowarrow)"/>
+      <!-- from neck toward supraclavicular -->
+      <path d="M 88 38 l -6 18" marker-end="url(#flowarrow)"/>
+      <path d="M 112 38 l 6 18" marker-end="url(#flowarrow)"/>
+    </g>
+
+    <!-- main nodes with numbers -->
+    <g>
+      <!-- 頸部 -->
+      <circle cx="80" cy="42" r="6" fill="url(#node-grad-2)" stroke="#4a8a9a" stroke-width="0.8"/>
+      <text x="80" y="46" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">A</text>
+      <circle cx="120" cy="42" r="6" fill="url(#node-grad-2)" stroke="#4a8a9a" stroke-width="0.8"/>
+      <text x="120" y="46" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">A</text>
+      <!-- 鎖骨上 -->
+      <circle cx="76" cy="62" r="7" fill="#c96b83" stroke="#fff" stroke-width="1.5"/>
+      <text x="76" y="66" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">★</text>
+      <circle cx="124" cy="62" r="7" fill="#c96b83" stroke="#fff" stroke-width="1.5"/>
+      <text x="124" y="66" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">★</text>
+      <!-- 腋窩 -->
+      <circle cx="62" cy="78" r="8" fill="url(#node-grad-2)" stroke="#4a8a9a" stroke-width="0.8"/>
+      <text x="62" y="82" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">B</text>
+      <circle cx="138" cy="78" r="8" fill="url(#node-grad-2)" stroke="#4a8a9a" stroke-width="0.8"/>
+      <text x="138" y="82" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">B</text>
+      <!-- 鼠径 -->
+      <circle cx="78" cy="160" r="8" fill="url(#node-grad-2)" stroke="#4a8a9a" stroke-width="0.8"/>
+      <text x="78" y="164" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">C</text>
+      <circle cx="122" cy="160" r="8" fill="url(#node-grad-2)" stroke="#4a8a9a" stroke-width="0.8"/>
+      <text x="122" y="164" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">C</text>
+    </g>
+  </g>
+
+  <!-- ==================== Right: legend & flow rules ==================== -->
+  <g transform="translate(450, 110)">
+    <text x="0" y="0" font-size="11" fill="#9a7d83" letter-spacing="3">DRAINAGE RULES — 流す方向の原則</text>
+
+    <!-- node legend -->
+    <g transform="translate(0, 24)">
+      <circle cx="10" cy="10" r="7" fill="#c96b83" stroke="#fff" stroke-width="1.5"/>
+      <text x="10" y="14" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">★</text>
+      <text x="28" y="14" font-size="11" fill="#3a2e30">最終終末（鎖骨下静脈角）</text>
+      <text x="28" y="28" font-size="9" fill="#9a7d83">全身のリンパが最後に集まる</text>
+
+      <circle cx="10" cy="50" r="6" fill="url(#node-grad-2)"/>
+      <text x="10" y="54" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">A</text>
+      <text x="28" y="54" font-size="11" fill="#3a2e30">頸部リンパ節</text>
+      <text x="28" y="68" font-size="9" fill="#9a7d83">頭部・顔・首から</text>
+
+      <circle cx="10" cy="90" r="7" fill="url(#node-grad-2)"/>
+      <text x="10" y="94" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">B</text>
+      <text x="28" y="94" font-size="11" fill="#3a2e30">腋窩（えきか）リンパ節</text>
+      <text x="28" y="108" font-size="9" fill="#9a7d83">上肢・胸部・背中上半から</text>
+
+      <circle cx="10" cy="130" r="7" fill="url(#node-grad-2)"/>
+      <text x="10" y="134" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">C</text>
+      <text x="28" y="134" font-size="11" fill="#3a2e30">鼠径（そけい）リンパ節</text>
+      <text x="28" y="148" font-size="9" fill="#9a7d83">下肢・腹部・腰から</text>
+    </g>
+
+    <!-- rules box -->
+    <g transform="translate(0, 188)">
+      <rect width="280" height="190" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+      <text x="20" y="26" font-size="10" letter-spacing="3" fill="#c96b83" font-weight="500">FLOW DIRECTION</text>
+
+      <g font-size="11" fill="#3a2e30" letter-spacing="0.5">
+        <text x="20" y="50" font-weight="500">① 末梢から中心へ</text>
+        <text x="20" y="64" font-size="9" fill="#9a7d83">手先・足先 → 体幹方向</text>
+
+        <text x="20" y="86" font-weight="500">② 一番近いリンパ節へ</text>
+        <text x="20" y="100" font-size="9" fill="#9a7d83">腕→腋窩、脚→鼠径、頭→頸部</text>
+
+        <text x="20" y="122" font-weight="500">③ 最終的に鎖骨へ</text>
+        <text x="20" y="136" font-size="9" fill="#9a7d83">全身のリンパは鎖骨下静脈角に</text>
+        <text x="20" y="148" font-size="9" fill="#9a7d83">合流して血流に戻る</text>
+
+        <text x="20" y="170" font-weight="500" fill="#c96b83">⚠ 中心から末梢に流さない</text>
+      </g>
+    </g>
+  </g>
+
+  <text x="400" y="540" text-anchor="middle" font-size="10" fill="#9a7d83" letter-spacing="2">→ 矢印はリンパが流れる正しい方向。施術もこの方向に沿って圧をかけること。</text>
+</svg>

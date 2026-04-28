@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-s" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="560" fill="url(#bg-s)"/>
+
+  <text x="400" y="42" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">SKELETAL SYSTEM &amp; JOINTS</text>
+  <text x="400" y="72" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">骨格と主要関節</text>
+  <line x1="370" y1="86" x2="430" y2="86" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- Centered figure -->
+  <g transform="translate(360, 110)">
+    <!-- skull -->
+    <ellipse cx="40" cy="20" rx="20" ry="24" fill="#fef5f7" stroke="#c96b83" stroke-width="1.4"/>
+    <ellipse cx="40" cy="44" rx="14" ry="6" fill="#fef5f7" stroke="#c96b83" stroke-width="1.4"/>
+
+    <!-- cervical (頸椎) -->
+    <g stroke="#c96b83" stroke-width="1.4" fill="#fef5f7">
+      <rect x="36" y="50" width="8" height="6" rx="1"/>
+      <rect x="36" y="58" width="8" height="6" rx="1"/>
+      <rect x="36" y="66" width="8" height="6" rx="1"/>
+    </g>
+
+    <!-- shoulders & arms -->
+    <line x1="40" y1="74" x2="-30" y2="80" stroke="#c96b83" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="40" y1="74" x2="110" y2="80" stroke="#c96b83" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- shoulder joints -->
+    <circle cx="-30" cy="80" r="5" fill="#e8849a" stroke="#c96b83" stroke-width="1.4"/>
+    <circle cx="110" cy="80" r="5" fill="#e8849a" stroke="#c96b83" stroke-width="1.4"/>
+    <!-- upper arm -->
+    <line x1="-30" y1="80" x2="-40" y2="150" stroke="#c96b83" stroke-width="2"/>
+    <line x1="110" y1="80" x2="120" y2="150" stroke="#c96b83" stroke-width="2"/>
+    <!-- elbow -->
+    <circle cx="-40" cy="150" r="4" fill="#e8849a" stroke="#c96b83" stroke-width="1.2"/>
+    <circle cx="120" cy="150" r="4" fill="#e8849a" stroke="#c96b83" stroke-width="1.2"/>
+    <!-- forearm -->
+    <line x1="-40" y1="150" x2="-50" y2="220" stroke="#c96b83" stroke-width="2"/>
+    <line x1="-44" y1="150" x2="-54" y2="220" stroke="#c96b83" stroke-width="1.2"/>
+    <line x1="120" y1="150" x2="130" y2="220" stroke="#c96b83" stroke-width="2"/>
+    <line x1="124" y1="150" x2="134" y2="220" stroke="#c96b83" stroke-width="1.2"/>
+    <!-- wrist -->
+    <circle cx="-52" cy="220" r="3" fill="#e8849a" stroke="#c96b83" stroke-width="1"/>
+    <circle cx="132" cy="220" r="3" fill="#e8849a" stroke="#c96b83" stroke-width="1"/>
+
+    <!-- ribcage 胸郭 -->
+    <g stroke="#c96b83" stroke-width="1.2" fill="none">
+      <path d="M 18 80 q 22 -4 44 0 q 4 50 0 80 q -22 4 -44 0 q -4 -50 0 -80 z" fill="#fef5f7"/>
+      <path d="M 18 92 q 22 -4 44 0"/>
+      <path d="M 16 106 q 24 -4 48 0"/>
+      <path d="M 16 120 q 24 -4 48 0"/>
+      <path d="M 18 134 q 22 -4 44 0"/>
+      <path d="M 20 148 q 20 -4 40 0"/>
+    </g>
+
+    <!-- thoracic spine 胸椎 (visible center line) -->
+    <g stroke="#c96b83" stroke-width="1.2" fill="#fdeaee">
+      <rect x="36" y="78" width="8" height="6"/>
+      <rect x="36" y="86" width="8" height="6"/>
+      <rect x="36" y="94" width="8" height="6"/>
+      <rect x="36" y="102" width="8" height="6"/>
+      <rect x="36" y="110" width="8" height="6"/>
+      <rect x="36" y="118" width="8" height="6"/>
+      <rect x="36" y="126" width="8" height="6"/>
+      <rect x="36" y="134" width="8" height="6"/>
+      <rect x="36" y="142" width="8" height="6"/>
+      <rect x="36" y="150" width="8" height="6"/>
+    </g>
+
+    <!-- lumbar 腰椎 -->
+    <g stroke="#c96b83" stroke-width="1.2" fill="#fef0f3">
+      <rect x="34" y="166" width="12" height="8"/>
+      <rect x="34" y="176" width="12" height="8"/>
+      <rect x="34" y="186" width="12" height="8"/>
+      <rect x="34" y="196" width="12" height="8"/>
+      <rect x="34" y="206" width="12" height="8"/>
+    </g>
+
+    <!-- pelvis 骨盤 -->
+    <path d="M 0 218 q 10 -8 80 0 q 10 30 -10 50 q -30 6 -60 0 q -20 -20 -10 -50 z" fill="#fef5f7" stroke="#c96b83" stroke-width="1.4"/>
+    <ellipse cx="22" cy="248" rx="8" ry="10" fill="#fdeaee" stroke="#c96b83" stroke-width="1"/>
+    <ellipse cx="58" cy="248" rx="8" ry="10" fill="#fdeaee" stroke="#c96b83" stroke-width="1"/>
+
+    <!-- hip joints -->
+    <circle cx="14" cy="270" r="6" fill="#e8849a" stroke="#c96b83" stroke-width="1.4"/>
+    <circle cx="66" cy="270" r="6" fill="#e8849a" stroke="#c96b83" stroke-width="1.4"/>
+
+    <!-- thighs (femur) -->
+    <line x1="14" y1="270" x2="8" y2="360" stroke="#c96b83" stroke-width="3" stroke-linecap="round"/>
+    <line x1="66" y1="270" x2="72" y2="360" stroke="#c96b83" stroke-width="3" stroke-linecap="round"/>
+    <!-- knees -->
+    <circle cx="8" cy="360" r="5" fill="#e8849a" stroke="#c96b83" stroke-width="1.4"/>
+    <circle cx="72" cy="360" r="5" fill="#e8849a" stroke="#c96b83" stroke-width="1.4"/>
+    <!-- shins (tibia/fibula) -->
+    <line x1="8" y1="360" x2="6" y2="430" stroke="#c96b83" stroke-width="2.5"/>
+    <line x1="12" y1="360" x2="10" y2="430" stroke="#c96b83" stroke-width="1.2"/>
+    <line x1="72" y1="360" x2="74" y2="430" stroke="#c96b83" stroke-width="2.5"/>
+    <line x1="68" y1="360" x2="70" y2="430" stroke="#c96b83" stroke-width="1.2"/>
+    <!-- ankles -->
+    <circle cx="8" cy="430" r="4" fill="#e8849a" stroke="#c96b83" stroke-width="1.2"/>
+    <circle cx="72" cy="430" r="4" fill="#e8849a" stroke="#c96b83" stroke-width="1.2"/>
+  </g>
+
+  <!-- ============ Annotations LEFT ============ -->
+  <g font-size="11" fill="#3a2e30" letter-spacing="1">
+    <line x1="370" y1="180" x2="280" y2="180" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="276" y="183" text-anchor="end">頸椎・胸椎・腰椎</text>
+    <text x="276" y="197" text-anchor="end" font-size="9" fill="#9a7d83">脊柱の3区分。</text>
+    <text x="276" y="209" text-anchor="end" font-size="9" fill="#9a7d83">過度な圧迫は禁忌。</text>
+
+    <line x1="332" y1="190" x2="280" y2="270" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="276" y="273" text-anchor="end">肋骨（胸郭）</text>
+    <text x="276" y="287" text-anchor="end" font-size="9" fill="#9a7d83">直接強圧は避ける。</text>
+    <text x="276" y="299" text-anchor="end" font-size="9" fill="#9a7d83">肋間に沿って施術。</text>
+
+    <line x1="370" y1="358" x2="280" y2="370" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="276" y="373" text-anchor="end">骨盤</text>
+    <text x="276" y="387" text-anchor="end" font-size="9" fill="#9a7d83">姿勢の土台。</text>
+  </g>
+
+  <!-- ============ Annotations RIGHT ============ -->
+  <g font-size="11" fill="#3a2e30" letter-spacing="1">
+    <line x1="468" y1="190" x2="540" y2="170" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="544" y="173">肩関節</text>
+    <text x="544" y="187" font-size="9" fill="#9a7d83">可動域が広く負傷リスク。</text>
+    <text x="544" y="199" font-size="9" fill="#9a7d83">急激な伸展は避ける。</text>
+
+    <line x1="480" y1="260" x2="540" y2="265" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="544" y="268">肘関節</text>
+    <text x="544" y="282" font-size="9" fill="#9a7d83">蝶番関節。</text>
+    <text x="544" y="294" font-size="9" fill="#9a7d83">過伸展しないこと。</text>
+
+    <line x1="430" y1="380" x2="540" y2="370" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="544" y="373">股関節</text>
+    <text x="544" y="387" font-size="9" fill="#9a7d83">球関節。施術中は</text>
+    <text x="544" y="399" font-size="9" fill="#9a7d83">無理な開排禁止。</text>
+
+    <line x1="430" y1="470" x2="540" y2="470" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="544" y="473">膝関節</text>
+    <text x="544" y="487" font-size="9" fill="#9a7d83">関節炎・既往あれば</text>
+    <text x="544" y="499" font-size="9" fill="#9a7d83">直接圧禁止。</text>
+  </g>
+
+  <text x="400" y="540" text-anchor="middle" font-size="10" fill="#9a7d83" letter-spacing="2">※ 教育用概念図。骨格の正確な位置・形状は専門書で確認してください。</text>
+</svg>

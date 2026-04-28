@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-app" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <linearGradient id="body-app" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce8ec"/>
+      <stop offset="100%" stop-color="#f5d4dc"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="560" fill="url(#bg-app)"/>
+
+  <text x="400" y="42" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">CLINICAL APPLICATION</text>
+  <text x="400" y="72" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">施術と解剖学 — 部位別の注意点</text>
+  <line x1="370" y1="86" x2="430" y2="86" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- legend -->
+  <g transform="translate(60, 110)" font-size="10" fill="#3a2e30" letter-spacing="1">
+    <text x="0" y="0" font-size="10" letter-spacing="3" fill="#9a7d83">CAUTION LEVEL — 注意レベル</text>
+    <circle cx="6" cy="20" r="6" fill="#6b9b7e"/>
+    <text x="20" y="24">推奨部位：圧をしっかり入れて良い</text>
+    <circle cx="6" cy="42" r="6" fill="#e0a020"/>
+    <text x="20" y="46">注意部位：弱圧・確認しながら</text>
+    <circle cx="6" cy="64" r="6" fill="#c96b83"/>
+    <text x="20" y="68">禁忌部位：直接圧禁止／既往要確認</text>
+  </g>
+
+  <!-- body silhouette -->
+  <g transform="translate(370, 130)">
+    <g fill="url(#body-app)" stroke="#d8a8b3" stroke-width="1.2">
+      <ellipse cx="100" cy="22" rx="22" ry="26"/>
+      <rect x="92" y="44" width="16" height="14"/>
+      <path d="M 60 58 q 0 -4 12 -6 l 56 0 q 12 2 12 6 l 6 84 q 0 8 -8 10 l -76 0 q -8 -2 -8 -10 z"/>
+      <path d="M 60 62 q -22 4 -28 30 l -6 80 q -2 12 4 12 l 12 0 q 4 0 6 -10 l 8 -50 q 6 -28 6 -50 z"/>
+      <path d="M 140 62 q 22 4 28 30 l 6 80 q 2 12 -4 12 l -12 0 q -4 0 -6 -10 l -8 -50 q -6 -28 -6 -50 z"/>
+      <path d="M 60 146 l 0 22 q 0 6 6 8 l 26 0 l 6 0 l 6 0 l 26 0 q 6 -2 6 -8 l 0 -22 z"/>
+      <path d="M 70 172 l -2 130 q 0 6 6 6 l 12 0 q 6 0 6 -6 l 4 -130 z"/>
+      <path d="M 130 172 l 2 130 q 0 6 -6 6 l -12 0 q -6 0 -6 -6 l -4 -130 z"/>
+    </g>
+
+    <!-- caution markers -->
+    <!-- 推奨：肩 (僧帽筋) -->
+    <circle cx="78" cy="65" r="7" fill="#6b9b7e" opacity="0.85"/>
+    <text x="78" y="69" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">1</text>
+
+    <!-- 推奨：背中広い面 -->
+    <circle cx="100" cy="100" r="7" fill="#6b9b7e" opacity="0.85"/>
+    <text x="100" y="104" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">2</text>
+
+    <!-- 推奨：殿筋 -->
+    <circle cx="100" cy="160" r="7" fill="#6b9b7e" opacity="0.85"/>
+    <text x="100" y="164" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">3</text>
+
+    <!-- 推奨：太もも後面 -->
+    <circle cx="84" cy="220" r="7" fill="#6b9b7e" opacity="0.85"/>
+    <text x="84" y="224" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">4</text>
+
+    <!-- 注意：首 -->
+    <circle cx="100" cy="50" r="7" fill="#e0a020" opacity="0.9"/>
+    <text x="100" y="54" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">5</text>
+
+    <!-- 注意：膝裏 -->
+    <circle cx="80" cy="290" r="7" fill="#e0a020" opacity="0.9"/>
+    <text x="80" y="294" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">6</text>
+
+    <!-- 禁忌：脊柱中央 -->
+    <circle cx="100" cy="80" r="7" fill="#c96b83" opacity="0.9"/>
+    <text x="100" y="84" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">7</text>
+
+    <!-- 禁忌：肋骨直接 -->
+    <circle cx="120" cy="105" r="7" fill="#c96b83" opacity="0.9"/>
+    <text x="120" y="109" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">8</text>
+
+    <!-- 禁忌：膝関節 -->
+    <circle cx="120" cy="285" r="7" fill="#c96b83" opacity="0.9"/>
+    <text x="120" y="289" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">9</text>
+  </g>
+
+  <!-- legend table right -->
+  <g transform="translate(560, 130)" font-size="11" fill="#3a2e30" letter-spacing="1">
+    <text x="0" y="0" font-size="10" letter-spacing="3" fill="#9a7d83">部位ガイド</text>
+
+    <!-- 推奨 group -->
+    <text x="0" y="22" font-size="10" fill="#6b9b7e" font-weight="500">● 推奨部位</text>
+    <text x="0" y="38">1. 僧帽筋（肩）</text>
+    <text x="0" y="52">2. 広背筋（背中）</text>
+    <text x="0" y="66">3. 殿筋群</text>
+    <text x="0" y="80">4. ハムストリング</text>
+
+    <text x="0" y="106" font-size="10" fill="#e0a020" font-weight="500">● 注意部位</text>
+    <text x="0" y="122">5. 頸部 — 強圧禁止</text>
+    <text x="0" y="136" font-size="9" fill="#9a7d83">頸動脈・神経が浅い</text>
+    <text x="0" y="156">6. 膝窩（しっか）</text>
+    <text x="0" y="170" font-size="9" fill="#9a7d83">血管・神経が密集</text>
+
+    <text x="0" y="196" font-size="10" fill="#c96b83" font-weight="500">● 禁忌部位</text>
+    <text x="0" y="212">7. 脊柱中央</text>
+    <text x="0" y="226" font-size="9" fill="#9a7d83">直接強圧は禁止</text>
+    <text x="0" y="246">8. 肋骨</text>
+    <text x="0" y="260" font-size="9" fill="#9a7d83">骨折リスクあり</text>
+    <text x="0" y="280">9. 関節そのもの</text>
+    <text x="0" y="294" font-size="9" fill="#9a7d83">既往確認・直圧不可</text>
+  </g>
+
+  <text x="400" y="540" text-anchor="middle" font-size="10" fill="#9a7d83" letter-spacing="2">※ お客様の既往歴・体調により判断は変わります。カウンセリングで必ず確認すること。</text>
+</svg>

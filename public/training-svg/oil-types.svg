@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-o" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-o)"/>
+
+  <text x="400" y="42" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">ESSENTIAL OIL CHART</text>
+  <text x="400" y="72" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">主要オイルの種類と効能</text>
+  <line x1="370" y1="86" x2="430" y2="86" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- ==== 4x2 grid of oil cards ==== -->
+
+  <!-- Oil 1: ホホバ -->
+  <g transform="translate(40, 110)">
+    <rect width="180" height="170" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <!-- bottle illustration -->
+    <g transform="translate(90, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#d4a574" stroke="#a07a4f" stroke-width="0.8"/>
+      <ellipse cx="0" cy="6" rx="14" ry="6" fill="#e8b78c" opacity="0.6"/>
+    </g>
+    <text x="90" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">ホホバオイル</text>
+    <text x="90" y="138" text-anchor="middle" font-size="9" fill="#c96b83" letter-spacing="1">JOJOBA</text>
+    <text x="90" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">皮脂に近い構造／全肌質OK</text>
+  </g>
+
+  <!-- Oil 2: スイートアーモンド -->
+  <g transform="translate(240, 110)">
+    <rect width="180" height="170" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <g transform="translate(90, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#f0d39c" stroke="#b8975a" stroke-width="0.8"/>
+      <ellipse cx="0" cy="6" rx="14" ry="6" fill="#f5dfb5" opacity="0.6"/>
+    </g>
+    <text x="90" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">スイートアーモンド</text>
+    <text x="90" y="138" text-anchor="middle" font-size="9" fill="#c96b83" letter-spacing="1">SWEET ALMOND</text>
+    <text x="90" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">保湿力高／敏感肌対応</text>
+  </g>
+
+  <!-- Oil 3: グレープシード -->
+  <g transform="translate(440, 110)">
+    <rect width="180" height="170" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <g transform="translate(90, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#bcc97a" stroke="#7c8a44" stroke-width="0.8"/>
+      <ellipse cx="0" cy="6" rx="14" ry="6" fill="#cad793" opacity="0.6"/>
+    </g>
+    <text x="90" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">グレープシード</text>
+    <text x="90" y="138" text-anchor="middle" font-size="9" fill="#c96b83" letter-spacing="1">GRAPE SEED</text>
+    <text x="90" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">サラッと軽い／脂性肌向き</text>
+  </g>
+
+  <!-- Oil 4: ココナッツ -->
+  <g transform="translate(640, 110)">
+    <rect width="120" height="170" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <g transform="translate(60, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#fef7e8" stroke="#d4c8a0" stroke-width="0.8"/>
+      <ellipse cx="0" cy="6" rx="14" ry="6" fill="#fef9ee" opacity="0.6"/>
+    </g>
+    <text x="60" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">ココナッツ</text>
+    <text x="60" y="138" text-anchor="middle" font-size="9" fill="#c96b83" letter-spacing="1">COCONUT</text>
+    <text x="60" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">高保湿／低温で固まる</text>
+  </g>
+
+  <!-- Row 2: Essential oils -->
+  <g transform="translate(40, 300)">
+    <rect width="180" height="170" fill="#ffffff" stroke="#a8a3c4" stroke-width="1"/>
+    <g transform="translate(90, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#b9a8d4" stroke="#7a6890" stroke-width="0.8"/>
+      <!-- lavender sprig -->
+      <g transform="translate(0,-32)" stroke="#7a6890" stroke-width="0.8" fill="#b9a8d4">
+        <line x1="0" y1="0" x2="0" y2="8"/>
+        <ellipse cx="0" cy="-2" rx="3" ry="5"/>
+      </g>
+    </g>
+    <text x="90" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">ラベンダー</text>
+    <text x="90" y="138" text-anchor="middle" font-size="9" fill="#7a6890" letter-spacing="1">LAVENDER (精油)</text>
+    <text x="90" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">鎮静・リラックス・睡眠促進</text>
+  </g>
+
+  <g transform="translate(240, 300)">
+    <rect width="180" height="170" fill="#ffffff" stroke="#d6a06a" stroke-width="1"/>
+    <g transform="translate(90, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#f0b660" stroke="#b07a30" stroke-width="0.8"/>
+      <circle cx="0" cy="-32" r="4" fill="#ff8030" stroke="#b07a30" stroke-width="0.6"/>
+    </g>
+    <text x="90" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">スイートオレンジ</text>
+    <text x="90" y="138" text-anchor="middle" font-size="9" fill="#b07a30" letter-spacing="1">SWEET ORANGE (精油)</text>
+    <text x="90" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">気分高揚・血行促進</text>
+  </g>
+
+  <g transform="translate(440, 300)">
+    <rect width="180" height="170" fill="#ffffff" stroke="#7eb89a" stroke-width="1"/>
+    <g transform="translate(90, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#a8d4b8" stroke="#4a8064" stroke-width="0.8"/>
+      <path d="M 0 -38 q -3 4 0 8 q 3 -4 0 -8" fill="#7eb89a" stroke="#4a8064" stroke-width="0.6"/>
+    </g>
+    <text x="90" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">ペパーミント</text>
+    <text x="90" y="138" text-anchor="middle" font-size="9" fill="#4a8064" letter-spacing="1">PEPPERMINT (精油)</text>
+    <text x="90" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">頭痛緩和・冷却感・覚醒</text>
+  </g>
+
+  <g transform="translate(640, 300)">
+    <rect width="120" height="170" fill="#ffffff" stroke="#94a87c" stroke-width="1"/>
+    <g transform="translate(60, 60)">
+      <rect x="-12" y="-30" width="24" height="6" fill="#3a2e30" rx="1"/>
+      <path d="M -16 -24 q 0 -4 4 -4 l 24 0 q 4 0 4 4 l 0 36 q 0 6 -6 6 l -20 0 q -6 0 -6 -6 z" fill="#bcc99c" stroke="#5a7044" stroke-width="0.8"/>
+    </g>
+    <text x="60" y="120" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2" font-weight="500">ローズマリー</text>
+    <text x="60" y="138" text-anchor="middle" font-size="9" fill="#5a7044" letter-spacing="1">ROSEMARY</text>
+    <text x="60" y="156" text-anchor="middle" font-size="9" fill="#9a7d83">集中力・血行促進</text>
+  </g>
+
+  <!-- bottom legend: distinction -->
+  <g transform="translate(60, 490)" font-size="10" fill="#3a2e30" letter-spacing="1">
+    <rect x="0" y="0" width="14" height="14" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="22" y="11">キャリアオイル — 単独で全身に使用可</text>
+    <rect x="280" y="0" width="14" height="14" fill="#ffffff" stroke="#a8a3c4" stroke-width="1"/>
+    <text x="302" y="11">精油（エッセンシャルオイル）— キャリアオイルで希釈して使用</text>
+  </g>
+
+  <text x="400" y="528" text-anchor="middle" font-size="9" fill="#9a7d83" letter-spacing="1">※ アレルギー・妊娠中・既往疾患がある場合は使用前にカウンセリングで確認</text>
+</svg>

@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-cl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-cl)"/>
+
+  <text x="400" y="42" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">ACTIVE LISTENING SKILLS</text>
+  <text x="400" y="72" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">傾聴技法のスキル階層</text>
+  <line x1="370" y1="86" x2="430" y2="86" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- Pyramid: 4 layers -->
+
+  <!-- Layer 4 (top): 共感 EMPATHY -->
+  <g transform="translate(310, 110)">
+    <polygon points="90,0 180,60 0,60" fill="#c96b83" stroke="#c96b83" stroke-width="1"/>
+    <text x="90" y="32" text-anchor="middle" font-size="10" letter-spacing="3" fill="#fdf6f7" font-weight="500">LEVEL 4</text>
+    <text x="90" y="50" text-anchor="middle" font-size="13" letter-spacing="2" fill="#ffffff" font-weight="500">共感</text>
+  </g>
+
+  <!-- Layer 3: 質問 INQUIRY -->
+  <g transform="translate(260, 170)">
+    <polygon points="140,0 280,80 0,80" fill="#e8849a" stroke="#c96b83" stroke-width="1"/>
+    <text x="140" y="36" text-anchor="middle" font-size="10" letter-spacing="3" fill="#fdf6f7" font-weight="500">LEVEL 3</text>
+    <text x="140" y="58" text-anchor="middle" font-size="13" letter-spacing="2" fill="#ffffff" font-weight="500">質問・深堀り</text>
+  </g>
+
+  <!-- Layer 2: 反映 REFLECTION -->
+  <g transform="translate(210, 250)">
+    <polygon points="190,0 380,80 0,80" fill="#f0a8b8" stroke="#c96b83" stroke-width="1"/>
+    <text x="190" y="36" text-anchor="middle" font-size="10" letter-spacing="3" fill="#fdf6f7" font-weight="500">LEVEL 2</text>
+    <text x="190" y="58" text-anchor="middle" font-size="13" letter-spacing="2" fill="#ffffff" font-weight="500">反映・要約</text>
+  </g>
+
+  <!-- Layer 1 (foundation): 受容 ACCEPTANCE -->
+  <g transform="translate(160, 330)">
+    <polygon points="240,0 480,80 0,80" fill="#fdeaee" stroke="#c96b83" stroke-width="1.5"/>
+    <text x="240" y="32" text-anchor="middle" font-size="10" letter-spacing="3" fill="#c96b83" font-weight="500">LEVEL 1 — FOUNDATION</text>
+    <text x="240" y="56" text-anchor="middle" font-size="14" letter-spacing="2" fill="#3a2e30" font-weight="500">受容（うなずき・相づち）</text>
+  </g>
+
+  <!-- Right annotations -->
+  <g font-size="11" fill="#3a2e30" letter-spacing="0.5">
+    <!-- L4 -->
+    <line x1="490" y1="140" x2="640" y2="140" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="644" y="143" font-weight="500" fill="#c96b83">共感</text>
+    <text x="644" y="158" font-size="9" fill="#9a7d83">「お疲れですね」と感情に寄り添う</text>
+
+    <!-- L3 -->
+    <line x1="540" y1="210" x2="640" y2="210" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="644" y="213" font-weight="500" fill="#c96b83">質問・深堀り</text>
+    <text x="644" y="228" font-size="9" fill="#9a7d83">「いつ頃から？」「どんな時に？」</text>
+
+    <!-- L2 -->
+    <line x1="590" y1="290" x2="640" y2="290" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="644" y="293" font-weight="500" fill="#c96b83">反映・要約</text>
+    <text x="644" y="308" font-size="9" fill="#9a7d83">「肩こりがつらいんですね」と</text>
+    <text x="644" y="320" font-size="9" fill="#9a7d83">お客様の言葉を返す</text>
+
+    <!-- L1 -->
+    <line x1="640" y1="370" x2="640" y2="370" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="644" y="373" font-weight="500" fill="#c96b83">受容</text>
+    <text x="644" y="388" font-size="9" fill="#9a7d83">「はい」「そうなんですね」</text>
+    <text x="644" y="400" font-size="9" fill="#9a7d83">否定せず受け止める</text>
+  </g>
+
+  <!-- Left annotations -->
+  <g font-size="11" fill="#3a2e30" letter-spacing="0.5">
+    <line x1="160" y1="370" x2="40" y2="370" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="36" y="373" text-anchor="end" font-weight="500" fill="#3a2e30">基礎ほど大事</text>
+    <text x="36" y="388" text-anchor="end" font-size="9" fill="#9a7d83">受容なしの質問は</text>
+    <text x="36" y="400" text-anchor="end" font-size="9" fill="#9a7d83">尋問になる</text>
+
+    <line x1="310" y1="140" x2="40" y2="140" stroke="#c96b83" stroke-width="0.8"/>
+    <text x="36" y="143" text-anchor="end" font-weight="500" fill="#3a2e30">最高のゴール</text>
+    <text x="36" y="158" text-anchor="end" font-size="9" fill="#9a7d83">「分かってもらえた」</text>
+    <text x="36" y="170" text-anchor="end" font-size="9" fill="#9a7d83">という体験</text>
+  </g>
+
+  <!-- footer rules -->
+  <g transform="translate(40, 440)">
+    <rect width="720" height="84" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="22" font-size="10" letter-spacing="3" fill="#c96b83" font-weight="500">3 GOLDEN RULES — 傾聴の3原則</text>
+    <g font-size="11" fill="#3a2e30" letter-spacing="0.5">
+      <text x="20" y="44">① <tspan font-weight="500">途中で遮らない</tspan> — お客様が話し終わるまで待つ</text>
+      <text x="20" y="60">② <tspan font-weight="500">アドバイスを急がない</tspan> — まず受け止めてから提案へ</text>
+      <text x="20" y="76">③ <tspan font-weight="500">非言語サインを観察</tspan> — 表情・呼吸・身体の緊張も見る</text>
+    </g>
+  </g>
+</svg>
