@@ -4719,6 +4719,12 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>CUSTOMER</p>
                 <h3 style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{noteHistoryCustomer}</h3>
                 <p style={{ margin: "3px 0 0", fontSize: 10, color: T.textFaint, letterSpacing: "0.03em" }}>施術を選んでメモを追加できます</p>
+                <a
+                  href={`/cast/customer?name=${encodeURIComponent(noteHistoryCustomer)}`}
+                  style={{ display: "inline-block", marginTop: 8, fontSize: 10, padding: "4px 10px", color: T.accent, border: `1px solid ${T.accent}`, textDecoration: "none", letterSpacing: "0.05em", fontFamily: FONT_SERIF, backgroundColor: T.accentBg }}
+                >
+                  📋 カルテ・健康プロファイル等の詳細ページへ →
+                </a>
               </div>
               <button onClick={() => setNoteHistoryCustomer("")} style={{ width: 28, height: 28, fontSize: 13, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
             </div>
