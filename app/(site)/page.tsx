@@ -451,10 +451,10 @@ export default function HomePage() {
               fontWeight: 400,
             }}
           >
-            清楚で可憐な彼女たちは<br />
+            当店のセラピストたちは<br />
             ビジュアル面でも目を引きますが<br />
-            それ以上に最高のマナーを兼ね備え<br />
-            <span style={{ color: SITE.color.pink }}>安らぎと癒し</span>を運びます
+            それ以上に<span style={{ color: SITE.color.pink }}>確かな技術と最高のマナー</span>を<br />
+            兼ね備えております
           </p>
           <p
             style={{
@@ -465,8 +465,8 @@ export default function HomePage() {
               lineHeight: 2,
             }}
           >
-            Please spend a relaxing time<br />
-            with a pretty girl.
+            Authentic body care,<br />
+            crafted by skilled therapists.
           </p>
         </div>
       </SectionBlock>
@@ -809,7 +809,7 @@ export default function HomePage() {
             }}
           >
             Ange Spa ではマッサージ技術だけでなく<br />
-            接客指導にも力を入れております。<br />
+            施術技術指導・カウンセリングにも力を入れております。<br />
             皆様の日頃の疲れを癒やすお手伝いが<br />
             出来ましたら幸いです。
           </p>
