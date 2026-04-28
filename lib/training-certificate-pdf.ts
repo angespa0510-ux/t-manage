@@ -34,8 +34,8 @@ type ModuleInfo = {
 type CategoryInfo = {
   id: number;
   name: string;
-  slug: string;
-  emoji?: string;
+  slug?: string | null;       // ライブラリ内では未使用だが呼び出し側の型互換のため許容
+  emoji?: string | null;      // null/undefined どちらも許容 (内部で `|| "🌿"` フォールバック)
   level: "basic" | "intermediate" | "advanced" | "master" | string;
 };
 
