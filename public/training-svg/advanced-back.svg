@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-aba" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <linearGradient id="body-aba" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce8ec"/>
+      <stop offset="100%" stop-color="#f5d4dc"/>
+    </linearGradient>
+    <filter id="soft-aba" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-aba)"/>
+
+  <text x="400" y="44" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">LOWER BACK INTENSIVE CARE</text>
+  <text x="400" y="74" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">腰部の集中ケア — 慢性腰痛アプローチ</text>
+  <line x1="370" y1="88" x2="430" y2="88" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- Top: 対応可/対応不可の振り分け -->
+  <g transform="translate(40,115)" filter="url(#soft-aba)">
+    <rect width="720" height="160" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">SCOPE — 施術業として対応できる範囲</text>
+    <line x1="20" y1="40" x2="280" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- OK column -->
+    <g transform="translate(40,60)">
+      <rect x="0" y="0" width="320" height="80" fill="#fdf0f3" stroke="#c96b83" stroke-width="0.8"/>
+      <text x="15" y="20" font-size="11" fill="#c96b83" letter-spacing="2">✓ 対応できる</text>
+      <text x="15" y="40" font-size="10" fill="#3a2e30">・デスクワーク・運動不足による筋肉性腰痛</text>
+      <text x="15" y="55" font-size="10" fill="#3a2e30">・立ち仕事による疲労腰痛</text>
+      <text x="15" y="70" font-size="10" fill="#3a2e30">・ストレス・冷えによる腰痛 / 姿勢由来</text>
+    </g>
+
+    <!-- NG column -->
+    <g transform="translate(380,60)">
+      <rect x="0" y="0" width="320" height="80" fill="#fbe7ea" stroke="#c96b83" stroke-width="0.8" stroke-dasharray="3 2"/>
+      <text x="15" y="20" font-size="11" fill="#c96b83" letter-spacing="2">✗ 医療領域 — 受診を勧める</text>
+      <text x="15" y="40" font-size="10" fill="#3a2e30">・ヘルニア・脊柱管狭窄症 / 内臓由来の腰痛</text>
+      <text x="15" y="55" font-size="10" fill="#3a2e30">・急性のぎっくり腰直後 / 骨折・骨粗しょう症</text>
+      <text x="15" y="70" font-size="10" fill="#3a2e30">・妊娠中の腰痛（要医師確認）</text>
+    </g>
+  </g>
+
+  <!-- Bottom: muscle map (back view) + key muscle list -->
+  <g transform="translate(40,295)" filter="url(#soft-aba)">
+    <rect width="720" height="220" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">KEY MUSCLES — アプローチする主要筋</text>
+    <line x1="20" y1="40" x2="200" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- Back-view body sketch -->
+    <g transform="translate(150,135)">
+      <!-- back silhouette -->
+      <g fill="url(#body-aba)" stroke="#d8a8b3" stroke-width="1">
+        <ellipse cx="0" cy="-46" rx="14" ry="16"/>
+        <rect x="-5" y="-30" width="10" height="8"/>
+        <path d="M -32 -22 q 0 -3 9 -4 l 46 0 q 9 1 9 4 l 5 60 q 0 5 -6 6 l -62 0 q -6 -1 -6 -6 z"/>
+        <path d="M -32 30 l 0 14 q 0 4 4 5 l 22 0 l 6 0 l 6 0 l 22 0 q 4 -1 4 -5 l 0 -14 z"/>
+      </g>
+
+      <!-- 脊柱起立筋 (lines on either side of spine) -->
+      <path d="M -8 -22 l 0 60" stroke="#c96b83" stroke-width="3" opacity="0.85" stroke-linecap="round"/>
+      <path d="M 8 -22 l 0 60" stroke="#c96b83" stroke-width="3" opacity="0.85" stroke-linecap="round"/>
+
+      <!-- 腰方形筋 (deeper, wider on sides) -->
+      <ellipse cx="-22" cy="20" rx="6" ry="14" fill="#eab5c0" opacity="0.7"/>
+      <ellipse cx="22" cy="20" rx="6" ry="14" fill="#eab5c0" opacity="0.7"/>
+
+      <!-- 大殿筋 (buttocks area) -->
+      <ellipse cx="-12" cy="42" rx="10" ry="8" fill="#d68a9a" opacity="0.7"/>
+      <ellipse cx="12" cy="42" rx="10" ry="8" fill="#d68a9a" opacity="0.7"/>
+
+      <!-- 梨状筋 (deep buttock) -->
+      <ellipse cx="-14" cy="42" rx="4" ry="3" fill="#c96b83" opacity="0.95"/>
+      <ellipse cx="14" cy="42" rx="4" ry="3" fill="#c96b83" opacity="0.95"/>
+
+      <!-- labels with leader lines -->
+      <line x1="8" y1="0" x2="60" y2="-20" stroke="#c96b83" stroke-width="0.5"/>
+      <text x="65" y="-22" font-size="10" fill="#c96b83">脊柱起立筋</text>
+      <text x="65" y="-10" font-size="9" fill="#9a7d83">姿勢維持の主役</text>
+
+      <line x1="22" y1="20" x2="60" y2="20" stroke="#c96b83" stroke-width="0.5"/>
+      <text x="65" y="22" font-size="10" fill="#c96b83">腰方形筋</text>
+      <text x="65" y="34" font-size="9" fill="#9a7d83">体側の歪み</text>
+
+      <line x1="14" y1="42" x2="60" y2="55" stroke="#c96b83" stroke-width="0.5"/>
+      <text x="65" y="58" font-size="10" fill="#c96b83">大殿筋・中殿筋</text>
+      <text x="65" y="70" font-size="9" fill="#9a7d83">運動不足で弱化</text>
+
+      <line x1="-22" y1="20" x2="-60" y2="-15" stroke="#c96b83" stroke-width="0.5"/>
+      <text x="-128" y="-15" font-size="10" fill="#c96b83">腸腰筋</text>
+      <text x="-128" y="-3" font-size="9" fill="#9a7d83">腹側深部・反り腰の犯人</text>
+
+      <line x1="-14" y1="42" x2="-60" y2="55" stroke="#c96b83" stroke-width="0.5"/>
+      <text x="-128" y="58" font-size="10" fill="#c96b83">梨状筋</text>
+      <text x="-128" y="70" font-size="9" fill="#9a7d83">坐骨神経に注意</text>
+    </g>
+
+    <!-- right: principle box -->
+    <g transform="translate(420,80)">
+      <rect x="0" y="0" width="280" height="110" fill="#fdf0f3" stroke="#e8849a55"/>
+      <text x="15" y="25" font-size="11" fill="#c96b83" letter-spacing="2">▲ 施術業としての線引き</text>
+      <line x1="15" y1="33" x2="120" y2="33" stroke="#e8849a" stroke-width="0.6"/>
+      <text x="15" y="55" font-size="10" fill="#3a2e30">「治す」ではなく「整える」</text>
+      <text x="15" y="75" font-size="10" fill="#3a2e30">「診断」ではなく「観察」</text>
+      <text x="15" y="95" font-size="10" fill="#3a2e30">「指導」ではなく「提案」</text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-ldy" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <linearGradient id="body-ldy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce8ec"/>
+      <stop offset="100%" stop-color="#f5d4dc"/>
+    </linearGradient>
+    <radialGradient id="node-ldy">
+      <stop offset="0%" stop-color="#7eb8c4"/>
+      <stop offset="100%" stop-color="#4a8a9a"/>
+    </radialGradient>
+    <filter id="soft-ldy" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-ldy)"/>
+
+  <text x="400" y="44" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">FULL BODY LYMPH DRAINAGE</text>
+  <text x="400" y="74" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">全身リンパドレナージュ — 60分</text>
+  <line x1="370" y1="88" x2="430" y2="88" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- Left: full body silhouette with nodes & flow -->
+  <g transform="translate(60,115)" filter="url(#soft-ldy)">
+    <rect width="260" height="395" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">BODY MAP</text>
+    <line x1="20" y1="40" x2="100" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- body shape -->
+    <g transform="translate(130,200)">
+      <g fill="url(#body-ldy)" stroke="#d8a8b3" stroke-width="1">
+        <!-- head -->
+        <ellipse cx="0" cy="-100" rx="22" ry="26"/>
+        <!-- neck -->
+        <rect x="-8" y="-78" width="16" height="14"/>
+        <!-- torso -->
+        <path d="M -40 -64 q 0 -4 12 -6 l 56 0 q 12 2 12 6 l 6 84 q 0 8 -8 10 l -76 0 q -8 -2 -8 -10 z"/>
+        <!-- arms -->
+        <path d="M -40 -60 q -22 4 -28 30 l -6 80 q -2 12 4 12 l 12 0 q 4 0 6 -10 l 8 -50 q 6 -28 6 -50 z"/>
+        <path d="M 40 -60 q 22 4 28 30 l 6 80 q 2 12 -4 12 l -12 0 q -4 0 -6 -10 l -8 -50 q -6 -28 -6 -50 z"/>
+        <!-- pelvis -->
+        <path d="M -40 24 l 0 22 q 0 6 6 8 l 26 0 l 6 0 l 6 0 l 26 0 q 6 -2 6 -8 l 0 -22 z"/>
+        <!-- legs -->
+        <path d="M -30 50 l -2 130 q 0 6 6 6 l 12 0 q 6 0 6 -6 l 4 -130 z"/>
+        <path d="M 30 50 l 2 130 q 0 6 -6 6 l -12 0 q -6 0 -6 -6 l -4 -130 z"/>
+      </g>
+
+      <!-- nodes -->
+      <!-- clavicle (final outlet) -->
+      <circle cx="-15" cy="-72" r="4.5" fill="url(#node-ldy)"/>
+      <circle cx="15" cy="-72" r="4.5" fill="url(#node-ldy)"/>
+      <text x="38" y="-70" font-size="8" fill="#4a8a9a">鎖骨</text>
+      <!-- axillary -->
+      <circle cx="-30" cy="-50" r="4" fill="url(#node-ldy)"/>
+      <circle cx="30" cy="-50" r="4" fill="url(#node-ldy)"/>
+      <text x="42" y="-48" font-size="8" fill="#4a8a9a">腋窩</text>
+      <!-- abdominal/inguinal -->
+      <circle cx="-18" cy="34" r="4.5" fill="url(#node-ldy)"/>
+      <circle cx="18" cy="34" r="4.5" fill="url(#node-ldy)"/>
+      <text x="42" y="36" font-size="8" fill="#4a8a9a">鼠径</text>
+      <!-- popliteal (knee) -->
+      <circle cx="-22" cy="120" r="3.5" fill="url(#node-ldy)" opacity="0.7"/>
+      <circle cx="22" cy="120" r="3.5" fill="url(#node-ldy)" opacity="0.7"/>
+
+      <!-- flow arrows (upward to clavicle) -->
+      <g stroke="#c96b83" stroke-width="0.8" fill="none" stroke-dasharray="2 2" opacity="0.8">
+        <!-- legs to inguinal -->
+        <path d="M -22 180 l 4 -140"/>
+        <path d="M 22 180 l -4 -140"/>
+        <!-- inguinal up -->
+        <path d="M -16 30 l 0 -98"/>
+        <path d="M 16 30 l 0 -98"/>
+        <!-- arms to axillary -->
+        <path d="M -50 60 q -2 -50 18 -106"/>
+        <path d="M 50 60 q 2 -50 -18 -106"/>
+      </g>
+    </g>
+
+    <text x="20" y="375" font-size="9" fill="#9a7d83">▲ すべてのリンパは鎖骨へ集まる</text>
+  </g>
+
+  <!-- Right: 60 min time allocation -->
+  <g transform="translate(340,115)" filter="url(#soft-ldy)">
+    <rect width="420" height="395" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">TIME ALLOCATION — 60 MIN</text>
+    <line x1="20" y1="40" x2="220" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- horizontal bar showing minute distribution -->
+    <g transform="translate(30,75)">
+      <!-- bar segments -->
+      <rect x="0" y="0" width="22" height="24" fill="#fce8ec" stroke="#d8a8b3" stroke-width="0.6"/>
+      <rect x="22" y="0" width="22" height="24" fill="#fbe7ea" stroke="#d8a8b3" stroke-width="0.6"/>
+      <rect x="44" y="0" width="60" height="24" fill="#f5d0d7" stroke="#d8a8b3" stroke-width="0.6"/>
+      <rect x="104" y="0" width="14" height="24" fill="#fce8ec" stroke="#d8a8b3" stroke-width="0.6"/>
+      <rect x="118" y="0" width="90" height="24" fill="#eab5c0" stroke="#c96b83" stroke-width="0.8"/>
+      <rect x="208" y="0" width="76" height="24" fill="#f5d0d7" stroke="#d8a8b3" stroke-width="0.6"/>
+      <rect x="284" y="0" width="36" height="24" fill="#fbe7ea" stroke="#d8a8b3" stroke-width="0.6"/>
+      <rect x="320" y="0" width="14" height="24" fill="#fce8ec" stroke="#d8a8b3" stroke-width="0.6"/>
+      <rect x="334" y="0" width="14" height="24" fill="#fdf0f3" stroke="#d8a8b3" stroke-width="0.6"/>
+
+      <!-- minute markers under bar -->
+      <line x1="0" y1="28" x2="0" y2="32" stroke="#9a7d83" stroke-width="0.6"/>
+      <line x1="120" y1="28" x2="120" y2="32" stroke="#9a7d83" stroke-width="0.6"/>
+      <line x1="240" y1="28" x2="240" y2="32" stroke="#9a7d83" stroke-width="0.6"/>
+      <line x1="360" y1="28" x2="360" y2="32" stroke="#9a7d83" stroke-width="0.6"/>
+      <text x="0" y="44" font-size="9" fill="#9a7d83">0</text>
+      <text x="120" y="44" font-size="9" fill="#9a7d83">20</text>
+      <text x="240" y="44" font-size="9" fill="#9a7d83">40</text>
+      <text x="360" y="44" font-size="9" fill="#9a7d83">60 分</text>
+    </g>
+
+    <!-- legend -->
+    <g transform="translate(30,140)" font-size="10" fill="#3a2e30">
+      <g>
+        <rect x="0" y="0" width="14" height="10" fill="#fce8ec" stroke="#d8a8b3" stroke-width="0.6"/>
+        <text x="22" y="9">鎖骨ポンプ・腋窩準備（3+3分）</text>
+      </g>
+      <g transform="translate(0,18)">
+        <rect x="0" y="0" width="14" height="10" fill="#f5d0d7" stroke="#d8a8b3" stroke-width="0.6"/>
+        <text x="22" y="9">腕（左右各4分・計8分）</text>
+      </g>
+      <g transform="translate(0,36)">
+        <rect x="0" y="0" width="14" height="10" fill="#fce8ec" stroke="#d8a8b3" stroke-width="0.6"/>
+        <text x="22" y="9">鼠径節準備（2分）</text>
+      </g>
+      <g transform="translate(0,54)">
+        <rect x="0" y="0" width="14" height="10" fill="#eab5c0" stroke="#c96b83" stroke-width="0.8"/>
+        <text x="22" y="9">脚（左右計12分・うつ伏せの中心）</text>
+      </g>
+      <g transform="translate(0,72)">
+        <rect x="0" y="0" width="14" height="10" fill="#f5d0d7" stroke="#d8a8b3" stroke-width="0.6"/>
+        <text x="22" y="9">脚の前面（計10分）</text>
+      </g>
+      <g transform="translate(0,90)">
+        <rect x="0" y="0" width="14" height="10" fill="#fbe7ea" stroke="#d8a8b3" stroke-width="0.6"/>
+        <text x="22" y="9">腹部（5分・時計回り）</text>
+      </g>
+      <g transform="translate(0,108)">
+        <rect x="0" y="0" width="14" height="10" fill="#fce8ec" stroke="#d8a8b3" stroke-width="0.6"/>
+        <text x="22" y="9">顔・首・デコルテ（10分）</text>
+      </g>
+      <g transform="translate(0,126)">
+        <rect x="0" y="0" width="14" height="10" fill="#fdf0f3" stroke="#d8a8b3" stroke-width="0.6"/>
+        <text x="22" y="9">仕上げ・アフターケア（4+2分）</text>
+      </g>
+    </g>
+
+    <!-- principle box -->
+    <g transform="translate(30,310)">
+      <rect x="0" y="0" width="360" height="60" fill="#fdf0f3" stroke="#e8849a55"/>
+      <text x="15" y="20" font-size="11" fill="#c96b83" letter-spacing="2">▲ 開けてから流す原則</text>
+      <text x="15" y="38" font-size="10" fill="#3a2e30">鎖骨 → 該当節 → 末端から流す → 鎖骨へ仕上げ</text>
+      <text x="15" y="52" font-size="9" fill="#9a7d83">出口を開ける前に流すと、行き場のないリンパが滞る</text>
+    </g>
+  </g>
+</svg>

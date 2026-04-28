@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-arbl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <linearGradient id="top-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce8ec"/>
+      <stop offset="100%" stop-color="#fbd6dc"/>
+    </linearGradient>
+    <linearGradient id="middle-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5c5d0"/>
+      <stop offset="100%" stop-color="#eab5c0"/>
+    </linearGradient>
+    <linearGradient id="base-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d68a9a"/>
+      <stop offset="100%" stop-color="#c96b83"/>
+    </linearGradient>
+    <filter id="soft-arbl" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-arbl)"/>
+
+  <text x="400" y="44" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">AROMA BLENDING — THREE NOTES</text>
+  <text x="400" y="74" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">香りのブレンディング — 3層ノート</text>
+  <line x1="370" y1="88" x2="430" y2="88" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- Left: 3-layer pyramid / bottle visualization -->
+  <g transform="translate(60,115)" filter="url(#soft-arbl)">
+    <rect width="320" height="395" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">VOLATILITY LAYERS</text>
+    <line x1="20" y1="40" x2="180" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- Bottle shape with three layers -->
+    <g transform="translate(160,90)">
+      <!-- bottle outline -->
+      <path d="M -15 -10 l 0 -20 q 0 -5 5 -5 l 20 0 q 5 0 5 5 l 0 20 q 30 10 30 50 l 0 200 q 0 10 -10 10 l -70 0 q -10 0 -10 -10 l 0 -200 q 0 -40 30 -50 z" fill="#fdf6f7" stroke="#c96b83" stroke-width="1"/>
+
+      <!-- Top note (top of bottle, evaporates first) -->
+      <rect x="-32" y="20" width="64" height="65" fill="url(#top-grad)" opacity="0.9"/>
+      <text x="0" y="48" text-anchor="middle" font-size="11" fill="#3a2e30" letter-spacing="2">TOP</text>
+      <text x="0" y="64" text-anchor="middle" font-size="10" fill="#3a2e30">トップ</text>
+      <text x="0" y="78" text-anchor="middle" font-size="9" fill="#9a7d83">3 滴 • 5〜30分</text>
+
+      <!-- Middle note -->
+      <rect x="-32" y="85" width="64" height="80" fill="url(#middle-grad)" opacity="0.9"/>
+      <text x="0" y="113" text-anchor="middle" font-size="11" fill="#3a2e30" letter-spacing="2">MIDDLE</text>
+      <text x="0" y="129" text-anchor="middle" font-size="10" fill="#3a2e30">ミドル</text>
+      <text x="0" y="143" text-anchor="middle" font-size="9" fill="#5a4a4d">5 滴 • 30分〜2時間</text>
+
+      <!-- Base note -->
+      <rect x="-32" y="165" width="64" height="80" fill="url(#base-grad)" opacity="0.9"/>
+      <text x="0" y="193" text-anchor="middle" font-size="11" fill="#fff" letter-spacing="2">BASE</text>
+      <text x="0" y="209" text-anchor="middle" font-size="10" fill="#fff">ベース</text>
+      <text x="0" y="223" text-anchor="middle" font-size="9" fill="#fdf6f7">2 滴 • 2時間〜半日</text>
+    </g>
+
+    <!-- evaporation arrow on the side -->
+    <g transform="translate(50,110)">
+      <text x="0" y="0" font-size="9" fill="#9a7d83" letter-spacing="2">揮発</text>
+      <text x="0" y="14" font-size="9" fill="#9a7d83" letter-spacing="2">早い</text>
+      <path d="M 10 25 l 0 200" stroke="#c96b83" stroke-width="0.8" stroke-dasharray="2 2"/>
+      <text x="0" y="245" font-size="9" fill="#9a7d83" letter-spacing="2">揮発</text>
+      <text x="0" y="259" font-size="9" fill="#9a7d83" letter-spacing="2">遅い</text>
+    </g>
+
+    <!-- Golden ratio at bottom -->
+    <g transform="translate(20,355)">
+      <text x="0" y="0" font-size="10" fill="#c96b83" letter-spacing="2">▲ 黄金比 = 3 : 5 : 2</text>
+      <text x="0" y="18" font-size="9" fill="#9a7d83">計10滴 / キャリアオイル30ml = 1%濃度</text>
+    </g>
+  </g>
+
+  <!-- Right: Note examples -->
+  <g transform="translate(400,115)" filter="url(#soft-arbl)">
+    <rect width="360" height="395" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">EXAMPLES BY NOTE</text>
+    <line x1="20" y1="40" x2="160" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- TOP examples -->
+    <g transform="translate(20,65)">
+      <rect x="0" y="0" width="320" height="80" fill="url(#top-grad)" opacity="0.4"/>
+      <text x="15" y="20" font-size="10" letter-spacing="2" fill="#c96b83">TOP — トップノート</text>
+      <text x="15" y="40" font-size="11" fill="#3a2e30">柑橘系・ペパーミント系が中心</text>
+      <text x="15" y="58" font-size="10" fill="#5a4a4d">ベルガモット ／ オレンジスイート ／ レモン</text>
+      <text x="15" y="73" font-size="10" fill="#5a4a4d">グレープフルーツ ／ ペパーミント</text>
+    </g>
+
+    <!-- MIDDLE examples -->
+    <g transform="translate(20,160)">
+      <rect x="0" y="0" width="320" height="100" fill="url(#middle-grad)" opacity="0.4"/>
+      <text x="15" y="20" font-size="10" letter-spacing="2" fill="#c96b83">MIDDLE — ミドルノート</text>
+      <text x="15" y="40" font-size="11" fill="#3a2e30">フローラル・ハーブ系が中心</text>
+      <text x="15" y="58" font-size="10" fill="#5a4a4d">ラベンダー ／ ゼラニウム ／ イランイラン</text>
+      <text x="15" y="73" font-size="10" fill="#5a4a4d">ローズマリー ／ クラリセージ</text>
+      <text x="15" y="91" font-size="10" fill="#5a4a4d">カモミール ／ ローズ</text>
+    </g>
+
+    <!-- BASE examples -->
+    <g transform="translate(20,275)">
+      <rect x="0" y="0" width="320" height="80" fill="url(#base-grad)" opacity="0.4"/>
+      <text x="15" y="20" font-size="10" letter-spacing="2" fill="#c96b83">BASE — ベースノート</text>
+      <text x="15" y="40" font-size="11" fill="#3a2e30">ウッディ・スパイス系が中心</text>
+      <text x="15" y="58" font-size="10" fill="#5a4a4d">サンダルウッド ／ フランキンセンス</text>
+      <text x="15" y="73" font-size="10" fill="#5a4a4d">パチュリ ／ シダーウッド ／ ジンジャー</text>
+    </g>
+
+    <text x="20" y="378" font-size="9" fill="#9a7d83">▲ 5種以上は混ぜない・同系統の重ね過ぎ注意</text>
+  </g>
+</svg>

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-afoot" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <linearGradient id="foot-afoot" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce8ec"/>
+      <stop offset="100%" stop-color="#f5d4dc"/>
+    </linearGradient>
+    <filter id="soft-afoot" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-afoot)"/>
+
+  <text x="400" y="44" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">REFLEXOLOGY &amp; FOOT CARE</text>
+  <text x="400" y="74" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">反射区とフットケア応用 — 足裏マップ</text>
+  <line x1="370" y1="88" x2="430" y2="88" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- Left: foot sole reflexology map -->
+  <g transform="translate(60,115)" filter="url(#soft-afoot)">
+    <rect width="380" height="395" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">FOOT SOLE MAP</text>
+    <line x1="20" y1="40" x2="160" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- foot sole shape (right foot, sole view) -->
+    <g transform="translate(190,210)">
+      <!-- main sole outline -->
+      <path d="M 0 -135 q -45 0 -50 35 q -2 25 -8 50 q -14 35 -10 75 q 4 35 18 50 q 25 18 50 18 q 25 0 50 -18 q 14 -15 18 -50 q 4 -40 -10 -75 q -6 -25 -8 -50 q -5 -35 -50 -35 z"
+            fill="url(#foot-afoot)" stroke="#d8a8b3" stroke-width="1"/>
+
+      <!-- toes (5 separate ovals) -->
+      <ellipse cx="-2" cy="-150" rx="14" ry="14" fill="#fbd6dc" stroke="#d8a8b3" stroke-width="1"/>
+      <ellipse cx="-30" cy="-138" rx="9" ry="10" fill="#fbd6dc" stroke="#d8a8b3" stroke-width="1"/>
+      <ellipse cx="-46" cy="-128" rx="8" ry="9" fill="#fbd6dc" stroke="#d8a8b3" stroke-width="1"/>
+      <ellipse cx="-58" cy="-115" rx="7" ry="8" fill="#fbd6dc" stroke="#d8a8b3" stroke-width="1"/>
+      <ellipse cx="-66" cy="-100" rx="6" ry="7" fill="#fbd6dc" stroke="#d8a8b3" stroke-width="1"/>
+
+      <!-- 頭部 (big toe top - highlighted) -->
+      <circle cx="-2" cy="-150" r="8" fill="#eab5c0" opacity="0.7"/>
+      <text x="-2" y="-147" text-anchor="middle" font-size="8" fill="#3a2e30">頭</text>
+
+      <!-- 目 (between 2nd and 3rd toe base) -->
+      <ellipse cx="-32" cy="-110" rx="14" ry="6" fill="#eab5c0" opacity="0.6"/>
+      <text x="-32" y="-107" text-anchor="middle" font-size="8" fill="#3a2e30">目</text>
+
+      <!-- 肩 (under little toe - outer side) -->
+      <ellipse cx="-62" cy="-80" rx="10" ry="8" fill="#d68a9a" opacity="0.5"/>
+      <text x="-62" y="-77" text-anchor="middle" font-size="8" fill="#3a2e30">肩</text>
+
+      <!-- 肺 (ball of foot - large pink area) -->
+      <ellipse cx="-15" cy="-60" rx="40" ry="20" fill="#f5d0d7" opacity="0.7"/>
+      <text x="-15" y="-57" text-anchor="middle" font-size="9" fill="#3a2e30">肺</text>
+
+      <!-- 心臓 (left foot indicator - small heart area) -->
+      <ellipse cx="-45" cy="-50" rx="8" ry="6" fill="#c96b83" opacity="0.6"/>
+      <text x="-45" y="-47" text-anchor="middle" font-size="7" fill="#fff">心</text>
+
+      <!-- 胃 (upper arch) -->
+      <ellipse cx="-18" cy="-15" rx="35" ry="14" fill="#eab5c0" opacity="0.6"/>
+      <text x="-18" y="-12" text-anchor="middle" font-size="9" fill="#3a2e30">胃</text>
+
+      <!-- 腎臓 (mid arch) -->
+      <circle cx="-30" cy="10" r="8" fill="#d68a9a" opacity="0.6"/>
+      <text x="-30" y="13" text-anchor="middle" font-size="8" fill="#fff">腎</text>
+
+      <!-- 腸 (lower arch) -->
+      <ellipse cx="-15" cy="40" rx="35" ry="20" fill="#fbd6dc" opacity="0.7"/>
+      <text x="-15" y="44" text-anchor="middle" font-size="9" fill="#3a2e30">腸</text>
+
+      <!-- 骨盤・腰 (heel) -->
+      <ellipse cx="-15" cy="85" rx="25" ry="14" fill="#d68a9a" opacity="0.6"/>
+      <text x="-15" y="89" text-anchor="middle" font-size="9" fill="#fff">骨盤・腰</text>
+    </g>
+
+    <!-- region labels at bottom -->
+    <text x="20" y="370" font-size="9" fill="#9a7d83">▲ 足裏は人体の縮図 — つま先=頭、土踏まず=内臓、かかと=骨盤</text>
+  </g>
+
+  <!-- Right: principles & cautions -->
+  <g transform="translate(460,115)" filter="url(#soft-afoot)">
+    <rect width="300" height="395" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="20" y="30" font-size="11" letter-spacing="3" fill="#c96b83" font-weight="500">SCOPE &amp; CAUTIONS</text>
+    <line x1="20" y1="40" x2="180" y2="40" stroke="#e8849a" stroke-width="1"/>
+
+    <!-- OK box -->
+    <g transform="translate(20,60)">
+      <rect x="0" y="0" width="260" height="100" fill="#fdf0f3" stroke="#c96b83" stroke-width="0.6"/>
+      <text x="15" y="20" font-size="11" fill="#c96b83" letter-spacing="2">✓ 施術業として OK</text>
+      <line x1="15" y1="28" x2="160" y2="28" stroke="#e8849a" stroke-width="0.6"/>
+      <text x="15" y="48" font-size="10" fill="#3a2e30">・リラクゼーション目的</text>
+      <text x="15" y="65" font-size="10" fill="#3a2e30">・足の疲労改善</text>
+      <text x="15" y="82" font-size="10" fill="#3a2e30">・「気持ちよさ」を主軸に提供</text>
+    </g>
+
+    <!-- NG box -->
+    <g transform="translate(20,175)">
+      <rect x="0" y="0" width="260" height="115" fill="#fbe7ea" stroke="#c96b83" stroke-width="0.6" stroke-dasharray="3 2"/>
+      <text x="15" y="20" font-size="11" fill="#c96b83" letter-spacing="2">✗ 施術業として NG</text>
+      <line x1="15" y1="28" x2="160" y2="28" stroke="#c96b83" stroke-width="0.6"/>
+      <text x="15" y="48" font-size="10" fill="#3a2e30">・病気の治療を目的にする</text>
+      <text x="15" y="65" font-size="10" fill="#3a2e30">・「○○の臓器が悪い」と診断</text>
+      <text x="15" y="82" font-size="10" fill="#3a2e30">・医学的効能の主張</text>
+      <text x="15" y="99" font-size="10" fill="#3a2e30">・お酒の飲み過ぎ等の決めつけ</text>
+    </g>
+
+    <!-- 4 techniques summary -->
+    <g transform="translate(20,305)">
+      <text x="0" y="0" font-size="10" fill="#c96b83" letter-spacing="2">基本手技 4 種</text>
+      <line x1="0" y1="8" x2="120" y2="8" stroke="#e8849a" stroke-width="0.6"/>
+      <text x="0" y="28" font-size="10" fill="#3a2e30">つまみ押し / スライド圧</text>
+      <text x="0" y="46" font-size="10" fill="#3a2e30">ローリング / ニーディング</text>
+      <text x="0" y="68" font-size="9" fill="#9a7d83">▲ 30分または60分の独立メニューに</text>
+    </g>
+  </g>
+</svg>

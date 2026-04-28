@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 540" font-family="'Noto Serif JP', serif">
+  <defs>
+    <linearGradient id="bg-arap" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fdf6f7"/>
+      <stop offset="100%" stop-color="#f9eef0"/>
+    </linearGradient>
+    <filter id="soft-arap" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="800" height="540" fill="url(#bg-arap)"/>
+
+  <text x="400" y="44" text-anchor="middle" font-size="13" letter-spacing="6" fill="#c96b83" font-weight="500">SCENE-SPECIFIC AROMA TREATMENTS</text>
+  <text x="400" y="74" text-anchor="middle" font-size="20" fill="#3a2e30" letter-spacing="3">シーン別アロマ施術 — 6 コース</text>
+  <line x1="370" y1="88" x2="430" y2="88" stroke="#e8849a" stroke-width="1"/>
+
+  <!-- 6 scene cards in 3x2 grid -->
+  <!-- Row 1 -->
+  <!-- Card 1: リラクゼーション -->
+  <g transform="translate(40,115)" filter="url(#soft-arap)">
+    <rect width="240" height="190" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="120" y="28" text-anchor="middle" font-size="22" fill="#c96b83">🌙</text>
+    <text x="120" y="50" text-anchor="middle" font-size="9" letter-spacing="2" fill="#c96b83" font-weight="500">RELAXATION</text>
+    <text x="120" y="70" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2">リラクゼーション</text>
+    <line x1="105" y1="80" x2="135" y2="80" stroke="#e8849a" stroke-width="1"/>
+
+    <text x="20" y="105" font-size="9" fill="#9a7d83">対象: 疲労困憊・心身リセット</text>
+    <text x="20" y="125" font-size="10" fill="#3a2e30">ラベンダー / ベルガモット</text>
+    <text x="20" y="140" font-size="10" fill="#3a2e30">サンダルウッド</text>
+    <text x="20" y="165" font-size="9" fill="#c96b83" letter-spacing="1">▲ 背中重点25分・最も暗い照明</text>
+  </g>
+
+  <!-- Card 2: ストレスケア -->
+  <g transform="translate(290,115)" filter="url(#soft-arap)">
+    <rect width="240" height="190" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="120" y="28" text-anchor="middle" font-size="22" fill="#c96b83">🍃</text>
+    <text x="120" y="50" text-anchor="middle" font-size="9" letter-spacing="2" fill="#c96b83" font-weight="500">STRESS CARE</text>
+    <text x="120" y="70" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2">ストレスケア</text>
+    <line x1="105" y1="80" x2="135" y2="80" stroke="#e8849a" stroke-width="1"/>
+
+    <text x="20" y="105" font-size="9" fill="#9a7d83">対象: 緊張・気持ちの解放</text>
+    <text x="20" y="125" font-size="10" fill="#3a2e30">イランイラン / オレンジ</text>
+    <text x="20" y="140" font-size="10" fill="#3a2e30">パチュリ</text>
+    <text x="20" y="165" font-size="9" fill="#c96b83" letter-spacing="1">▲ 首肩重点・深呼吸を誘導</text>
+  </g>
+
+  <!-- Card 3: 睡眠改善 -->
+  <g transform="translate(540,115)" filter="url(#soft-arap)">
+    <rect width="240" height="190" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="120" y="28" text-anchor="middle" font-size="22" fill="#c96b83">💤</text>
+    <text x="120" y="50" text-anchor="middle" font-size="9" letter-spacing="2" fill="#c96b83" font-weight="500">SLEEP IMPROVEMENT</text>
+    <text x="120" y="70" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2">睡眠改善</text>
+    <line x1="105" y1="80" x2="135" y2="80" stroke="#e8849a" stroke-width="1"/>
+
+    <text x="20" y="105" font-size="9" fill="#9a7d83">対象: 不眠・浅い眠り</text>
+    <text x="20" y="125" font-size="10" fill="#3a2e30">ラベンダー / カモミール</text>
+    <text x="20" y="140" font-size="10" fill="#3a2e30">サンダルウッド / クラリ</text>
+    <text x="20" y="165" font-size="9" fill="#c96b83" letter-spacing="1">▲ 夜の時間帯が理想・顔頭皮丁寧に</text>
+  </g>
+
+  <!-- Row 2 -->
+  <!-- Card 4: むくみ・冷え改善 -->
+  <g transform="translate(40,325)" filter="url(#soft-arap)">
+    <rect width="240" height="190" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="120" y="28" text-anchor="middle" font-size="22" fill="#c96b83">💧</text>
+    <text x="120" y="50" text-anchor="middle" font-size="9" letter-spacing="2" fill="#c96b83" font-weight="500">EDEMA &amp; COLD CARE</text>
+    <text x="120" y="70" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2">むくみ・冷え改善</text>
+    <line x1="105" y1="80" x2="135" y2="80" stroke="#e8849a" stroke-width="1"/>
+
+    <text x="20" y="105" font-size="9" fill="#9a7d83">対象: 下半身のむくみ・冷え性</text>
+    <text x="20" y="125" font-size="10" fill="#3a2e30">ジュニパー / ローズマリー</text>
+    <text x="20" y="140" font-size="10" fill="#3a2e30">グレープフルーツ / サイプレス</text>
+    <text x="20" y="165" font-size="9" fill="#c96b83" letter-spacing="1">▲ 下半身50%・リンパ要素多め</text>
+  </g>
+
+  <!-- Card 5: 女性のリズム -->
+  <g transform="translate(290,325)" filter="url(#soft-arap)">
+    <rect width="240" height="190" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="120" y="28" text-anchor="middle" font-size="22" fill="#c96b83">🌸</text>
+    <text x="120" y="50" text-anchor="middle" font-size="9" letter-spacing="2" fill="#c96b83" font-weight="500">FEMININE RHYTHM</text>
+    <text x="120" y="70" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2">女性のリズムサポート</text>
+    <line x1="105" y1="80" x2="135" y2="80" stroke="#e8849a" stroke-width="1"/>
+
+    <text x="20" y="105" font-size="9" fill="#9a7d83">対象: PMS・更年期</text>
+    <text x="20" y="125" font-size="10" fill="#3a2e30">クラリセージ / ゼラニウム</text>
+    <text x="20" y="140" font-size="10" fill="#3a2e30">ベルガモット / イランイラン</text>
+    <text x="20" y="165" font-size="9" fill="#c96b83" letter-spacing="1">⚠ 妊娠の可能性は別レシピ</text>
+  </g>
+
+  <!-- Card 6: 集中・気分転換 -->
+  <g transform="translate(540,325)" filter="url(#soft-arap)">
+    <rect width="240" height="190" fill="#ffffff" stroke="#e8849a55" stroke-width="1"/>
+    <text x="120" y="28" text-anchor="middle" font-size="22" fill="#c96b83">✨</text>
+    <text x="120" y="50" text-anchor="middle" font-size="9" letter-spacing="2" fill="#c96b83" font-weight="500">FOCUS &amp; REFRESH</text>
+    <text x="120" y="70" text-anchor="middle" font-size="13" fill="#3a2e30" letter-spacing="2">集中・気分転換</text>
+    <line x1="105" y1="80" x2="135" y2="80" stroke="#e8849a" stroke-width="1"/>
+
+    <text x="20" y="105" font-size="9" fill="#9a7d83">対象: 午後の活性化</text>
+    <text x="20" y="125" font-size="10" fill="#3a2e30">ローズマリー / ペパーミント</text>
+    <text x="20" y="140" font-size="10" fill="#3a2e30">レモン / ユーカリ</text>
+    <text x="20" y="165" font-size="9" fill="#c96b83" letter-spacing="1">▲ やや早めのリズム・しっかり圧</text>
+  </g>
+</svg>
