@@ -103,6 +103,36 @@ export default function Dashboard() {
   const [custStats, setCustStats] = useState<Record<number, { visitCount: number; lastVisit: string; pointBalance: number }>>({});
   const [custMemoStats, setCustMemoStats] = useState<Record<string, { count: number; hasNg: boolean }>>({});
 
+  // ─── 業務オペレーションダッシュボード(HOME)用 ────────────
+  // 「今お店で何が起きているか」「すぐやるべきこと」を可視化
+  const [opsStats, setOpsStats] = useState<{
+    todayReservationCount: number;        // 本日の予約数(キャンセル除く)
+    todayCompletedCount: number;          // 完了済み件数
+    todayServingCount: number;            // 接客中件数
+    todayPendingCount: number;            // 未処理件数
+    todaySales: number;                   // 完了済み売上合計
+    onShiftCount: number;                 // 出勤セラピスト数(approved & today)
+    webResUnseen: number;                 // Web予約 未確認(customer_status=web_reservation)
+    cancelledUnprocessed: number;         // キャンセル復元待ち(過去1ヶ月)
+    pastUnsettled: number;                // 昨日以前の未締め清算
+    unrecoveredChange: number;            // 釣銭未回収(過去7日)
+  } | null>(null);
+  const [opsLiveRooms, setOpsLiveRooms] = useState<{
+    therapistName: string;
+    roomLabel: string;
+    course: string;
+    endTime: string;
+    minutesLeft: number;
+  }[]>([]);
+  const [opsRecentCalls, setOpsRecentCalls] = useState<{
+    id: number;
+    phone: string;
+    customerName: string | null;
+    receivedAt: string;
+    minutesAgo: number;
+  }[]>([]);
+  const [opsLoading, setOpsLoading] = useState(false);
+
   // NG登録
   const [showNgRegister, setShowNgRegister] = useState(false);
   const [showCustImport, setShowCustImport] = useState(false);
@@ -574,6 +604,139 @@ export default function Dashboard() {
     if (data) setAllCancelledRes(data);
   }, []);
 
+  // ─── 業務オペレーションダッシュボード(HOME)のデータ取得 ───
+  // 「今すべきこと」を即把握するための集計を一気に並列取得する。
+  // 個別画面(/timechart, /cash-dashboard 等)への深掘り誘導が目的なので、
+  // ここでは全件持たず件数とライブ稼働状況のみ取得する。
+  const fetchOpsDashboard = useCallback(async () => {
+    setOpsLoading(true);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+      const oneMonthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+      const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+      const [
+        todayResResp, shiftsResp, webUnseenResp, cancelledResp,
+        pastUnsettledResp, unrecoveredResp, ctiResp,
+        roomAssignResp, allRoomsResp, allBuildingsResp,
+        custLookupResp, settlementsTodayResp,
+      ] = await Promise.all([
+        supabase.from("reservations").select("id,start_time,end_time,course,therapist_id,total_price,status,customer_status").eq("date", today),
+        supabase.from("shifts").select("therapist_id").eq("date", today).eq("status", "confirmed"),
+        supabase.from("reservations").select("id", { count: "exact", head: true }).eq("date", today).eq("customer_status", "web_reservation").neq("status", "completed"),
+        supabase.from("reservations").select("id", { count: "exact", head: true }).eq("status", "cancelled").gte("date", oneMonthAgo),
+        // 昨日以前の本来締めるべき reservations(completed) があるが therapist_daily_settlements に is_settled=true レコードが無いセラピストを件数集計
+        supabase.from("reservations").select("therapist_id, date").eq("status", "completed").gte("date", sevenDaysAgo).lt("date", today),
+        // 釣銭未回収: 過去7日で is_settled=true だが change_collected=false
+        supabase.from("therapist_daily_settlements").select("id", { count: "exact", head: true }).gte("date", sevenDaysAgo).eq("is_settled", true).eq("change_collected", false),
+        // 直近30分の着信
+        supabase.from("cti_calls").select("id, phone_number, received_at, raw_text").gte("received_at", thirtyMinAgo).order("received_at", { ascending: false }).limit(10),
+        // 部屋割当(今日)
+        supabase.from("room_assignments").select("therapist_id, room_id").eq("date", today),
+        supabase.from("rooms").select("id, name, building_id"),
+        supabase.from("buildings").select("id, name"),
+        // 顧客名解決用(着信表示)
+        supabase.from("customers").select("id, name, phone, phone2, phone3"),
+        // 当日の精算済み(出勤済みで締め完了の表示用に必要)
+        supabase.from("therapist_daily_settlements").select("therapist_id, is_settled").eq("date", today),
+      ]);
+
+      const todayRes = todayResResp.data || [];
+      const completed = todayRes.filter(r => r.status === "completed");
+      const serving = todayRes.filter(r => r.status === "serving");
+      const pending = todayRes.filter(r => r.status === "unprocessed");
+      const totalSales = completed.reduce((s, r) => s + (r.total_price || 0), 0);
+      const onShiftCount = (shiftsResp.data || []).length;
+
+      // 昨日以前の未締め: completed があるが is_settled=true の精算が無い (therapist_id, date) 組合せ数
+      // 全期間でやると重いので過去7日に限定
+      const settledCombosResp = await supabase
+        .from("therapist_daily_settlements")
+        .select("therapist_id, date")
+        .gte("date", sevenDaysAgo).lt("date", today)
+        .eq("is_settled", true);
+      const settledSet = new Set((settledCombosResp.data || []).map(s => `${s.therapist_id}_${s.date}`));
+      const completedCombos = new Set<string>();
+      (pastUnsettledResp.data || []).forEach((r: any) => {
+        completedCombos.add(`${r.therapist_id}_${r.date}`);
+      });
+      let pastUnsettled = 0;
+      completedCombos.forEach(combo => {
+        if (!settledSet.has(combo)) pastUnsettled++;
+      });
+
+      setOpsStats({
+        todayReservationCount: todayRes.filter(r => r.status !== "cancelled").length,
+        todayCompletedCount: completed.length,
+        todayServingCount: serving.length,
+        todayPendingCount: pending.length,
+        todaySales: totalSales,
+        onShiftCount,
+        webResUnseen: webUnseenResp.count || 0,
+        cancelledUnprocessed: cancelledResp.count || 0,
+        pastUnsettled,
+        unrecoveredChange: unrecoveredResp.count || 0,
+      });
+
+      // ─── ライブ稼働 ───
+      const allRoomsArr = allRoomsResp.data || [];
+      const allBldsArr = allBuildingsResp.data || [];
+      const roomAssignsArr = roomAssignResp.data || [];
+      const thMapArr = therapists; // 既にロード済みのstateを利用
+      const now = new Date();
+      const live = serving.map((r: any) => {
+        const th = thMapArr.find((x: any) => x.id === r.therapist_id);
+        const ra = roomAssignsArr.find((a: any) => a.therapist_id === r.therapist_id);
+        const rm = ra ? allRoomsArr.find((x: any) => x.id === ra.room_id) : null;
+        const bl = rm ? allBldsArr.find((b: any) => b.id === rm.building_id) : null;
+        const [eh, em] = (r.end_time || "00:00").split(":").map(Number);
+        const endDate = new Date(now); endDate.setHours(eh || 0, em || 0, 0, 0);
+        const minutesLeft = Math.round((endDate.getTime() - now.getTime()) / 60000);
+        return {
+          therapistName: th?.name || "不明",
+          roomLabel: bl && rm ? `${bl.name} ${rm.name}` : "—",
+          course: r.course || "",
+          endTime: r.end_time || "",
+          minutesLeft,
+        };
+      }).sort((a, b) => a.minutesLeft - b.minutesLeft);
+      setOpsLiveRooms(live);
+
+      // ─── 直近着信 ───
+      const customersArr = custLookupResp.data || [];
+      const callsArr = ctiResp.data || [];
+      const recentCalls = callsArr.map((c: any) => {
+        const phone = c.phone_number || "";
+        const cust = customersArr.find((x: any) =>
+          x.phone === phone || x.phone2 === phone || x.phone3 === phone
+        );
+        const minutesAgo = Math.round((Date.now() - new Date(c.received_at).getTime()) / 60000);
+        return {
+          id: c.id,
+          phone,
+          customerName: cust?.name || null,
+          receivedAt: c.received_at,
+          minutesAgo,
+        };
+      });
+      setOpsRecentCalls(recentCalls);
+    } catch (e) {
+      console.error("opsDashboard fetch error:", e);
+    } finally {
+      setOpsLoading(false);
+    }
+  }, [therapists]);
+
+  // HOME表示時 + 1分ごとに自動再取得(ライブ感を保つ)
+  useEffect(() => {
+    if (activePage !== "HOME") return;
+    fetchOpsDashboard();
+    const interval = setInterval(fetchOpsDashboard, 60000);
+    return () => clearInterval(interval);
+  }, [activePage, fetchOpsDashboard]);
+
   useEffect(() => {
     const checkUser = async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) { router.push("/"); } else { setUserEmail(user.email || ""); setUserId(user.id); } };
     checkUser(); fetchCustomers(); fetchMaster(); fetchAllCancelled();
@@ -838,19 +1001,177 @@ export default function Dashboard() {
         <main className="flex-1 overflow-y-auto p-8">
           {/* Loading */}
           {activePage === "" && null}
-          {/* HOME */}
+          {/* HOME — 業務オペレーションダッシュボード */}
           {activePage === "HOME" && (
             <div className="animate-[fadeIn_0.4s]">
-              <div className="mb-8"><h2 className="text-[22px] font-medium">{greeting}</h2><p className="text-[13px] mt-1" style={{ color: T.textMuted }}>{dateStr}（{dayStr}）の業務状況</p></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-                {[{ label: "本日の予約", value: "0", unit: "件", accent: "#c3a782" }, { label: "本日の売上", value: "¥0", unit: "", accent: "#7ab88f" }, { label: "出勤セラピスト", value: "0", unit: "名", accent: "#85a8c4" }, { label: "総顧客数", value: String(customers.length), unit: "名", accent: "#c49885" }].map((stat) => (
-                  <div key={stat.label} className="rounded-2xl p-6 border cursor-default" style={{ backgroundColor: T.card, borderColor: T.border }}>
-                    <div className="flex items-center justify-between mb-4"><span className="text-[11px]" style={{ color: T.textMuted }}>{stat.label}</span><div className="w-2 h-2 rounded-full" style={{ backgroundColor: stat.accent, opacity: 0.5 }} /></div>
-                    <div className="flex items-baseline gap-1.5"><span className="text-[32px] font-light tracking-tight leading-none">{stat.value}</span><span className="text-[12px]" style={{ color: T.textFaint }}>{stat.unit}</span></div>
+              {/* ヘッダー */}
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-[22px] font-medium">{greeting}</h2>
+                  <p className="text-[13px] mt-1" style={{ color: T.textMuted }}>{dateStr}（{dayStr}）の業務状況</p>
+                </div>
+                <button
+                  onClick={fetchOpsDashboard}
+                  disabled={opsLoading}
+                  className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer border"
+                  style={{ borderColor: T.border, color: T.textSub, opacity: opsLoading ? 0.5 : 1 }}
+                >
+                  {opsLoading ? "🔄 更新中..." : "🔄 更新"}
+                </button>
+              </div>
+
+              {/* ─── 本日の数字(実データ) ─── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: "本日の予約", value: opsStats ? String(opsStats.todayReservationCount) : "—", unit: "件", accent: "#c3a782", sub: opsStats ? `完了 ${opsStats.todayCompletedCount} / 接客中 ${opsStats.todayServingCount}` : "" },
+                  { label: "本日の売上", value: opsStats ? `¥${opsStats.todaySales.toLocaleString()}` : "—", unit: "", accent: "#7ab88f", sub: opsStats && opsStats.todayCompletedCount > 0 ? `客単価 ¥${Math.round(opsStats.todaySales / opsStats.todayCompletedCount).toLocaleString()}` : "" },
+                  { label: "出勤セラピスト", value: opsStats ? String(opsStats.onShiftCount) : "—", unit: "名", accent: "#85a8c4", sub: opsStats ? `接客中 ${opsStats.todayServingCount} 名` : "" },
+                  { label: "総顧客数", value: String(customers.length), unit: "名", accent: "#c49885", sub: "" },
+                ].map((stat) => (
+                  <div key={stat.label} className="rounded-2xl p-5 border cursor-default" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px]" style={{ color: T.textMuted }}>{stat.label}</span>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stat.accent, opacity: 0.5 }} />
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[28px] font-light tracking-tight leading-none">{stat.value}</span>
+                      <span className="text-[12px]" style={{ color: T.textFaint }}>{stat.unit}</span>
+                    </div>
+                    {stat.sub && <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>{stat.sub}</p>}
                   </div>
                 ))}
               </div>
-              <div className="mt-8"><p className="text-[11px] mb-4" style={{ color: T.textMuted }}>クイックアクション</p>
+
+              {/* ─── 要対応アラート ─── */}
+              {opsStats && (opsStats.webResUnseen > 0 || opsStats.pastUnsettled > 0 || opsStats.unrecoveredChange > 0 || opsStats.cancelledUnprocessed > 0) && (
+                <div className="rounded-2xl border mb-6 overflow-hidden" style={{ backgroundColor: T.card, borderColor: "#f59e0b44" }}>
+                  <div className="px-5 py-3 flex items-center gap-2" style={{ backgroundColor: "#f59e0b12", borderBottom: `1px solid #f59e0b22` }}>
+                    <span className="text-[14px]">🚨</span>
+                    <h3 className="text-[12px] font-medium" style={{ color: "#f59e0b" }}>要対応アラート</h3>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: T.cardAlt }}>
+                    {opsStats.webResUnseen > 0 && (
+                      <button onClick={() => router.push("/timechart")} className="w-full px-5 py-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-black/5 text-left" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
+                        <div>
+                          <p className="text-[12px] font-medium" style={{ color: T.text }}>📡 Web予約 未確認</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>本日のWeb予約に未対応のものがあります</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[18px] font-light" style={{ color: "#a855f7" }}>{opsStats.webResUnseen}</span>
+                          <span className="text-[10px]" style={{ color: T.textFaint }}>件 →</span>
+                        </div>
+                      </button>
+                    )}
+                    {opsStats.pastUnsettled > 0 && (
+                      <button onClick={() => router.push("/timechart")} className="w-full px-5 py-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-black/5 text-left" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
+                        <div>
+                          <p className="text-[12px] font-medium" style={{ color: T.text }}>💸 未締め清算</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>過去7日間で完了した予約のうち未清算のセラピストがいます</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[18px] font-light" style={{ color: "#c45555" }}>{opsStats.pastUnsettled}</span>
+                          <span className="text-[10px]" style={{ color: T.textFaint }}>名 →</span>
+                        </div>
+                      </button>
+                    )}
+                    {opsStats.unrecoveredChange > 0 && (
+                      <button onClick={() => router.push("/cash-dashboard")} className="w-full px-5 py-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-black/5 text-left" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
+                        <div>
+                          <p className="text-[12px] font-medium" style={{ color: T.text }}>💰 釣銭未回収</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>過去7日間で釣銭が回収されていない清算があります</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[18px] font-light" style={{ color: "#22c55e" }}>{opsStats.unrecoveredChange}</span>
+                          <span className="text-[10px]" style={{ color: T.textFaint }}>件 →</span>
+                        </div>
+                      </button>
+                    )}
+                    {opsStats.cancelledUnprocessed > 0 && (
+                      <button onClick={() => setActivePage("顧客一覧")} className="w-full px-5 py-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-black/5 text-left">
+                        <div>
+                          <p className="text-[12px] font-medium" style={{ color: T.text }}>🚫 キャンセル(過去30日)</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>必要に応じて復元・記録の確認を</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[18px] font-light" style={{ color: "#c45555" }}>{opsStats.cancelledUnprocessed}</span>
+                          <span className="text-[10px]" style={{ color: T.textFaint }}>件 →</span>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ─── 2カラム: ライブ稼働 + 直近着信 ─── */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+                {/* ライブ稼働 */}
+                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                  <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "#22c55e" }} />
+                      <h3 className="text-[12px] font-medium">⏱ ライブ稼働中</h3>
+                    </div>
+                    <span className="text-[10px]" style={{ color: T.textMuted }}>{opsLiveRooms.length} 件接客中</span>
+                  </div>
+                  {opsLiveRooms.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-[11px]" style={{ color: T.textFaint }}>現在接客中のセラピストはいません</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y" style={{ borderColor: T.cardAlt }}>
+                      {opsLiveRooms.slice(0, 6).map((live, i) => (
+                        <div key={i} className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: i < Math.min(opsLiveRooms.length, 6) - 1 ? `1px solid ${T.cardAlt}` : "none" }}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-medium truncate" style={{ color: T.text }}>{live.therapistName}</p>
+                            <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textMuted }}>{live.roomLabel} · {live.course}</p>
+                          </div>
+                          <div className="text-right ml-3 flex-shrink-0">
+                            <p className="text-[14px] font-light leading-none" style={{ color: live.minutesLeft <= 5 ? "#f59e0b" : live.minutesLeft <= 15 ? "#c3a782" : T.textSub }}>
+                              {live.minutesLeft <= 0 ? "終了予定" : `あと${live.minutesLeft}分`}
+                            </p>
+                            <p className="text-[9px] mt-1" style={{ color: T.textFaint }}>〜{live.endTime}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {opsLiveRooms.length > 6 && (
+                        <button onClick={() => router.push("/timechart")} className="w-full px-5 py-2 text-[10px] cursor-pointer" style={{ color: T.textMuted }}>残り {opsLiveRooms.length - 6} 件をタイムチャートで見る →</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 直近着信 */}
+                <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: T.card, borderColor: T.border }}>
+                  <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
+                    <h3 className="text-[12px] font-medium">📞 直近の着信(30分以内)</h3>
+                    <span className="text-[10px]" style={{ color: T.textMuted }}>{opsRecentCalls.length} 件</span>
+                  </div>
+                  {opsRecentCalls.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-[11px]" style={{ color: T.textFaint }}>直近30分の着信はありません</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y" style={{ borderColor: T.cardAlt }}>
+                      {opsRecentCalls.slice(0, 6).map((call) => (
+                        <div key={call.id} className="px-5 py-2.5 flex items-center justify-between" style={{ borderBottom: `1px solid ${T.cardAlt}` }}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-medium truncate" style={{ color: T.text }}>
+                              {call.customerName ? <>👤 {call.customerName}</> : <span style={{ color: T.textMuted }}>未登録</span>}
+                            </p>
+                            <p className="text-[10px] mt-0.5 truncate" style={{ color: T.textFaint, fontFamily: "monospace" }}>{call.phone || "—"}</p>
+                          </div>
+                          <p className="text-[10px] ml-3 flex-shrink-0" style={{ color: T.textMuted }}>{call.minutesAgo === 0 ? "たった今" : `${call.minutesAgo}分前`}</p>
+                        </div>
+                      ))}
+                      <button onClick={() => router.push("/cti-monitor")} className="w-full px-5 py-2 text-[10px] cursor-pointer" style={{ color: T.textMuted }}>すべての着信を見る →</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* クイックアクション */}
+              <div className="mt-8">
+                <p className="text-[11px] mb-4" style={{ color: T.textMuted }}>クイックアクション</p>
                 <div className="flex flex-wrap gap-3">
                   {["顧客登録", "タイムチャート", "日別分析", "セラピスト登録"].map((a) => (<button key={a} onClick={() => a === "タイムチャート" ? router.push("/timechart") : setActivePage(a)} className="px-5 py-2.5 border rounded-xl text-[12px] cursor-pointer" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textSub }}>{a}</button>))}
                   <a href="/admin/contract-v3-info" target="_blank" rel="noreferrer" className="px-5 py-2.5 border rounded-xl text-[12px] cursor-pointer inline-flex items-center" style={{ backgroundColor: "#e8849a12", borderColor: "#e8849a44", color: "#c96b83", textDecoration: "none" }}>📜 契約書改訂説明</a>
