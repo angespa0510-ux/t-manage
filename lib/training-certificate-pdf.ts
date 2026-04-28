@@ -12,23 +12,23 @@
  */
 
 type CompanyInfo = {
-  company_name: string;        // 例: 合同会社テラスライフ
-  brand_name?: string;         // 例: Ange Spa
-  representative?: string;     // 代表者名
-  company_address?: string;
+  company_name: string;                  // 例: 合同会社テラスライフ
+  brand_name?: string | null;            // 例: Ange Spa
+  representative?: string | null;        // 代表者名
+  company_address?: string | null;
 };
 
 type TherapistInfo = {
   id: number | string;
-  real_name: string;           // 本名 (修了証には本名で記載)
-  name?: string;               // 源氏名 (副情報として表示しない)
+  real_name: string;                     // 本名 (修了証には本名で記載)
+  name?: string | null;                  // 源氏名 (副情報として表示しない)
 };
 
 type ModuleInfo = {
   id: number;
   title: string;
-  duration_minutes: number;
-  completed_at?: string;       // ISO date
+  duration_minutes: number | null;  // training_modules.duration_minutes は NULL 許容
+  completed_at?: string | null;     // ISO date
 };
 
 type CategoryInfo = {
@@ -115,7 +115,7 @@ function buildCategoryCertificateHtml(
     return `<li class="mod-row">
       <span class="mod-no">${String(i + 1).padStart(2, "0")}</span>
       <span class="mod-title">${escapeHtml(m.title)}</span>
-      <span class="mod-min">${m.duration_minutes}分</span>
+      <span class="mod-min">${m.duration_minutes ?? 0}分</span>
       <span class="mod-date">${completedAt}</span>
     </li>`;
   }).join("");
@@ -693,7 +693,7 @@ function certificateBaseStyle(): string {
 /* ═══════════════════════════════════════════════════════════════
  * Helpers
  * ═══════════════════════════════════════════════════════════════ */
-function escapeHtml(s: string): string {
+function escapeHtml(s: string | null | undefined): string {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
