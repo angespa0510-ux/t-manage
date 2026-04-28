@@ -12,6 +12,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 **T-MANAGE 利用契約書テンプレート**:
 - `docs/CONTRACT_TEMPLATE.md`（他店舗展開で再利用可能な雛形。無償/有償両対応）
 
+**施術業としてのポジショニング設計（2026/04/28〜）**:
+- `docs/21_TREATMENT_BUSINESS_POSITIONING.md` — 全体方針書（江坂税理士確認済）
+- `docs/22_CONTRACT_REDESIGN.md` — ③業務委託契約書 v2（弁護士レビュー前提）
+- `docs/23_TREATMENT_CHART.md` — ④お客様カルテシステム（新規DB+UI）
+- `docs/24_THERAPIST_TRAINING.md` — ②セラピスト研修・技術ライブラリ（新規DB+UI）
+
+→ チョップを所得税法204条1項6号「ホステス等」に該当しない**「施術業」**として通すため、契約・カルテ・研修・対外表現を一貫させる戦略。セラピスト全員源泉徴収なしで継続。
+
 **Supabase Pro プラン移行計画**:
 - `docs/09_SUPABASE_PRO_MIGRATION.md`
 
