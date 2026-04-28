@@ -149,7 +149,7 @@ const [editLoginPassword, setEditLoginPassword] = useState("");
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null); const [deleting, setDeleting] = useState(false);
-  const [contractInfo, setContractInfo] = useState<{ status: string; signature_url?: string; signed_at?: string; token?: string } | null>(null);
+  const [contractInfo, setContractInfo] = useState<{ id?: number; status: string; signature_url?: string; signed_at?: string; signer_name?: string; signer_address?: string; contract_version?: string | null; token?: string } | null>(null);
   const [contractUrl, setContractUrl] = useState("");
   const [contractsMap, setContractsMap] = useState<Record<number, { status: string; token: string }>>({});
   const [newcomerMonths, setNewcomerMonths] = useState(2);
@@ -256,9 +256,31 @@ const generatePassword = () => {
   };
 
   const loadContract = async (therapistId: number) => {
-    const { data } = await supabase.from("contracts").select("*").eq("therapist_id", therapistId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const { data } = await supabase.from("contracts").select("*").eq("therapist_id", therapistId).eq("type", "contract").order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (data) { setContractInfo(data); setContractUrl(`${window.location.origin}/contract-sign/${data.token}`); }
     else { setContractInfo(null); setContractUrl(""); }
+  };
+
+  // 署名済み契約のリセット — 再署名させたい場合用
+  // 既存レコードを pending に戻し、token を再生成して URL を新しくする
+  // 旧署名画像URL等はクリア(履歴は contracts_v2_consents 側に残る)
+  const resetContract = async (therapistId: number) => {
+    if (!contractInfo?.id) { toast.show("契約書情報が読み込めていません", "error"); return; }
+    const ok = window.confirm("この契約書の署名をリセットして再署名できる状態にしますか?\n\n署名画像・署名者情報はクリアされます。\n署名済みのDBレコードは履歴として保持されます。");
+    if (!ok) return;
+    const newToken = `c_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const { error } = await supabase.from("contracts").update({
+      status: "pending",
+      signature_url: null,
+      signer_name: null,
+      signer_address: null,
+      signed_at: null,
+      token: newToken,
+    }).eq("id", contractInfo.id);
+    if (error) { toast.show("リセットに失敗しました: " + error.message, "error"); return; }
+    toast.show("🔁 署名をリセットしました。新しいURLが発行されました。", "success");
+    loadContract(therapistId);
+    fetchTherapists();
   };
 
   const generateContractLink = async (therapistId: number) => {
@@ -518,6 +540,8 @@ const generatePassword = () => {
     setEditIsPickup(t.is_pickup || false);
     setEditIsNewcomer(t.is_newcomer || false);
     setEditSubPhotoFiles([]);
+    // 編集パネル個人情報タブの「業務委託契約書」セクション用に契約情報を読み込む
+    loadContract(t.id);
   };
 
   const handleUpdate = async () => {
@@ -1281,6 +1305,56 @@ const generatePassword = () => {
                       <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] cursor-pointer font-medium" style={{ backgroundColor: "#85a8c418", color: "#85a8c4", border: "1px solid #85a8c444" }}>📎 裏面を選択<input type="file" accept="image/*" onChange={(e) => setEditLicensePhotoBack(e.target.files?.[0] || null)} className="hidden" /></label>
                       {editLicensePhotoBack && <div className="flex items-center gap-2 mt-1"><span className="text-[9px]" style={{ color: "#22c55e" }}>✅ {editLicensePhotoBack.name}</span><button onClick={async () => { if (!editTarget || !editLicensePhotoBack) return; const ext = editLicensePhotoBack.name.split(".").pop(); const now = new Date(); const ds = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`; const fn = `therapist_license_back_${editTarget.id}_${ds}.${ext}`; await supabase.storage.from("therapist-photos").upload(fn, editLicensePhotoBack, { upsert: true }); const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn); await supabase.from("therapists").update({ license_photo_url_back: u.publicUrl }).eq("id", editTarget.id); setEditLicensePhotoBack(null); fetchTherapists(); toast.show("免許証（裏面）を保存しました", "success"); }} className="px-2 py-1 rounded text-[9px] cursor-pointer" style={{ backgroundColor: "#22c55e22", color: "#22c55e", border: "1px solid #22c55e44" }}>💾 保存</button></div>}
                     </div>
+                  </div>
+                </div>
+
+                {/* 業務委託契約書 — 状態 + 署名情報 + URL操作 + 再署名リセット */}
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📝 業務委託契約書</label>
+                  <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                    {!contractInfo ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px]" style={{ color: T.textMuted }}>❌ 未発行</span>
+                        <button type="button" onClick={() => editTarget && generateContractLink(editTarget.id)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>📝 契約書リンクを発行</button>
+                      </div>
+                    ) : contractInfo.status === "signed" ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] px-2 py-0.5 rounded font-medium" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 契約済み</span>
+                          {contractInfo.contract_version && <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: T.card, color: T.textMuted, border: `1px solid ${T.border}` }}>{contractInfo.contract_version}</span>}
+                          {contractInfo.signed_at && <span className="text-[10px]" style={{ color: T.textMuted }}>{new Date(contractInfo.signed_at).toLocaleDateString("ja-JP")} 署名</span>}
+                        </div>
+                        {(contractInfo.signer_name || contractInfo.signer_address) && (
+                          <div className="rounded-lg p-2" style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                            {contractInfo.signer_name && <p className="text-[10px]" style={{ color: T.textSub }}>👤 署名者: <span style={{ color: T.text, fontWeight: 500 }}>{contractInfo.signer_name}</span></p>}
+                            {contractInfo.signer_address && <p className="text-[10px] mt-0.5" style={{ color: T.textSub }}>🏠 住所: <span style={{ color: T.text }}>{contractInfo.signer_address}</span></p>}
+                          </div>
+                        )}
+                        {contractInfo.signature_url && (
+                          <div>
+                            <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>✍️ 署名画像</p>
+                            <a href={contractInfo.signature_url} target="_blank" rel="noreferrer" className="inline-block">
+                              <img src={contractInfo.signature_url} alt="署名" style={{ maxWidth: 200, maxHeight: 80, backgroundColor: "#fff", borderRadius: 6, border: `1px solid ${T.border}`, padding: 4 }} />
+                            </a>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                          {contractUrl && <button type="button" onClick={() => { navigator.clipboard.writeText(contractUrl); toast.show("URLをコピーしました", "success"); }} className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📋 URLコピー</button>}
+                          {contractUrl && <a href={contractUrl} target="_blank" rel="noreferrer" className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer inline-flex items-center" style={{ backgroundColor: T.card, color: T.textSub, border: `1px solid ${T.border}`, textDecoration: "none" }}>🔗 契約書を開く</a>}
+                          <button type="button" onClick={() => editTarget && resetContract(editTarget.id)} className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b44" }}>🔁 署名リセット</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <span className="text-[10px] px-2 py-0.5 rounded font-medium" style={{ backgroundColor: "#f59e0b18", color: "#f59e0b" }}>⏳ 署名待ち</span>
+                        {contractUrl && <p className="text-[9px] break-all" style={{ color: T.textMuted, fontFamily: "monospace" }}>{contractUrl}</p>}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {contractUrl && <button type="button" onClick={() => { navigator.clipboard.writeText(contractUrl); toast.show("URLをコピーしました", "success"); }} className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: "#3b82f618", color: "#3b82f6", border: "1px solid #3b82f644" }}>📋 URLコピー</button>}
+                          {contractUrl && <a href={contractUrl} target="_blank" rel="noreferrer" className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer inline-flex items-center" style={{ backgroundColor: T.card, color: T.textSub, border: `1px solid ${T.border}`, textDecoration: "none" }}>🔗 契約書を開く</a>}
+                          <button type="button" onClick={() => editTarget && generateContractLink(editTarget.id)} className="px-2.5 py-1 text-[9px] rounded-lg cursor-pointer" style={{ backgroundColor: "#c3a78218", color: "#c3a782", border: "1px solid #c3a78244" }}>📝 リンク再発行</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
