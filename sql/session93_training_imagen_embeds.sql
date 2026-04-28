@@ -22,6 +22,24 @@ SET content = E'![主要オイル8種](/training-img/oil-types.webp)\n\n' || con
 WHERE slug = 'oil-types' AND content NOT LIKE '%/training-img/oil-types%';
 
 
+-- ──────────────────────────────────────────────
+-- 1. 衛生管理の基本 (hygiene-basics)
+-- ヘッダー画像: 清潔な施術室 (くすみピンク壁・白リネン・小花瓶) (Imagen 4 生成)
+-- ──────────────────────────────────────────────
+UPDATE training_modules
+SET content = E'![清潔な施術室](/training-img/hygiene-basics.webp)\n\n' || content
+WHERE slug = 'hygiene-basics' AND content NOT LIKE '%/training-img/hygiene-basics%';
+
+
+-- ──────────────────────────────────────────────
+-- 8. オイルの選び方と注意点 (oil-selection)
+-- ヘッダー画像: ラベンダーオイル単体 (アンバーボトル + ラベンダー) (Imagen 4 生成)
+-- ──────────────────────────────────────────────
+UPDATE training_modules
+SET content = E'![ラベンダーオイル](/training-img/oil-selection.webp)\n\n' || content
+WHERE slug = 'oil-selection' AND content NOT LIKE '%/training-img/oil-selection%';
+
+
 -- ==========================================================================
 -- 確認クエリ (実行後オプションで)
 -- ==========================================================================
