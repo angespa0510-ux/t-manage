@@ -52,6 +52,19 @@ SET content = E'![施術前カウンセリングシーン](/training-img/counsel
 WHERE slug = 'counseling-pre' AND content NOT LIKE '%/training-img/counseling-pre%';
 
 
+-- ──────────────────────────────────────────────
+-- 10. お客様の声を引き出す傾聴技法 (counseling-listening)
+-- ヘッダー画像: 女性セラピスト × 男性顧客の傾聴シーン (Imagen 4 生成)
+--   - セラピストはノートとペンで記録しつつ前傾姿勢で「聴く」
+--   - 顧客は両手を広げて話している (能動的に発信)
+--   - 一輪の花のあるマーブルテーブル越しの対話
+--   - 「話を引き出す」「真剣にメモを取る」という傾聴技法の本質を表現
+-- ──────────────────────────────────────────────
+UPDATE training_modules
+SET content = E'![傾聴シーン](/training-img/counseling-listening.webp)\n\n' || content
+WHERE slug = 'counseling-listening' AND content NOT LIKE '%/training-img/counseling-listening%';
+
+
 -- ==========================================================================
 -- 確認クエリ (実行後オプションで)
 -- ==========================================================================
