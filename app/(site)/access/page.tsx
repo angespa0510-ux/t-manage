@@ -33,6 +33,7 @@ type ParentStore = {
   shop_hours?: string;
   shop_reception_hours?: string;
   shop_holiday?: string;
+  shop_sort_order?: number;
 };
 
 type Building = {
@@ -88,7 +89,10 @@ export default function AccessPage() {
   useEffect(() => {
     (async () => {
       // 公開建物 + 親ストアを並列取得し、クライアントで merge
-      // 並び順: 店舗ID昇順（同じ店舗の建物がまとまる）→ shop_sort_order → id
+      // 並び順:
+      //   ① 親店舗の shop_sort_order (店舗グループの表示順)
+      //   ② 建物の shop_sort_order (店舗内の建物表示順)
+      //   ③ 建物 id (フォールバック)
       const [bRes, sRes] = await Promise.all([
         supabase
           .from("buildings")
@@ -99,7 +103,7 @@ export default function AccessPage() {
           .order("id", { ascending: true }),
         supabase
           .from("stores")
-          .select("id, name, shop_hours, shop_reception_hours, shop_holiday"),
+          .select("id, name, shop_hours, shop_reception_hours, shop_holiday, shop_sort_order"),
       ]);
       const storeMap = new Map<number, ParentStore>(
         (sRes.data || []).map((s: ParentStore) => [s.id, s])
@@ -108,6 +112,13 @@ export default function AccessPage() {
         ...b,
         store: storeMap.get(b.store_id),
       }));
+      // クライアント側で「親店舗の表示順」を最優先に再ソート
+      // (Array.sort は安定ソートなので、同じ親店舗内では DB の並び順が保たれる)
+      merged.sort((a, b) => {
+        const aOrder = a.store?.shop_sort_order ?? 0;
+        const bOrder = b.store?.shop_sort_order ?? 0;
+        return aOrder - bOrder;
+      });
       setBuildings(merged);
       setLoading(false);
     })();

@@ -67,6 +67,7 @@ export default function RoomManagement() {
 
   const [editStore, setEditStore] = useState<Store | null>(null);
   const [editStoreName, setEditStoreName] = useState("");
+  const [editStoreSortOrder, setEditStoreSortOrder] = useState("0");
   // ─── 公開HP (Ange Spa) 用 state ───
   const [editShopIsPublic, setEditShopIsPublic] = useState(false);
   const [editShopDisplayName, setEditShopDisplayName] = useState("");
@@ -112,6 +113,8 @@ export default function RoomManagement() {
       shop_hours: editShopHours.trim(),
       shop_reception_hours: editShopReceptionHours.trim(),
       shop_holiday: editShopHoliday.trim(),
+      // ─── /access 上の店舗グループ表示順 ───
+      shop_sort_order: parseInt(editStoreSortOrder) || 0,
     }).eq("id", editStore.id);
     setEditStore(null);
     fetchData();
@@ -267,6 +270,7 @@ export default function RoomManagement() {
                       setEditShopHours(s.shop_hours || "");
                       setEditShopReceptionHours(s.shop_reception_hours || "");
                       setEditShopHoliday(s.shop_holiday || "");
+                      setEditStoreSortOrder(String(s.shop_sort_order ?? 0));
                     }} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
                     <button onClick={() => deleteStore(s.id)} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                   </div>
@@ -447,6 +451,14 @@ export default function RoomManagement() {
                     <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🏖 定休日</label>
                     <input type="text" value={editShopHoliday} onChange={(e) => setEditShopHoliday(e.target.value)} placeholder="年中無休" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
                   </div>
+                </div>
+              </div>
+
+              {/* 表示順 (店舗グループ) */}
+              <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-[11px] flex-1" style={{ color: T.text }}>📊 店舗グループの表示順<span className="text-[9px] ml-1" style={{ color: T.textMuted }}>（/access ページで小さい順に表示。配下の建物はまとまって表示されます）</span></label>
+                  <input type="number" value={editStoreSortOrder} onChange={(e) => setEditStoreSortOrder(e.target.value)} className="w-20 px-2 py-1.5 rounded-lg text-[11px] outline-none text-right" style={inputStyle} />
                 </div>
               </div>
             </div>
