@@ -25,6 +25,7 @@ import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { NavMenu } from "../../lib/nav-menu";
 import { useStaffSession } from "../../lib/staff-session";
+import { generateCategoryCertificate, generateMasterCertificate } from "../../lib/training-certificate-pdf";
 
 type Therapist = {
   id: number;
@@ -33,6 +34,11 @@ type Therapist = {
   status: string;
   entry_date: string | null;
   deleted_at: string | null;
+};
+
+type StoreInfo = {
+  company_name?: string;
+  representative_name?: string;
 };
 
 type TrainingCategory = {
@@ -88,6 +94,7 @@ export default function TrainingReportPage() {
   const [modules, setModules] = useState<TrainingModule[]>([]);
   const [records, setRecords] = useState<TrainingRecord[]>([]);
   const [badges, setBadges] = useState<SkillBadge[]>([]);
+  const [storeInfo, setStoreInfo] = useState<StoreInfo>({});
 
   // フィルタ
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,12 +104,13 @@ export default function TrainingReportPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    const [tRes, cRes, mRes, rRes, bRes] = await Promise.all([
+    const [tRes, cRes, mRes, rRes, bRes, sRes] = await Promise.all([
       supabase.from("therapists").select("id,name,real_name,status,entry_date,deleted_at").is("deleted_at", null),
       supabase.from("training_categories").select("id,name,slug,level,emoji,is_required,sort_order").order("sort_order"),
       supabase.from("training_modules").select("id,category_id,title,duration_minutes,is_required,sort_order"),
       supabase.from("therapist_training_records").select("id,therapist_id,module_id,status,started_at,completed_at,updated_at"),
       supabase.from("therapist_skill_badges").select("id,therapist_id,category_id,level,acquired_at"),
+      supabase.from("stores").select("company_name,representative_name").limit(1).maybeSingle(),
     ]);
 
     setTherapists((tRes.data as Therapist[]) || []);
@@ -110,6 +118,7 @@ export default function TrainingReportPage() {
     setModules((mRes.data as TrainingModule[]) || []);
     setRecords((rRes.data as TrainingRecord[]) || []);
     setBadges((bRes.data as SkillBadge[]) || []);
+    if (sRes.data) setStoreInfo(sRes.data as StoreInfo);
 
     setLoading(false);
   }, []);
@@ -117,6 +126,103 @@ export default function TrainingReportPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  /* ─────────────────────────────────────────────────────────────
+   * 修了証発行ハンドラ
+   * ───────────────────────────────────────────────────────────── */
+  const companyForCert = useMemo(() => ({
+    company_name: storeInfo.company_name || "合同会社テラスライフ",
+    brand_name: storeInfo.company_name?.includes("テラスライフ") ? "Ange Spa" : undefined,
+    representative: storeInfo.representative_name || "",
+  }), [storeInfo]);
+
+  // カテゴリ別修了証
+  const issueCategoryCert = useCallback((therapist: Therapist, categoryId: number) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return;
+    const badge = badges.find(b => b.therapist_id === therapist.id && b.category_id === categoryId);
+    if (!badge) {
+      alert("バッジが取得されていないため、修了証を発行できません。");
+      return;
+    }
+    const catModules = modules
+      .filter(m => m.category_id === categoryId)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const moduleInfos = catModules.map(m => {
+      const rec = records.find(r => r.therapist_id === therapist.id && r.module_id === m.id);
+      return {
+        id: m.id,
+        title: m.title,
+        duration_minutes: m.duration_minutes,
+        completed_at: rec?.completed_at || badge.acquired_at,
+      };
+    });
+    generateCategoryCertificate({
+      company: companyForCert,
+      therapist: {
+        id: therapist.id,
+        real_name: therapist.real_name || therapist.name,
+      },
+      category: {
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug,
+        emoji: cat.emoji || undefined,
+        level: cat.level || "basic",
+      },
+      badge: {
+        id: badge.id,
+        acquired_at: badge.acquired_at,
+        level: badge.level || "basic",
+      },
+      modules: moduleInfos,
+    });
+  }, [categories, badges, modules, records, companyForCert]);
+
+  // 必須5総合修了証
+  const issueMasterCert = useCallback((therapist: Therapist) => {
+    const basicCats = categories.filter(c => c.level === "basic");
+    const basicBadges = badges.filter(b => {
+      if (b.therapist_id !== therapist.id) return false;
+      const cat = categories.find(c => c.id === b.category_id);
+      return cat?.level === "basic";
+    });
+    if (basicCats.length === 0 || basicBadges.length < basicCats.length) {
+      alert("必須5カリキュラムを全修了していないため、総合修了証を発行できません。");
+      return;
+    }
+    const allBasicModules = modules.filter(m => {
+      const cat = categories.find(c => c.id === m.category_id);
+      return cat?.level === "basic";
+    });
+    const masterMinutes = allBasicModules.reduce((s, m) => s + (m.duration_minutes || 0), 0);
+    const sortedDates = basicBadges.map(b => b.acquired_at).sort();
+
+    generateMasterCertificate({
+      company: companyForCert,
+      therapist: {
+        id: therapist.id,
+        real_name: therapist.real_name || therapist.name,
+      },
+      basicCategories: basicCats.map(c => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        emoji: c.emoji || undefined,
+        level: c.level || "basic",
+      })),
+      basicBadges: basicBadges.map(b => ({
+        id: b.id,
+        acquired_at: b.acquired_at,
+        level: b.level || "basic",
+        category_id: b.category_id,
+      } as unknown as { id: number; acquired_at: string; level: string })),
+      totalModules: allBasicModules.length,
+      totalHours: parseFloat((masterMinutes / 60).toFixed(1)),
+      earliestDate: sortedDates[0] || "",
+      latestDate: sortedDates[sortedDates.length - 1] || "",
+    });
+  }, [categories, badges, modules, companyForCert]);
 
   /* ─────────────────────────────────────────────────────────────
    * 集計ロジック
@@ -540,7 +646,14 @@ export default function TrainingReportPage() {
                             </td>
                             <td className="text-center px-2 py-2.5">
                               {isMaster ? (
-                                <span className="inline-block text-[18px]" title="必須5全修了">🎓</span>
+                                <button
+                                  onClick={() => issueMasterCert(t)}
+                                  title="必須5全修了 — クリックで総合修了証を発行"
+                                  className="inline-block text-[18px] cursor-pointer hover:scale-110 transition-transform"
+                                  style={{ background: "none", border: "none", padding: 0 }}
+                                >
+                                  🎓
+                                </button>
                               ) : (
                                 <span className="text-[9px]" style={{ color: T.textFaint }}>—</span>
                               )}
@@ -554,9 +667,14 @@ export default function TrainingReportPage() {
                               if (hasBadge) {
                                 return (
                                   <td key={cat.id} className="text-center px-2 py-2.5">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px]" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>
-                                      ✓ 修了
-                                    </span>
+                                    <button
+                                      onClick={() => issueCategoryCert(t, cat.id)}
+                                      title={`${cat.name} 修了証を発行`}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] cursor-pointer hover:opacity-80 transition-opacity"
+                                      style={{ backgroundColor: "#4a7c5918", color: "#4a7c59", border: "none" }}
+                                    >
+                                      ✓ 修了 📜
+                                    </button>
                                   </td>
                                 );
                               }
@@ -588,8 +706,8 @@ export default function TrainingReportPage() {
                 {/* 凡例 */}
                 <div className="mt-3 px-4 py-2.5 rounded-xl border text-[10px] flex flex-wrap items-center gap-4" style={{ backgroundColor: T.card, borderColor: T.border, color: T.textMuted }}>
                   <span>凡例:</span>
-                  <span><span className="inline-block text-[14px] mr-1">🎓</span>必須5全修了</span>
-                  <span><span className="inline-block px-1.5 py-0.5 rounded text-[9px] mr-1" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>✓ 修了</span>カテゴリ全モジュール修了+バッジ取得</span>
+                  <span><span className="inline-block text-[14px] mr-1">🎓</span>必須5全修了 (クリックで総合修了証発行)</span>
+                  <span><span className="inline-block px-1.5 py-0.5 rounded text-[9px] mr-1" style={{ backgroundColor: "#4a7c5918", color: "#4a7c59" }}>✓ 修了 📜</span>カテゴリ別修了証発行</span>
                   <span><span className="inline-block w-12 h-1 rounded-full mr-1" style={{ backgroundColor: T.cardAlt, position: "relative", verticalAlign: "middle" }}><span className="absolute left-0 top-0 h-full" style={{ width: "60%", backgroundColor: "#b38419" }} /></span>進捗中</span>
                   <span style={{ color: T.textFaint }}>未着手 = 1モジュールも完了していない</span>
                 </div>

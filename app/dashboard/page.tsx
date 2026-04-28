@@ -16,6 +16,7 @@ import { findTherapistName, makeTherapistNameResolver } from "../../lib/therapis
 import { useToast } from "../../lib/toast";
 const CustomerImportPanel = lazy(() => import("../../lib/customer-import-panel"));
 const NgImportPanel = lazy(() => import("../../lib/ng-import-panel"));
+const CustomerHealthCharts = lazy(() => import("../../components/dashboard/CustomerHealthCharts"));
 
 type Customer = {
   id: number; created_at: string; name: string; self_name: string; phone: string; phone2: string; phone3: string;
@@ -1409,6 +1410,13 @@ export default function Dashboard() {
                   </div>
                 </div>
                 {custPoints.length > 0 && (<div className="space-y-1 max-h-[150px] overflow-y-auto">{custPoints.slice(0, 10).map(p => (<div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-[11px]" style={{ backgroundColor: T.cardAlt }}><div className="min-w-0 flex-1"><p className="truncate">{p.description || (p.type === "earn" ? "ポイント付与" : "ポイント利用")}</p><span className="text-[9px]" style={{ color: T.textMuted }}>{new Date(p.created_at).toLocaleDateString("ja-JP")}{p.expires_at && ` / 期限:${new Date(p.expires_at).toLocaleDateString("ja-JP")}`}</span></div><span className="font-bold ml-2 flex-shrink-0" style={{ color: p.amount > 0 ? "#4a7c59" : "#c45555" }}>{p.amount > 0 ? "+" : ""}{p.amount.toLocaleString()}pt</span></div>))}{custPoints.length > 10 && <p className="text-[9px] text-center py-1" style={{ color: T.textFaint }}>他{custPoints.length - 10}件</p>}</div>)}
+              </div>
+
+              {/* 🩺 健康プロファイル + 📋 施術カルテ履歴 */}
+              <div className="mb-6">
+                <Suspense fallback={<div className="rounded-xl p-3 text-[11px] text-center" style={{ backgroundColor: T.cardAlt, color: T.textMuted }}>読み込み中...</div>}>
+                  <CustomerHealthCharts customerId={detailCustomer.id} customerName={detailCustomer.name} therapists={therapists} T={T} />
+                </Suspense>
               </div>
 
               {/* セラピストメモ */}
