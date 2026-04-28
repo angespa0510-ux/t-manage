@@ -66,6 +66,9 @@ export default function RoomManagement() {
   const [editShopDescription, setEditShopDescription] = useState("");
   const [editShopSortOrder, setEditShopSortOrder] = useState("0");
   const [editShopImageFile, setEditShopImageFile] = useState<File | null>(null);
+  // ─── サブ画像（ギャラリー） ───
+  const [editShopSubImageUrls, setEditShopSubImageUrls] = useState<string[]>([]);
+  const [editShopSubImageFiles, setEditShopSubImageFiles] = useState<File[]>([]);
   const [editShopTab, setEditShopTab] = useState<"basic" | "public">("basic");
   const [editBuilding, setEditBuilding] = useState<Building | null>(null);
   const [editBuildingName, setEditBuildingName] = useState("");
@@ -96,6 +99,20 @@ export default function RoomManagement() {
         if (u?.publicUrl) finalImageUrl = u.publicUrl;
       }
     }
+    // サブ画像（ギャラリー）アップロード — 残した既存URL + 新規アップロード分を結合
+    const finalSubImageUrls: string[] = [...editShopSubImageUrls];
+    if (editShopSubImageFiles.length > 0) {
+      for (let i = 0; i < editShopSubImageFiles.length; i++) {
+        const f = editShopSubImageFiles[i];
+        const ext = f.name.split(".").pop() || "jpg";
+        const fn = `shop_${editStore.id}_sub_${new Date().getTime()}_${i}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("therapist-photos").upload(fn, f, { upsert: true });
+        if (!upErr) {
+          const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
+          if (u?.publicUrl) finalSubImageUrls.push(u.publicUrl);
+        }
+      }
+    }
     await supabase.from("stores").update({
       name: editStoreName.trim(),
       // ─── 公開HP (Ange Spa) 用 ───
@@ -110,11 +127,13 @@ export default function RoomManagement() {
       shop_access: editShopAccess.trim(),
       shop_map_embed: editShopMapEmbed.trim(),
       shop_image_url: finalImageUrl,
+      shop_sub_image_urls: finalSubImageUrls,
       shop_description: editShopDescription.trim(),
       shop_sort_order: parseInt(editShopSortOrder) || 0,
     }).eq("id", editStore.id);
     setEditStore(null);
     setEditShopImageFile(null);
+    setEditShopSubImageFiles([]);
     fetchData();
   };
   const deleteStore = async (id: number) => {
@@ -230,6 +249,8 @@ export default function RoomManagement() {
                       setEditShopAccess(s.shop_access || "");
                       setEditShopMapEmbed(s.shop_map_embed || "");
                       setEditShopImageUrl(s.shop_image_url || "");
+                      setEditShopSubImageUrls(s.shop_sub_image_urls || []);
+                      setEditShopSubImageFiles([]);
                       setEditShopDescription(s.shop_description || "");
                       setEditShopSortOrder(String(s.shop_sort_order ?? 0));
                       setEditShopImageFile(null);
@@ -467,6 +488,80 @@ export default function RoomManagement() {
                     📷 画像を選択
                     <input type="file" accept="image/*" onChange={(e) => setEditShopImageFile(e.target.files?.[0] || null)} className="hidden" />
                   </label>
+                </div>
+
+                {/* サブ画像（ギャラリー） */}
+                <div>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🖼 サブ画像（ギャラリー）<span className="text-[9px] ml-1" style={{ color: T.textMuted }}>※ /access ページで最大4枚表示</span></label>
+
+                  {/* 既存URL + 新規ファイルのプレビュー */}
+                  {(editShopSubImageUrls.length > 0 || editShopSubImageFiles.length > 0) && (
+                    <div className="mb-2 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {/* 既存URL（DBに保存済み） */}
+                      {editShopSubImageUrls.map((url, i) => (
+                        <div key={`url-${i}`} className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt={`sub-${i}`} className="rounded-lg w-full" style={{ aspectRatio: "1 / 1", objectFit: "cover" }} />
+                          <button
+                            type="button"
+                            onClick={() => setEditShopSubImageUrls(editShopSubImageUrls.filter((_, idx) => idx !== i))}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-[11px] cursor-pointer"
+                            style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}
+                            title="この画像を削除"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      {/* アップロード待ちファイル */}
+                      {editShopSubImageFiles.map((f, i) => {
+                        const previewUrl = URL.createObjectURL(f);
+                        return (
+                          <div key={`file-${i}`} className="relative">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={previewUrl} alt={f.name} className="rounded-lg w-full" style={{ aspectRatio: "1 / 1", objectFit: "cover", opacity: 0.85 }} />
+                            <div className="absolute inset-0 rounded-lg flex items-center justify-center pointer-events-none" style={{ backgroundColor: "rgba(232,132,154,0.15)", border: "1px dashed #e8849a" }}>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#e8849a", color: "#fff" }}>NEW</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setEditShopSubImageFiles(editShopSubImageFiles.filter((_, idx) => idx !== i))}
+                              className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-[11px] cursor-pointer"
+                              style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}
+                              title="このファイルをキャンセル"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {editShopSubImageFiles.length > 0 && (
+                    <p className="text-[10px] mb-2" style={{ color: "#e8849a" }}>📸 {editShopSubImageFiles.length}枚 追加予定（保存時にアップロードされます）</p>
+                  )}
+
+                  <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: "#e8849a18", color: "#e8849a", border: "1px solid #e8849a44" }}>
+                    📷 サブ画像を追加（複数可）
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length > 0) {
+                          setEditShopSubImageFiles([...editShopSubImageFiles, ...files]);
+                        }
+                        e.target.value = "";
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {editShopSubImageUrls.length === 0 && editShopSubImageFiles.length === 0 && (
+                    <p className="text-[9px] mt-1.5" style={{ color: T.textMuted }}>未登録 / 内観・入口・看板など店舗の魅力が伝わる写真を3〜5枚程度</p>
+                  )}
                 </div>
 
                 {/* 紹介文 */}
