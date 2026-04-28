@@ -6,6 +6,7 @@ import TaxSupportWizard from "../../components/TaxSupportWizard";
 import TaxBookkeeping from "../../components/TaxBookkeeping";
 import { SITE, MARBLE } from "../../lib/site-theme";
 import { generateContractCertificate, generatePaymentCertificate, generateTransactionCertificate } from "../../lib/certificate-pdf";
+import { generateCategoryCertificate, generateMasterCertificate } from "../../lib/training-certificate-pdf";
 import { calcGrossRevenue } from "../../lib/settlement-calc";
 import { useConfirm } from "../../components/useConfirm";
 import PushToggle from "../../components/PushToggle";
@@ -150,7 +151,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [salaryYear, setSalaryYear] = useState(() => new Date().getFullYear());
   const [annualSettlements, setAnnualSettlements] = useState<Settlement[]>([]);
   const [annualLoading, setAnnualLoading] = useState(false);
-  const [storeInfo, setStoreInfo] = useState<{ company_name?: string; company_address?: string; company_phone?: string; invoice_number?: string } | null>(null);
+  const [storeInfo, setStoreInfo] = useState<{ company_name?: string; company_address?: string; company_phone?: string; invoice_number?: string; representative_name?: string; representative_title?: string } | null>(null);
   const [certChecks, setCertChecks] = useState<{ label: string; ok: boolean }[]>([]);
   const [certEligible, setCertEligible] = useState(false);
   const [noteSearch, setNoteSearch] = useState(""); const [showAddNote, setShowAddNote] = useState(false);
@@ -491,7 +492,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     const { data: ma } = await supabase.from("manual_articles").select("*").eq("is_published", true).order("sort_order").order("created_at", { ascending: false }); if (ma) setManualArticles(ma);
     const { data: mr } = await supabase.from("manual_reads").select("article_id").eq("therapist_id", tid); if (mr) setManualReads(mr.map((r: any) => r.article_id));
     const { data: mu } = await supabase.from("manual_updates").select("*").order("created_at", { ascending: false }).limit(10); if (mu) setManualUpdates(mu);
-    const { data: storeD } = await supabase.from("stores").select("company_name,company_address,company_phone,invoice_number"); if (storeD?.[0]) setStoreInfo(storeD[0]);
+    const { data: storeD } = await supabase.from("stores").select("company_name,company_address,company_phone,invoice_number,representative_name,representative_title"); if (storeD?.[0]) setStoreInfo(storeD[0]);
     // 証明書発行条件チェック
     const th = therapist as any;
     const { data: ct } = await supabase.from("contracts").select("status").eq("therapist_id", tid).eq("status", "signed").maybeSingle();
@@ -3179,6 +3180,104 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           }, 0);
           const totalHours = (totalMinutes / 60).toFixed(1);
 
+          // 修了証発行: 共通の company 情報
+          const companyForCert = {
+            company_name: storeInfo?.company_name || "合同会社テラスライフ",
+            brand_name: storeInfo?.company_name?.includes("テラスライフ") ? "Ange Spa" : undefined,
+            representative: storeInfo?.representative_name || "",
+            company_address: storeInfo?.company_address || "",
+          };
+
+          // カテゴリ別修了証を発行
+          const issueCategoryCert = (badge: typeof badges[number]) => {
+            if (!therapist) return;
+            const cat = trainingCategories.find(c => c.id === badge.category_id);
+            if (!cat) return;
+            const catModules = trainingModules
+              .filter(m => m.category_id === cat.id)
+              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            const moduleInfos = catModules.map(m => {
+              const rec = trainingRecordsByModule[m.id];
+              return {
+                id: m.id,
+                title: m.title,
+                duration_minutes: m.duration_minutes,
+                completed_at: rec?.completed_at || badge.acquired_at,
+              };
+            });
+            generateCategoryCertificate({
+              company: companyForCert,
+              therapist: {
+                id: therapist.id,
+                real_name: therapist.real_name || therapist.name,
+              },
+              category: {
+                id: cat.id,
+                name: cat.name,
+                slug: cat.slug,
+                emoji: cat.emoji,
+                level: cat.level || "basic",
+              },
+              badge: {
+                id: badge.id,
+                acquired_at: badge.acquired_at,
+                level: badge.level || "basic",
+              },
+              modules: moduleInfos,
+            });
+          };
+
+          // 必須5総合修了証を発行
+          const issueMasterCert = () => {
+            if (!therapist) return;
+            const basicCats = trainingCategories.filter(c => c.level === "basic");
+            const basicBadges = badges.filter(b => {
+              const cat = trainingCategories.find(c => c.id === b.category_id);
+              return cat?.level === "basic";
+            });
+            if (basicCats.length === 0 || basicBadges.length < basicCats.length) return;
+
+            const allBasicModules = trainingModules.filter(m => {
+              const cat = trainingCategories.find(c => c.id === m.category_id);
+              return cat?.level === "basic";
+            });
+            const masterMinutes = allBasicModules.reduce((s, m) => s + (m.duration_minutes || 0), 0);
+            const sortedDates = basicBadges.map(b => b.acquired_at).sort();
+
+            generateMasterCertificate({
+              company: companyForCert,
+              therapist: {
+                id: therapist.id,
+                real_name: therapist.real_name || therapist.name,
+              },
+              basicCategories: basicCats.map(c => ({
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                emoji: c.emoji,
+                level: c.level || "basic",
+              })),
+              basicBadges: basicBadges.map(b => ({
+                id: b.id,
+                acquired_at: b.acquired_at,
+                level: b.level || "basic",
+                category_id: b.category_id,
+              } as unknown as { id: number; acquired_at: string; level: string })),
+              totalModules: allBasicModules.length,
+              totalHours: parseFloat((masterMinutes / 60).toFixed(1)),
+              earliestDate: sortedDates[0] || "",
+              latestDate: sortedDates[sortedDates.length - 1] || "",
+            });
+          };
+
+          // 必須5全修了判定
+          const basicCatsAll = trainingCategories.filter(c => c.level === "basic");
+          const basicBadgesGot = badges.filter(b => {
+            const cat = trainingCategories.find(c => c.id === b.category_id);
+            return cat?.level === "basic";
+          });
+          const isMasterEligible = basicCatsAll.length > 0 && basicBadgesGot.length >= basicCatsAll.length;
+
           return (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
             {/* セクション見出し */}
             <div style={{ textAlign: "center", paddingTop: 6 }}>
@@ -3224,11 +3323,17 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     const cat = trainingCategories.find(c => c.id === badge.category_id);
                     if (!cat) return null;
                     return (
-                      <div key={badge.id} style={{ padding: "16px 14px", backgroundColor: T.card, border: `1px solid #6b9b7e`, textAlign: "center", position: "relative" }}>
-                        <p style={{ margin: 0, fontSize: 32, lineHeight: 1, marginBottom: 8 }}>{cat.emoji || "🏆"}</p>
+                      <div key={badge.id} style={{ padding: "16px 14px 12px", backgroundColor: T.card, border: `1px solid #6b9b7e`, textAlign: "center", position: "relative", display: "flex", flexDirection: "column", gap: 6 }}>
+                        <p style={{ margin: 0, fontSize: 32, lineHeight: 1, marginBottom: 6 }}>{cat.emoji || "🏆"}</p>
                         <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em" }}>{cat.name}</p>
-                        <p style={{ margin: "3px 0 0", fontFamily: FONT_DISPLAY, fontSize: 9, color: "#6b9b7e", letterSpacing: "0.15em", fontWeight: 500 }}>{(badge.level || "BASIC").toUpperCase()}</p>
-                        <p style={{ margin: "6px 0 0", fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>{new Date(badge.acquired_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</p>
+                        <p style={{ margin: "1px 0 0", fontFamily: FONT_DISPLAY, fontSize: 9, color: "#6b9b7e", letterSpacing: "0.15em", fontWeight: 500 }}>{(badge.level || "BASIC").toUpperCase()}</p>
+                        <p style={{ margin: "2px 0 6px", fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>{new Date(badge.acquired_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</p>
+                        <button
+                          onClick={() => issueCategoryCert(badge)}
+                          style={{ marginTop: "auto", padding: "6px 8px", fontSize: 10, fontFamily: FONT_SERIF, letterSpacing: "0.1em", backgroundColor: "#fff", border: `1px solid ${T.accent}`, color: T.accent, cursor: "pointer", fontWeight: 500 }}
+                        >
+                          📜 修了証を発行
+                        </button>
                       </div>
                     );
                   })}
@@ -3294,14 +3399,97 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               </div>
             )}
 
-            {/* 修了証発行プレースホルダー (Phase 2) */}
-            <div style={{ padding: "14px 16px", backgroundColor: T.accentBg, border: `1px solid ${T.accent}40` }}>
-              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.accentDeep, fontWeight: 500, marginBottom: 6 }}>COMING SOON · PHASE 2</p>
-              <p style={{ margin: 0, fontSize: 12, color: T.text, lineHeight: 1.7 }}>
-                📜 <strong style={{ fontWeight: 500 }}>修了証PDF発行機能</strong><br />
-                <span style={{ fontSize: 11, color: T.textSub }}>必須カリキュラム完了後、PDF形式で修了証を発行できます。確定申告時の研修費経費計上の証明にもご活用ください。</span>
-              </p>
-            </div>
+            {/* ═══ 📜 修了証ライブラリ (Phase 2 本実装) ═══ */}
+            {badges.length > 0 && (
+              <div>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>CERTIFICATES — 修了証ライブラリ</p>
+
+                {/* 必須5全修了の総合修了証 (達成時のみ大きく表示) */}
+                {isMasterEligible && (
+                  <button
+                    onClick={issueMasterCert}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "20px 22px",
+                      marginBottom: 12,
+                      background: "linear-gradient(135deg, #fdf6f7 0%, #fbe7ea 100%)",
+                      border: `1px solid ${T.accent}`,
+                      cursor: "pointer",
+                      fontFamily: FONT_SERIF,
+                      position: "relative",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <span style={{ fontSize: 36, lineHeight: 1, flexShrink: 0 }}>🎓</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.3em", color: T.accentDeep, fontWeight: 500, marginBottom: 4 }}>MASTER CERTIFICATE — 必須全修了</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: T.text, letterSpacing: "0.08em", lineHeight: 1.5 }}>
+                          必須5カリキュラム<br />
+                          総合修了証
+                        </p>
+                        <p style={{ margin: "6px 0 0", fontSize: 10, color: T.textSub, letterSpacing: "0.02em", lineHeight: 1.6 }}>
+                          基礎技術習得を証する特別な修了証です。クリックして発行 →
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {/* 個別カテゴリ修了証 - 取得済み + 未取得を網羅表示 */}
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 8, fontWeight: 500, marginTop: isMasterEligible ? 16 : 0 }}>BY CATEGORY — カテゴリ別修了証</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {trainingCategories.map(cat => {
+                    const badge = badges.find(b => b.category_id === cat.id);
+                    const catModuleCount = trainingModules.filter(m => m.category_id === cat.id).length;
+                    const completedCatCount = completed.filter(r => {
+                      const m = trainingModules.find(mm => mm.id === r.module_id);
+                      return m?.category_id === cat.id;
+                    }).length;
+                    const isAvailable = !!badge;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => badge && issueCategoryCert(badge)}
+                        disabled={!isAvailable}
+                        style={{
+                          textAlign: "left",
+                          padding: "10px 14px",
+                          backgroundColor: isAvailable ? T.card : T.cardAlt,
+                          border: `1px solid ${isAvailable ? T.border : T.border}`,
+                          cursor: isAvailable ? "pointer" : "default",
+                          fontFamily: FONT_SERIF,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          opacity: isAvailable ? 1 : 0.5,
+                        }}
+                      >
+                        <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0, filter: isAvailable ? "none" : "grayscale(100%)" }}>{cat.emoji || "📘"}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em" }}>{cat.name}</p>
+                          <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textMuted, letterSpacing: "0.02em" }}>
+                            {isAvailable
+                              ? `修了 · ${new Date(badge!.acquired_at).toLocaleDateString("ja-JP")}`
+                              : `${completedCatCount} / ${catModuleCount} モジュール — 全完了で発行可能`}
+                          </p>
+                        </div>
+                        {isAvailable ? (
+                          <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "3px 8px", letterSpacing: "0.15em", color: T.accent, border: `1px solid ${T.accent}`, fontWeight: 500 }}>📜 発行</span>
+                        ) : (
+                          <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "3px 8px", letterSpacing: "0.15em", color: T.textFaint, border: `1px solid ${T.border}`, fontWeight: 500 }}>未達成</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ padding: "10px 14px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, fontSize: 10, lineHeight: 1.7, color: T.textMuted, letterSpacing: "0.02em", marginTop: 10 }}>
+                  💡 <strong style={{ color: T.textSub }}>修了証について</strong> · 業務委託契約書 第10条（研修受講義務）に基づき発行されます。確定申告時の研修費経費計上の証憑としてもご活用いただけます。新規タブで開く修了証は、ブラウザの「印刷 → PDFとして保存」でファイル化できます。
+                </div>
+              </div>
+            )}
           </div>);
         })()}
 
