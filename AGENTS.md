@@ -20,6 +20,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 → チョップを所得税法204条1項6号「ホステス等」に該当しない**「施術業」**として通すため、契約・カルテ・研修・対外表現を一貫させる戦略。セラピスト全員源泉徴収なしで継続。
 
+**Phase 1 実装状況（2026/04/28 完了）**:
+- ✅ 契約書 v3.0 (18条・施術業対応版): `app/contract-sign/[token]/page.tsx` + `lib/contract-v3.tsx` (`?preview=v3` で表示。弁護士レビュー後 default 切替予定)
+- ✅ 同意フラグ DB: `sql/session89_contract_v3_consents.sql` (実行済)
+- ✅ カルテ DB: `sql/session90_treatment_charts.sql` (実行済) — `treatment_charts` + `customer_health_profiles`
+- ✅ 研修 DB + 必須5カリキュラム × 10モジュール: `sql/session91_therapist_training.sql` (実行済)
+- ✅ カルテ入力 UI: `app/cast/page.tsx` 内モーダル本実装 (下書き保存 / 確定保存 / 状態別ボタン切替)
+- ✅ 研修 UI: `app/cast/page.tsx` techniques + training タブ本実装、研修詳細モーダル、自動バッジ付与
+- ✅ HOME 必須研修バナー (契約書第10条準拠)
+- ✅ 公開HPセラピスト詳細にスキルバッジ表示 (`app/(site)/therapist/[id]/page.tsx`)
+
+**Phase 2 残タスク（弁護士レビュー後 / 6月中〜7月以降）**:
+- 弁護士レビュー後: contract-sign の `?preview=v3` を default 化、page.tsx の v2 分岐を撤去
+- 外部専門家による研修コンテンツのブラッシュアップ (整体師・アロマセラピスト・看護師等)
+- 修了証 PDF 発行機能 (jspdf 既導入)
+- 管理者: 研修教材管理画面 / バッジ手動付与画面 / 受講率レポート
+- お客様マイページ: 健康プロファイル更新 (要配慮個人情報の同意フロー)
+- カルテ履歴閲覧 (`app/cast/customer/[id]` に新タブ)
+- カルテへの customer_id / store_id 自動補完 (現状は reservation_id のみ紐付け)
+
 **Supabase Pro プラン移行計画**:
 - `docs/09_SUPABASE_PRO_MIGRATION.md`
 
