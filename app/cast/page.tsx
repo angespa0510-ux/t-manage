@@ -1618,6 +1618,41 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             );
           })()}
 
+          {/* ═══ 必須研修未受講アラート（契約書 v3.0 第10条） ═══ */}
+          {(() => {
+            // 必須カテゴリの中で「全必須モジュール完了 = バッジ獲得」していないものを集計
+            const incompleteCategories = trainingCategories.filter(c => {
+              if (!c.is_required) return false;
+              if (skillBadgesByCategory[c.id]) return false;  // バッジ取得済はOK
+              const reqMods = trainingModules.filter(m => m.category_id === c.id && m.is_required);
+              if (reqMods.length === 0) return false;
+              return !reqMods.every(m => trainingRecordsByModule[m.id]?.status === "completed");
+            });
+            if (incompleteCategories.length === 0) return null;
+            return (
+              <section style={{ ...MARBLE.beige, padding: "26px 18px", marginLeft: -16, marginRight: -16 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, maxWidth: 480, margin: "0 auto" }}>
+                  <div style={{ flexShrink: 0, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#c3a78218", border: "1px solid #c3a78244", fontSize: 22 }}>🌿</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: "#a08658", fontWeight: 500 }}>REQUIRED TRAINING</p>
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 999, backgroundColor: "#c3a782", color: "#fff", letterSpacing: 0 }}>{incompleteCategories.length}件</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.04em", lineHeight: 1.7 }}>
+                      必須研修が未受講です
+                    </p>
+                    <p style={{ margin: "4px 0 0", fontSize: 10, color: T.textSub, letterSpacing: "0.02em", lineHeight: 1.7 }}>
+                      {incompleteCategories.map(c => c.emoji + " " + c.name).join(" / ")}<br />
+                      <button onClick={() => { setMainTab("learn"); setLearnSub("techniques"); setTab("techniques"); }} style={{ marginTop: 6, fontFamily: FONT_SERIF, fontSize: 11, padding: "5px 14px", color: "#fff", backgroundColor: "#c3a782", border: "none", cursor: "pointer", letterSpacing: "0.05em" }}>📖 ラーンタブで受講する</button>
+                      <br />
+                      <span style={{ color: T.textFaint }}>※ 業務委託契約書 第10条により、施術技術研修の受講は受託業務の一部です。</span>
+                    </p>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
+
           {/* ═══ ブロック3 — 本日のオーダー ═══ */}
           <section>
             <div style={{ textAlign: "center", marginBottom: 16 }}>

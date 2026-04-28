@@ -106,6 +106,9 @@ export default function TherapistDetailPage({
     therapistReplyAt: string | null;
   }>>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
+  // 🌿 取得バッジ (公開HPでセラピストの専門性を表示するため、Phase 2 機能を一部前倒し)
+  type PublicBadge = { id: number; level: string | null; category_name: string; category_emoji: string | null };
+  const [skillBadges, setSkillBadges] = useState<PublicBadge[]>([]);
   const { customer, isLoggedIn } = useCustomerAuth();
   const isMember = isLoggedIn && !!customer;
 
@@ -180,7 +183,7 @@ export default function TherapistDetailPage({
       }
       const today = new Date().toISOString().split("T")[0];
       const weekLater = new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
-      const [tResp, sResp, stResp, pResp] = await Promise.all([
+      const [tResp, sResp, stResp, pResp, bResp] = await Promise.all([
         supabase
           .from("therapists")
           .select("*")
@@ -202,6 +205,12 @@ export default function TherapistDetailPage({
           .eq("therapist_id", therapistId)
           .eq("is_active", true)
           .order("display_order", { ascending: true }),
+        // 🌿 取得スキルバッジ (training_categories と JOIN)
+        supabase
+          .from("therapist_skill_badges")
+          .select("id, level, training_categories(name, emoji, sort_order)")
+          .eq("therapist_id", therapistId)
+          .order("acquired_at", { ascending: false }),
       ]);
       if (!tResp.data) {
         setNotFound(true);
@@ -214,6 +223,20 @@ export default function TherapistDetailPage({
       setShifts(sResp.data || []);
       setStores(stResp.data || []);
       setHpPhotos(pResp.data || []);
+      // 🌿 取得バッジを公開HP用の形式に整形 (training_categories は JOIN で配列or単一オブジェクトで返る)
+      if (bResp.data) {
+        const badges: PublicBadge[] = bResp.data.flatMap((b: any) => {
+          const cat = Array.isArray(b.training_categories) ? b.training_categories[0] : b.training_categories;
+          if (!cat) return [];
+          return [{
+            id: b.id,
+            level: b.level,
+            category_name: cat.name,
+            category_emoji: cat.emoji,
+          }];
+        });
+        setSkillBadges(badges);
+      }
       setLoading(false);
     })();
   }, [therapistId]);
@@ -633,6 +656,49 @@ export default function TherapistDetailPage({
                       </span>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* 🌿 取得スキル (研修修了バッジ) — 施術業の専門性を顧客に提示 */}
+              {skillBadges.length > 0 && (
+                <div style={{ marginBottom: SITE.sp.xl }}>
+                  <p
+                    style={{
+                      fontFamily: SITE.font.display,
+                      fontSize: "11px",
+                      letterSpacing: SITE.ls.wide,
+                      color: SITE.color.pink,
+                      marginBottom: 10,
+                    }}
+                  >
+                    SKILLS
+                  </p>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {skillBadges.map((b) => (
+                      <span
+                        key={b.id}
+                        title={`${b.category_name} (${(b.level || "BASIC").toUpperCase()})`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          padding: "5px 11px",
+                          border: `1px solid ${SITE.color.borderPink}`,
+                          backgroundColor: "rgba(232,132,154,0.06)",
+                          color: SITE.color.textSub,
+                          fontFamily: SITE.font.serif,
+                          fontSize: "11px",
+                          letterSpacing: SITE.ls.loose,
+                        }}
+                      >
+                        <span style={{ fontSize: "13px", lineHeight: 1 }}>{b.category_emoji || "🏆"}</span>
+                        <span>{b.category_name}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <p style={{ marginTop: 8, fontSize: "10px", color: SITE.color.textMuted, letterSpacing: SITE.ls.normal, fontFamily: SITE.font.serif, lineHeight: 1.7 }}>
+                    所定の社内研修プログラムを修了した証です。
+                  </p>
                 </div>
               )}
 
