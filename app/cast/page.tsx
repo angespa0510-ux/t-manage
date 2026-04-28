@@ -157,6 +157,8 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [noteForm, setNoteForm] = useState({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 })
   const [noteViewTarget, setNoteViewTarget] = useState<CustomerNote | null>(null);
   const [noteHistoryCustomer, setNoteHistoryCustomer] = useState("");
+  // カルテ入力モーダル（Phase 1: UI placeholder - DBは未実装）
+  const [chartModalReservationId, setChartModalReservationId] = useState<number | null>(null);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
 　const [calShifts, setCalShifts] = useState<Shift[]>([]);
 　const [calSettlements, setCalSettlements] = useState<Settlement[]>([]);
@@ -1287,6 +1289,35 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             </div>
           </section>
 
+          {/* ═══ カルテ未記入アラート（施術業実態証跡・6/1〜本格運用） ═══ */}
+          {(() => {
+            const completedTodayCount = todayOrders.filter(o => {
+              const cs = (o as any).customer_status;
+              return cs === "completed" || (o as any).status === "completed";
+            }).length;
+            if (completedTodayCount === 0) return null;
+            return (
+              <section style={{ ...MARBLE.beige, padding: "26px 18px", marginLeft: -16, marginRight: -16 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, maxWidth: 480, margin: "0 auto" }}>
+                  <div style={{ flexShrink: 0, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#b3841918", border: "1px solid #b3841944", fontSize: 22 }}>📋</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: "#b38419", fontWeight: 500 }}>TREATMENT CHART</p>
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 999, backgroundColor: "#e74c5e", color: "#fff", letterSpacing: 0 }}>{completedTodayCount}件</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.04em", lineHeight: 1.7 }}>
+                      本日の施術カルテ未記入があります
+                    </p>
+                    <p style={{ margin: "4px 0 0", fontSize: 10, color: T.textSub, letterSpacing: "0.02em", lineHeight: 1.7 }}>
+                      下の「本日のオーダー」から各予約の <strong style={{ color: "#b38419" }}>📋カルテを記入</strong> ボタンでご記入ください。<br />
+                      <span style={{ color: T.textFaint }}>※ カルテ機能は 2026/6/1 から本格運用開始予定です。</span>
+                    </p>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
+
           {/* ═══ ブロック3 — 本日のオーダー ═══ */}
           <section>
             <div style={{ textAlign: "center", marginBottom: 16 }}>
@@ -1364,13 +1395,19 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                           </button>
                         </>)}
                         {isCompleted && (
-                          <button onClick={async () => {
-                            await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving", status: "unprocessed" }).eq("id", r.id);
-                            setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving", status: "unprocessed" } as any : o));
-                            fetchData();
-                          }} style={{ padding: "9px 14px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
-                            ↩ 退室を取り消す
-                          </button>
+                          <>
+                            <button onClick={() => setChartModalReservationId(r.id)} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: "#b38419", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, position: "relative" }}>
+                              📋 カルテを記入
+                              <span style={{ position: "absolute", top: -6, right: -6, fontFamily: FONT_SANS, fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 999, backgroundColor: "#e74c5e", color: "#fff", letterSpacing: 0, boxShadow: "0 1px 3px rgba(231,76,94,0.4)" }}>未記入</span>
+                            </button>
+                            <button onClick={async () => {
+                              await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving", status: "unprocessed" }).eq("id", r.id);
+                              setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving", status: "unprocessed" } as any : o));
+                              fetchData();
+                            }} style={{ padding: "9px 14px", fontSize: 10, cursor: "pointer", backgroundColor: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
+                              ↩ 退室を取り消す
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -3642,6 +3679,131 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           {taxSubTab === "ledger" && <TaxBookkeeping T={T} therapistId={therapist.id} />}
         </div>
       )}
+
+      {/* ═══ 📋 施術カルテ入力モーダル（Phase 1 placeholder） ═══ */}
+      {chartModalReservationId !== null && (() => {
+        const r = todayOrders.find(x => x.id === chartModalReservationId) || allReservations.find(x => x.id === chartModalReservationId);
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setChartModalReservationId(null)}>
+            <div style={{ width: "100%", maxWidth: 480, maxHeight: "90vh", backgroundColor: T.card, border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+              {/* ヘッダー */}
+              <div style={{ padding: "18px 22px", borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: "#b38419", fontWeight: 500 }}>TREATMENT CHART</p>
+                    <h3 style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 500, letterSpacing: "0.06em", color: T.text }}>📋 施術カルテ</h3>
+                  </div>
+                  <button onClick={() => setChartModalReservationId(null)} style={{ width: 30, height: 30, fontSize: 14, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
+                </div>
+                {r && (
+                  <div style={{ marginTop: 12, fontSize: 11, color: T.textSub, lineHeight: 1.8, letterSpacing: "0.03em" }}>
+                    <p style={{ margin: 0 }}>👤 {r.customer_name}</p>
+                    <p style={{ margin: "2px 0 0" }}>📅 {r.date} {r.start_time?.slice(0,5)} 〜 {r.end_time?.slice(0,5)}</p>
+                    <p style={{ margin: "2px 0 0" }}>📋 {r.course}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 本体 (Coming Soonバナー + 設計プレビュー) */}
+              <div style={{ overflowY: "auto", flex: 1, padding: "18px 22px" }}>
+                {/* Coming Soonバナー */}
+                <div style={{ padding: "16px 18px", backgroundColor: "#b3841912", border: `1px solid #b3841944`, fontSize: 12, lineHeight: 1.9, color: T.text, letterSpacing: "0.03em", textAlign: "center", marginBottom: 18 }}>
+                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#b38419", fontWeight: 500, marginBottom: 6 }}>COMING SOON · 6/1 LAUNCH</p>
+                  <p style={{ margin: 0, fontSize: 12, color: T.text }}>
+                    施術カルテ機能は現在準備中です。<br />
+                    6/1ローンチ時にこちらから入力できるようになります。
+                  </p>
+                </div>
+
+                {/* セクション1: 施術前カウンセリング */}
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>1. 施術前カウンセリング</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.5 }}>
+                    {[
+                      { label: "当日の体調・コンディション", placeholder: "例: 仕事疲れ、肩こりがひどい" },
+                      { label: "気になる箇所・お悩み", placeholder: "例: 右肩・腰" },
+                      { label: "当日のご希望", placeholder: "例: 圧は強め、リラックス重視" },
+                    ].map((f, i) => (
+                      <div key={i}>
+                        <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>{f.label}</p>
+                        <textarea readOnly placeholder={f.placeholder} style={{ width: "100%", minHeight: 36, padding: "8px 10px", fontSize: 11, backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, resize: "none", outline: "none", letterSpacing: "0.02em" }} disabled />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* セクション2: 施術内容 */}
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>2. 施術内容</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, opacity: 0.5 }}>
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>施術部位</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {["肩", "首", "背中", "腰", "脚", "足裏", "腕", "手", "ヘッド", "顔"].map(p => (
+                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>☐ {p}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>使用オイル</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {["ラベンダー", "ホホバ", "アーモンド", "グレープシード"].map(p => (
+                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>☐ {p}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>圧の強さ</p>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {["やわらかめ", "標準", "強め", "かなり強め"].map(p => (
+                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>○ {p}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* セクション3: 施術中の所見 */}
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>3. 施術中の所見</p>
+                  <div style={{ opacity: 0.5 }}>
+                    <textarea readOnly placeholder="例: 右肩の凝りが顕著。施術後にリラックスされた様子。" style={{ width: "100%", minHeight: 56, padding: "8px 10px", fontSize: 11, backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, resize: "none", outline: "none", letterSpacing: "0.02em" }} disabled />
+                  </div>
+                </div>
+
+                {/* セクション4: 次回提案 */}
+                <div style={{ marginBottom: 8 }}>
+                  <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>4. 次回提案</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.5 }}>
+                    <div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>推奨内容</p>
+                      <textarea readOnly placeholder="例: 次回は脚の重点ケアを提案。" style={{ width: "100%", minHeight: 36, padding: "8px 10px", fontSize: 11, backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, resize: "none", outline: "none", letterSpacing: "0.02em" }} disabled />
+                    </div>
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>推奨来店間隔</p>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {["1週間以内", "2週間以内", "1ヶ月以内", "未定"].map(p => (
+                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>○ {p}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* フッター（保存ボタンプレースホルダー） */}
+              <div style={{ padding: "12px 20px", borderTop: `1px solid ${T.border}`, backgroundColor: T.cardAlt, display: "flex", gap: 8 }}>
+                <button onClick={() => setChartModalReservationId(null)} style={{ flex: 1, padding: "11px", fontSize: 11, cursor: "pointer", backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
+                  閉じる
+                </button>
+                <button disabled style={{ flex: 2, padding: "11px", fontSize: 11, cursor: "not-allowed", backgroundColor: T.textFaint, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, opacity: 0.6 }}>
+                  📋 確定保存（6/1〜）
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* お客様施術履歴モーダル */}
       {noteHistoryCustomer && (
