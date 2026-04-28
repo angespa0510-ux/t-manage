@@ -98,18 +98,19 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
   const progressPct = Math.round((completedSteps / STEPS.length) * 100);
 
   // ── 節税計算 ──
+  // Ange Spa は施術業として業務委託契約しているため、源泉徴収なしで運用 (契約書 v3.0 第3条)。
+  // セラピストは個人事業主として自分で確定申告・納税する必要があり、経費を計上することで
+  // 納税額を最小化できる ── というのがこのシミュレーターの主目的。
   const calcSaving = () => {
     const income = parseInt(calcIncome) || 0;
     const expense = parseInt(calcExpense) || 0;
     const days = parseInt(calcDays) || 0;
-    // インボイス控除（未登録の場合バック×10%が天引き）
+    // インボイス控除（未登録の場合バック×10%が天引き／Ange Spa の運用）
     const invoiceDed = calcHasInvoice ? 0 : Math.round(income * 0.1);
     const adjustedIncome = income - invoiceDed;
-    // 源泉徴収（実際: (日次バック-インボイス控除後-5000)×10.21%×日数）
+    // 源泉徴収は Ange Spa では行われない (将来切替時の備えとして変数は残す)
     const dailyAdj = days > 0 ? adjustedIncome / days : 0;
-    const withheld = days > 0
-      ? Math.floor(Math.max(0, dailyAdj - 5000) * 0.1021) * days
-      : Math.floor(Math.max(0, adjustedIncome * 0.8) * 0.1021);
+    const withheld = 0;
     // 厚生費（500円×出勤日数）
     const welfareFee = days > 0 ? 500 * days : 0;
     // 交通費支給（2000円×出勤日数）
@@ -132,9 +133,17 @@ export default function TaxSupportWizard({ T, therapistId, onGoToLedger }: { T: 
     };
     const aoiroTax = baseTax(aoiroIncome);
     const aoiroTotal = aoiroTax + Math.floor(aoiroTax * 0.021);
-    const refund = Math.max(0, withheld - aoiroTotal);
+    // 「経費を一切計上しない場合」の納税額 (比較用 = もし申告しなかったらいくら払うことになるか)
+    const noExpenseProfit = Math.max(0, adjustedIncome + transportIncome);
+    const noExpenseBase = baseTax(noExpenseProfit);
+    const noExpenseTotal = noExpenseBase + Math.floor(noExpenseBase * 0.021);
+    // 節税額 = 経費なしの税額 − 経費・控除を計上した税額
+    const taxSaving = Math.max(0, noExpenseTotal - aoiroTotal);
+    // 還付金は Ange Spa では発生しない (源泉なしのため)。
+    // 他店で源泉徴収されている場合のみ意味を持つので 0 に。変数は互換のため残す。
+    const refund = 0;
     const healthSaving = Math.floor(profit * 0.10) - Math.floor(aoiroIncome * 0.10);
-    return { income, expense, days, dailyAdj, invoiceDed, adjustedIncome, withheld, welfareFee, transportIncome, totalIncome, totalExpense, profit, aoiroIncome, aoiroTax, aoiroTotal, refund, healthSaving, totalBenefit: refund + healthSaving };
+    return { income, expense, days, dailyAdj, invoiceDed, adjustedIncome, withheld, welfareFee, transportIncome, totalIncome, totalExpense, profit, aoiroIncome, aoiroTax, aoiroTotal, noExpenseTotal, taxSaving, refund, healthSaving, totalBenefit: taxSaving + healthSaving };
   };
 
   const fmt = (n: number) => "¥" + n.toLocaleString();
@@ -342,7 +351,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
   // ── 必要書類チェックリスト ──
   const documents = [
     { key: "mynumber", label: "マイナンバーカード（または通知カード＋身分証明書）" },
-    { key: "bank", label: "還付用の口座情報（通帳やキャッシュカード）" },
+    { key: "bank", label: "納付・還付用の口座情報（通帳やキャッシュカード）" },
     { key: "income_record", label: "1年間の収入記録（給料明細・振込記録）" },
     { key: "expense_receipts", label: "経費のレシート・領収書" },
     { key: "insurance", label: "国民健康保険の納付証明書" },
@@ -394,12 +403,13 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             <div className="p-4 rounded-2xl mb-4" style={{ background: `linear-gradient(135deg, ${pink}15, ${pink}05)`, border: `1px solid ${pinkBorder}` }}>
               <p className="text-[12px] font-medium mb-2" style={{ color: pink }}>💡 一番大事なこと</p>
               <p className="text-[11px] leading-relaxed" style={{ color: T.textSub }}>
-                あなたのお給料から、お店は毎回<b style={{ color: red }}>源泉徴収（約10%）</b>を天引きして税務署に納めています。
-                でもこれは<b>「経費ゼロ」前提</b>の税額です。
+                Ange Spa はあなたを<b>個人事業主</b>として業務委託しています。お給料からの<b style={{ color: green }}>源泉徴収はありません</b>。
+                つまり、<b style={{ color: red }}>自分で確定申告して所得税を納める必要があります</b>。
               </p>
               <p className="text-[11px] leading-relaxed mt-2" style={{ color: T.textSub }}>
-                実際は美容費・衣装代・交通費など<b style={{ color: green }}>たくさんの経費</b>がかかっていますよね？
-                確定申告で経費を申告すると、<b style={{ color: green }}>払いすぎた税金が還付金として戻ってきます！</b>
+                でも安心してください。美容費・衣装代・交通費など<b style={{ color: green }}>たくさんの経費</b>がかかっていますよね？
+                確定申告で経費をしっかり申告すれば、<b style={{ color: green }}>納税額を最小化</b>できます。
+                やらないのは大損です。
               </p>
             </div>
 
@@ -407,18 +417,18 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             <div style={{ ...altCard, marginBottom: "12px" }}>
               <p className="text-[11px] font-medium mb-3" style={{ color: T.text }}>📊 お金の流れ（図解）</p>
               <div className="space-y-2">
-                {/* 今の状態 */}
+                {/* 申告しない場合 */}
                 <div className="p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
-                  <p className="text-[10px] font-medium mb-1" style={{ color: red }}>❌ 今（確定申告しない場合）</p>
+                  <p className="text-[10px] font-medium mb-1" style={{ color: red }}>❌ 申告しない場合（無申告）</p>
                   <div className="space-y-1 text-[9px]" style={{ color: T.textSub }}>
-                    <p>あなたの1日のバック 例：¥30,000</p>
-                    <p style={{ color: red }}>　→ 源泉徴収：(¥30,000 − ¥5,000) × 10.21% = ¥2,552</p>
-                    <p style={{ color: red }}>　→ 備品・リネン代：¥500</p>
-                    <p style={{ color: T.textMuted }}>　→ 月15日出勤で年間 源泉約<b style={{ color: red }}>¥46万</b>も天引き</p>
-                    <p style={{ color: T.textMuted }}>　→ <b>美容費・衣装代・交通費などの経費は一切考慮されていない！</b></p>
+                    <p>年間報酬 ¥3,600,000（日バック¥20,000 × 月15日 × 12ヶ月）</p>
+                    <p style={{ color: red }}>　→ 税務署から見て「経費ゼロ」の扱い</p>
+                    <p style={{ color: red }}>　→ 無申告がバレた場合、加算税15〜20% + 延滞税</p>
+                    <p style={{ color: red }}>　→ 国民健康保険料が「所得不明 = 最高額」に</p>
+                    <p style={{ color: T.textMuted }}>　→ <b>美容費・衣装代・交通費などの経費は一切考慮されない！</b></p>
                   </div>
                 </div>
-                {/* 申告後 */}
+                {/* 申告した場合 */}
                 <div className="p-3 rounded-xl" style={{ backgroundColor: green + "08", border: `1px solid ${green}33` }}>
                   <p className="text-[10px] font-medium mb-1" style={{ color: green }}>✅ 確定申告すると</p>
                   <div className="space-y-1 text-[9px]" style={{ color: T.textSub }}>
@@ -427,14 +437,17 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <p style={{ color: green }}>　→ 備品・リネン代を引く（¥500×180日 = −¥90,000）</p>
                     <p style={{ color: green }}>　→ 青色控除を引く（−¥650,000）</p>
                     <p style={{ color: green }}>　→ 基礎控除を引く（−¥950,000〜）</p>
-                    <p>　→ 本来の税額は<b style={{ color: green }}>大幅に減額</b></p>
-                    <p>　→ 源泉徴収で<b style={{ color: red }}>¥276,000</b>も払い済み</p>
+                    <p>　→ 課税所得は<b style={{ color: green }}>大幅に圧縮</b></p>
+                    <p>　→ 所得税は<b style={{ color: green }}>10万円以下</b>に収まることも</p>
                     <p className="mt-1 text-[10px] font-medium" style={{ color: green }}>
-                      💰 差額の約¥182,000が銀行口座に還付される！
+                      💰 経費をしっかり計上すれば、納税額は最小化できる！
                     </p>
                   </div>
                 </div>
               </div>
+              <p className="text-[8px] mt-2" style={{ color: T.textMuted }}>
+                ※ 上記は概算例です。実際の金額はあなたの収入・経費・控除によって変わります。
+              </p>
             </div>
 
             {/* メリット一覧 */}
@@ -442,12 +455,12 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               <p className="text-[11px] font-medium mb-2" style={{ color: green }}>✅ 確定申告するメリット</p>
               <ul className="space-y-1.5">
                 {[
-                  "払いすぎた税金が還付金として戻ってくる💰",
-                  "経費を引いて「本来の税額」で計算される",
+                  "経費を引いて「本来の税額」で計算される（節税できる）",
                   "青色申告なら最大65万円の追加控除",
                   "国民健康保険料が安くなる（所得が下がるため）",
                   "社会的信用UP（ローン・賃貸審査が通りやすい）",
-                  "翌年以降、源泉徴収が調整される場合も",
+                  "他店で源泉徴収されていれば、還付金が戻る場合も",
+                  "無申告のペナルティ（加算税・延滞税）を避けられる",
                 ].map((t, i) => (
                   <li key={i} className="text-[11px] flex gap-1.5" style={{ color: T.textSub }}>
                     <span style={{ color: green }}>✓</span>{t}
@@ -457,10 +470,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             </div>
 
             <div style={{ ...altCard, marginBottom: "12px", borderLeft: `3px solid ${red}` }}>
-              <p className="text-[11px] font-medium mb-2" style={{ color: red }}>❌ しないとどうなる？</p>
+              <p className="text-[11px] font-medium mb-2" style={{ color: red }}>❌ 申告しないとどうなる？</p>
               <ul className="space-y-1.5">
                 {[
-                  "払いすぎた税金がそのまま戻ってこない（大損！）",
+                  "「経費ゼロ」前提の税額がそのまま請求される（大損！）",
                   "無申告がバレると加算税15〜20% + 延滞税",
                   "国民健康保険料が所得不明で最高額に",
                   "住宅ローン・クレジットカードの審査に不利",
@@ -472,10 +485,10 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               </ul>
             </div>
 
-            {/* 還付金シミュレーター */}
+            {/* 節税シミュレーター */}
             <button onClick={() => setShowCalc(!showCalc)} style={{ ...altCard, width: "100%", cursor: "pointer", textAlign: "left", border: `1px solid ${green}44` }}>
-              <p className="text-[12px] font-medium" style={{ color: green }}>💰 還付金シミュレーター {showCalc ? "▲" : "▼"}</p>
-              <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>あなたの収入と経費を入力すると、いくら戻ってくるか分かります！</p>
+              <p className="text-[12px] font-medium" style={{ color: green }}>💰 節税シミュレーター {showCalc ? "▲" : "▼"}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>あなたの収入と経費を入力すると、節税額の目安が分かります！</p>
             </button>
             {showCalc && (
               <div className="mt-3 space-y-3" style={{ ...altCard, border: `1px solid ${green}44` }}>
@@ -524,20 +537,32 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                     <button onClick={() => setCalcHasInvoice(true)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer"
                       style={{ backgroundColor: calcHasInvoice ? green + "20" : "transparent", color: calcHasInvoice ? green : T.textMuted, border: `1px solid ${calcHasInvoice ? green : T.border}` }}>登録済み</button>
                     <button onClick={() => setCalcHasInvoice(false)} className="px-3 py-1.5 text-[10px] rounded-lg cursor-pointer"
-                      style={{ backgroundColor: !calcHasInvoice ? red + "20" : "transparent", color: !calcHasInvoice ? red : T.textMuted, border: `1px solid ${!calcHasInvoice ? red : T.border}` }}>未登録（10%天引きされている）</button>
+                      style={{ backgroundColor: !calcHasInvoice ? red + "20" : "transparent", color: !calcHasInvoice ? red : T.textMuted, border: `1px solid ${!calcHasInvoice ? red : T.border}` }}>未登録（バック10%が控除されている）</button>
                   </div>
                 </div>
                 {calcIncome && (() => {
                   const c = calcSaving();
                   return (
                     <div className="space-y-2">
-                      {/* お店からの天引き合計 */}
-                      <div className="p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
-                        <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>お店が天引き済みの合計額</p>
-                        {c.invoiceDed > 0 && <p className="text-[8px]" style={{ color: T.textMuted }}>インボイス控除（10%）: {fmt(c.invoiceDed)}</p>}
-                        <p className="text-[8px]" style={{ color: T.textMuted }}>源泉徴収: {fmt(c.withheld)}{c.days > 0 && ` （1日: (${fmt(Math.round(c.dailyAdj))} − ¥5,000) × 10.21% × ${c.days}日）`}</p>
-                        <p className="text-[16px] font-medium mt-1" style={{ color: red }}>天引き合計 {fmt(c.invoiceDed + c.withheld)}</p>
-                      </div>
+                      {/* お店からの天引き合計 (Ange Spa は源泉なし、インボイス控除のみ) */}
+                      {c.invoiceDed > 0 ? (
+                        <div className="p-3 rounded-xl" style={{ backgroundColor: red + "08", border: `1px solid ${red}33` }}>
+                          <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>お店から天引きされている分</p>
+                          <p className="text-[8px]" style={{ color: T.textMuted }}>インボイス控除（10%）: {fmt(c.invoiceDed)}</p>
+                          <p className="text-[8px]" style={{ color: T.textMuted }}>源泉徴収: ¥0（Ange Spa は源泉徴収なし）</p>
+                          <p className="text-[16px] font-medium mt-1" style={{ color: red }}>天引き合計 {fmt(c.invoiceDed)}</p>
+                          <p className="text-[8px] mt-1" style={{ color: T.textMuted }}>
+                            ※ インボイスに登録すると、この10%控除はなくなります（2割特例で実質2%）
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl" style={{ backgroundColor: green + "08", border: `1px solid ${green}33` }}>
+                          <p className="text-[9px] mb-1" style={{ color: T.textMuted }}>お店から天引きされている分</p>
+                          <p className="text-[8px]" style={{ color: T.textMuted }}>インボイス控除: ¥0（登録済み）</p>
+                          <p className="text-[8px]" style={{ color: T.textMuted }}>源泉徴収: ¥0（Ange Spa は源泉徴収なし）</p>
+                          <p className="text-[14px] font-medium mt-1" style={{ color: green }}>天引きはありません</p>
+                        </div>
+                      )}
                       {/* 計算過程 */}
                       <div className="space-y-1">
                         {[
@@ -562,20 +587,23 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                           </div>
                         ))}
                       </div>
-                      {/* 還付金 */}
+                      {/* 節税効果 */}
                       <div className="rounded-2xl p-4 text-center" style={{ background: `linear-gradient(135deg, ${green}20, ${green}08)`, border: `1px solid ${green}44` }}>
-                        <p className="text-[9px]" style={{ color: T.textMuted }}>源泉徴収{fmt(c.withheld)} − 本来の税額{fmt(c.aoiroTotal)}</p>
-                        <p className="text-[10px] mt-1" style={{ color: green }}>💰 あなたに戻ってくる還付金</p>
-                        <p className="text-[28px] font-medium" style={{ color: green }}>{fmt(c.refund)}</p>
+                        <p className="text-[9px]" style={{ color: T.textMuted }}>申告しない場合の税額 {fmt(c.noExpenseTotal)} − 経費計上した税額 {fmt(c.aoiroTotal)}</p>
+                        <p className="text-[10px] mt-1" style={{ color: green }}>💰 経費を計上することによる節税額</p>
+                        <p className="text-[28px] font-medium" style={{ color: green }}>{fmt(c.taxSaving)}</p>
+                        <p className="text-[9px] mt-1" style={{ color: T.text }}>
+                          → 実際の納税額：<b style={{ color: green }}>{fmt(c.aoiroTotal)}</b>
+                        </p>
                         {c.healthSaving > 0 && (
                           <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>
                             ＋ 国民健康保険料も約{fmt(c.healthSaving)}安くなる → 合計 <b style={{ color: green }}>{fmt(c.totalBenefit)}お得！</b>
                           </p>
                         )}
                       </div>
-                      {c.refund > 0 && (
+                      {c.taxSaving > 0 && (
                         <p className="text-[10px] text-center" style={{ color: T.textMuted }}>
-                          月に換算すると約<b style={{ color: green }}>{fmt(Math.round(c.refund / 12))}</b>の手取りUP！
+                          月に換算すると約<b style={{ color: green }}>{fmt(Math.round(c.taxSaving / 12))}</b>の節税！
                         </p>
                       )}
                       {profile.isSingleParent && (
@@ -584,11 +612,11 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                             🌸 さらに「ひとり親控除」で所得税・住民税合わせて約5〜8万円/年の追加節税！
                           </p>
                           <p className="text-[8px]" style={{ color: T.textMuted }}>
-                            上記の還付金に加え、ひとり親控除（所得税38万円＋住民税33万円）で追加の節税が見込めます。
+                            上記の節税額に加え、ひとり親控除（所得税38万円＋住民税33万円）で追加の節税が見込めます。
                           </p>
                         </div>
                       )}
-                      <p className="text-[7px]" style={{ color: T.textMuted }}>※概算です。社会保険料控除等は含みません。実際はT-MANAGEの帳簿データに基づいて正確に計算されます。</p>
+                      <p className="text-[7px]" style={{ color: T.textMuted }}>※概算です。社会保険料控除等は含みません。実際はT-MANAGEの帳簿データに基づいて正確に計算されます。他店で源泉徴収されている場合、その分は還付として戻ってくる可能性があります。</p>
                     </div>
                   );
                 })()}
@@ -745,7 +773,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
                         ① 年間の収入から経費を引いた「所得」を<b>48万円以下</b>に抑える{"\n"}
                         ② 経費をしっかり記録・計上する（美容費・衣装代・交通費など）{"\n"}
                         ③ 健康保険の扶養は<b>年間収入130万円</b>が目安{"\n"}
-                        ④ 迷ったら確定申告はしておく方が安心（還付金が戻る可能性も）
+                        ④ 確定申告は必須（Ange Spaは源泉徴収なしのため、自分で納税）
                       </p>
                     </div>
                   </div>
@@ -1531,7 +1559,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             <div className="mt-3 p-3 rounded-xl" style={{ background: `linear-gradient(135deg, ${pink}15, ${pink}05)`, border: `1px solid ${pinkBorder}` }}>
               <p className="text-[12px] font-medium text-center" style={{ color: pink }}>📅 提出期限</p>
               <p className="text-[20px] font-medium text-center mt-1" style={{ color: T.text }}>毎年 2月16日 〜 3月15日</p>
-              <p className="text-[9px] text-center mt-1" style={{ color: T.textMuted }}>※還付申告（税金が戻ってくる場合）は1月1日から提出可能</p>
+              <p className="text-[9px] text-center mt-1" style={{ color: T.textMuted }}>※他店で源泉徴収されていて還付申告となる場合は、1月1日から提出可能</p>
             </div>
 
             {/* T-MANAGEデータの使い方 */}
@@ -1555,7 +1583,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
             {/* 💰 納税方法 */}
             <div className="mt-3" style={{ ...altCard, border: `1px solid ${green}33` }}>
               <p className="text-[12px] font-medium mb-3" style={{ color: green }}>💰 税金の納め方（所得税）</p>
-              <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>確定申告で「納付」の場合、以下の方法で3月15日までに納付します。還付の場合は約1〜2ヶ月で指定口座に振り込まれます。</p>
+              <p className="text-[9px] mb-3" style={{ color: T.textMuted }}>Ange Spa は源泉徴収なしのため、確定申告では基本的に「納付」となります。3月15日までに以下の方法で納付してください。他店で源泉徴収されていて差額が還付になる場合は、約1〜2ヶ月で指定口座に振り込まれます。</p>
               <div className="space-y-2">
                 <div className="p-2.5 rounded-lg" style={{ backgroundColor: green + "10", border: `1px solid ${green}33` }}>
                   <p className="text-[10px] font-medium" style={{ color: green }}>★ おすすめ：振替納税（口座引き落とし）</p>
@@ -1589,7 +1617,7 @@ T-MANAGEの帳簿機能が自動で複式簿記に対応しています。別途
               <div className="space-y-2">
                 {[
                   { when: "3月15日", what: "所得税の納付期限", desc: "振替納税の場合は4月中旬〜下旬に引き落とし", icon: "💴" },
-                  { when: "1〜2ヶ月後", what: "還付金の振込", desc: "税金が戻る場合、申告書に書いた口座に振り込まれます", icon: "💰" },
+                  { when: "1〜2ヶ月後", what: "還付金の振込（該当者のみ）", desc: "他店で源泉徴収されていて還付になる場合、申告書に書いた口座に振り込まれます。Ange Spa のみの場合は通常該当しません。", icon: "💰" },
                   { when: "6月頃", what: "住民税の通知", desc: "市区町村から「住民税の決定通知書」が届きます。年4回に分けて納付（6月・8月・10月・1月）", icon: "📬" },
                   { when: "6〜7月頃", what: "国民健康保険料の通知", desc: "確定申告の所得に基づいて保険料が決定されます。経費をしっかり申告すると保険料も下がります！", icon: "🏥" },
                   { when: "翌年8月〜", what: "予定納税（該当者のみ）", desc: "前年の所得税が15万円以上の場合、翌年分の所得税を前払い（7月・11月に各1/3ずつ）", icon: "📊" },
