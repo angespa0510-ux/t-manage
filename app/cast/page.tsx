@@ -1643,7 +1643,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                     </p>
                     <p style={{ margin: "4px 0 0", fontSize: 10, color: T.textSub, letterSpacing: "0.02em", lineHeight: 1.7 }}>
                       {incompleteCategories.map(c => c.emoji + " " + c.name).join(" / ")}<br />
-                      <button onClick={() => { setMainTab("learn"); setLearnSub("techniques"); setTab("techniques"); }} style={{ marginTop: 6, fontFamily: FONT_SERIF, fontSize: 11, padding: "5px 14px", color: "#fff", backgroundColor: "#c3a782", border: "none", cursor: "pointer", letterSpacing: "0.05em" }}>📖 ラーンタブで受講する</button>
+                      <button onClick={() => { setLearnSub("techniques"); setTab("techniques"); }} style={{ marginTop: 6, fontFamily: FONT_SERIF, fontSize: 11, padding: "5px 14px", color: "#fff", backgroundColor: "#c3a782", border: "none", cursor: "pointer", letterSpacing: "0.05em" }}>📖 ラーンタブで受講する</button>
                       <br />
                       <span style={{ color: T.textFaint }}>※ 業務委託契約書 第10条により、施術技術研修の受講は受託業務の一部です。</span>
                     </p>
