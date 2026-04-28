@@ -227,7 +227,7 @@ export default function ContractSign() {
           <h3 style={{ fontSize: 12, fontWeight: 500, marginTop: 18, marginBottom: 6, color: "#c96b83", letterSpacing: "0.08em" }}>第5条（禁止事項）</h3>
           <p>乙は、以下の行為を行ってはならない。</p>
           <ol style={{ paddingLeft: 22, margin: "4px 0" }}>
-            <li>接客において、風俗行為・売春行為を行うこと、またはそれを助長すること。</li>
+            <li>施術業務において、風俗行為・売春行為を行うこと、またはそれを助長すること。</li>
             <li>宣伝・集客活動において、風俗行為を想起させる文言・画像を使用すること。</li>
             <li>甲の許可なく、同業他社との兼業（掛け持ち）を行うこと。</li>
             <li>本契約に基づき知り得た顧客との私的な接触、私的な金銭の授受、または他社への勧誘。</li>

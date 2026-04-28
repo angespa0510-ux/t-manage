@@ -155,7 +155,7 @@ export default function CustomerMypage() {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [freeMode, setFreeMode] = useState(false); // フリー予約モード
   const [bookFreeBuildingId, setBookFreeBuildingId] = useState<number | null>(null);
-  // セラピストメモ（1接客ごと）
+  // セラピストメモ（1施術ごと）
   const [customerMemos, setCustomerMemos] = useState<CustomerTherapistMemo[]>([]);
   const [editMemoResId, setEditMemoResId] = useState(0);
   const [editMemoTherapistId, setEditMemoTherapistId] = useState(0);
@@ -478,7 +478,7 @@ export default function CustomerMypage() {
       case "email_sent": return { label: "🔵 確認メール送信済", color: "#6b8ba8", bg: "#6b8ba818" };
       case "customer_confirmed": return { label: "🟢 お客様確定", color: "#6b9b7e", bg: "#6b9b7e18" };
       case "completed": return { label: "✅ 完了", color: "#c3a782", bg: "#c3a78218" };
-      case "serving": return { label: "💆 接客中", color: "#6b9b7e", bg: "#6b9b7e18" };
+      case "serving": return { label: "💆 施術中", color: "#6b9b7e", bg: "#6b9b7e18" };
       case "cancelled": return { label: "❌ キャンセル", color: "#c96b83", bg: "#c96b8318" };
       default: return { label: status || "未処理", color: "#888780", bg: "#88878018" };
     }

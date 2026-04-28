@@ -23,7 +23,7 @@ type PersonKind = "therapist" | "staff";
 /** 業務内容の既定値。PersonKind に応じて切り替える */
 const BUSINESS_DESCRIPTION: Record<PersonKind, string> = {
   therapist: "リラクゼーション施術業務",
-  staff: "店舗運営業務（予約管理・接客対応・施設管理ほか）",
+  staff: "店舗運営業務（予約管理・受付対応・施設管理ほか）",
 };
 
 /** 後方互換: 既存コードは TherapistInfo という名前で import しているケースがあるため alias を残す */

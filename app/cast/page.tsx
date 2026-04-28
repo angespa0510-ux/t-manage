@@ -589,7 +589,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const saveCustomerNote = async () => {
     if (!therapist || !noteForm.customer_name.trim()) return;
     if (noteForm.reservation_id > 0) {
-      // 接客単位メモ: reservation_idで検索
+      // 施術単位メモ: reservation_idで検索
       const existing = customerNotes.find(n => n.reservation_id === noteForm.reservation_id);
       if (existing) {
         await supabase.from("therapist_customer_notes").update({ note: noteForm.note, rating: noteForm.rating, is_ng: noteForm.is_ng, ng_reason: noteForm.ng_reason, updated_at: new Date().toISOString() }).eq("id", existing.id);
@@ -1272,7 +1272,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
               {[
                 { l: "REWARD",   subL: "報酬",     v: monthTotal.toLocaleString(),   unit: "¥", primary: true },
-                { l: "ORDERS",   subL: "接客数",   v: String(monthOrders),            unit: "件", primary: false },
+                { l: "ORDERS",   subL: "施術数",   v: String(monthOrders),            unit: "件", primary: false },
                 { l: "DAYS",     subL: "出勤日数", v: String(monthDays),              unit: "日", primary: false },
               ].map(s => (
                 <div key={s.l} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 12px", textAlign: "center" }}>
@@ -1315,7 +1315,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                   const custSt = (r as any).customer_status || "unsent";
                   const isServing = custSt === "serving";
                   const isCompleted = custSt === "completed" || (r as any).status === "completed";
-                  const statusLabel = isCompleted ? "終了" : isServing ? "接客中" : "予約済";
+                  const statusLabel = isCompleted ? "終了" : isServing ? "施術中" : "予約済";
                   const statusIcon = isCompleted ? "✅" : isServing ? "💆" : "⏳";
                   const statusColor = isCompleted ? SITE.color.text : isServing ? T.accent : T.textMuted;
                   const accentBorder = isServing ? T.accent : isCompleted ? "#6b9b7e" : T.border;
@@ -1344,7 +1344,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                             await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving" }).eq("id", r.id);
                             setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving" } as any : o));
                           }} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: T.accent, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-                            🔔 入室（接客開始）
+                            🔔 入室（施術開始）
                           </button>
                         )}
                         {isServing && (<>
@@ -1353,7 +1353,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                             setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "completed", therapist_status: "completed", status: "completed" } as any : o));
                             fetchData();
                           }} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: "#6b9b7e", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.1em", fontWeight: 500 }}>
-                            🚪 退室（接客終了）
+                            🚪 退室（施術終了）
                           </button>
                           <button onClick={async () => {
                             await supabase.from("reservations").update({ customer_status: "detail_read", therapist_status: "detail_sent" }).eq("id", r.id);
@@ -1945,7 +1945,7 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
               {[
                 { label: "MONTHLY", jp: "月合計", v: monthTotal.toLocaleString(), unit: "¥", primary: true },
-                { label: "ORDERS",  jp: "接客数", v: String(monthOrders),           unit: "件", primary: false },
+                { label: "ORDERS",  jp: "施術数", v: String(monthOrders),           unit: "件", primary: false },
                 { label: "DAYS",    jp: "出勤日数", v: String(monthDays),           unit: "日", primary: false },
               ].map(s => (
                 <div key={s.label} style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "18px 10px", textAlign: "center" }}>
@@ -2170,7 +2170,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           {uniqueCustomers.length > 0 && (
             <div style={{ backgroundColor: T.card, border: `1px solid ${T.border}`, padding: "14px 16px" }}>
               <p style={{ margin: "0 0 10px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>
-                接客したお客様 <span style={{ fontFamily: FONT_SANS, color: T.accent, letterSpacing: 0, marginLeft: 4 }}>{uniqueCustomers.length}名</span>
+                施術したお客様 <span style={{ fontFamily: FONT_SANS, color: T.accent, letterSpacing: 0, marginLeft: 4 }}>{uniqueCustomers.length}名</span>
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {uniqueCustomers.filter(([name]) => !noteSearch || name.includes(noteSearch)).map(([name, info]) => {
@@ -2771,7 +2771,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.card, border: `1px solid ${T.accent}44` }}>
                   <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>💰 SETTLEMENT</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>接客数</span><span style={{ fontFamily: FONT_SANS, fontWeight: 500 }}>{dSettlement.order_count} 件</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>施術数</span><span style={{ fontFamily: FONT_SANS, fontWeight: 500 }}>{dSettlement.order_count} 件</span></div>
                     <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>売上合計</span><span style={{ fontFamily: FONT_SANS }}>{fmt(dSettlement.total_sales)}</span></div>
                     <div style={{ display: "flex", justifyContent: "space-between", letterSpacing: "0.02em" }}><span>バック合計</span><span style={{ fontFamily: FONT_SANS }}>{fmt(dSettlement.total_back)}</span></div>
                     {dSettlement.adjustment !== 0 && <div style={{ display: "flex", justifyContent: "space-between", color: dSettlement.adjustment > 0 ? "#6b9b7e" : "#c96b83", letterSpacing: "0.02em" }}><span>調整金{dSettlement.adjustment_note ? `（${dSettlement.adjustment_note}）` : ""}</span><span style={{ fontFamily: FONT_SANS }}>{dSettlement.adjustment > 0 ? "+" : ""}{fmt(dSettlement.adjustment)}</span></div>}
@@ -2874,7 +2874,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 </div>
               ) : dShift ? (
                 <div style={{ padding: "12px 14px", marginBottom: 12, backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textFaint, letterSpacing: "0.05em" }}>接客情報なし</p>
+                  <p style={{ margin: 0, fontSize: 11, color: T.textFaint, letterSpacing: "0.05em" }}>施術情報なし</p>
                 </div>
               ) : null}
 
@@ -2885,7 +2885,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
         );
       })()}
 
-      {/* お客様接客履歴モーダル */}
+      {/* お客様施術履歴モーダル */}
       {/* ── 証明書発行タブ ── */}
       {tab === "cert" && therapist && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
@@ -3508,7 +3508,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
         </div>
       )}
 
-      {/* お客様接客履歴モーダル */}
+      {/* お客様施術履歴モーダル */}
       {noteHistoryCustomer && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setNoteHistoryCustomer("")}>
           <div style={{ width: "100%", maxWidth: 420, maxHeight: "85vh", backgroundColor: T.card, border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
@@ -3517,7 +3517,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
               <div>
                 <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>CUSTOMER</p>
                 <h3 style={{ margin: "3px 0 0", fontSize: 15, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{noteHistoryCustomer}</h3>
-                <p style={{ margin: "3px 0 0", fontSize: 10, color: T.textFaint, letterSpacing: "0.03em" }}>接客を選んでメモを追加できます</p>
+                <p style={{ margin: "3px 0 0", fontSize: 10, color: T.textFaint, letterSpacing: "0.03em" }}>施術を選んでメモを追加できます</p>
               </div>
               <button onClick={() => setNoteHistoryCustomer("")} style={{ width: 28, height: 28, fontSize: 13, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
             </div>
@@ -3562,10 +3562,10 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                   </div>
                 ) : null;
               })()}
-              <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>HISTORY — 接客履歴</p>
+              <p style={{ margin: "0 0 8px", fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, fontWeight: 500 }}>HISTORY — 施術履歴</p>
               {(() => {
                 const hist = allReservations.filter(r => r.customer_name === noteHistoryCustomer);
-                if (hist.length === 0) return <p style={{ fontSize: 11, textAlign: "center", padding: "32px 0", color: T.textFaint, margin: 0 }}>接客履歴がありません</p>;
+                if (hist.length === 0) return <p style={{ fontSize: 11, textAlign: "center", padding: "32px 0", color: T.textFaint, margin: 0 }}>施術履歴がありません</p>;
                 return hist.map(r => {
                   const dateStr = (() => { const dt = new Date(r.date + "T00:00:00"); const days = ["日","月","火","水","木","金","土"]; return `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})`; })();
                   const resNote = customerNotes.find(n => n.reservation_id === r.id);
