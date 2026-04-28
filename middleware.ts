@@ -26,6 +26,7 @@ const LEGACY_REDIRECTS: Record<string, string> = {
   "/staff-attendance": "/admin/staff-attendance",
   "/staff-login": "/admin",
   "/therapists": "/admin/therapists",
+  "/training-report": "/admin/training-report",
   "/shifts": "/admin/shifts",
   "/courses": "/admin/courses",
   "/rooms": "/admin/rooms",

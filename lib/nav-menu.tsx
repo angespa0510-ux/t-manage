@@ -44,6 +44,7 @@ export const NAV_ITEMS: NavItem[] = [
   // ── セラピスト ──
   { icon: "⏰", label: "セラピスト勤怠",       path: "/admin/shifts",                       category: "セラピスト" },
   { icon: "💆", label: "セラピスト登録",       path: "/admin/therapists",                   category: "セラピスト" },
+  { icon: "📊", label: "研修受講管理",         path: "/admin/training-report",              category: "セラピスト" },
   { icon: "📢", label: "セラピストお知らせ投稿", path: "/admin/therapist-notification-post",  category: "セラピスト" },
   { icon: "👤", label: "セラピストマイページ",  path: "/cast",                       category: "セラピスト" },
   { icon: "🎬", label: "AI動画生成",           path: "/admin/video-generator",              category: "セラピスト" },
