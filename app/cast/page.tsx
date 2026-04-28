@@ -107,11 +107,11 @@ export default function TherapistMyPage() {
   // インタラクティブツアー
   const [tourStep, setTourStep] = useState<number | null>(null); // null = ツアー非表示
   const [showReset, setShowReset] = useState(false); const [resetPhone, setResetPhone] = useState(""); const [resetMsg, setResetMsg] = useState(""); const [resetDone, setResetDone] = useState(false);
-  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "gift" | "chat" | "diary" | "reviews">("home");
+  const [tab, setTab] = useState<"home" | "work" | "money" | "learn" | "shift" | "schedule" | "salary" | "customers" | "manual" | "notifications" | "tax" | "cert" | "gift" | "chat" | "diary" | "reviews" | "techniques" | "training">("home");
   // ワーク / マネー / ラーン タブ内のサブセグメント
   const [workSub, setWorkSub] = useState<"schedule" | "shift" | "customers" | "diary" | "reviews">("schedule");
   const [moneySub, setMoneySub] = useState<"salary" | "cert" | "tax" | "gift">("salary");
-  const [learnSub, setLearnSub] = useState<"notifications" | "manual">("notifications");
+  const [learnSub, setLearnSub] = useState<"notifications" | "manual" | "techniques" | "training">("notifications");
   // ボトムナビ→実タブへのディスパッチ
   const clickMain = (m: MainTab) => {
     if (m === "home") setTab("home");
@@ -126,6 +126,7 @@ export default function TherapistMyPage() {
     if (t === "chat") return "chat";
     if (t === "shift" || t === "schedule" || t === "customers" || t === "work" || t === "reviews" || t === "diary") return "work";
     if (t === "salary" || t === "cert" || t === "tax" || t === "gift" || t === "money") return "money";
+    // learn 系: notifications / manual / techniques / training
     return "learn";
   };
   const mainTab = getMainTab(tab);
@@ -1595,16 +1596,18 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             items = [
               { key: "notifications", emoji: "🔔", label: "お知らせ",   badge: notifUnread },
               { key: "manual",        emoji: "📖", label: "マニュアル", badge: manualUnread },
+              { key: "techniques",    emoji: "🌿", label: "施術技術" },
+              { key: "training",      emoji: "🏆", label: "研修記録" },
             ];
           }
           const clickSub = (k: typeof tab) => {
             setTab(k);
             if (k === "shift" || k === "schedule" || k === "customers" || k === "diary" || k === "reviews") setWorkSub(k);
             else if (k === "salary" || k === "cert" || k === "tax" || k === "gift") setMoneySub(k);
-            else if (k === "notifications" || k === "manual") setLearnSub(k);
+            else if (k === "notifications" || k === "manual" || k === "techniques" || k === "training") setLearnSub(k);
           };
           const sectionLabel = mainTab === "work" ? "WORK" : mainTab === "money" ? "MONEY" : "LEARN";
-          const sectionTitle = mainTab === "work" ? "仕事" : mainTab === "money" ? "報酬・税務" : "情報・お知らせ";
+          const sectionTitle = mainTab === "work" ? "仕事" : mainTab === "money" ? "報酬・税務" : "学び・情報";
           return (
             <div style={{ marginBottom: 20, fontFamily: FONT_SERIF }}>
               <div style={{ textAlign: "center", marginBottom: 18 }}>
@@ -2641,6 +2644,138 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
             </div>
           )}
 
+        </div>)}
+
+        {/* ═══ 🌿 施術技術ライブラリ（Phase 1 placeholder） ═══ */}
+        {tab === "techniques" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center", paddingTop: 6 }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TECHNIQUES</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🌿 施術技術ライブラリ</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto 4px" }} />
+            <p style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.05em", marginTop: 8, lineHeight: 1.7 }}>
+              プロのセラピストとしての技術を体系的に学べます。<br />
+              受講したモジュールは「研修記録」に自動で記録されます。
+            </p>
+          </div>
+
+          {/* 開発中バナー */}
+          <div style={{ padding: "16px 18px", backgroundColor: T.accentBg, border: `1px solid ${T.accent}40`, fontSize: 12, lineHeight: 1.9, color: T.text, letterSpacing: "0.03em", textAlign: "center" }}>
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accentDeep, fontWeight: 500, marginBottom: 6 }}>COMING SOON · 6/1 LAUNCH</p>
+            <p style={{ margin: 0, fontSize: 12, color: T.text }}>
+              現在、解剖学・リンパ・オイル・カウンセリング・衛生管理の<br />
+              5つの基礎カリキュラムを準備中です。
+            </p>
+          </div>
+
+          {/* カテゴリプレビュー（モック） */}
+          <div>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>BASIC CURRICULUM — 必須5カリキュラム</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+              {[
+                { emoji: "🧴", title: "衛生管理・感染対策", time: "30分", level: "必須", desc: "施術前後の手指消毒、施術用品の清浄化、感染症対策の基礎" },
+                { emoji: "🦴", title: "解剖学の基礎", time: "90分", level: "必須", desc: "主要な筋肉群と骨格の関係、施術における重要ポイント" },
+                { emoji: "💧", title: "リンパ系の理解", time: "60分", level: "必須", desc: "リンパの流れと役割、リンパケアの基礎" },
+                { emoji: "🌿", title: "オイル種別と効能", time: "45分", level: "必須", desc: "ラベンダー・ホホバ等の主要オイル、肌タイプ別の選び方" },
+                { emoji: "🩺", title: "カウンセリング技法", time: "60分", level: "必須", desc: "施術前ヒアリング、要望聴取、コンディション確認の手順" },
+              ].map((m, i) => (
+                <div key={i} style={{ padding: "14px 16px", backgroundColor: T.card, border: `1px solid ${T.border}`, opacity: 0.85 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <span style={{ fontSize: 24, lineHeight: 1 }}>{m.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{m.title}</p>
+                        <span style={{ fontFamily: FONT_SANS, fontSize: 9, color: T.textFaint, letterSpacing: 0 }}>{m.time}</span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 11, color: T.textSub, lineHeight: 1.7, letterSpacing: "0.02em" }}>{m.desc}</p>
+                      <div style={{ display: "inline-block", marginTop: 8, padding: "2px 8px", fontSize: 9, fontFamily: FONT_DISPLAY, letterSpacing: "0.15em", color: T.accentDeep, backgroundColor: T.accentBg, fontWeight: 500 }}>{m.level}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 中級・上級カテゴリ予告 */}
+          <div>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>UPCOMING — 中級・上級カリキュラム</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[
+                { emoji: "🤲", title: "ボディケア基本技法" },
+                { emoji: "💆", title: "リンパドレナージュ" },
+                { emoji: "🧖", title: "アロマトリートメント" },
+                { emoji: "🎯", title: "部位別ケア応用" },
+              ].map((m, i) => (
+                <div key={i} style={{ padding: "12px 14px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, opacity: 0.6, textAlign: "center" }}>
+                  <p style={{ margin: 0, fontSize: 18, lineHeight: 1, marginBottom: 6 }}>{m.emoji}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>{m.title}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>)}
+
+        {/* ═══ 🏆 研修受講記録（Phase 1 placeholder） ═══ */}
+        {tab === "training" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+          {/* セクション見出し */}
+          <div style={{ textAlign: "center", paddingTop: 6 }}>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TRAINING</p>
+            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🏆 研修受講記録</p>
+            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto 4px" }} />
+            <p style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.05em", marginTop: 8, lineHeight: 1.7 }}>
+              受講した研修・取得した技術バッジを管理します。<br />
+              確定申告時の経費証明にも活用できます。
+            </p>
+          </div>
+
+          {/* 統計カード（モック） */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {[
+              { label: "MODULES", jp: "受講モジュール", v: "0", unit: "" },
+              { label: "COMPLETED", jp: "完了モジュール", v: "0", unit: "" },
+              { label: "BADGES", jp: "取得バッジ", v: "0", unit: "" },
+            ].map((s, i) => (
+              <div key={i} style={{ padding: "12px 10px", backgroundColor: T.card, border: `1px solid ${T.border}`, textAlign: "center" }}>
+                <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>{s.label}</p>
+                <p style={{ margin: "4px 0 0", fontFamily: FONT_SANS, fontSize: 22, fontWeight: 500, color: T.text, letterSpacing: 0 }}>
+                  {s.v}<span style={{ fontSize: 10, color: T.textFaint, marginLeft: 2 }}>{s.unit}</span>
+                </p>
+                <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textMuted, letterSpacing: "0.03em" }}>{s.jp}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* 取得バッジエリア */}
+          <div>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>SKILL BADGES — 取得バッジ</p>
+            <div style={{ padding: "32px 20px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, textAlign: "center" }}>
+              <p style={{ margin: 0, fontSize: 32, lineHeight: 1, marginBottom: 10, opacity: 0.4 }}>🏆</p>
+              <p style={{ margin: 0, fontSize: 12, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>
+                まだバッジを取得していません<br />
+                <span style={{ fontSize: 10, color: T.textMuted }}>研修モジュールを完了するとバッジが付与されます</span>
+              </p>
+            </div>
+          </div>
+
+          {/* 受講中モジュールエリア */}
+          <div>
+            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>IN PROGRESS — 受講中モジュール</p>
+            <div style={{ padding: "24px 20px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, textAlign: "center" }}>
+              <p style={{ margin: 0, fontSize: 12, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>
+                受講中のモジュールはありません<br />
+                <span style={{ fontSize: 10, color: T.textMuted }}>「施術技術」タブから始めましょう</span>
+              </p>
+            </div>
+          </div>
+
+          {/* 修了証発行プレースホルダー */}
+          <div style={{ padding: "14px 16px", backgroundColor: T.accentBg, border: `1px solid ${T.accent}40` }}>
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.accentDeep, fontWeight: 500, marginBottom: 6 }}>COMING SOON</p>
+            <p style={{ margin: 0, fontSize: 12, color: T.text, lineHeight: 1.7 }}>
+              📜 <strong style={{ fontWeight: 500 }}>修了証PDF発行機能</strong><br />
+              <span style={{ fontSize: 11, color: T.textSub }}>必須カリキュラム完了後、PDF形式で修了証を発行できます。確定申告時の研修費経費計上の証明にもご活用ください。</span>
+            </p>
+          </div>
         </div>)}
 
       </div></div>
