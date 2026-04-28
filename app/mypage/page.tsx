@@ -114,6 +114,38 @@ export default function CustomerMypage() {
   const [readNotifIds, setReadNotifIds] = useState<number[]>([]);
   const [cards, setCards] = useState<CardInfo[]>([]);
   const [setEmail, setSetEmail] = useState(""); const [setPw, setSetPw] = useState(""); const [setPwConfirm, setSetPwConfirm] = useState(""); const [settingMsg, setSettingMsg] = useState(""); const [settingSaving, setSettingSaving] = useState(false); const [setBday, setSetBday] = useState(""); const [setSelfN, setSetSelfN] = useState("");
+
+  // 🩺 健康プロファイル (customer_health_profiles)
+  type HealthProfile = {
+    id: number; customer_id: number;
+    allergies: string | null; skin_sensitivity: string | null;
+    health_conditions: string | null; current_medications: string | null;
+    posture_notes: string | null; chronic_issues: string[] | null;
+    preferred_pressure: string | null; preferred_oils: string[] | null;
+    avoided_techniques: string[] | null; caution_notes: string | null;
+    consent_given_at: string | null; consent_source: string | null;
+    last_reviewed_at: string | null;
+    created_at: string; updated_at: string;
+  };
+  const [healthProfile, setHealthProfile] = useState<HealthProfile | null>(null);
+  const [healthOpen, setHealthOpen] = useState(false); // 折りたたみ
+  const [healthSaving, setHealthSaving] = useState(false);
+  const [healthMsg, setHealthMsg] = useState("");
+  const [healthForm, setHealthForm] = useState({
+    allergies: "",
+    skin_sensitivity: "",
+    health_conditions: "",
+    current_medications: "",
+    posture_notes: "",
+    chronic_issues: [] as string[],
+    preferred_pressure: "",
+    preferred_oils: [] as string[],
+    avoided_techniques: [] as string[],
+    caution_notes: "",
+  });
+  const CHRONIC_ISSUE_OPTIONS = ["腰痛", "肩こり", "首こり", "頭痛", "眼精疲労", "むくみ", "冷え性", "生理痛", "不眠", "便秘"];
+  const OIL_OPTIONS = ["ラベンダー", "ベルガモット", "オレンジスイート", "ペパーミント", "ローズマリー", "ティーツリー", "ユーカリ", "イランイラン", "サンダルウッド"];
+  const TECHNIQUE_OPTIONS = ["強圧", "深部圧迫", "叩打", "急なストレッチ", "頭皮への強い圧"];
   const [showAddCard, setShowAddCard] = useState(false); const [cardBrand, setCardBrand] = useState("visa"); const [cardLast4, setCardLast4] = useState(""); const [cardHolder, setCardHolder] = useState(""); const [cardExpMonth, setCardExpMonth] = useState(1); const [cardExpYear, setCardExpYear] = useState(new Date().getFullYear());
 
   // スケジュール
@@ -265,8 +297,76 @@ export default function CustomerMypage() {
     } catch { /* 取得失敗は静かに無視 */ }
     // お客様セラピストメモ取得
     try { const { data: memos } = await supabase.from("customer_therapist_memos").select("*").eq("customer_id", customer.id); if (memos) setCustomerMemos(memos); } catch {}
+    // 健康プロファイル取得 (要配慮個人情報)
+    try {
+      const { data: hp } = await supabase.from("customer_health_profiles").select("*").eq("customer_id", customer.id).maybeSingle();
+      if (hp) setHealthProfile(hp);
+      else setHealthProfile(null);
+    } catch {}
   }, [customer]);
   useEffect(() => { if (customer) fetchData(); }, [customer, fetchData]);
+
+  // 健康プロファイル取得後にフォームを初期化
+  useEffect(() => {
+    if (healthProfile) {
+      setHealthForm({
+        allergies: healthProfile.allergies || "",
+        skin_sensitivity: healthProfile.skin_sensitivity || "",
+        health_conditions: healthProfile.health_conditions || "",
+        current_medications: healthProfile.current_medications || "",
+        posture_notes: healthProfile.posture_notes || "",
+        chronic_issues: healthProfile.chronic_issues || [],
+        preferred_pressure: healthProfile.preferred_pressure || "",
+        preferred_oils: healthProfile.preferred_oils || [],
+        avoided_techniques: healthProfile.avoided_techniques || [],
+        caution_notes: healthProfile.caution_notes || "",
+      });
+    }
+  }, [healthProfile]);
+
+  // 🩺 健康プロファイルを保存 (UPSERT)
+  const saveHealthProfile = async () => {
+    if (!customer) return;
+    setHealthMsg(""); setHealthSaving(true);
+    const now = new Date().toISOString();
+    const payload = {
+      customer_id: customer.id,
+      allergies: healthForm.allergies.trim() || null,
+      skin_sensitivity: healthForm.skin_sensitivity || null,
+      health_conditions: healthForm.health_conditions.trim() || null,
+      current_medications: healthForm.current_medications.trim() || null,
+      posture_notes: healthForm.posture_notes.trim() || null,
+      chronic_issues: healthForm.chronic_issues.length > 0 ? healthForm.chronic_issues : null,
+      preferred_pressure: healthForm.preferred_pressure || null,
+      preferred_oils: healthForm.preferred_oils.length > 0 ? healthForm.preferred_oils : null,
+      avoided_techniques: healthForm.avoided_techniques.length > 0 ? healthForm.avoided_techniques : null,
+      caution_notes: healthForm.caution_notes.trim() || null,
+      consent_given_at: healthProfile?.consent_given_at || now,
+      consent_source: healthProfile?.consent_source || "mypage",
+      updated_at: now,
+    };
+    const { error } = await supabase
+      .from("customer_health_profiles")
+      .upsert(payload, { onConflict: "customer_id" });
+    setHealthSaving(false);
+    if (error) {
+      setHealthMsg("保存に失敗しました: " + error.message);
+      return;
+    }
+    setHealthMsg("保存しました！施術担当のセラピストに伝わります。");
+    // 再取得
+    const { data: hp } = await supabase.from("customer_health_profiles").select("*").eq("customer_id", customer.id).maybeSingle();
+    if (hp) setHealthProfile(hp);
+    setTimeout(() => setHealthMsg(""), 3000);
+  };
+
+  // タグの追加/削除トグル
+  const toggleHealthTag = (key: "chronic_issues" | "preferred_oils" | "avoided_techniques", value: string) => {
+    setHealthForm(prev => {
+      const arr = prev[key];
+      return { ...prev, [key]: arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value] };
+    });
+  };
 
   // 当日スケジュール取得
   const fetchDaySchedule = useCallback(async (date: string) => {
@@ -1702,6 +1802,170 @@ export default function CustomerMypage() {
           <button onClick={saveSettings} disabled={settingSaving} style={{ width: "100%", padding: "14px", fontSize: 13, color: "#fff", backgroundColor: C.accent, border: "none", borderRadius: 4, cursor: settingSaving ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.15em", opacity: settingSaving ? 0.5 : 1 }}>
             {settingSaving ? "保存中..." : "変更を保存"}
           </button>
+        </div>
+
+        {/* ═══ 🩺 健康プロファイル (要配慮個人情報) ═══ */}
+        <div style={{ padding: 22, backgroundColor: C.card, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: C.accent, textTransform: "uppercase" }}>Health Profile</p>
+              <h3 style={{ margin: "6px 0 4px", fontFamily: FONT_DISPLAY, fontSize: 15, fontWeight: 400, letterSpacing: "0.05em", color: C.text }}>🩺 健康プロファイル</h3>
+              <p style={{ margin: 0, fontSize: 11, color: C.textMuted, lineHeight: 1.7 }}>アレルギーや体調等をご登録いただくと、より安全で適切な施術をご提供できます。</p>
+            </div>
+            <button onClick={() => setHealthOpen(o => !o)} style={{ padding: "8px 14px", fontSize: 11, color: C.accent, backgroundColor: "transparent", border: `1px solid ${C.accent}`, borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.1em", whiteSpace: "nowrap" }}>
+              {healthOpen ? "✕ 閉じる" : (healthProfile ? "✏️ 編集する" : "✓ 入力する")}
+            </button>
+          </div>
+
+          {/* 同意・登録状況の要約 */}
+          <div style={{ marginTop: 14, padding: "10px 14px", backgroundColor: C.cardAlt, borderRadius: 4, fontSize: 11, color: C.textSub, lineHeight: 1.7 }}>
+            {healthProfile?.consent_given_at ? (
+              <span>✓ 登録済み <span style={{ color: C.textMuted, marginLeft: 6 }}>（{new Date(healthProfile.consent_given_at).toLocaleDateString("ja-JP")} 同意取得・最終更新 {new Date(healthProfile.updated_at).toLocaleDateString("ja-JP")}）</span></span>
+            ) : (
+              <span>未登録 <span style={{ color: C.textMuted, marginLeft: 6 }}>（編集ボタンから入力できます）</span></span>
+            )}
+          </div>
+
+          {healthOpen && (
+            <div style={{ marginTop: 18, paddingTop: 18, borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 18 }}>
+
+              {/* 同意確認 (新規登録時のみ表示) */}
+              {!healthProfile?.consent_given_at && (
+                <div style={{ padding: 14, backgroundColor: C.accentBg, border: `1px solid ${C.accent}`, borderRadius: 4 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: C.accentDark, lineHeight: 1.8, letterSpacing: "0.03em" }}>
+                    <strong>📋 個人情報の取扱について</strong><br />
+                    入力いただく内容には「要配慮個人情報」（健康・医療情報）が含まれます。<br />
+                    施術担当のセラピスト・店舗管理者のみが閲覧し、施術提供以外の目的では使用しません。<br />
+                    内容はいつでも編集・削除できます。<br /><br />
+                    <strong>「保存する」ボタンを押すことで、上記取扱に同意いただいたものとみなします。</strong>
+                  </p>
+                </div>
+              )}
+
+              {/* アレルギー */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>⚠ アレルギー（オイル・食品等）</label>
+                <textarea value={healthForm.allergies} onChange={e => setHealthForm(f => ({ ...f, allergies: e.target.value }))} rows={2} placeholder="例: ラベンダーオイル / ナッツ類" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text, resize: "vertical" }} />
+              </div>
+
+              {/* 注意事項 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>⚠ セラピストへの注意事項</label>
+                <textarea value={healthForm.caution_notes} onChange={e => setHealthForm(f => ({ ...f, caution_notes: e.target.value }))} rows={2} placeholder="例: 妊娠初期のため強い圧は避けてほしい" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text, resize: "vertical" }} />
+              </div>
+
+              {/* 既往症 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>既往症・健康状態</label>
+                <textarea value={healthForm.health_conditions} onChange={e => setHealthForm(f => ({ ...f, health_conditions: e.target.value }))} rows={2} placeholder="例: 椎間板ヘルニア（治療中）" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text, resize: "vertical" }} />
+              </div>
+
+              {/* 服用中の薬 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>服用中の薬</label>
+                <input type="text" value={healthForm.current_medications} onChange={e => setHealthForm(f => ({ ...f, current_medications: e.target.value }))} placeholder="例: 血圧の薬を服用中" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text }} />
+              </div>
+
+              {/* 肌の敏感度 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>肌の敏感度</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {[
+                    { v: "normal", label: "普通" },
+                    { v: "sensitive", label: "敏感" },
+                    { v: "very_sensitive", label: "非常に敏感" },
+                  ].map(opt => (
+                    <button key={opt.v} type="button" onClick={() => setHealthForm(f => ({ ...f, skin_sensitivity: f.skin_sensitivity === opt.v ? "" : opt.v }))}
+                      style={{ flex: 1, padding: "10px 12px", fontSize: 12, backgroundColor: healthForm.skin_sensitivity === opt.v ? C.accent : C.cardAlt, color: healthForm.skin_sensitivity === opt.v ? "#fff" : C.text, border: `1px solid ${healthForm.skin_sensitivity === opt.v ? C.accent : C.border}`, borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 好みの圧 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>好みの圧の強さ</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[
+                    { v: "soft", label: "ソフト" },
+                    { v: "medium", label: "標準" },
+                    { v: "firm", label: "しっかり" },
+                    { v: "extra_firm", label: "強め" },
+                  ].map(opt => (
+                    <button key={opt.v} type="button" onClick={() => setHealthForm(f => ({ ...f, preferred_pressure: f.preferred_pressure === opt.v ? "" : opt.v }))}
+                      style={{ padding: "10px 18px", fontSize: 12, backgroundColor: healthForm.preferred_pressure === opt.v ? C.accent : C.cardAlt, color: healthForm.preferred_pressure === opt.v ? "#fff" : C.text, border: `1px solid ${healthForm.preferred_pressure === opt.v ? C.accent : C.border}`, borderRadius: 4, cursor: "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.05em" }}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 慢性的な不調 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>慢性的な不調（複数選択可）</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {CHRONIC_ISSUE_OPTIONS.map(opt => {
+                    const selected = healthForm.chronic_issues.includes(opt);
+                    return (
+                      <button key={opt} type="button" onClick={() => toggleHealthTag("chronic_issues", opt)}
+                        style={{ padding: "8px 14px", fontSize: 11, backgroundColor: selected ? "#8b6cb7" : C.cardAlt, color: selected ? "#fff" : C.text, border: `1px solid ${selected ? "#8b6cb7" : C.border}`, borderRadius: 16, cursor: "pointer", fontFamily: FONT_SERIF }}>
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 好みのオイル */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>好みのオイル（複数選択可）</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {OIL_OPTIONS.map(opt => {
+                    const selected = healthForm.preferred_oils.includes(opt);
+                    return (
+                      <button key={opt} type="button" onClick={() => toggleHealthTag("preferred_oils", opt)}
+                        style={{ padding: "8px 14px", fontSize: 11, backgroundColor: selected ? "#6b9b7e" : C.cardAlt, color: selected ? "#fff" : C.text, border: `1px solid ${selected ? "#6b9b7e" : C.border}`, borderRadius: 16, cursor: "pointer", fontFamily: FONT_SERIF }}>
+                        🌿 {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 避けたい技法 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>避けたい技法（複数選択可）</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {TECHNIQUE_OPTIONS.map(opt => {
+                    const selected = healthForm.avoided_techniques.includes(opt);
+                    return (
+                      <button key={opt} type="button" onClick={() => toggleHealthTag("avoided_techniques", opt)}
+                        style={{ padding: "8px 14px", fontSize: 11, backgroundColor: selected ? "#c96b83" : C.cardAlt, color: selected ? "#fff" : C.text, border: `1px solid ${selected ? "#c96b83" : C.border}`, borderRadius: 16, cursor: "pointer", fontFamily: FONT_SERIF }}>
+                        ✕ {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 姿勢の特徴 */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: "0.12em", color: C.textSub, marginBottom: 6 }}>姿勢の特徴・その他</label>
+                <textarea value={healthForm.posture_notes} onChange={e => setHealthForm(f => ({ ...f, posture_notes: e.target.value }))} rows={2} placeholder="例: デスクワークで猫背気味" style={{ width: "100%", padding: "12px 14px", fontSize: 13, backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 4, outline: "none", fontFamily: FONT_SERIF, color: C.text, resize: "vertical" }} />
+              </div>
+
+              {healthMsg && (
+                <div style={{ padding: "12px 14px", backgroundColor: healthMsg.includes("保存しました") ? "#edf3ee" : C.accentBg, color: healthMsg.includes("保存しました") ? C.green : C.accentDark, fontSize: 12, borderRadius: 4, border: `1px solid ${healthMsg.includes("保存しました") ? "#cadbcf" : C.accent + "30"}` }}>
+                  {healthMsg}
+                </div>
+              )}
+
+              <button onClick={saveHealthProfile} disabled={healthSaving} style={{ width: "100%", padding: "14px", fontSize: 13, color: "#fff", backgroundColor: C.accent, border: "none", borderRadius: 4, cursor: healthSaving ? "not-allowed" : "pointer", fontFamily: FONT_SERIF, letterSpacing: "0.15em", opacity: healthSaving ? 0.5 : 1 }}>
+                {healthSaving ? "保存中..." : (healthProfile?.consent_given_at ? "変更を保存" : "同意して保存")}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ═══ プッシュ通知 ═══ */}
