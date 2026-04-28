@@ -1,11 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
+import { ContractV3 } from "../../../lib/contract-v3";
+
+// このページはトークン認証で動的に内容が変わるため、prerender 不要。
+// useSearchParams を含むため SSG エラー回避にも force-dynamic が安全。
+export const dynamic = "force-dynamic";
 
 // 現行の契約書バージョン — 条項を改訂したら必ず更新すること
-// v1.0 = 6条版(株式会社アンジュスパ表記) / v2.0 = 12条版(合同会社テラスライフ)
+// v1.0 = 6条版(株式会社アンジュスパ表記)
+// v2.0 = 12条版(合同会社テラスライフ) ← 現行デフォルト
+// v3.0 = 18条版(施術業対応版 / 仕様書呼称v2) ← ?preview=v3 時のみ表示。弁護士レビュー後デフォルト化
 const CURRENT_CONTRACT_VERSION = "v2.0";
 
 type Contract = { id: number; therapist_id: number; token: string; status: string; signer_name: string; signer_address: string; signature_url: string; signed_at: string; created_at: string; contract_version: string | null };
@@ -14,6 +21,10 @@ type Therapist = { id: number; name: string };
 export default function ContractSign() {
   const params = useParams();
   const token = params.token as string;
+  const searchParams = useSearchParams();
+  // ?preview=v3 で施術業対応版(v3.0)ドラフトを表示。弁護士レビュー前の関係者確認用。
+  const previewVersion = searchParams?.get("preview");
+  const useV3 = previewVersion === "v3";
   const [contract, setContract] = useState<Contract | null>(null);
   const [therapist, setTherapist] = useState<Therapist | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,6 +177,19 @@ export default function ContractSign() {
       </div>
     </div>
   );
+
+  // ?preview=v3 で施術業対応版(v3.0)ドラフトを表示。
+  // 弁護士レビュー前の関係者確認用。レビュー完了後はこの分岐を撤去し、
+  // page.tsx 全体を v3 に置き換える予定。
+  if (useV3 && contract) {
+    return (
+      <ContractV3
+        contract={contract}
+        therapist={therapist}
+        onDone={() => setDone(true)}
+      />
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", ...MARBLE_BG, paddingBottom: 40, fontFamily: FONT_SERIF, color: "#2b2b2b" }}>
