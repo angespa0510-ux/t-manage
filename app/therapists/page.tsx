@@ -48,6 +48,9 @@ export default function TherapistManagement() {
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterNewcomer, setFilterNewcomer] = useState(false);
+  const [filterPublic, setFilterPublic] = useState<"all" | "public" | "hidden">("all");
+  const [sortBy, setSortBy] = useState<"name" | "created" | "entry" | "status">("name");
   const [storeInfo, setStoreInfo] = useState<{ company_name: string; company_address: string; company_phone: string; invoice_number: string } | null>(null);
   const [showPayroll, setShowPayroll] = useState(false);
   const [payrollYear, setPayrollYear] = useState(String(new Date().getFullYear()));
@@ -656,12 +659,49 @@ const generatePassword = () => {
     else { setAddPhotoFile(file); setAddPhotoPreview(URL.createObjectURL(file)); }
   };
 
+  const isNewcomer = (t: Therapist) => {
+    if (!t.entry_date) return false;
+    const diff = Date.now() - new Date(t.entry_date).getTime();
+    return diff < newcomerMonths * 30 * 86400000;
+  };
+
   const filtered = therapists.filter((t) => {
     const q = searchQuery.toLowerCase();
     const matchSearch = t.name?.toLowerCase().includes(q) || t.phone?.includes(q);
     const matchStatus = filterStatus === "all" || t.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchNewcomer = !filterNewcomer || isNewcomer(t);
+    const matchPublic = filterPublic === "all" || (filterPublic === "public" ? !!t.is_public : !t.is_public);
+    return matchSearch && matchStatus && matchNewcomer && matchPublic;
   });
+
+  const sorted = [...filtered].sort((a, b) => {
+    switch (sortBy) {
+      case "name":
+        return (a.name || "").localeCompare(b.name || "", "ja");
+      case "created":
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      case "entry":
+        return new Date(b.entry_date || 0).getTime() - new Date(a.entry_date || 0).getTime();
+      case "status": {
+        const order: Record<string, number> = { active: 0, inactive: 1, retired: 2 };
+        return (order[a.status] ?? 3) - (order[b.status] ?? 3);
+      }
+      default:
+        return 0;
+    }
+  });
+
+  const newcomerCount = therapists.filter((t) => isNewcomer(t)).length;
+  const publicCount = therapists.filter((t) => !!t.is_public).length;
+  const hiddenCount = therapists.filter((t) => !t.is_public).length;
+
+  const togglePublic = async (t: Therapist) => {
+    const next = !t.is_public;
+    const { error } = await supabase.from("therapists").update({ is_public: next }).eq("id", t.id);
+    if (error) { toast.show("更新に失敗しました", "error"); return; }
+    fetchTherapists();
+    toast.show(next ? "🌐 HPに公開しました" : "🚫 HP非公開にしました", "success");
+  };
 
   const statusMap: Record<string, { bg: string; text: string; label: string }> = {
     active: { bg: "#4a7c5918", text: "#4a7c59", label: "稼働中" },
@@ -676,11 +716,6 @@ const generatePassword = () => {
   const getSalaryLabel = (t: Therapist) => {
     if (!t.salary_amount) return "";
     return t.salary_type === "percent" ? `${t.salary_amount}%UP` : `${t.salary_amount.toLocaleString()}円UP`;
-  };
-  const isNewcomer = (t: Therapist) => {
-    if (!t.entry_date) return false;
-    const diff = Date.now() - new Date(t.entry_date).getTime();
-    return diff < newcomerMonths * 30 * 86400000;
   };
 
   const PhotoField = ({ preview, fileRef, onFileChange, width, height, onWidthChange, onHeightChange }: { preview: string; fileRef: React.RefObject<HTMLInputElement | null>; onFileChange: (f: File | null) => void; width: string; height: string; onWidthChange: (v: string) => void; onHeightChange: (v: string) => void }) => (
@@ -732,7 +767,7 @@ const generatePassword = () => {
           <input type="text" placeholder="名前・電話番号で検索" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
           <svg className="absolute left-3.5 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textFaint} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 flex-wrap items-center">
           <button onClick={() => setFilterStatus("all")} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border" style={{ borderColor: filterStatus === "all" ? T.accent : T.border, backgroundColor: filterStatus === "all" ? T.accent + "18" : "transparent", color: filterStatus === "all" ? T.accent : T.textMuted, fontWeight: filterStatus === "all" ? 600 : 400 }}>全て {therapists.length}</button>
           {Object.entries(statusMap).map(([key, val]) => (
             <button key={key} onClick={() => setFilterStatus(filterStatus === key ? "all" : key)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border"
@@ -740,22 +775,47 @@ const generatePassword = () => {
               {val.label} {therapists.filter((t) => t.status === key).length}
             </button>
           ))}
+          <span className="w-px h-5 mx-1" style={{ backgroundColor: T.border }} />
+          {/* 新人トグル */}
+          <button onClick={() => setFilterNewcomer(!filterNewcomer)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border"
+            style={{ borderColor: filterNewcomer ? "#e8849a" : T.border, backgroundColor: filterNewcomer ? "#e8849a22" : "transparent", color: filterNewcomer ? "#c96b83" : T.textMuted, fontWeight: filterNewcomer ? 600 : 400 }}>
+            ✨ 新人 {newcomerCount}
+          </button>
+          {/* HP公開フィルター */}
+          <button onClick={() => setFilterPublic(filterPublic === "public" ? "all" : "public")} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border"
+            style={{ borderColor: filterPublic === "public" ? "#22c55e" : T.border, backgroundColor: filterPublic === "public" ? "#22c55e18" : "transparent", color: filterPublic === "public" ? "#22c55e" : T.textMuted, fontWeight: filterPublic === "public" ? 600 : 400 }}>
+            🌐 HP公開中 {publicCount}
+          </button>
+          <button onClick={() => setFilterPublic(filterPublic === "hidden" ? "all" : "hidden")} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer border"
+            style={{ borderColor: filterPublic === "hidden" ? "#888780" : T.border, backgroundColor: filterPublic === "hidden" ? "#88878018" : "transparent", color: filterPublic === "hidden" ? "#888780" : T.textMuted, fontWeight: filterPublic === "hidden" ? 600 : 400 }}>
+            🚫 HP非公開 {hiddenCount}
+          </button>
+          <span className="w-px h-5 mx-1" style={{ backgroundColor: T.border }} />
+          {/* 並び替えセレクト */}
+          <label className="text-[10px]" style={{ color: T.textMuted }}>並び順</label>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="px-2.5 py-1.5 rounded-lg text-[10px] cursor-pointer outline-none border"
+            style={{ borderColor: T.border, backgroundColor: T.cardAlt, color: T.text }}>
+            <option value="name">あいうえお順</option>
+            <option value="created">登録日(新しい順)</option>
+            <option value="entry">入店日(新しい順)</option>
+            <option value="status">ステータス順</option>
+          </select>
         </div>
       </div>
 
       {/* List */}
       <div className="flex-1 overflow-y-auto p-6">
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
             <p className="text-[14px]" style={{ color: T.textMuted }}>{therapists.length === 0 ? "セラピストが登録されていません" : "検索結果がありません"}</p>
             {therapists.length === 0 && <button onClick={() => setShowAdd(true)} className="mt-4 px-5 py-2.5 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">+ セラピストを登録</button>}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
-            {filtered.map((t, i) => {
+            {sorted.map((t, i) => {
               const st = statusMap[t.status] || statusMap.active;
               return (
-                <div key={t.id} draggable onDragStart={(e) => { e.dataTransfer.setData("therapistId", String(t.id)); e.dataTransfer.setData("sortOrder", String(t.sort_order || i)); }} onDragOver={(e) => e.preventDefault()} onDrop={async (e) => { e.preventDefault(); const fromId = Number(e.dataTransfer.getData("therapistId")); if (fromId === t.id) return; const fromIdx = filtered.findIndex(x => x.id === fromId); const toIdx = filtered.findIndex(x => x.id === t.id); if (fromIdx < 0 || toIdx < 0) return; const reordered = [...filtered]; const [moved] = reordered.splice(fromIdx, 1); reordered.splice(toIdx, 0, moved); for (let j = 0; j < reordered.length; j++) { await supabase.from("therapists").update({ sort_order: j }).eq("id", reordered[j].id); } fetchTherapists(); }} className="rounded-xl border p-2.5 transition-all duration-200 cursor-grab active:cursor-grabbing hover:shadow-md" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={() => { setDetailTarget(t); loadContract(t.id); }}>
+                <div key={t.id} className="rounded-xl border p-2.5 transition-all duration-200 cursor-pointer hover:shadow-md" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={() => { setDetailTarget(t); loadContract(t.id); }}>
                   <div className="flex items-center gap-2 mb-1.5">
                     {t.photo_url ? (
                       <img src={t.photo_url} alt={t.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
@@ -763,11 +823,17 @@ const generatePassword = () => {
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] text-white font-medium flex-shrink-0" style={{ backgroundColor: colors[i % colors.length] }}>{t.name?.charAt(0)}</div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1"><p className="text-[11px] font-medium truncate">{t.name}</p>{isNewcomer(t) && <span className="px-1 py-0.5 rounded text-[7px] font-medium flex-shrink-0" style={{ backgroundColor: "#8b5cf618", color: "#8b5cf6" }}>NEW</span>}<span className="px-1.5 py-0.5 rounded text-[7px] font-medium flex-shrink-0" style={{ backgroundColor: st.bg, color: st.text }}>{st.label}</span></div>
+                      <div className="flex items-center gap-1 flex-wrap"><p className="text-[11px] font-medium truncate">{t.name}</p>{isNewcomer(t) && <span className="px-1.5 py-0.5 rounded-md text-[8px] font-bold flex-shrink-0" style={{ backgroundColor: "#e8849a", color: "#fff", letterSpacing: "0.5px" }}>✨新人</span>}<span className="px-1.5 py-0.5 rounded text-[7px] font-medium flex-shrink-0" style={{ backgroundColor: st.bg, color: st.text }}>{st.label}</span></div>
                       <p className="text-[9px] truncate" style={{ color: T.textMuted }}>{t.phone || "電話番号なし"}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 mb-1" onClick={(e) => e.stopPropagation()}>
+                    {/* HP公開トグル */}
+                    {t.is_public ? (
+                      <button onClick={() => togglePublic(t)} className="px-2 py-0.5 text-[9px] rounded-md font-medium cursor-pointer" style={{ backgroundColor: "#22c55e18", color: "#22c55e", border: "none" }}>🌐 HP公開中</button>
+                    ) : (
+                      <button onClick={() => togglePublic(t)} className="px-2 py-0.5 text-[9px] rounded-md font-medium cursor-pointer" style={{ backgroundColor: "#88878018", color: "#888780", border: "none" }}>🚫 HP非公開</button>
+                    )}
                     {contractsMap[t.id]?.status === "signed" ? (
                       <span className="px-2 py-0.5 text-[9px] rounded-md font-medium" style={{ backgroundColor: "#22c55e18", color: "#22c55e" }}>✅ 契約済</span>
                     ) : (
@@ -801,7 +867,6 @@ const generatePassword = () => {
                       <button onClick={() => startEdit(t)} className="px-2 py-1 text-[8px] rounded cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
                       <button onClick={() => setDeleteTarget(t)} className="px-2 py-1 text-[8px] rounded cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                     </div>
-                    <span className="text-[7px]" style={{ color: T.textFaint }}>⋮⋮</span>
                   </div>
                 </div>
               );
