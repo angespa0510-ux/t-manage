@@ -157,8 +157,43 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [noteForm, setNoteForm] = useState({ customer_name: "", note: "", is_ng: false, ng_reason: "", rating: 0, reservation_id: 0 })
   const [noteViewTarget, setNoteViewTarget] = useState<CustomerNote | null>(null);
   const [noteHistoryCustomer, setNoteHistoryCustomer] = useState("");
-  // カルテ入力モーダル（Phase 1: UI placeholder - DBは未実装）
+  // ═══ 📋 施術カルテシステム (Phase 1 本実装、契約書 v3.0 第11条 / docs/23_TREATMENT_CHART.md) ═══
+  type TreatmentChart = {
+    id: number;
+    reservation_id: number | null;
+    customer_id: number | null;
+    therapist_id: number | null;
+    pre_condition: string | null;
+    pre_concern: string | null;
+    pre_request: string | null;
+    body_parts: string[] | null;
+    oils_used: string[] | null;
+    pressure_level: string | null;
+    treatment_notes: string | null;
+    customer_reaction: string | null;
+    next_recommendation: string | null;
+    recommended_interval: string | null;
+    is_finalized: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  type ChartForm = {
+    pre_condition: string; pre_concern: string; pre_request: string;
+    body_parts: string[]; oils_used: string[]; pressure_level: string;
+    treatment_notes: string; customer_reaction: string;
+    next_recommendation: string; recommended_interval: string;
+  };
+  const EMPTY_CHART_FORM: ChartForm = {
+    pre_condition: "", pre_concern: "", pre_request: "",
+    body_parts: [], oils_used: [], pressure_level: "",
+    treatment_notes: "", customer_reaction: "",
+    next_recommendation: "", recommended_interval: "",
+  };
   const [chartModalReservationId, setChartModalReservationId] = useState<number | null>(null);
+  const [chartsByReservationId, setChartsByReservationId] = useState<Record<number, TreatmentChart>>({});
+  const [chartForm, setChartForm] = useState<ChartForm>(EMPTY_CHART_FORM);
+  const [chartSaving, setChartSaving] = useState(false);
+  const [chartFinalizeConfirm, setChartFinalizeConfirm] = useState(false);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
 　const [calShifts, setCalShifts] = useState<Shift[]>([]);
 　const [calSettlements, setCalSettlements] = useState<Settlement[]>([]);
@@ -354,6 +389,21 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
     // 本日の全オーダー（キャンセル以外）
     const todayStr = new Date().toISOString().split("T")[0];
     const { data: todayR } = await supabase.from("reservations").select("*").eq("therapist_id", tid).eq("date", todayStr).neq("status", "cancelled").order("start_time"); if (todayR) setTodayOrders(todayR);
+
+    // 施術カルテ取得 (直近30日分の自分の予約に紐づくもの)
+    // 「カルテ未記入」判定と編集モーダルの初期値ロードに使う。
+    const { data: tc } = await supabase
+      .from("treatment_charts")
+      .select("*")
+      .eq("therapist_id", tid)
+      .gte("created_at", d30.toISOString());
+    if (tc) {
+      const map: Record<number, TreatmentChart> = {};
+      for (const c of tc as TreatmentChart[]) {
+        if (c.reservation_id != null) map[c.reservation_id] = c;
+      }
+      setChartsByReservationId(map);
+    }
     const { data: cn } = await supabase.from("therapist_customer_notes").select("*").eq("therapist_id", tid).order("customer_name"); if (cn) setCustomerNotes(cn);
     const [cy, cm] = calMonth.split("-").map(Number);
     const calDim = new Date(cy, cm, 0).getDate();
@@ -396,6 +446,79 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   }, [therapist, salaryMonth, calMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // 📋 カルテモーダルを開いたとき、既存カルテがあれば初期値をロード
+  useEffect(() => {
+    if (chartModalReservationId == null) return;
+    setChartFinalizeConfirm(false);
+    const existing = chartsByReservationId[chartModalReservationId];
+    if (existing) {
+      setChartForm({
+        pre_condition: existing.pre_condition ?? "",
+        pre_concern:   existing.pre_concern ?? "",
+        pre_request:   existing.pre_request ?? "",
+        body_parts:    existing.body_parts ?? [],
+        oils_used:     existing.oils_used ?? [],
+        pressure_level: existing.pressure_level ?? "",
+        treatment_notes: existing.treatment_notes ?? "",
+        customer_reaction: existing.customer_reaction ?? "",
+        next_recommendation: existing.next_recommendation ?? "",
+        recommended_interval: existing.recommended_interval ?? "",
+      });
+    } else {
+      setChartForm(EMPTY_CHART_FORM);
+    }
+  }, [chartModalReservationId, chartsByReservationId]);
+
+  // 📋 カルテ保存処理 (下書き / 確定)
+  const saveChart = useCallback(async (finalize: boolean): Promise<boolean> => {
+    if (chartModalReservationId == null || !therapist) return false;
+    setChartSaving(true);
+    try {
+      const existing = chartsByReservationId[chartModalReservationId];
+      const payload = {
+        reservation_id: chartModalReservationId,
+        therapist_id: therapist.id,
+        pre_condition: chartForm.pre_condition || null,
+        pre_concern:   chartForm.pre_concern || null,
+        pre_request:   chartForm.pre_request || null,
+        body_parts:    chartForm.body_parts.length > 0 ? chartForm.body_parts : null,
+        oils_used:     chartForm.oils_used.length > 0 ? chartForm.oils_used : null,
+        pressure_level: chartForm.pressure_level || null,
+        treatment_notes: chartForm.treatment_notes || null,
+        customer_reaction: chartForm.customer_reaction || null,
+        next_recommendation: chartForm.next_recommendation || null,
+        recommended_interval: chartForm.recommended_interval || null,
+        is_finalized: finalize,
+        created_by_therapist_id: therapist.id,
+      };
+      let savedRow: TreatmentChart | null = null;
+      if (existing) {
+        const { data, error } = await supabase
+          .from("treatment_charts")
+          .update(payload)
+          .eq("id", existing.id)
+          .select()
+          .maybeSingle();
+        if (error) { alert("カルテ更新エラー: " + error.message); return false; }
+        savedRow = data as TreatmentChart;
+      } else {
+        const { data, error } = await supabase
+          .from("treatment_charts")
+          .insert(payload)
+          .select()
+          .maybeSingle();
+        if (error) { alert("カルテ保存エラー: " + error.message); return false; }
+        savedRow = data as TreatmentChart;
+      }
+      if (savedRow && savedRow.reservation_id != null) {
+        setChartsByReservationId(prev => ({ ...prev, [savedRow!.reservation_id!]: savedRow! }));
+      }
+      return true;
+    } finally {
+      setChartSaving(false);
+    }
+  }, [chartModalReservationId, chartsByReservationId, chartForm, therapist]);
 
   // 受領ポイント取得 (gift タブを開いた時 + therapist 切替時)
   const fetchGiftSummary = useCallback(async () => {
@@ -1289,13 +1412,17 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
             </div>
           </section>
 
-          {/* ═══ カルテ未記入アラート（施術業実態証跡・6/1〜本格運用） ═══ */}
+          {/* ═══ カルテ未記入アラート（施術業実態証跡・契約書 v3.0 第11条） ═══ */}
           {(() => {
-            const completedTodayCount = todayOrders.filter(o => {
+            // completed の予約のうち、カルテ未記入 (treatment_charts レコードなし or 下書き状態) を集計
+            const unwrittenList = todayOrders.filter(o => {
               const cs = (o as any).customer_status;
-              return cs === "completed" || (o as any).status === "completed";
-            }).length;
-            if (completedTodayCount === 0) return null;
+              const isCompleted = cs === "completed" || (o as any).status === "completed";
+              if (!isCompleted) return false;
+              const ch = chartsByReservationId[o.id];
+              return !ch || !ch.is_finalized;
+            });
+            if (unwrittenList.length === 0) return null;
             return (
               <section style={{ ...MARBLE.beige, padding: "26px 18px", marginLeft: -16, marginRight: -16 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14, maxWidth: 480, margin: "0 auto" }}>
@@ -1303,14 +1430,14 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
                       <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: "#b38419", fontWeight: 500 }}>TREATMENT CHART</p>
-                      <span style={{ fontFamily: FONT_SANS, fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 999, backgroundColor: "#e74c5e", color: "#fff", letterSpacing: 0 }}>{completedTodayCount}件</span>
+                      <span style={{ fontFamily: FONT_SANS, fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 999, backgroundColor: "#e74c5e", color: "#fff", letterSpacing: 0 }}>{unwrittenList.length}件</span>
                     </div>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.04em", lineHeight: 1.7 }}>
                       本日の施術カルテ未記入があります
                     </p>
                     <p style={{ margin: "4px 0 0", fontSize: 10, color: T.textSub, letterSpacing: "0.02em", lineHeight: 1.7 }}>
                       下の「本日のオーダー」から各予約の <strong style={{ color: "#b38419" }}>📋カルテを記入</strong> ボタンでご記入ください。<br />
-                      <span style={{ color: T.textFaint }}>※ カルテ機能は 2026/6/1 から本格運用開始予定です。</span>
+                      <span style={{ color: T.textFaint }}>※ 業務委託契約書 第11条によりカルテの記録は受託業務の一部です。</span>
                     </p>
                   </div>
                 </div>
@@ -1396,10 +1523,23 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
                         </>)}
                         {isCompleted && (
                           <>
-                            <button onClick={() => setChartModalReservationId(r.id)} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: "#b38419", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, position: "relative" }}>
-                              📋 カルテを記入
-                              <span style={{ position: "absolute", top: -6, right: -6, fontFamily: FONT_SANS, fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 999, backgroundColor: "#e74c5e", color: "#fff", letterSpacing: 0, boxShadow: "0 1px 3px rgba(231,76,94,0.4)" }}>未記入</span>
-                            </button>
+                            {(() => {
+                              const ch = chartsByReservationId[r.id];
+                              const status = !ch ? "unwritten" : ch.is_finalized ? "finalized" : "draft";
+                              const btnBg = status === "finalized" ? "#6b9b7e" : "#b38419";
+                              const label = status === "unwritten" ? "📋 カルテを記入"
+                                          : status === "draft"     ? "📋 カルテを編集"
+                                          :                          "📋 カルテを確認";
+                              const badge = status === "unwritten" ? { txt: "未記入", color: "#e74c5e" }
+                                          : status === "draft"     ? { txt: "下書き",  color: "#b38419" }
+                                          :                          null;
+                              return (
+                                <button onClick={() => setChartModalReservationId(r.id)} style={{ flex: 1, padding: "11px", fontSize: 12, cursor: "pointer", backgroundColor: btnBg, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, position: "relative" }}>
+                                  {label}
+                                  {badge && <span style={{ position: "absolute", top: -6, right: -6, fontFamily: FONT_SANS, fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 999, backgroundColor: badge.color, color: "#fff", letterSpacing: 0, boxShadow: `0 1px 3px ${badge.color}66` }}>{badge.txt}</span>}
+                                </button>
+                              );
+                            })()}
                             <button onClick={async () => {
                               await supabase.from("reservations").update({ customer_status: "serving", therapist_status: "serving", status: "unprocessed" }).eq("id", r.id);
                               setTodayOrders(prev => prev.map(o => o.id === r.id ? { ...o, customer_status: "serving", therapist_status: "serving", status: "unprocessed" } as any : o));
@@ -3687,11 +3827,71 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
         </div>
       )}
 
-      {/* ═══ 📋 施術カルテ入力モーダル（Phase 1 placeholder） ═══ */}
+      {/* ═══ 📋 施術カルテ入力モーダル (Phase 1 本実装 / 契約書 v3.0 第11条) ═══ */}
       {chartModalReservationId !== null && (() => {
         const r = todayOrders.find(x => x.id === chartModalReservationId) || allReservations.find(x => x.id === chartModalReservationId);
+        const existing = chartsByReservationId[chartModalReservationId];
+        const isFinalized = !!(existing && existing.is_finalized);
+        // 確定済みは閲覧モード固定 (誤操作で書き換えないよう)
+        const readOnly = isFinalized;
+
+        const BODY_PARTS = ["肩", "首", "背中", "腰", "脚", "足裏", "腕", "手", "ヘッド", "顔", "デコルテ", "お腹"];
+        const OIL_OPTIONS = ["ホホバ", "ラベンダー", "アーモンド", "グレープシード", "ココナッツ", "オレンジ", "ペパーミント", "ローズマリー"];
+        const PRESSURE_OPTIONS = [
+          { value: "soft",       label: "やわらかめ" },
+          { value: "medium",     label: "標準" },
+          { value: "firm",       label: "強め" },
+          { value: "extra_firm", label: "かなり強め" },
+        ];
+        const INTERVAL_OPTIONS = ["1週間以内", "2週間以内", "1ヶ月以内", "未定"];
+
+        const togglePart = (p: string) => {
+          if (readOnly) return;
+          setChartForm(f => ({
+            ...f,
+            body_parts: f.body_parts.includes(p) ? f.body_parts.filter(x => x !== p) : [...f.body_parts, p],
+          }));
+        };
+        const toggleOil = (o: string) => {
+          if (readOnly) return;
+          setChartForm(f => ({
+            ...f,
+            oils_used: f.oils_used.includes(o) ? f.oils_used.filter(x => x !== o) : [...f.oils_used, o],
+          }));
+        };
+
+        const onSaveDraft = async () => {
+          const ok = await saveChart(false);
+          if (ok) setChartModalReservationId(null);
+        };
+        const onFinalize = async () => {
+          const ok = await saveChart(true);
+          if (ok) {
+            setChartFinalizeConfirm(false);
+            setChartModalReservationId(null);
+          }
+        };
+
+        // 入力スタイル
+        const inputStyle: React.CSSProperties = {
+          width: "100%", minHeight: 36, padding: "8px 10px", fontSize: 11,
+          backgroundColor: readOnly ? T.cardAlt : T.card, color: T.text,
+          border: `1px solid ${T.border}`, fontFamily: FONT_SERIF,
+          resize: "none", outline: "none", letterSpacing: "0.02em",
+          opacity: readOnly ? 0.7 : 1,
+        };
+        const chipStyle = (selected: boolean): React.CSSProperties => ({
+          padding: "5px 10px", fontSize: 10, letterSpacing: "0.03em",
+          backgroundColor: selected ? "#b38419" : T.cardAlt,
+          color: selected ? "#fff" : T.textSub,
+          border: `1px solid ${selected ? "#b38419" : T.border}`,
+          cursor: readOnly ? "default" : "pointer",
+          userSelect: "none",
+          fontFamily: FONT_SERIF,
+        });
+
         return (
-          <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setChartModalReservationId(null)}>
+          <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => !chartSaving && setChartModalReservationId(null)}>
             <div style={{ width: "100%", maxWidth: 480, maxHeight: "90vh", backgroundColor: T.card, border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
               {/* ヘッダー */}
               <div style={{ padding: "18px 22px", borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
@@ -3700,7 +3900,7 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: "#b38419", fontWeight: 500 }}>TREATMENT CHART</p>
                     <h3 style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 500, letterSpacing: "0.06em", color: T.text }}>📋 施術カルテ</h3>
                   </div>
-                  <button onClick={() => setChartModalReservationId(null)} style={{ width: 30, height: 30, fontSize: 14, cursor: "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
+                  <button onClick={() => setChartModalReservationId(null)} disabled={chartSaving} style={{ width: 30, height: 30, fontSize: 14, cursor: chartSaving ? "not-allowed" : "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF }}>✕</button>
                 </div>
                 {r && (
                   <div style={{ marginTop: 12, fontSize: 11, color: T.textSub, lineHeight: 1.8, letterSpacing: "0.03em" }}>
@@ -3709,62 +3909,68 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                     <p style={{ margin: "2px 0 0" }}>📋 {r.course}</p>
                   </div>
                 )}
+                {isFinalized && (
+                  <div style={{ marginTop: 10, padding: "6px 10px", display: "inline-block", fontSize: 10, color: "#6b9b7e", border: "1px solid #6b9b7e44", backgroundColor: "#6b9b7e10", letterSpacing: "0.05em" }}>
+                    ✓ 確定済 — 編集できません
+                  </div>
+                )}
+                {existing && !isFinalized && (
+                  <div style={{ marginTop: 10, padding: "6px 10px", display: "inline-block", fontSize: 10, color: "#b38419", border: "1px solid #b3841944", backgroundColor: "#b3841910", letterSpacing: "0.05em" }}>
+                    ✏ 下書き保存済 — 続きを編集できます
+                  </div>
+                )}
               </div>
 
-              {/* 本体 (Coming Soonバナー + 設計プレビュー) */}
+              {/* 本体 */}
               <div style={{ overflowY: "auto", flex: 1, padding: "18px 22px" }}>
-                {/* Coming Soonバナー */}
-                <div style={{ padding: "16px 18px", backgroundColor: "#b3841912", border: `1px solid #b3841944`, fontSize: 12, lineHeight: 1.9, color: T.text, letterSpacing: "0.03em", textAlign: "center", marginBottom: 18 }}>
-                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#b38419", fontWeight: 500, marginBottom: 6 }}>COMING SOON · 6/1 LAUNCH</p>
-                  <p style={{ margin: 0, fontSize: 12, color: T.text }}>
-                    施術カルテ機能は現在準備中です。<br />
-                    6/1ローンチ時にこちらから入力できるようになります。
-                  </p>
-                </div>
-
                 {/* セクション1: 施術前カウンセリング */}
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>1. 施術前カウンセリング</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.5 }}>
-                    {[
-                      { label: "当日の体調・コンディション", placeholder: "例: 仕事疲れ、肩こりがひどい" },
-                      { label: "気になる箇所・お悩み", placeholder: "例: 右肩・腰" },
-                      { label: "当日のご希望", placeholder: "例: 圧は強め、リラックス重視" },
-                    ].map((f, i) => (
-                      <div key={i}>
-                        <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>{f.label}</p>
-                        <textarea readOnly placeholder={f.placeholder} style={{ width: "100%", minHeight: 36, padding: "8px 10px", fontSize: 11, backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, resize: "none", outline: "none", letterSpacing: "0.02em" }} disabled />
-                      </div>
-                    ))}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>当日の体調・コンディション</p>
+                      <textarea readOnly={readOnly} value={chartForm.pre_condition} onChange={(e) => setChartForm(f => ({ ...f, pre_condition: e.target.value }))} placeholder="例: 仕事疲れ、肩こりがひどい" style={inputStyle} />
+                    </div>
+                    <div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>気になる箇所・お悩み</p>
+                      <textarea readOnly={readOnly} value={chartForm.pre_concern} onChange={(e) => setChartForm(f => ({ ...f, pre_concern: e.target.value }))} placeholder="例: 右肩・腰" style={inputStyle} />
+                    </div>
+                    <div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>当日のご希望</p>
+                      <textarea readOnly={readOnly} value={chartForm.pre_request} onChange={(e) => setChartForm(f => ({ ...f, pre_request: e.target.value }))} placeholder="例: 圧は強め、リラックス重視" style={inputStyle} />
+                    </div>
                   </div>
                 </div>
 
                 {/* セクション2: 施術内容 */}
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>2. 施術内容</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12, opacity: 0.5 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <div>
-                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>施術部位</p>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>施術部位 (複数選択可)</p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {["肩", "首", "背中", "腰", "脚", "足裏", "腕", "手", "ヘッド", "顔"].map(p => (
-                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>☐ {p}</span>
-                        ))}
+                        {BODY_PARTS.map(p => {
+                          const sel = chartForm.body_parts.includes(p);
+                          return <span key={p} onClick={() => togglePart(p)} style={chipStyle(sel)}>{sel ? "✓" : "☐"} {p}</span>;
+                        })}
                       </div>
                     </div>
                     <div>
-                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>使用オイル</p>
+                      <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>使用オイル (複数選択可)</p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {["ラベンダー", "ホホバ", "アーモンド", "グレープシード"].map(p => (
-                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>☐ {p}</span>
-                        ))}
+                        {OIL_OPTIONS.map(o => {
+                          const sel = chartForm.oils_used.includes(o);
+                          return <span key={o} onClick={() => toggleOil(o)} style={chipStyle(sel)}>{sel ? "✓" : "☐"} {o}</span>;
+                        })}
                       </div>
                     </div>
                     <div>
                       <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>圧の強さ</p>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {["やわらかめ", "標準", "強め", "かなり強め"].map(p => (
-                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>○ {p}</span>
-                        ))}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {PRESSURE_OPTIONS.map(p => {
+                          const sel = chartForm.pressure_level === p.value;
+                          return <span key={p.value} onClick={() => !readOnly && setChartForm(f => ({ ...f, pressure_level: sel ? "" : p.value }))} style={chipStyle(sel)}>{sel ? "●" : "○"} {p.label}</span>;
+                        })}
                       </div>
                     </div>
                   </div>
@@ -3773,40 +3979,86 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
                 {/* セクション3: 施術中の所見 */}
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>3. 施術中の所見</p>
-                  <div style={{ opacity: 0.5 }}>
-                    <textarea readOnly placeholder="例: 右肩の凝りが顕著。施術後にリラックスされた様子。" style={{ width: "100%", minHeight: 56, padding: "8px 10px", fontSize: 11, backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, resize: "none", outline: "none", letterSpacing: "0.02em" }} disabled />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>気付き (凝り・緊張・好み等)</p>
+                      <textarea readOnly={readOnly} value={chartForm.treatment_notes} onChange={(e) => setChartForm(f => ({ ...f, treatment_notes: e.target.value }))} placeholder="例: 右肩の凝りが顕著。肩甲骨周りに緊張あり。" style={{ ...inputStyle, minHeight: 56 }} />
+                    </div>
+                    <div>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>お客様の反応・喜ばれた点</p>
+                      <textarea readOnly={readOnly} value={chartForm.customer_reaction} onChange={(e) => setChartForm(f => ({ ...f, customer_reaction: e.target.value }))} placeholder="例: 施術後リラックスされ、肩が軽くなったと喜ばれた" style={inputStyle} />
+                    </div>
                   </div>
                 </div>
 
                 {/* セクション4: 次回提案 */}
                 <div style={{ marginBottom: 8 }}>
                   <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accent, marginBottom: 10, fontWeight: 500 }}>4. 次回提案</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.5 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div>
                       <p style={{ margin: "0 0 4px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>推奨内容</p>
-                      <textarea readOnly placeholder="例: 次回は脚の重点ケアを提案。" style={{ width: "100%", minHeight: 36, padding: "8px 10px", fontSize: 11, backgroundColor: T.cardAlt, color: T.text, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, resize: "none", outline: "none", letterSpacing: "0.02em" }} disabled />
+                      <textarea readOnly={readOnly} value={chartForm.next_recommendation} onChange={(e) => setChartForm(f => ({ ...f, next_recommendation: e.target.value }))} placeholder="例: 次回は脚の重点ケアを提案。" style={inputStyle} />
                     </div>
                     <div>
                       <p style={{ margin: "0 0 6px", fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>推奨来店間隔</p>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {["1週間以内", "2週間以内", "1ヶ月以内", "未定"].map(p => (
-                          <span key={p} style={{ padding: "5px 10px", fontSize: 10, backgroundColor: T.cardAlt, color: T.textSub, border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>○ {p}</span>
-                        ))}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {INTERVAL_OPTIONS.map(p => {
+                          const sel = chartForm.recommended_interval === p;
+                          return <span key={p} onClick={() => !readOnly && setChartForm(f => ({ ...f, recommended_interval: sel ? "" : p }))} style={chipStyle(sel)}>{sel ? "●" : "○"} {p}</span>;
+                        })}
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* 注意書き */}
+                {!isFinalized && (
+                  <p style={{ marginTop: 16, padding: "10px 12px", fontSize: 10, color: T.textMuted, lineHeight: 1.7, letterSpacing: "0.03em", backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
+                    ※ <strong style={{ color: T.textSub }}>下書き保存</strong> で続きを後ほど編集できます。
+                    <br />※ <strong style={{ color: "#6b9b7e" }}>確定保存</strong> 後は編集不可となります。施術業の業務記録として保管されます。
+                  </p>
+                )}
               </div>
 
-              {/* フッター（保存ボタンプレースホルダー） */}
+              {/* フッター */}
               <div style={{ padding: "12px 20px", borderTop: `1px solid ${T.border}`, backgroundColor: T.cardAlt, display: "flex", gap: 8 }}>
-                <button onClick={() => setChartModalReservationId(null)} style={{ flex: 1, padding: "11px", fontSize: 11, cursor: "pointer", backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
-                  閉じる
-                </button>
-                <button disabled style={{ flex: 2, padding: "11px", fontSize: 11, cursor: "not-allowed", backgroundColor: T.textFaint, color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, opacity: 0.6 }}>
-                  📋 確定保存（6/1〜）
-                </button>
+                {isFinalized ? (
+                  <button onClick={() => setChartModalReservationId(null)} style={{ flex: 1, padding: "11px", fontSize: 11, cursor: "pointer", backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
+                    閉じる
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={onSaveDraft} disabled={chartSaving} style={{ flex: 1, padding: "11px", fontSize: 11, cursor: chartSaving ? "not-allowed" : "pointer", backgroundColor: "transparent", color: "#b38419", border: "1px solid #b38419", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, opacity: chartSaving ? 0.6 : 1 }}>
+                      {chartSaving ? "保存中…" : "✏ 下書き保存"}
+                    </button>
+                    <button onClick={() => setChartFinalizeConfirm(true)} disabled={chartSaving} style={{ flex: 2, padding: "11px", fontSize: 11, cursor: chartSaving ? "not-allowed" : "pointer", backgroundColor: "#6b9b7e", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, opacity: chartSaving ? 0.6 : 1 }}>
+                      📋 確定保存
+                    </button>
+                  </>
+                )}
               </div>
+
+              {/* 確定保存の確認ダイアログ */}
+              {chartFinalizeConfirm && (
+                <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => !chartSaving && setChartFinalizeConfirm(false)}>
+                  <div style={{ width: "100%", maxWidth: 360, padding: "22px 24px", backgroundColor: T.card, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF }} onClick={(e) => e.stopPropagation()}>
+                    <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: "#6b9b7e", fontWeight: 500 }}>FINALIZE</p>
+                    <h4 style={{ margin: "6px 0 12px", fontSize: 14, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>カルテを確定保存しますか？</h4>
+                    <p style={{ margin: 0, fontSize: 11, color: T.textSub, lineHeight: 1.8, letterSpacing: "0.02em" }}>
+                      確定後は編集できなくなり、業務記録として保管されます。<br />
+                      下書きで続きを書きたい場合は「下書き保存」を使ってください。
+                    </p>
+                    <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+                      <button onClick={() => setChartFinalizeConfirm(false)} disabled={chartSaving} style={{ flex: 1, padding: "10px", fontSize: 11, cursor: chartSaving ? "not-allowed" : "pointer", backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
+                        キャンセル
+                      </button>
+                      <button onClick={onFinalize} disabled={chartSaving} style={{ flex: 1, padding: "10px", fontSize: 11, cursor: chartSaving ? "not-allowed" : "pointer", backgroundColor: "#6b9b7e", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, opacity: chartSaving ? 0.6 : 1 }}>
+                        {chartSaving ? "保存中…" : "確定する"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
