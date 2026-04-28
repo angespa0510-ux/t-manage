@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import { SITE, MARBLE } from "../../../lib/site-theme";
@@ -1319,7 +1319,7 @@ function MatrixCell({
   time: string;
   height: number;
 }) {
-  const baseTd: React.CSSProperties = {
+  const baseTd: CSSProperties = {
     height,
     padding: 0,
     textAlign: "center",
