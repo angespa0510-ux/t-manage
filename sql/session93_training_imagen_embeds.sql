@@ -40,6 +40,18 @@ SET content = E'![ラベンダーオイル](/training-img/oil-selection.webp)\n\
 WHERE slug = 'oil-selection' AND content NOT LIKE '%/training-img/oil-selection%';
 
 
+-- ──────────────────────────────────────────────
+-- 9. 効果的な施術前カウンセリング (counseling-pre)
+-- ヘッダー画像: 女性セラピスト × 男性顧客のカウンセリングシーン (Imagen 4 生成)
+--   - 顔は意図的にフレーム外/切り取り (プライバシー配慮 + AI破綻回避)
+--   - クリップボードを渡す瞬間、マーブル丸テーブル + 一輪の花
+--   - イラスト調なので業務的・教育的なトーン
+-- ──────────────────────────────────────────────
+UPDATE training_modules
+SET content = E'![施術前カウンセリングシーン](/training-img/counseling-pre.webp)\n\n' || content
+WHERE slug = 'counseling-pre' AND content NOT LIKE '%/training-img/counseling-pre%';
+
+
 -- ==========================================================================
 -- 確認クエリ (実行後オプションで)
 -- ==========================================================================
