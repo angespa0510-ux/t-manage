@@ -25,6 +25,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - ✅ 同意フラグ DB: `sql/session89_contract_v3_consents.sql` (実行済)
 - ✅ カルテ DB: `sql/session90_treatment_charts.sql` (実行済) — `treatment_charts` + `customer_health_profiles`
 - ✅ 研修 DB + 必須5カリキュラム × 10モジュール: `sql/session91_therapist_training.sql` (実行済)
+- ✅ 必須カリキュラム SVG 図解 10枚: `public/training-svg/` + `sql/session92_training_visual_embeds.sql` (実行済)
+- ✅ Imagen 4 ヘッダー画像: `sql/session93_training_imagen_embeds.sql` (実行済)
+- 🆕 中級カリキュラム × 10モジュール (3カテゴリ): `sql/session94_intermediate_curriculum.sql` (**SQL実行待ち**)
+  - 🤲 ボディケア基本技法 4モジュール (圧迫揉捏 / 摩擦振動叩打 / 体勢別 / 全身フロー)
+  - 💆 リンパドレナージュ 3モジュール (基本手技 / 顔デコルテ / 全身)
+  - 🧖 アロマトリートメント 3モジュール (基本フロー / ブレンディング / シーン別6コース)
+- 🆕 上級カリキュラム × 4モジュール (1カテゴリ): `sql/session95_advanced_curriculum.sql` (**SQL実行待ち**)
+  - 🎯 部位別ケア応用 4モジュール (肩首 / 腰部 / 脚むくみ / 反射区フット)
+- 🆕 中級・上級用 SVG 図解 14枚: `public/training-svg/{slug}.svg` + `sql/session96_intermediate_advanced_visual_embeds.sql` (**SQL実行待ち**)
 - ✅ カルテ入力 UI: `app/cast/page.tsx` 内モーダル本実装 (下書き保存 / 確定保存 / 状態別ボタン切替)
 - ✅ 研修 UI: `app/cast/page.tsx` techniques + training タブ本実装、研修詳細モーダル、自動バッジ付与
 - ✅ HOME 必須研修バナー (契約書第10条準拠)
