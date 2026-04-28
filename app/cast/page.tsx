@@ -194,6 +194,58 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
   const [chartForm, setChartForm] = useState<ChartForm>(EMPTY_CHART_FORM);
   const [chartSaving, setChartSaving] = useState(false);
   const [chartFinalizeConfirm, setChartFinalizeConfirm] = useState(false);
+
+  // ═══ 🌿 セラピスト研修システム (Phase 1 / docs/24_THERAPIST_TRAINING.md) ═══
+  type TrainingCategory = {
+    id: number;
+    name: string;
+    slug: string | null;
+    description: string | null;
+    level: string | null;
+    prerequisites: number[] | null;
+    emoji: string | null;
+    sort_order: number | null;
+    is_required: boolean;
+    is_active: boolean;
+  };
+  type TrainingModule = {
+    id: number;
+    category_id: number;
+    title: string;
+    slug: string | null;
+    content: string | null;
+    duration_minutes: number | null;
+    has_quiz: boolean;
+    sort_order: number | null;
+    is_required: boolean;
+  };
+  type TrainingRecord = {
+    id: number;
+    therapist_id: number;
+    module_id: number;
+    status: "not_started" | "in_progress" | "completed";
+    progress_percent: number;
+    started_at: string | null;
+    completed_at: string | null;
+    last_accessed_at: string | null;
+  };
+  type SkillBadge = {
+    id: number;
+    therapist_id: number;
+    category_id: number;
+    level: string | null;
+    acquired_at: string;
+    acquired_method: string | null;
+    notes: string | null;
+  };
+  const [trainingCategories, setTrainingCategories] = useState<TrainingCategory[]>([]);
+  const [trainingModules, setTrainingModules] = useState<TrainingModule[]>([]);
+  const [trainingRecordsByModule, setTrainingRecordsByModule] = useState<Record<number, TrainingRecord>>({});
+  const [skillBadgesByCategory, setSkillBadgesByCategory] = useState<Record<number, SkillBadge>>({});
+  const [trainingDetailModuleId, setTrainingDetailModuleId] = useState<number | null>(null);
+  const [expandedTrainingCategoryId, setExpandedTrainingCategoryId] = useState<number | null>(null);
+  const [trainingActionInFlight, setTrainingActionInFlight] = useState(false);
+  const [newBadgeNotice, setNewBadgeNotice] = useState<{ category: TrainingCategory } | null>(null);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
 　const [calShifts, setCalShifts] = useState<Shift[]>([]);
 　const [calSettlements, setCalSettlements] = useState<Settlement[]>([]);
@@ -404,6 +456,28 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       }
       setChartsByReservationId(map);
     }
+
+    // 🌿 研修システム: カテゴリ・モジュール・受講記録・バッジを取得
+    // (公開教材なのでカテゴリ・モジュールはアクティブなもの全件、受講記録・バッジは自分の分のみ)
+    const [tcats, tmods, trecs, tbadges] = await Promise.all([
+      supabase.from("training_categories").select("*").eq("is_active", true).order("sort_order"),
+      supabase.from("training_modules").select("*").order("category_id").order("sort_order"),
+      supabase.from("therapist_training_records").select("*").eq("therapist_id", tid),
+      supabase.from("therapist_skill_badges").select("*").eq("therapist_id", tid).order("acquired_at", { ascending: false }),
+    ]);
+    if (tcats.data) setTrainingCategories(tcats.data as TrainingCategory[]);
+    if (tmods.data) setTrainingModules(tmods.data as TrainingModule[]);
+    if (trecs.data) {
+      const m: Record<number, TrainingRecord> = {};
+      for (const r of trecs.data as TrainingRecord[]) m[r.module_id] = r;
+      setTrainingRecordsByModule(m);
+    }
+    if (tbadges.data) {
+      const m: Record<number, SkillBadge> = {};
+      for (const b of tbadges.data as SkillBadge[]) m[b.category_id] = b;
+      setSkillBadgesByCategory(m);
+    }
+
     const { data: cn } = await supabase.from("therapist_customer_notes").select("*").eq("therapist_id", tid).order("customer_name"); if (cn) setCustomerNotes(cn);
     const [cy, cm] = calMonth.split("-").map(Number);
     const calDim = new Date(cy, cm, 0).getDate();
@@ -519,6 +593,105 @@ const [optsMaster, setOptsMaster] = useState<{ id: number; name: string; therapi
       setChartSaving(false);
     }
   }, [chartModalReservationId, chartsByReservationId, chartForm, therapist]);
+
+  // 🌿 研修モジュール: 開始 (in_progress 状態で record を upsert)
+  const openTrainingModule = useCallback(async (moduleId: number) => {
+    setTrainingDetailModuleId(moduleId);
+    if (!therapist) return;
+    const existing = trainingRecordsByModule[moduleId];
+    // 既に completed なら何もしない (status を戻さない)
+    if (existing?.status === "completed") {
+      // last_accessed_at だけ更新
+      await supabase.from("therapist_training_records")
+        .update({ last_accessed_at: new Date().toISOString() })
+        .eq("id", existing.id);
+      return;
+    }
+    const now = new Date().toISOString();
+    if (existing) {
+      const { data } = await supabase.from("therapist_training_records")
+        .update({ last_accessed_at: now })
+        .eq("id", existing.id)
+        .select()
+        .maybeSingle();
+      if (data) setTrainingRecordsByModule(prev => ({ ...prev, [moduleId]: data as TrainingRecord }));
+    } else {
+      const { data } = await supabase.from("therapist_training_records")
+        .insert({
+          therapist_id: therapist.id,
+          module_id: moduleId,
+          status: "in_progress",
+          progress_percent: 0,
+          started_at: now,
+          last_accessed_at: now,
+        })
+        .select()
+        .maybeSingle();
+      if (data) setTrainingRecordsByModule(prev => ({ ...prev, [moduleId]: data as TrainingRecord }));
+    }
+  }, [therapist, trainingRecordsByModule]);
+
+  // 🌿 研修モジュール: 完了 (completed 状態で record を update + 必須カテゴリ全完了でバッジ自動付与)
+  const completeTrainingModule = useCallback(async (moduleId: number) => {
+    if (!therapist) return;
+    setTrainingActionInFlight(true);
+    try {
+      const existing = trainingRecordsByModule[moduleId];
+      const now = new Date().toISOString();
+      const completedRow: TrainingRecord | null = existing
+        ? (await supabase.from("therapist_training_records")
+            .update({ status: "completed", progress_percent: 100, completed_at: now, last_accessed_at: now })
+            .eq("id", existing.id)
+            .select()
+            .maybeSingle()).data as TrainingRecord | null
+        : (await supabase.from("therapist_training_records")
+            .insert({
+              therapist_id: therapist.id,
+              module_id: moduleId,
+              status: "completed",
+              progress_percent: 100,
+              started_at: now,
+              completed_at: now,
+              last_accessed_at: now,
+            })
+            .select()
+            .maybeSingle()).data as TrainingRecord | null;
+      if (!completedRow) return;
+      const newRecords = { ...trainingRecordsByModule, [moduleId]: completedRow };
+      setTrainingRecordsByModule(newRecords);
+
+      // 自動バッジ付与判定:
+      // 完了したモジュールが属するカテゴリの「必須モジュール全完了」を満たすなら、
+      // basic レベルのバッジを therapist_skill_badges に insert する。
+      const completedMod = trainingModules.find(m => m.id === moduleId);
+      if (!completedMod) return;
+      const catId = completedMod.category_id;
+      if (skillBadgesByCategory[catId]) return; // 既にバッジ取得済
+      const requiredModulesInCat = trainingModules.filter(m => m.category_id === catId && m.is_required);
+      if (requiredModulesInCat.length === 0) return;
+      const allRequiredCompleted = requiredModulesInCat.every(m => newRecords[m.id]?.status === "completed");
+      if (!allRequiredCompleted) return;
+
+      // バッジ付与
+      const { data: badge } = await supabase.from("therapist_skill_badges")
+        .insert({
+          therapist_id: therapist.id,
+          category_id: catId,
+          level: "basic",
+          acquired_method: "completed_modules",
+          notes: "必須モジュール全完了による自動付与",
+        })
+        .select()
+        .maybeSingle();
+      if (badge) {
+        setSkillBadgesByCategory(prev => ({ ...prev, [catId]: badge as SkillBadge }));
+        const cat = trainingCategories.find(c => c.id === catId);
+        if (cat) setNewBadgeNotice({ category: cat });
+      }
+    } finally {
+      setTrainingActionInFlight(false);
+    }
+  }, [therapist, trainingRecordsByModule, trainingModules, trainingCategories, skillBadgesByCategory]);
 
   // 受領ポイント取得 (gift タブを開いた時 + therapist 切替時)
   const fetchGiftSummary = useCallback(async () => {
@@ -2830,137 +3003,272 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
 
         </div>)}
 
-        {/* ═══ 🌿 施術技術ライブラリ（Phase 1 placeholder） ═══ */}
-        {tab === "techniques" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center", paddingTop: 6 }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TECHNIQUES</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🌿 施術技術ライブラリ</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto 4px" }} />
-            <p style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.05em", marginTop: 8, lineHeight: 1.7 }}>
-              プロのセラピストとしての技術を体系的に学べます。<br />
-              受講したモジュールは「研修記録」に自動で記録されます。
-            </p>
-          </div>
+        {/* ═══ 🌿 施術技術ライブラリ (Phase 1 本実装) ═══ */}
+        {tab === "techniques" && (() => {
+          const requiredCats = trainingCategories.filter(c => c.is_required);
+          const intermediateCats = trainingCategories.filter(c => !c.is_required && c.level === "intermediate");
+          const advancedCats = trainingCategories.filter(c => !c.is_required && c.level === "advanced");
 
-          {/* 開発中バナー */}
-          <div style={{ padding: "16px 18px", backgroundColor: T.accentBg, border: `1px solid ${T.accent}40`, fontSize: 12, lineHeight: 1.9, color: T.text, letterSpacing: "0.03em", textAlign: "center" }}>
-            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.accentDeep, fontWeight: 500, marginBottom: 6 }}>COMING SOON · 6/1 LAUNCH</p>
-            <p style={{ margin: 0, fontSize: 12, color: T.text }}>
-              現在、解剖学・リンパ・オイル・カウンセリング・衛生管理の<br />
-              5つの基礎カリキュラムを準備中です。
-            </p>
-          </div>
+          // カテゴリ進捗 (完了モジュール数 / 全モジュール数)
+          const catProgress = (catId: number) => {
+            const mods = trainingModules.filter(m => m.category_id === catId);
+            const done = mods.filter(m => trainingRecordsByModule[m.id]?.status === "completed").length;
+            return { done, total: mods.length };
+          };
 
-          {/* カテゴリプレビュー（モック） */}
-          <div>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>BASIC CURRICULUM — 必須5カリキュラム</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-              {[
-                { emoji: "🧴", title: "衛生管理・感染対策", time: "30分", level: "必須", desc: "施術前後の手指消毒、施術用品の清浄化、感染症対策の基礎" },
-                { emoji: "🦴", title: "解剖学の基礎", time: "90分", level: "必須", desc: "主要な筋肉群と骨格の関係、施術における重要ポイント" },
-                { emoji: "💧", title: "リンパ系の理解", time: "60分", level: "必須", desc: "リンパの流れと役割、リンパケアの基礎" },
-                { emoji: "🌿", title: "オイル種別と効能", time: "45分", level: "必須", desc: "ラベンダー・ホホバ等の主要オイル、肌タイプ別の選び方" },
-                { emoji: "🩺", title: "カウンセリング技法", time: "60分", level: "必須", desc: "施術前ヒアリング、要望聴取、コンディション確認の手順" },
-              ].map((m, i) => (
-                <div key={i} style={{ padding: "14px 16px", backgroundColor: T.card, border: `1px solid ${T.border}`, opacity: 0.85 }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <span style={{ fontSize: 24, lineHeight: 1 }}>{m.emoji}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{m.title}</p>
-                        <span style={{ fontFamily: FONT_SANS, fontSize: 9, color: T.textFaint, letterSpacing: 0 }}>{m.time}</span>
-                      </div>
-                      <p style={{ margin: 0, fontSize: 11, color: T.textSub, lineHeight: 1.7, letterSpacing: "0.02em" }}>{m.desc}</p>
-                      <div style={{ display: "inline-block", marginTop: 8, padding: "2px 8px", fontSize: 9, fontFamily: FONT_DISPLAY, letterSpacing: "0.15em", color: T.accentDeep, backgroundColor: T.accentBg, fontWeight: 500 }}>{m.level}</div>
+          const renderCategoryCard = (cat: TrainingCategory) => {
+            const { done, total } = catProgress(cat.id);
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+            const hasBadge = !!skillBadgesByCategory[cat.id];
+            const expanded = expandedTrainingCategoryId === cat.id;
+            const cmods = trainingModules.filter(m => m.category_id === cat.id);
+            return (
+              <div key={cat.id} style={{ backgroundColor: T.card, border: `1px solid ${hasBadge ? T.accent : T.border}`, overflow: "hidden" }}>
+                <button onClick={() => setExpandedTrainingCategoryId(expanded ? null : cat.id)} style={{ width: "100%", textAlign: "left", padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, backgroundColor: "transparent", border: "none", cursor: "pointer", fontFamily: FONT_SERIF }}>
+                  <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }}>{cat.emoji || "📘"}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, letterSpacing: "0.04em", color: T.text }}>{cat.name}</p>
+                      {cat.is_required && <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 7px", letterSpacing: "0.15em", color: "#c96b83", border: "1px solid #c96b8344", fontWeight: 500 }}>必須</span>}
+                      {hasBadge && <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 7px", letterSpacing: "0.15em", color: "#fff", backgroundColor: "#6b9b7e", fontWeight: 500 }}>✓ 取得済</span>}
                     </div>
+                    {cat.description && <p style={{ margin: 0, fontSize: 11, color: T.textSub, lineHeight: 1.6, letterSpacing: "0.02em" }}>{cat.description}</p>}
+                    {/* 進捗バー */}
+                    {total > 0 && (
+                      <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1, height: 4, backgroundColor: T.border, position: "relative", overflow: "hidden" }}>
+                          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, backgroundColor: pct === 100 ? "#6b9b7e" : T.accent, transition: "width 0.3s" }} />
+                        </div>
+                        <span style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted, fontWeight: 500, minWidth: 36, textAlign: "right" }}>{done}/{total}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 中級・上級カテゴリ予告 */}
-          <div>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>UPCOMING — 中級・上級カリキュラム</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {[
-                { emoji: "🤲", title: "ボディケア基本技法" },
-                { emoji: "💆", title: "リンパドレナージュ" },
-                { emoji: "🧖", title: "アロマトリートメント" },
-                { emoji: "🎯", title: "部位別ケア応用" },
-              ].map((m, i) => (
-                <div key={i} style={{ padding: "12px 14px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, opacity: 0.6, textAlign: "center" }}>
-                  <p style={{ margin: 0, fontSize: 18, lineHeight: 1, marginBottom: 6 }}>{m.emoji}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textSub, letterSpacing: "0.03em" }}>{m.title}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>)}
-
-        {/* ═══ 🏆 研修受講記録（Phase 1 placeholder） ═══ */}
-        {tab === "training" && (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
-          {/* セクション見出し */}
-          <div style={{ textAlign: "center", paddingTop: 6 }}>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TRAINING</p>
-            <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🏆 研修受講記録</p>
-            <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto 4px" }} />
-            <p style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.05em", marginTop: 8, lineHeight: 1.7 }}>
-              受講した研修・取得した技術バッジを管理します。<br />
-              確定申告時の経費証明にも活用できます。
-            </p>
-          </div>
-
-          {/* 統計カード（モック） */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-            {[
-              { label: "MODULES", jp: "受講モジュール", v: "0", unit: "" },
-              { label: "COMPLETED", jp: "完了モジュール", v: "0", unit: "" },
-              { label: "BADGES", jp: "取得バッジ", v: "0", unit: "" },
-            ].map((s, i) => (
-              <div key={i} style={{ padding: "12px 10px", backgroundColor: T.card, border: `1px solid ${T.border}`, textAlign: "center" }}>
-                <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>{s.label}</p>
-                <p style={{ margin: "4px 0 0", fontFamily: FONT_SANS, fontSize: 22, fontWeight: 500, color: T.text, letterSpacing: 0 }}>
-                  {s.v}<span style={{ fontSize: 10, color: T.textFaint, marginLeft: 2 }}>{s.unit}</span>
-                </p>
-                <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textMuted, letterSpacing: "0.03em" }}>{s.jp}</p>
+                  <span style={{ color: T.textMuted, fontSize: 11, transition: "transform 0.2s", transform: expanded ? "rotate(90deg)" : "none", flexShrink: 0 }}>▶</span>
+                </button>
+                {/* 展開部分: モジュール一覧 */}
+                {expanded && (
+                  <div style={{ borderTop: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                    {cmods.length === 0 ? (
+                      <p style={{ margin: 0, padding: "16px", fontSize: 11, color: T.textMuted, textAlign: "center", letterSpacing: "0.03em" }}>
+                        モジュール準備中
+                      </p>
+                    ) : cmods.map(m => {
+                      const rec = trainingRecordsByModule[m.id];
+                      const status = rec?.status || "not_started";
+                      const statusLabel = status === "completed" ? "✓ 完了" : status === "in_progress" ? "受講中" : "未受講";
+                      const statusColor = status === "completed" ? "#6b9b7e" : status === "in_progress" ? "#b38419" : T.textMuted;
+                      return (
+                        <button key={m.id} onClick={() => openTrainingModule(m.id)} style={{ width: "100%", textAlign: "left", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, borderTop: `1px solid ${T.border}`, backgroundColor: "transparent", cursor: "pointer", fontFamily: FONT_SERIF }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em" }}>{m.title}</p>
+                            <div style={{ display: "flex", gap: 10, marginTop: 4, alignItems: "center" }}>
+                              {m.duration_minutes && <span style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>⏱ {m.duration_minutes}分</span>}
+                              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "1px 7px", letterSpacing: "0.1em", color: statusColor, border: `1px solid ${statusColor}33`, backgroundColor: `${statusColor}10`, fontWeight: 500 }}>{statusLabel}</span>
+                            </div>
+                          </div>
+                          <span style={{ color: T.textMuted, fontSize: 12, flexShrink: 0 }}>›</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          };
 
-          {/* 取得バッジエリア */}
-          <div>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>SKILL BADGES — 取得バッジ</p>
-            <div style={{ padding: "32px 20px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, textAlign: "center" }}>
-              <p style={{ margin: 0, fontSize: 32, lineHeight: 1, marginBottom: 10, opacity: 0.4 }}>🏆</p>
-              <p style={{ margin: 0, fontSize: 12, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>
-                まだバッジを取得していません<br />
-                <span style={{ fontSize: 10, color: T.textMuted }}>研修モジュールを完了するとバッジが付与されます</span>
+          return (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+            {/* セクション見出し */}
+            <div style={{ textAlign: "center", paddingTop: 6 }}>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TECHNIQUES</p>
+              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🌿 施術技術ライブラリ</p>
+              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto 4px" }} />
+              <p style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.05em", marginTop: 8, lineHeight: 1.7 }}>
+                プロのセラピストとしての技術を体系的に学べます。<br />
+                必須5カリキュラム完了で技術バッジが自動付与されます。
               </p>
             </div>
-          </div>
 
-          {/* 受講中モジュールエリア */}
-          <div>
-            <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>IN PROGRESS — 受講中モジュール</p>
-            <div style={{ padding: "24px 20px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, textAlign: "center" }}>
-              <p style={{ margin: 0, fontSize: 12, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>
-                受講中のモジュールはありません<br />
-                <span style={{ fontSize: 10, color: T.textMuted }}>「施術技術」タブから始めましょう</span>
+            {/* 契約書 第10条 リマインダー */}
+            <div style={{ padding: "12px 14px", backgroundColor: T.cardAlt, border: `1px solid ${T.border}`, fontSize: 10, lineHeight: 1.7, color: T.textMuted, letterSpacing: "0.02em" }}>
+              <strong style={{ color: T.textSub }}>📜 業務委託契約書 第10条</strong> により、施術技術研修の受講・技術習得は受託者の継続的な義務です。
+            </div>
+
+            {/* 必須カリキュラム */}
+            {requiredCats.length > 0 && (
+              <div>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>BASIC CURRICULUM — 必須5カリキュラム</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {requiredCats.map(renderCategoryCard)}
+                </div>
+              </div>
+            )}
+
+            {/* 中級カリキュラム */}
+            {intermediateCats.length > 0 && (
+              <div>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>INTERMEDIATE — 中級カリキュラム</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {intermediateCats.map(renderCategoryCard)}
+                </div>
+              </div>
+            )}
+
+            {/* 上級カリキュラム */}
+            {advancedCats.length > 0 && (
+              <div>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>ADVANCED — 上級カリキュラム</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {advancedCats.map(renderCategoryCard)}
+                </div>
+              </div>
+            )}
+
+            {trainingCategories.length === 0 && (
+              <div style={{ padding: "32px 20px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, textAlign: "center" }}>
+                <p style={{ margin: 0, fontSize: 12, color: T.textSub, letterSpacing: "0.03em" }}>研修カリキュラム準備中…</p>
+              </div>
+            )}
+          </div>);
+        })()}
+
+        {/* ═══ 🏆 研修受講記録 (Phase 1 本実装) ═══ */}
+        {tab === "training" && (() => {
+          const allRecords = Object.values(trainingRecordsByModule);
+          const inProgress = allRecords.filter(r => r.status === "in_progress");
+          const completed = allRecords.filter(r => r.status === "completed").sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
+          const badges = Object.values(skillBadgesByCategory).sort((a, b) => b.acquired_at.localeCompare(a.acquired_at));
+          // 学習時間合計 (完了モジュール × duration_minutes)
+          const totalMinutes = completed.reduce((acc, r) => {
+            const m = trainingModules.find(mm => mm.id === r.module_id);
+            return acc + (m?.duration_minutes || 0);
+          }, 0);
+          const totalHours = (totalMinutes / 60).toFixed(1);
+
+          return (<div style={{ display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT_SERIF }}>
+            {/* セクション見出し */}
+            <div style={{ textAlign: "center", paddingTop: 6 }}>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.25em", color: T.accent, marginBottom: 6, fontWeight: 500 }}>TRAINING</p>
+              <p style={{ fontFamily: FONT_SERIF, fontSize: 15, letterSpacing: "0.08em", color: T.text, fontWeight: 500, marginBottom: 10 }}>🏆 研修受講記録</p>
+              <div style={{ width: 30, height: 1, backgroundColor: T.accent, margin: "0 auto 4px" }} />
+              <p style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.05em", marginTop: 8, lineHeight: 1.7 }}>
+                受講した研修・取得した技術バッジを管理します。
               </p>
             </div>
-          </div>
 
-          {/* 修了証発行プレースホルダー */}
-          <div style={{ padding: "14px 16px", backgroundColor: T.accentBg, border: `1px solid ${T.accent}40` }}>
-            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.accentDeep, fontWeight: 500, marginBottom: 6 }}>COMING SOON</p>
-            <p style={{ margin: 0, fontSize: 12, color: T.text, lineHeight: 1.7 }}>
-              📜 <strong style={{ fontWeight: 500 }}>修了証PDF発行機能</strong><br />
-              <span style={{ fontSize: 11, color: T.textSub }}>必須カリキュラム完了後、PDF形式で修了証を発行できます。確定申告時の研修費経費計上の証明にもご活用ください。</span>
-            </p>
-          </div>
-        </div>)}
+            {/* 統計カード */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+              {[
+                { label: "COMPLETED", jp: "完了モジュール", v: String(completed.length), unit: "" },
+                { label: "BADGES", jp: "取得バッジ", v: String(badges.length), unit: "" },
+                { label: "HOURS", jp: "学習時間", v: totalHours, unit: "h" },
+              ].map((s, i) => (
+                <div key={i} style={{ padding: "12px 10px", backgroundColor: T.card, border: `1px solid ${T.border}`, textAlign: "center" }}>
+                  <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.accent, fontWeight: 500 }}>{s.label}</p>
+                  <p style={{ margin: "4px 0 0", fontFamily: FONT_SANS, fontSize: 22, fontWeight: 500, color: T.text, letterSpacing: 0 }}>
+                    {s.v}<span style={{ fontSize: 10, color: T.textFaint, marginLeft: 2 }}>{s.unit}</span>
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textMuted, letterSpacing: "0.03em" }}>{s.jp}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* 取得バッジエリア */}
+            <div>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>SKILL BADGES — 取得バッジ</p>
+              {badges.length === 0 ? (
+                <div style={{ padding: "32px 20px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, textAlign: "center" }}>
+                  <p style={{ margin: 0, fontSize: 32, lineHeight: 1, marginBottom: 10, opacity: 0.4 }}>🏆</p>
+                  <p style={{ margin: 0, fontSize: 12, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>
+                    まだバッジを取得していません<br />
+                    <span style={{ fontSize: 10, color: T.textMuted }}>研修モジュールを完了するとバッジが付与されます</span>
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+                  {badges.map(badge => {
+                    const cat = trainingCategories.find(c => c.id === badge.category_id);
+                    if (!cat) return null;
+                    return (
+                      <div key={badge.id} style={{ padding: "16px 14px", backgroundColor: T.card, border: `1px solid #6b9b7e`, textAlign: "center", position: "relative" }}>
+                        <p style={{ margin: 0, fontSize: 32, lineHeight: 1, marginBottom: 8 }}>{cat.emoji || "🏆"}</p>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em" }}>{cat.name}</p>
+                        <p style={{ margin: "3px 0 0", fontFamily: FONT_DISPLAY, fontSize: 9, color: "#6b9b7e", letterSpacing: "0.15em", fontWeight: 500 }}>{(badge.level || "BASIC").toUpperCase()}</p>
+                        <p style={{ margin: "6px 0 0", fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>{new Date(badge.acquired_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 受講中モジュールエリア */}
+            <div>
+              <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>IN PROGRESS — 受講中モジュール</p>
+              {inProgress.length === 0 ? (
+                <div style={{ padding: "20px", backgroundColor: T.cardAlt, border: `1px dashed ${T.border}`, textAlign: "center" }}>
+                  <p style={{ margin: 0, fontSize: 12, color: T.textSub, letterSpacing: "0.03em", lineHeight: 1.7 }}>
+                    受講中のモジュールはありません<br />
+                    <span style={{ fontSize: 10, color: T.textMuted }}>「施術技術」タブから始めましょう</span>
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {inProgress.map(rec => {
+                    const m = trainingModules.find(mm => mm.id === rec.module_id);
+                    if (!m) return null;
+                    const cat = trainingCategories.find(c => c.id === m.category_id);
+                    return (
+                      <button key={rec.id} onClick={() => openTrainingModule(m.id)} style={{ textAlign: "left", padding: "12px 14px", backgroundColor: T.card, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: FONT_SERIF, display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{cat?.emoji || "📘"}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em" }}>{m.title}</p>
+                          {cat && <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textMuted, letterSpacing: "0.02em" }}>{cat.name}</p>}
+                        </div>
+                        <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 7px", letterSpacing: "0.15em", color: "#b38419", border: "1px solid #b3841944", backgroundColor: "#b3841910", fontWeight: 500 }}>受講中</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 最近完了モジュール */}
+            {completed.length > 0 && (
+              <div>
+                <p style={{ fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.2em", color: T.textMuted, marginBottom: 10, fontWeight: 500 }}>RECENTLY COMPLETED — 最近完了したモジュール</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {completed.slice(0, 8).map(rec => {
+                    const m = trainingModules.find(mm => mm.id === rec.module_id);
+                    if (!m) return null;
+                    const cat = trainingCategories.find(c => c.id === m.category_id);
+                    return (
+                      <button key={rec.id} onClick={() => openTrainingModule(m.id)} style={{ textAlign: "left", padding: "10px 14px", backgroundColor: T.card, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: FONT_SERIF, display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{cat?.emoji || "📘"}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: T.text, letterSpacing: "0.03em" }}>{m.title}</p>
+                          <p style={{ margin: "2px 0 0", fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted, letterSpacing: "0.02em" }}>
+                            {rec.completed_at ? new Date(rec.completed_at).toLocaleDateString("ja-JP") : ""}
+                            {cat && <span style={{ marginLeft: 8 }}>{cat.name}</span>}
+                          </p>
+                        </div>
+                        <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "2px 7px", letterSpacing: "0.15em", color: "#6b9b7e", border: "1px solid #6b9b7e44", backgroundColor: "#6b9b7e10", fontWeight: 500 }}>✓ 完了</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 修了証発行プレースホルダー (Phase 2) */}
+            <div style={{ padding: "14px 16px", backgroundColor: T.accentBg, border: `1px solid ${T.accent}40` }}>
+              <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: T.accentDeep, fontWeight: 500, marginBottom: 6 }}>COMING SOON · PHASE 2</p>
+              <p style={{ margin: 0, fontSize: 12, color: T.text, lineHeight: 1.7 }}>
+                📜 <strong style={{ fontWeight: 500 }}>修了証PDF発行機能</strong><br />
+                <span style={{ fontSize: 11, color: T.textSub }}>必須カリキュラム完了後、PDF形式で修了証を発行できます。確定申告時の研修費経費計上の証明にもご活用ください。</span>
+              </p>
+            </div>
+          </div>);
+        })()}
 
       </div></div>
 
@@ -4063,6 +4371,114 @@ ${aTransport > 0 ? `<tr><td>交通費（実費精算分）</td><td class="right"
           </div>
         );
       })()}
+
+      {/* ═══ 🌿 研修モジュール詳細モーダル (Phase 1 本実装) ═══ */}
+      {trainingDetailModuleId !== null && (() => {
+        const m = trainingModules.find(x => x.id === trainingDetailModuleId);
+        if (!m) {
+          return (
+            <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => setTrainingDetailModuleId(null)}>
+              <div style={{ padding: 30, backgroundColor: T.card, border: `1px solid ${T.border}` }}><p style={{ margin: 0, fontSize: 12, color: T.textSub }}>モジュールが見つかりません</p></div>
+            </div>
+          );
+        }
+        const cat = trainingCategories.find(c => c.id === m.category_id);
+        const rec = trainingRecordsByModule[m.id];
+        const status = rec?.status || "not_started";
+        const isCompleted = status === "completed";
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", fontFamily: FONT_SERIF }} onClick={() => !trainingActionInFlight && setTrainingDetailModuleId(null)}>
+            <div style={{ width: "100%", maxWidth: 520, maxHeight: "92vh", backgroundColor: T.card, border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+              {/* ヘッダー */}
+              <div style={{ padding: "18px 22px", borderBottom: `1px solid ${T.border}`, backgroundColor: T.cardAlt }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {cat && (
+                      <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.25em", color: T.accent, fontWeight: 500 }}>
+                        {cat.emoji} {cat.name.toUpperCase()}
+                      </p>
+                    )}
+                    <h3 style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 500, letterSpacing: "0.04em", color: T.text, lineHeight: 1.5 }}>{m.title}</h3>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      {m.duration_minutes && <span style={{ fontFamily: FONT_SANS, fontSize: 10, color: T.textMuted }}>⏱ {m.duration_minutes}分</span>}
+                      {m.is_required && <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "1px 7px", letterSpacing: "0.15em", color: "#c96b83", border: "1px solid #c96b8344", fontWeight: 500 }}>必須</span>}
+                      <span style={{ fontFamily: FONT_DISPLAY, fontSize: 9, padding: "1px 7px", letterSpacing: "0.15em", color: isCompleted ? "#6b9b7e" : status === "in_progress" ? "#b38419" : T.textMuted, border: `1px solid ${isCompleted ? "#6b9b7e44" : status === "in_progress" ? "#b3841944" : T.border}`, backgroundColor: isCompleted ? "#6b9b7e10" : status === "in_progress" ? "#b3841910" : "transparent", fontWeight: 500 }}>
+                        {isCompleted ? "✓ 完了済" : status === "in_progress" ? "受講中" : "未受講"}
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={() => setTrainingDetailModuleId(null)} disabled={trainingActionInFlight} style={{ width: 30, height: 30, fontSize: 14, cursor: trainingActionInFlight ? "not-allowed" : "pointer", backgroundColor: "transparent", border: `1px solid ${T.border}`, color: T.textMuted, fontFamily: FONT_SERIF, flexShrink: 0 }}>✕</button>
+                </div>
+              </div>
+
+              {/* 本文 (Markdown レンダリング) */}
+              <div style={{ overflowY: "auto", flex: 1, padding: "18px 22px" }}>
+                {m.content ? (
+                  <div style={{ fontFamily: FONT_SERIF, color: T.text }}>
+                    {m.content.split("\n").map((line, i) => {
+                      // 既存マニュアル機能と同じ簡易 Markdown レンダリング
+                      if (line.startsWith("# ")) return <h2 key={i} style={{ fontSize: 17, fontWeight: 500, marginTop: 4, marginBottom: 12, color: T.text, fontFamily: FONT_SERIF, letterSpacing: "0.04em", borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>{renderInlineLinks(line.slice(2))}</h2>;
+                      if (line.startsWith("## ")) return <h3 key={i} style={{ fontSize: 15, fontWeight: 500, marginTop: 18, marginBottom: 8, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.04em" }}>{renderInlineLinks(line.slice(3))}</h3>;
+                      if (line.startsWith("### ")) return <h4 key={i} style={{ fontSize: 13, fontWeight: 500, marginTop: 14, marginBottom: 6, color: T.accent, fontFamily: FONT_SERIF, letterSpacing: "0.03em" }}>{renderInlineLinks(line.slice(4))}</h4>;
+                      if (line.startsWith("- ")) return <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, lineHeight: 1.9, marginLeft: 6, letterSpacing: "0.02em" }}><span style={{ color: T.accent }}>●</span><span>{renderInlineContent(line.slice(2))}</span></div>;
+                      if (line.match(/^\d+\.\s/)) return <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, lineHeight: 1.9, marginLeft: 6, letterSpacing: "0.02em" }}><span style={{ color: T.accent, fontWeight: 600, minWidth: 18, fontFamily: FONT_SANS }}>{line.match(/^(\d+)\./)?.[1]}.</span><span>{renderInlineContent(line.replace(/^\d+\.\s/, ""))}</span></div>;
+                      if (line.startsWith("> ")) return <div key={i} style={{ borderLeft: `2px solid ${T.accent}`, paddingLeft: 14, margin: "10px 0", fontSize: 12, color: T.textSub, fontStyle: "italic", letterSpacing: "0.02em", lineHeight: 1.9 }}>{renderInlineContent(line.slice(2))}</div>;
+                      if (line.startsWith("|") && line.includes("|")) return <div key={i} style={{ fontFamily: FONT_SANS, fontSize: 11, color: T.textSub, padding: "2px 0", letterSpacing: "0.02em", whiteSpace: "pre", overflowX: "auto" }}>{line}</div>;
+                      if (line.trim() === "---") return <hr key={i} style={{ border: "none", borderTop: `1px solid ${T.border}`, margin: "14px 0" }} />;
+                      if (line.match(/\*\*(.*?)\*\*/)) return <p key={i} style={{ fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", margin: "4px 0" }}>{renderInlineContent(line)}</p>;
+                      if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
+                      return <p key={i} style={{ fontSize: 13, lineHeight: 1.9, letterSpacing: "0.02em", margin: "4px 0" }}>{renderInlineContent(line)}</p>;
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 12, color: T.textMuted, textAlign: "center", padding: "30px 0" }}>本文準備中</p>
+                )}
+
+                {isCompleted && rec?.completed_at && (
+                  <div style={{ marginTop: 20, padding: "12px 14px", backgroundColor: "#6b9b7e10", border: "1px solid #6b9b7e44", textAlign: "center" }}>
+                    <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 9, letterSpacing: "0.2em", color: "#6b9b7e", fontWeight: 500 }}>COMPLETED</p>
+                    <p style={{ margin: "3px 0 0", fontSize: 11, color: T.text, letterSpacing: "0.03em" }}>
+                      ✓ {new Date(rec.completed_at).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })} に完了
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* フッター */}
+              <div style={{ padding: "12px 20px", borderTop: `1px solid ${T.border}`, backgroundColor: T.cardAlt, display: "flex", gap: 8 }}>
+                <button onClick={() => setTrainingDetailModuleId(null)} disabled={trainingActionInFlight} style={{ flex: 1, padding: "11px", fontSize: 11, cursor: trainingActionInFlight ? "not-allowed" : "pointer", backgroundColor: "transparent", color: T.textSub, border: `1px solid ${T.border}`, fontFamily: FONT_SERIF, letterSpacing: "0.08em" }}>
+                  閉じる
+                </button>
+                {!isCompleted && (
+                  <button onClick={() => completeTrainingModule(m.id)} disabled={trainingActionInFlight} style={{ flex: 2, padding: "11px", fontSize: 11, cursor: trainingActionInFlight ? "not-allowed" : "pointer", backgroundColor: "#6b9b7e", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.08em", fontWeight: 500, opacity: trainingActionInFlight ? 0.6 : 1 }}>
+                    {trainingActionInFlight ? "保存中…" : "✓ 完了にする"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ═══ 🏆 新バッジ獲得通知モーダル ═══ */}
+      {newBadgeNotice && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", fontFamily: FONT_SERIF }} onClick={() => setNewBadgeNotice(null)}>
+          <div style={{ width: "100%", maxWidth: 360, padding: "32px 28px", backgroundColor: T.card, border: `2px solid #6b9b7e`, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.3em", color: "#6b9b7e", fontWeight: 500 }}>🎉 BADGE ACQUIRED</p>
+            <div style={{ width: 30, height: 1, backgroundColor: "#6b9b7e", margin: "14px auto" }} />
+            <p style={{ margin: 0, fontSize: 56, lineHeight: 1, marginBottom: 14 }}>{newBadgeNotice.category.emoji || "🏆"}</p>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 500, letterSpacing: "0.05em", color: T.text }}>{newBadgeNotice.category.name}</h3>
+            <p style={{ margin: "4px 0 0", fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: "0.2em", color: "#6b9b7e", fontWeight: 500 }}>BASIC</p>
+            <p style={{ margin: "16px 0 0", fontSize: 12, color: T.textSub, lineHeight: 1.8, letterSpacing: "0.03em" }}>
+              必須カリキュラム全完了！<br />
+              新しい技術バッジを取得しました。
+            </p>
+            <button onClick={() => setNewBadgeNotice(null)} style={{ marginTop: 22, width: "100%", padding: "12px", fontSize: 12, cursor: "pointer", backgroundColor: "#6b9b7e", color: "#fff", border: "none", fontFamily: FONT_SERIF, letterSpacing: "0.15em", fontWeight: 500 }}>
+              ありがとうございます！
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* お客様施術履歴モーダル */}
       {noteHistoryCustomer && (
