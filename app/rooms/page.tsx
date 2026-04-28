@@ -26,7 +26,23 @@ type Store = {
   shop_description?: string;
   shop_sort_order?: number;
 };
-type Building = { id: number; store_id: number; name: string };
+type Building = {
+  id: number;
+  store_id: number;
+  name: string;
+  // ─── 公開HP (Ange Spa) 掲載用 ───
+  shop_is_public?: boolean;
+  shop_display_name?: string;
+  shop_address?: string;
+  shop_phone?: string;
+  shop_phone_secondary?: string;
+  shop_access?: string;
+  shop_map_embed?: string;
+  shop_image_url?: string;
+  shop_sub_image_urls?: string[];
+  shop_description?: string;
+  shop_sort_order?: number;
+};
 type Room = { id: number; store_id: number; building_id: number; name: string; key_number?: string };
 type ParkingSpot = { id: number; store_id: number; building_id: number; number: string; type: string };
 
@@ -88,52 +104,16 @@ export default function RoomManagement() {
   const addStore = async () => { if (!newStoreName.trim()) return; await supabase.from("stores").insert({ name: newStoreName.trim() }); setNewStoreName(""); fetchData(); };
   const updateStore = async () => {
     if (!editStore || !editStoreName.trim()) return;
-    // 店舗画像アップロード（あれば）
-    let finalImageUrl = editShopImageUrl;
-    if (editShopImageFile) {
-      const ext = editShopImageFile.name.split(".").pop() || "jpg";
-      const fn = `shop_${editStore.id}_${new Date().getTime()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("therapist-photos").upload(fn, editShopImageFile, { upsert: true });
-      if (!upErr) {
-        const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
-        if (u?.publicUrl) finalImageUrl = u.publicUrl;
-      }
-    }
-    // サブ画像（ギャラリー）アップロード — 残した既存URL + 新規アップロード分を結合
-    const finalSubImageUrls: string[] = [...editShopSubImageUrls];
-    if (editShopSubImageFiles.length > 0) {
-      for (let i = 0; i < editShopSubImageFiles.length; i++) {
-        const f = editShopSubImageFiles[i];
-        const ext = f.name.split(".").pop() || "jpg";
-        const fn = `shop_${editStore.id}_sub_${new Date().getTime()}_${i}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("therapist-photos").upload(fn, f, { upsert: true });
-        if (!upErr) {
-          const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
-          if (u?.publicUrl) finalSubImageUrls.push(u.publicUrl);
-        }
-      }
-    }
+    // 店舗（ルーム）はもう公開拠点単位ではない。住所・電話・地図・画像 etc.
+    // は buildings 側で管理する。stores では「全建物共通」項目のみ保存する。
     await supabase.from("stores").update({
       name: editStoreName.trim(),
-      // ─── 公開HP (Ange Spa) 用 ───
-      shop_is_public: editShopIsPublic,
-      shop_display_name: editShopDisplayName.trim(),
-      shop_address: editShopAddress.trim(),
-      shop_phone: editShopPhone.trim(),
-      shop_phone_secondary: editShopPhoneSecondary.trim(),
+      // ─── 全建物共通の運営情報 ───
       shop_hours: editShopHours.trim(),
       shop_reception_hours: editShopReceptionHours.trim(),
       shop_holiday: editShopHoliday.trim(),
-      shop_access: editShopAccess.trim(),
-      shop_map_embed: editShopMapEmbed.trim(),
-      shop_image_url: finalImageUrl,
-      shop_sub_image_urls: finalSubImageUrls,
-      shop_description: editShopDescription.trim(),
-      shop_sort_order: parseInt(editShopSortOrder) || 0,
     }).eq("id", editStore.id);
     setEditStore(null);
-    setEditShopImageFile(null);
-    setEditShopSubImageFiles([]);
     fetchData();
   };
   const deleteStore = async (id: number) => {
@@ -155,7 +135,53 @@ export default function RoomManagement() {
   };
 
   const addBuilding = async () => { if (!newBuildingName.trim() || !newBuildingStoreId) return; await supabase.from("buildings").insert({ name: newBuildingName.trim(), store_id: newBuildingStoreId }); setNewBuildingName(""); fetchData(); };
-  const updateBuilding = async () => { if (!editBuilding || !editBuildingName.trim()) return; await supabase.from("buildings").update({ name: editBuildingName.trim() }).eq("id", editBuilding.id); setEditBuilding(null); fetchData(); };
+  const updateBuilding = async () => {
+    if (!editBuilding || !editBuildingName.trim()) return;
+    // 建物メイン画像アップロード（あれば）
+    let finalImageUrl = editShopImageUrl;
+    if (editShopImageFile) {
+      const ext = editShopImageFile.name.split(".").pop() || "jpg";
+      const fn = `building_${editBuilding.id}_${new Date().getTime()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("therapist-photos").upload(fn, editShopImageFile, { upsert: true });
+      if (!upErr) {
+        const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
+        if (u?.publicUrl) finalImageUrl = u.publicUrl;
+      }
+    }
+    // サブ画像（ギャラリー）アップロード — 残した既存URL + 新規アップロード分を結合
+    const finalSubImageUrls: string[] = [...editShopSubImageUrls];
+    if (editShopSubImageFiles.length > 0) {
+      for (let i = 0; i < editShopSubImageFiles.length; i++) {
+        const f = editShopSubImageFiles[i];
+        const ext = f.name.split(".").pop() || "jpg";
+        const fn = `building_${editBuilding.id}_sub_${new Date().getTime()}_${i}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("therapist-photos").upload(fn, f, { upsert: true });
+        if (!upErr) {
+          const { data: u } = supabase.storage.from("therapist-photos").getPublicUrl(fn);
+          if (u?.publicUrl) finalSubImageUrls.push(u.publicUrl);
+        }
+      }
+    }
+    await supabase.from("buildings").update({
+      name: editBuildingName.trim(),
+      // ─── 公開HP (Ange Spa) 用 ───
+      shop_is_public: editShopIsPublic,
+      shop_display_name: editShopDisplayName.trim(),
+      shop_address: editShopAddress.trim(),
+      shop_phone: editShopPhone.trim(),
+      shop_phone_secondary: editShopPhoneSecondary.trim(),
+      shop_access: editShopAccess.trim(),
+      shop_map_embed: editShopMapEmbed.trim(),
+      shop_image_url: finalImageUrl,
+      shop_sub_image_urls: finalSubImageUrls,
+      shop_description: editShopDescription.trim(),
+      shop_sort_order: parseInt(editShopSortOrder) || 0,
+    }).eq("id", editBuilding.id);
+    setEditBuilding(null);
+    setEditShopImageFile(null);
+    setEditShopSubImageFiles([]);
+    fetchData();
+  };
   const deleteBuilding = async (id: number) => {
     const ok = await confirm({
       title: "この建物を削除しますか？",
@@ -232,28 +258,15 @@ export default function RoomManagement() {
             {stores.length === 0 ? <p className="text-[12px] text-center py-4" style={{ color: T.textFaint }}>ルームが登録されていません</p> : (
               <div className="space-y-2">{stores.map((s, si) => (
                 <div key={s.id} className="flex items-center justify-between px-4 py-3 rounded-xl" style={{ backgroundColor: colors[si % colors.length] + "12" }}>
-                  <div className="flex items-center gap-3 flex-wrap"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} /><span className="text-[13px] font-medium">{s.name}</span>{s.shop_is_public && <span className="px-2 py-0.5 text-[9px] rounded-full" style={{ backgroundColor: "#e8849a18", color: "#e8849a", border: "1px solid #e8849a44" }}>🌸 公開中</span>}<span className="text-[10px]" style={{ color: T.textMuted }}>（建物 {buildings.filter((b) => b.store_id === s.id).length}件）</span></div>
+                  <div className="flex items-center gap-3 flex-wrap"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} /><span className="text-[13px] font-medium">{s.name}</span>{buildings.some((b) => b.store_id === s.id && b.shop_is_public) && <span className="px-2 py-0.5 text-[9px] rounded-full" style={{ backgroundColor: "#e8849a18", color: "#e8849a", border: "1px solid #e8849a44" }}>🌸 公開中の建物あり</span>}<span className="text-[10px]" style={{ color: T.textMuted }}>（建物 {buildings.filter((b) => b.store_id === s.id).length}件）</span></div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => {
                       setEditStore(s);
                       setEditStoreName(s.name);
-                      setEditShopTab("basic");
-                      setEditShopIsPublic(s.shop_is_public || false);
-                      setEditShopDisplayName(s.shop_display_name || "");
-                      setEditShopAddress(s.shop_address || "");
-                      setEditShopPhone(s.shop_phone || "");
-                      setEditShopPhoneSecondary(s.shop_phone_secondary || "");
+                      // 全建物共通の運営情報のみ
                       setEditShopHours(s.shop_hours || "");
                       setEditShopReceptionHours(s.shop_reception_hours || "");
                       setEditShopHoliday(s.shop_holiday || "");
-                      setEditShopAccess(s.shop_access || "");
-                      setEditShopMapEmbed(s.shop_map_embed || "");
-                      setEditShopImageUrl(s.shop_image_url || "");
-                      setEditShopSubImageUrls(s.shop_sub_image_urls || []);
-                      setEditShopSubImageFiles([]);
-                      setEditShopDescription(s.shop_description || "");
-                      setEditShopSortOrder(String(s.shop_sort_order ?? 0));
-                      setEditShopImageFile(null);
                     }} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
                     <button onClick={() => deleteStore(s.id)} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                   </div>
@@ -279,9 +292,33 @@ export default function RoomManagement() {
               <div key={s.id} className="mb-4"><p className="text-[11px] mb-2 flex items-center gap-2" style={{ color: T.textMuted }}><span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[si % colors.length] }} />{s.name}</p>
                 <div className="space-y-2 ml-4">{sb.map((b) => (
                   <div key={b.id} className="flex items-center justify-between px-4 py-2.5 rounded-xl" style={{ backgroundColor: T.cardAlt }}>
-                    <div className="flex items-center gap-2"><span className="text-[13px] font-medium">{b.name}</span><span className="text-[10px]" style={{ color: T.textMuted }}>（{rooms.filter((r) => r.building_id === b.id).length}部屋）</span></div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-medium">{b.name}</span>
+                      {b.shop_is_public && (
+                        <span className="px-2 py-0.5 text-[9px] rounded-full" style={{ backgroundColor: "#e8849a18", color: "#e8849a", border: "1px solid #e8849a44" }}>🌸 HP公開中</span>
+                      )}
+                      <span className="text-[10px]" style={{ color: T.textMuted }}>（{rooms.filter((r) => r.building_id === b.id).length}部屋）</span>
+                    </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => { setEditBuilding(b); setEditBuildingName(b.name); }} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
+                      <button onClick={() => {
+                        setEditBuilding(b);
+                        setEditBuildingName(b.name);
+                        setEditShopTab("basic");
+                        // ─── 公開HP情報をロード ───
+                        setEditShopIsPublic(b.shop_is_public || false);
+                        setEditShopDisplayName(b.shop_display_name || "");
+                        setEditShopAddress(b.shop_address || "");
+                        setEditShopPhone(b.shop_phone || "");
+                        setEditShopPhoneSecondary(b.shop_phone_secondary || "");
+                        setEditShopAccess(b.shop_access || "");
+                        setEditShopMapEmbed(b.shop_map_embed || "");
+                        setEditShopImageUrl(b.shop_image_url || "");
+                        setEditShopSubImageUrls(b.shop_sub_image_urls || []);
+                        setEditShopSubImageFiles([]);
+                        setEditShopDescription(b.shop_description || "");
+                        setEditShopSortOrder(String(b.shop_sort_order ?? 0));
+                        setEditShopImageFile(null);
+                      }} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ color: "#3d6b9f", backgroundColor: "#3d6b9f18" }}>編集</button>
                       <button onClick={() => deleteBuilding(b.id)} className="px-3 py-1 text-[10px] rounded-lg cursor-pointer" style={{ color: "#c45555", backgroundColor: "#c4555518" }}>削除</button>
                     </div>
                   </div>
@@ -380,21 +417,64 @@ export default function RoomManagement() {
       {/* Edit Modals */}
       {editStore && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditStore(null)}>
-          <div className="rounded-2xl border p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-2xl border p-6 w-full max-w-md animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-[16px] font-medium mb-1">ルーム情報を編集</h2>
-            <p className="text-[10px] mb-4" style={{ color: T.textFaint }}>基本情報は T-MANAGE 用、公開HP情報は Ange Spa 公式サイト掲載用です</p>
+            <p className="text-[10px] mb-5" style={{ color: T.textFaint }}>住所・電話・地図・写真は <span style={{ color: "#7ab88f" }}>建物</span> 側で管理します。ここでは全建物共通の運営情報のみ。</p>
+
+            <div className="space-y-4">
+              {/* ルーム名 */}
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ルーム名</label>
+                <input type="text" value={editStoreName} onChange={(e) => setEditStoreName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} />
+                <p className="text-[10px] mt-1" style={{ color: T.textFaint }}>例: 三河安城ルーム、豊橋ルーム</p>
+              </div>
+
+              {/* 全建物共通の運営情報 */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: "#7ab88f10", border: "1px solid #7ab88f33" }}>
+                <p className="text-[10px] mb-3 flex items-center gap-1.5" style={{ color: "#5a9e6f" }}>
+                  <span>📌</span><span>全建物に共通する運営情報</span>
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🕛 営業時間</label>
+                    <input type="text" value={editShopHours} onChange={(e) => setEditShopHours(e.target.value)} placeholder="12:00〜深夜27:00" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🕐 受付時間</label>
+                    <input type="text" value={editShopReceptionHours} onChange={(e) => setEditShopReceptionHours(e.target.value)} placeholder="最終受付26:00（電話受付11:00〜26:00）" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🏖 定休日</label>
+                    <input type="text" value={editShopHoliday} onChange={(e) => setEditShopHoliday(e.target.value)} placeholder="年中無休" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6 pt-4 border-t" style={{ borderColor: T.border }}>
+              <button onClick={updateStore} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">更新する</button>
+              <button onClick={() => setEditStore(null)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editBuilding && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditBuilding(null)}>
+          <div className="rounded-2xl border p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-[16px] font-medium mb-1">建物情報を編集</h2>
+            <p className="text-[10px] mb-4" style={{ color: T.textFaint }}>基本情報は T-MANAGE 用、公開HP情報は Ange Spa 公式サイトのアクセスページ掲載用です</p>
 
             {/* タブ切替 */}
             <div className="flex gap-2 mb-5">
-              <button onClick={() => setEditShopTab("basic")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editShopTab === "basic" ? "#c3a78222" : T.cardAlt, color: editShopTab === "basic" ? "#c3a782" : T.textMuted, border: `1px solid ${editShopTab === "basic" ? "#c3a78244" : T.border}`, fontWeight: editShopTab === "basic" ? 700 : 400 }}>① 基本情報</button>
+              <button onClick={() => setEditShopTab("basic")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editShopTab === "basic" ? "#7ab88f22" : T.cardAlt, color: editShopTab === "basic" ? "#5a9e6f" : T.textMuted, border: `1px solid ${editShopTab === "basic" ? "#7ab88f55" : T.border}`, fontWeight: editShopTab === "basic" ? 700 : 400 }}>① 基本情報</button>
               <button onClick={() => setEditShopTab("public")} className="px-4 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ backgroundColor: editShopTab === "public" ? "#e8849a22" : T.cardAlt, color: editShopTab === "public" ? "#e8849a" : T.textMuted, border: `1px solid ${editShopTab === "public" ? "#e8849a66" : T.border}`, fontWeight: editShopTab === "public" ? 700 : 400 }}>② 公開HP 🌸</button>
             </div>
 
             {editShopTab === "basic" && (
               <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>ルーム名（T-MANAGE内部表示）</label>
-                <input type="text" value={editStoreName} onChange={(e) => setEditStoreName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} />
-                <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>例: 三河安城ルーム、豊橋ルーム</p>
+                <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>建物名（T-MANAGE内部表示）</label>
+                <input type="text" value={editBuildingName} onChange={(e) => setEditBuildingName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none" style={inputStyle} />
+                <p className="text-[10px] mt-2" style={{ color: T.textFaint }}>例: オアシス、マイコート、リングセレクト</p>
               </div>
             )}
 
@@ -422,14 +502,14 @@ export default function RoomManagement() {
 
                 {/* 公開表示名 */}
                 <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🏪 公開表示名 <span className="text-[9px]" style={{ color: T.textMuted }}>（空なら内部名を使用）</span></label>
-                  <input type="text" value={editShopDisplayName} onChange={(e) => setEditShopDisplayName(e.target.value)} placeholder="Ange Spa 三河安城ルーム" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🏪 公開表示名 <span className="text-[9px]" style={{ color: T.textMuted }}>（空なら建物名を使用）</span></label>
+                  <input type="text" value={editShopDisplayName} onChange={(e) => setEditShopDisplayName(e.target.value)} placeholder="オアシス（三河安城）" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
                 </div>
 
                 {/* 住所 */}
                 <div>
                   <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📍 住所</label>
-                  <input type="text" value={editShopAddress} onChange={(e) => setEditShopAddress(e.target.value)} placeholder="〒446-0032 愛知県安城市..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  <input type="text" value={editShopAddress} onChange={(e) => setEditShopAddress(e.target.value)} placeholder="〒446-0056 愛知県安城市三河安城町2-11-1" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
                 </div>
 
                 {/* 電話 */}
@@ -444,24 +524,10 @@ export default function RoomManagement() {
                   </div>
                 </div>
 
-                {/* 時間関連 */}
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🕛 営業時間</label>
-                  <input type="text" value={editShopHours} onChange={(e) => setEditShopHours(e.target.value)} placeholder="12:00〜深夜27:00" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🕐 受付時間</label>
-                  <input type="text" value={editShopReceptionHours} onChange={(e) => setEditShopReceptionHours(e.target.value)} placeholder="最終受付26:00（電話受付11:00〜26:00）" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-                <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🏖 定休日</label>
-                  <input type="text" value={editShopHoliday} onChange={(e) => setEditShopHoliday(e.target.value)} placeholder="年中無休" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
-                </div>
-
                 {/* アクセス */}
                 <div>
                   <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🚃 アクセス説明</label>
-                  <input type="text" value={editShopAccess} onChange={(e) => setEditShopAccess(e.target.value)} placeholder="JR三河安城駅より徒歩5分" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
+                  <input type="text" value={editShopAccess} onChange={(e) => setEditShopAccess(e.target.value)} placeholder="JR三河安城駅 北口 徒歩5分" className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none" style={inputStyle} />
                 </div>
 
                 {/* 地図埋め込み */}
@@ -471,13 +537,13 @@ export default function RoomManagement() {
                   <p className="text-[9px] mt-1" style={{ color: T.textMuted }}>Google Maps で目的地を表示 → 共有 → 地図を埋め込む → HTMLをコピー</p>
                 </div>
 
-                {/* 店舗画像 */}
+                {/* 建物画像 */}
                 <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📷 店舗メイン画像</label>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>📷 建物メイン画像（外観・入口）</label>
                   {editShopImageUrl && !editShopImageFile && (
                     <div className="mb-2 relative inline-block">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={editShopImageUrl} alt="shop" className="rounded-lg" style={{ maxHeight: 160, objectFit: "cover" }} />
+                      <img src={editShopImageUrl} alt="building" className="rounded-lg" style={{ maxHeight: 160, objectFit: "cover" }} />
                       <button type="button" onClick={() => setEditShopImageUrl("")} className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-[11px] cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>✕</button>
                     </div>
                   )}
@@ -494,10 +560,8 @@ export default function RoomManagement() {
                 <div>
                   <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>🖼 サブ画像（ギャラリー）<span className="text-[9px] ml-1" style={{ color: T.textMuted }}>※ /access ページで最大4枚表示</span></label>
 
-                  {/* 既存URL + 新規ファイルのプレビュー */}
                   {(editShopSubImageUrls.length > 0 || editShopSubImageFiles.length > 0) && (
                     <div className="mb-2 grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {/* 既存URL（DBに保存済み） */}
                       {editShopSubImageUrls.map((url, i) => (
                         <div key={`url-${i}`} className="relative">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -513,7 +577,6 @@ export default function RoomManagement() {
                           </button>
                         </div>
                       ))}
-                      {/* アップロード待ちファイル */}
                       {editShopSubImageFiles.map((f, i) => {
                         const previewUrl = URL.createObjectURL(f);
                         return (
@@ -560,13 +623,13 @@ export default function RoomManagement() {
                   </label>
 
                   {editShopSubImageUrls.length === 0 && editShopSubImageFiles.length === 0 && (
-                    <p className="text-[9px] mt-1.5" style={{ color: T.textMuted }}>未登録 / 内観・入口・看板など店舗の魅力が伝わる写真を3〜5枚程度</p>
+                    <p className="text-[9px] mt-1.5" style={{ color: T.textMuted }}>未登録 / 内観・入口・看板など建物の魅力が伝わる写真を3〜5枚程度</p>
                   )}
                 </div>
 
                 {/* 紹介文 */}
                 <div>
-                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💬 店舗紹介文</label>
+                  <label className="block text-[11px] mb-1.5" style={{ color: T.textSub }}>💬 建物紹介文</label>
                   <textarea value={editShopDescription} onChange={(e) => setEditShopDescription(e.target.value)} rows={4} placeholder="落ち着いた空間で、上質な癒しのひと時を..." className="w-full px-3 py-2.5 rounded-xl text-[12px] outline-none resize-none" style={inputStyle} />
                   <p className="text-[9px] mt-1 text-right" style={{ color: T.textMuted }}>{editShopDescription.length} 文字</p>
                 </div>
@@ -574,7 +637,7 @@ export default function RoomManagement() {
                 {/* 表示順 */}
                 <div className="rounded-xl p-3" style={{ backgroundColor: T.cardAlt, border: `1px solid ${T.border}` }}>
                   <div className="flex items-center justify-between gap-3">
-                    <label className="text-[11px] flex-1" style={{ color: T.text }}>📊 表示順<span className="text-[9px] ml-1" style={{ color: T.textMuted }}>（小さい順に表示）</span></label>
+                    <label className="text-[11px] flex-1" style={{ color: T.text }}>📊 表示順<span className="text-[9px] ml-1" style={{ color: T.textMuted }}>（小さい順に /access に表示）</span></label>
                     <input type="number" value={editShopSortOrder} onChange={(e) => setEditShopSortOrder(e.target.value)} className="w-20 px-2 py-1.5 rounded-lg text-[11px] outline-none text-right" style={inputStyle} />
                   </div>
                 </div>
@@ -582,18 +645,9 @@ export default function RoomManagement() {
             )}
 
             <div className="flex gap-3 mt-6 pt-4 border-t" style={{ borderColor: T.border }}>
-              <button onClick={updateStore} className="px-7 py-3 bg-gradient-to-r from-[#c3a782] to-[#b09672] text-white text-[12px] rounded-xl cursor-pointer">更新する</button>
-              <button onClick={() => setEditStore(null)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
+              <button onClick={updateBuilding} className="px-7 py-3 bg-gradient-to-r from-[#7ab88f] to-[#5a9e6f] text-white text-[12px] rounded-xl cursor-pointer">更新する</button>
+              <button onClick={() => setEditBuilding(null)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button>
             </div>
-          </div>
-        </div>
-      )}
-      {editBuilding && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditBuilding(null)}>
-          <div className="rounded-2xl border p-8 w-full max-w-sm animate-[fadeIn_0.25s]" style={{ backgroundColor: T.card, borderColor: T.border }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-[16px] font-medium mb-4">建物名を変更</h2>
-            <input type="text" value={editBuildingName} onChange={(e) => setEditBuildingName(e.target.value)} className="w-full px-4 py-3 rounded-xl text-[13px] outline-none mb-4" style={inputStyle} />
-            <div className="flex gap-3"><button onClick={updateBuilding} className="px-7 py-3 bg-gradient-to-r from-[#7ab88f] to-[#5a9e6f] text-white text-[12px] rounded-xl cursor-pointer">更新</button><button onClick={() => setEditBuilding(null)} className="px-7 py-3 border text-[12px] rounded-xl cursor-pointer" style={{ borderColor: T.border, color: T.textSub }}>キャンセル</button></div>
           </div>
         </div>
       )}

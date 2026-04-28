@@ -10,38 +10,47 @@ import { PageHero, LoadingBlock } from "../../../components/site/SiteLayoutParts
 /**
  * /access — 店舗・アクセスページ
  *
- * データソース: stores (shop_is_public=true)
- * カラム: shop_display_name, shop_address, shop_phone, shop_phone_secondary,
- *        shop_hours, shop_reception_hours, shop_holiday, shop_access,
- *        shop_map_embed, shop_image_url, shop_sub_image_urls,
- *        shop_description, shop_sort_order
+ * データソース: buildings (shop_is_public=true) + 親 stores
+ *
+ * 設計:
+ *   - 各「建物」を /access の1カードとして表示
+ *   - 住所・電話・地図・写真等は buildings 側
+ *   - 営業時間・受付時間・定休日は親 stores から継承
  *
  * 構成:
  *   1. PageHero
  *   2. HOURS / 営業・予約クイックインフォ
- *   3. 店舗タブ（sticky）
- *   4. 各店舗ブロック（写真ギャラリー / 情報 / 3 CTA / 地図）
+ *   3. 建物タブ（sticky）
+ *   4. 各建物ブロック（写真ギャラリー / 情報 / 3 CTA / 地図）
  *   5. VISIT / 来店までの流れ（4ステップ）
  *   6. RESERVE / 下部 CTA
  *   7. LocalBusiness JSON-LD（SEO）
  */
 
-type Store = {
+type ParentStore = {
   id: number;
+  name: string;
+  shop_hours?: string;
+  shop_reception_hours?: string;
+  shop_holiday?: string;
+};
+
+type Building = {
+  id: number;
+  store_id: number;
   name: string;
   shop_display_name?: string;
   shop_address?: string;
   shop_phone?: string;
   shop_phone_secondary?: string;
-  shop_hours?: string;
-  shop_reception_hours?: string;
-  shop_holiday?: string;
   shop_access?: string;
   shop_map_embed?: string;
   shop_image_url?: string;
   shop_sub_image_urls?: string[];
   shop_description?: string;
   shop_sort_order?: number;
+  // クライアント側で merge
+  store?: ParentStore;
 };
 
 const VISIT_STEPS = [
@@ -72,24 +81,37 @@ const VISIT_STEPS = [
 ];
 
 export default function AccessPage() {
-  const [stores, setStores] = useState<Store[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copiedStoreId, setCopiedStoreId] = useState<number | null>(null);
+  const [copiedBuildingId, setCopiedBuildingId] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("stores")
-        .select("*")
-        .eq("shop_is_public", true)
-        .order("shop_sort_order", { ascending: true })
-        .order("id", { ascending: true });
-      setStores(data || []);
+      // 公開建物 + 親ストアを並列取得し、クライアントで merge
+      const [bRes, sRes] = await Promise.all([
+        supabase
+          .from("buildings")
+          .select("*")
+          .eq("shop_is_public", true)
+          .order("shop_sort_order", { ascending: true })
+          .order("id", { ascending: true }),
+        supabase
+          .from("stores")
+          .select("id, name, shop_hours, shop_reception_hours, shop_holiday"),
+      ]);
+      const storeMap = new Map<number, ParentStore>(
+        (sRes.data || []).map((s: ParentStore) => [s.id, s])
+      );
+      const merged: Building[] = (bRes.data || []).map((b: Building) => ({
+        ...b,
+        store: storeMap.get(b.store_id),
+      }));
+      setBuildings(merged);
       setLoading(false);
     })();
   }, []);
 
-  const handleCopyAddress = async (storeId: number, address: string) => {
+  const handleCopyAddress = async (buildingId: number, address: string) => {
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard) {
         await navigator.clipboard.writeText(address);
@@ -104,8 +126,8 @@ export default function AccessPage() {
         document.execCommand("copy");
         document.body.removeChild(ta);
       }
-      setCopiedStoreId(storeId);
-      setTimeout(() => setCopiedStoreId(null), 2000);
+      setCopiedBuildingId(buildingId);
+      setTimeout(() => setCopiedBuildingId(null), 2000);
     } catch {
       // 失敗時は何もしない（ユーザーは手動で住所行を選択可能）
     }
@@ -136,7 +158,7 @@ export default function AccessPage() {
         <section style={{ padding: SITE.sp.section }}>
           <LoadingBlock />
         </section>
-      ) : stores.length === 0 ? (
+      ) : buildings.length === 0 ? (
         <section style={{ padding: `${SITE.sp.section} ${SITE.sp.lg}` }}>
           <div
             style={{
@@ -289,10 +311,10 @@ export default function AccessPage() {
                 justifyContent: "center",
               }}
             >
-              {stores.map((s) => (
+              {buildings.map((b) => (
                 <a
-                  key={s.id}
-                  href={`#store-${s.id}`}
+                  key={b.id}
+                  href={`#store-${b.id}`}
                   style={{
                     padding: "14px 24px",
                     color: SITE.color.text,
@@ -304,30 +326,31 @@ export default function AccessPage() {
                   }}
                   className="site-access-tab"
                 >
-                  {s.shop_display_name || s.name}
+                  {b.shop_display_name || b.name}
                 </a>
               ))}
             </div>
           </section>
 
-          {/* ───── 各店舗ブロック ───── */}
-          {stores.map((s, idx) => {
-            const displayName = s.shop_display_name || s.name;
-            const subImages = (s.shop_sub_image_urls || []).filter(Boolean);
+          {/* ───── 各建物ブロック ───── */}
+          {buildings.map((b, idx) => {
+            const displayName = b.shop_display_name || b.name;
+            const parentStoreName = b.store?.name || "";
+            const subImages = (b.shop_sub_image_urls || []).filter(Boolean);
             const allImages = [
-              s.shop_image_url,
+              b.shop_image_url,
               ...subImages,
             ].filter((u): u is string => !!u);
-            const tel = (s.shop_phone || "").replace(/[^0-9]/g, "");
-            const telSecondary = (s.shop_phone_secondary || "").replace(
+            const tel = (b.shop_phone || "").replace(/[^0-9]/g, "");
+            const telSecondary = (b.shop_phone_secondary || "").replace(
               /[^0-9]/g,
               ""
             );
 
             return (
               <section
-                key={s.id}
-                id={`store-${s.id}`}
+                key={b.id}
+                id={`store-${b.id}`}
                 style={{
                   padding: `${SITE.sp.section} ${SITE.sp.lg}`,
                   backgroundColor:
@@ -341,6 +364,7 @@ export default function AccessPage() {
                   <SectionHeading
                     label={`SHOP ${String(idx + 1).padStart(2, "0")}`}
                     title={displayName}
+                    subtitle={parentStoreName || undefined}
                   />
 
                   <div
@@ -426,7 +450,7 @@ export default function AccessPage() {
                         </div>
                       )}
 
-                      {s.shop_description && (
+                      {b.shop_description && (
                         <p
                           style={{
                             marginTop: SITE.sp.md,
@@ -438,7 +462,7 @@ export default function AccessPage() {
                             whiteSpace: "pre-wrap",
                           }}
                         >
-                          {s.shop_description}
+                          {b.shop_description}
                         </p>
                       )}
                     </div>
@@ -453,23 +477,23 @@ export default function AccessPage() {
                         }}
                       >
                         {[
-                          { k: "住所", v: s.shop_address },
+                          { k: "住所", v: b.shop_address },
                           {
                             k: "電話",
-                            v: s.shop_phone,
-                            tel: s.shop_phone,
+                            v: b.shop_phone,
+                            tel: b.shop_phone,
                           },
-                          s.shop_phone_secondary
+                          b.shop_phone_secondary
                             ? {
                                 k: "予備回線",
-                                v: s.shop_phone_secondary,
-                                tel: s.shop_phone_secondary,
+                                v: b.shop_phone_secondary,
+                                tel: b.shop_phone_secondary,
                               }
                             : null,
-                          { k: "営業", v: s.shop_hours },
-                          { k: "受付", v: s.shop_reception_hours },
-                          { k: "定休日", v: s.shop_holiday },
-                          { k: "アクセス", v: s.shop_access },
+                          { k: "営業", v: b.store?.shop_hours },
+                          { k: "受付", v: b.store?.shop_reception_hours },
+                          { k: "定休日", v: b.store?.shop_holiday },
+                          { k: "アクセス", v: b.shop_access },
                         ]
                           .filter(
                             (
@@ -580,11 +604,11 @@ export default function AccessPage() {
                             }}
                             className="site-cta-primary"
                           >
-                            電話する　{s.shop_phone}
+                            電話する　{b.shop_phone}
                           </a>
                         )}
 
-                        {s.shop_address && (
+                        {b.shop_address && (
                           <div
                             className="site-access-cta-row"
                             style={{
@@ -594,7 +618,7 @@ export default function AccessPage() {
                             }}
                           >
                             <a
-                              href={mapsLink(s.shop_address)}
+                              href={mapsLink(b.shop_address)}
                               target="_blank"
                               rel="noopener noreferrer"
                               style={{
@@ -618,7 +642,7 @@ export default function AccessPage() {
                             <button
                               type="button"
                               onClick={() =>
-                                handleCopyAddress(s.id, s.shop_address!)
+                                handleCopyAddress(b.id, b.shop_address!)
                               }
                               style={{
                                 display: "block",
@@ -626,7 +650,7 @@ export default function AccessPage() {
                                 backgroundColor: SITE.color.surface,
                                 border: `1px solid ${SITE.color.border}`,
                                 color:
-                                  copiedStoreId === s.id
+                                  copiedBuildingId === b.id
                                     ? SITE.color.pink
                                     : SITE.color.text,
                                 fontFamily: SITE.font.serif,
@@ -639,7 +663,7 @@ export default function AccessPage() {
                               }}
                               className="site-access-copy-btn"
                             >
-                              {copiedStoreId === s.id
+                              {copiedBuildingId === b.id
                                 ? "コピーしました"
                                 : "住所をコピー"}
                             </button>
@@ -660,7 +684,7 @@ export default function AccessPage() {
                               textAlign: "center",
                             }}
                           >
-                            予備回線：{s.shop_phone_secondary}
+                            予備回線：{b.shop_phone_secondary}
                           </a>
                         )}
                       </div>
@@ -668,7 +692,7 @@ export default function AccessPage() {
                   </div>
 
                   {/* ─── 地図 ─── */}
-                  {s.shop_map_embed && (
+                  {b.shop_map_embed && (
                     <div
                       style={{
                         marginTop: SITE.sp.xl,
@@ -678,9 +702,9 @@ export default function AccessPage() {
                         overflow: "hidden",
                       }}
                       dangerouslySetInnerHTML={{
-                        __html: s.shop_map_embed.includes("<iframe")
-                          ? s.shop_map_embed
-                          : `<iframe src="${s.shop_map_embed}" width="100%" height="100%" style="border:0;" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`,
+                        __html: b.shop_map_embed.includes("<iframe")
+                          ? b.shop_map_embed
+                          : `<iframe src="${b.shop_map_embed}" width="100%" height="100%" style="border:0;" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`,
                       }}
                     />
                   )}
@@ -897,25 +921,25 @@ export default function AccessPage() {
           </section>
 
           {/* ───── LocalBusiness JSON-LD（SEO） ───── */}
-          {stores.map((s) => {
-            const displayName = s.shop_display_name || s.name;
-            const phones = [s.shop_phone, s.shop_phone_secondary].filter(
+          {buildings.map((b) => {
+            const displayName = b.shop_display_name || b.name;
+            const phones = [b.shop_phone, b.shop_phone_secondary].filter(
               (p): p is string => !!p
             );
             const ld: Record<string, unknown> = {
               "@context": "https://schema.org",
               "@type": "HealthAndBeautyBusiness",
               name: `Ange Spa ${displayName}`,
-              ...(s.shop_address && { address: s.shop_address }),
+              ...(b.shop_address && { address: b.shop_address }),
               ...(phones.length > 0 && { telephone: phones[0] }),
               openingHours: "Mo-Su 12:00-27:00",
-              ...(s.shop_image_url && { image: s.shop_image_url }),
-              ...(s.shop_description && { description: s.shop_description }),
-              url: `https://ange-spa.jp/access#store-${s.id}`,
+              ...(b.shop_image_url && { image: b.shop_image_url }),
+              ...(b.shop_description && { description: b.shop_description }),
+              url: `https://ange-spa.jp/access#store-${b.id}`,
             };
             return (
               <script
-                key={`ld-${s.id}`}
+                key={`ld-${b.id}`}
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }}
               />
