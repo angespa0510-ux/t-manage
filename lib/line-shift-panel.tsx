@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
+import { compareByReading } from "./sort-utils";
 
 type ThemeColors = { bg: string; card: string; cardAlt: string; border: string; text: string; textSub: string; textMuted: string; textFaint: string; accent: string; accentBg: string };
 type Store = { id: number; name: string };
@@ -184,7 +185,7 @@ export default function LineShiftPanel({
       });
     }
 
-    list.sort((a, b) => b.shifts.length - a.shifts.length || a.therapistName.localeCompare(b.therapistName));
+    list.sort((a, b) => b.shifts.length - a.shifts.length || compareByReading(a.therapistName, b.therapistName));
     setCastList(list);
     setLoading(false);
   }, [startDate, endDate, therapists, rooms, buildings]);

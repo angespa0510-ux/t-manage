@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useStaffSession } from "../../lib/staff-session";
 import { useTheme } from "../../lib/theme";
 import { useToast } from "../../lib/toast";
+import { compareByReading } from "../../lib/sort-utils";
 
 /**
  * 写メ日記モデレーション管理画面
@@ -152,7 +153,7 @@ export default function DiaryModerationPage() {
     }
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+      .sort((a, b) => compareByReading(a.name, b.name));
   }, [entries]);
 
   // ════════════════════════════════════════════════════════
