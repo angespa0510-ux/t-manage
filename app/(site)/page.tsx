@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 import { SITE, MARBLE } from "../../lib/site-theme";
 import EventCarousel from "../../components/site/EventCarousel";
 import NewsSection from "../../components/site/NewsSection";
+import BookingTicker from "../../components/site/BookingTicker";
 import { useCustomerAuth, displayName } from "../../lib/customer-auth-context";
 
 /**
@@ -475,6 +476,11 @@ export default function HomePage() {
           ②-b NEWS — 最新のお知らせ（全員向けのみ）
           ═══════════════════════════════════════════════ */}
       <NewsSection />
+
+      {/* ═══════════════════════════════════════════════
+          ②-c LIVE TICKER — 予約状況のライブテロップ
+          ═══════════════════════════════════════════════ */}
+      <BookingTicker />
 
       {/* ═══════════════════════════════════════════════
           ③ TODAY'S SCHEDULE

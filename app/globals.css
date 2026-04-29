@@ -49,3 +49,124 @@ html {
 .manual-updated-badge {
   animation: manual-shimmer 3s ease-in-out infinite;
 }
+
+/* ═══════════════════════════════════════════════
+   Booking Ticker — 公開HPのライブ予約状況テロップ
+   ═══════════════════════════════════════════════ */
+.booking-ticker {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.875rem 1.25rem;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 245, 248, 0.85) 0%,
+    rgba(255, 250, 252, 0.85) 50%,
+    rgba(255, 245, 248, 0.85) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(232, 132, 154, 0.18);
+  border-bottom: 1px solid rgba(232, 132, 154, 0.18);
+  font-family: "Noto Serif JP", serif;
+  overflow: hidden;
+}
+
+.booking-ticker__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding-right: 1rem;
+  border-right: 1px solid rgba(232, 132, 154, 0.3);
+  color: #c96b83;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 0.95rem;
+  font-style: italic;
+  letter-spacing: 0.12em;
+}
+
+.booking-ticker__pulse {
+  width: 7px;
+  height: 7px;
+  background: #e8849a;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(232, 132, 154, 0.6);
+  animation: ticker-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ticker-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(232, 132, 154, 0.6);
+  }
+  50% {
+    transform: scale(0.85);
+    box-shadow: 0 0 0 8px rgba(232, 132, 154, 0);
+  }
+}
+
+.booking-ticker__viewport {
+  flex: 1;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 32px,
+    #000 calc(100% - 32px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 32px,
+    #000 calc(100% - 32px),
+    transparent 100%
+  );
+}
+
+.booking-ticker__track {
+  display: inline-flex;
+  gap: 2.5rem;
+  white-space: nowrap;
+  animation: ticker-scroll 75s linear infinite;
+  will-change: transform;
+}
+
+.booking-ticker__track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.booking-ticker__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  font-size: 0.875rem;
+  color: #4a3540;
+}
+
+.booking-ticker__time {
+  color: #c96b83;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+}
+
+.booking-ticker__customer { color: #4a3540; }
+.booking-ticker__course { color: #6b5560; font-size: 0.8125rem; }
+.booking-ticker__therapist { color: #c96b83; }
+.booking-ticker__message { color: #6b5560; font-size: 0.8125rem; }
+.booking-ticker__divider {
+  color: rgba(232, 132, 154, 0.45);
+  margin: 0 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booking-ticker__track { animation: none; }
+  .booking-ticker__pulse { animation: none; }
+}
