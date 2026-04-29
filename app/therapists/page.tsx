@@ -39,6 +39,28 @@ const BODY_TYPES = ["", "モデル", "スレンダー", "標準", "グラマー"
 const HAIR_STYLES = ["", "ショート", "ミディアム", "ロング"];
 const HAIR_COLORS = ["", "黒髪", "茶髪", "金髪", "派手髪"];
 
+/**
+ * セラピスト名からあいうえお順のソートキーを抽出する。
+ *
+ * - 「愛花【あいか】」のように【】や[]内にふりがながある場合は、その中身を採用
+ * - ふりがながない場合は名前そのまま
+ * - カタカナはひらがなに変換（「ルナ」と「るな」を同じ位置に並べるため）
+ *
+ * これにより、漢字で始まる源氏名が一覧の最後に固まらず、
+ * 読みベースで自然な「あいうえお順」になる。
+ */
+function getReadingKey(name: string | null | undefined): string {
+  const s = (name ?? "").trim();
+  if (!s) return "";
+  // 全角【】 / 半角[] のいずれにも対応
+  const m = s.match(/[【\[]([^】\]]+)[】\]]/);
+  const base = m && m[1] ? m[1].trim() : s;
+  // カタカナ → ひらがな（コードポイント差 0x60）
+  return base.replace(/[\u30A1-\u30F6]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60)
+  );
+}
+
 export default function TherapistManagement() {
   const router = useRouter();
   const { dark, toggle, T } = useTheme();
@@ -701,7 +723,7 @@ const generatePassword = () => {
   const sorted = [...filtered].sort((a, b) => {
     switch (sortBy) {
       case "name":
-        return (a.name || "").localeCompare(b.name || "", "ja");
+        return getReadingKey(a.name).localeCompare(getReadingKey(b.name), "ja");
       case "created":
         return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
       case "entry":
